@@ -2,6 +2,7 @@
   "name": "prompt-enhancer-api",
   "version": "1.0.0",
   "description": "Enterprise backend for Prompt Enhancer iOS app",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
