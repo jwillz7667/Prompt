@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER MANAGEMENT - Scalable for millions of users
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  avatarUrl     String?
+
+  // Auth providers
+  appleId       String?   @unique
+  googleId      String?   @unique
+
+  // Security
+  passwordHash  String?
+  refreshToken  String?
+  tokenVersion  Int       @default(0)
+
+  // Account status
+  isActive      Boolean   @default(true)
+  isPremium     Boolean   @default(false)
+  premiumUntil  DateTime?
+
+  // Usage tracking
+  promptCount   Int       @default(0)
+  tokenUsage    BigInt    @default(0)
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  // Relations
+  sessions      Session[]
+  prompts       Prompt[]
+  apiKeys       ApiKey[]
+
+  // Indexes for performance at scale
+  @@index([email])
+  @@index([appleId])
+  @@index([googleId])
+  @@index([createdAt])
+  @@index([isActive, isPremium])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deviceId     String?
+  deviceName   String?
+  deviceType   String?  // ios, web, etc.
+  ipAddress    String?
+  userAgent    String?
+
+  accessToken  String   @unique
+  refreshToken String   @unique
+
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([accessToken])
+  @@index([refreshToken])
+  @@index([expiresAt])
+}
+
+// ============================================================================
+// PROMPT HISTORY - Optimized for high-volume writes and queries
+// ============================================================================
+
+model Prompt {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Original input
+  originalPrompt  String   @db.Text
+
+  // Enhanced output
+  enhancedPrompt  String   @db.Text
+
+  // Metadata
+  model           String   @default("deepseek-reasoner")
+  temperature     Float    @default(0.7)
+  maxTokens       Int      @default(8192)
+
+  // Usage stats
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  totalTokens     Int      @default(0)
+  processingMs    Int      @default(0)
+
+  // Organization
+  title           String?
+  tags            String[] @default([])
+  isFavorite      Boolean  @default(false)
+  isArchived      Boolean  @default(false)
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Indexes for fast queries at scale
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, isFavorite])
+  @@index([userId, isArchived])
+  @@index([userId, tags])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ============================================================================
+// API KEYS - For programmatic access
+// ============================================================================
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  keyHash     String    @unique
+  keyPrefix   String    // First 8 chars for identification
+
+  permissions String[]  @default(["read", "write"])
+
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([keyHash])
+}
+
+// ============================================================================
+// USAGE ANALYTICS - For tracking and billing
+// ============================================================================
+
+model UsageRecord {
+  id          String   @id @default(cuid())
+  userId      String
+
+  date        DateTime @db.Date
+  promptCount Int      @default(0)
+  tokenCount  BigInt   @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date(sort: Desc)])
+}
+
+// ============================================================================
+// SYSTEM - Rate limiting and audit logs
+// ============================================================================
+
+model RateLimit {
+  id         String   @id @default(cuid())
+  identifier String   // userId or IP
+  endpoint   String
+
+  count      Int      @default(0)
+  windowStart DateTime @default(now())
+
+  @@unique([identifier, endpoint])
+  @@index([identifier])
+  @@index([windowStart])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  resource  String
+  resourceId String?
+
+  ipAddress String?
+  userAgent String?
+
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}

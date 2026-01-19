@@ -6,27 +6,36 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct PromptApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @State private var settingsManager = SettingsManager()
+    @State private var authManager = AuthManager.shared
+    @State private var historyManager = PromptHistoryManager.shared
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(settingsManager)
+                .environment(authManager)
+                .environment(historyManager)
         }
-        .modelContainer(sharedModelContainer)
+    }
+}
+
+// MARK: - Root View
+
+struct RootView: View {
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        Group {
+            if authManager.isAuthenticated {
+                ContentView()
+            } else {
+                AuthView()
+            }
+        }
+        .animation(.easeInOut, value: authManager.isAuthenticated)
     }
 }

@@ -1,0 +1,80 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import { config } from 'dotenv';
+
+import { authRouter } from './routes/auth.js';
+import { promptRouter } from './routes/prompts.js';
+import { userRouter } from './routes/users.js';
+import { healthRouter } from './routes/health.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { prisma } from './utils/prisma.js';
+
+config();
+
+const app = express();
+const PORT = process.env['PORT'] || 3000;
+
+// Security middleware
+app.use(helmet());
+app.use(cors({
+  origin: process.env['CORS_ORIGIN'] || '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-ID'],
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env['RATE_LIMIT_WINDOW_MS'] || '60000'),
+  max: parseInt(process.env['RATE_LIMIT_MAX_REQUESTS'] || '100'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+app.use(limiter);
+
+// Body parsing & compression
+app.use(compression());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Logging
+if (process.env['NODE_ENV'] !== 'test') {
+  app.use(morgan('combined'));
+}
+
+// Routes
+app.use('/health', healthRouter);
+app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/prompts', promptRouter);
+app.use('/api/v1/users', userRouter);
+
+// Error handling
+app.use(errorHandler);
+
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Graceful shutdown
+const shutdown = async () => {
+  console.log('Shutting down gracefully...');
+  await prisma.$disconnect();
+  process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Environment: ${process.env['NODE_ENV'] || 'development'}`);
+});
+
+export default app;
