@@ -72,9 +72,25 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env['NODE_ENV'] || 'development'}`);
-});
+const port = typeof PORT === 'string' ? parseInt(PORT, 10) : PORT;
+
+const startServer = async () => {
+  try {
+    // Test database connection on startup
+    console.log('Testing database connection...');
+    await prisma.$connect();
+    console.log('Database connected successfully');
+
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${port}`);
+      console.log(`📊 Environment: ${process.env['NODE_ENV'] || 'development'}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 export default app;

@@ -7,14 +7,16 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
+# Install all dependencies (including dev for build)
 RUN npm ci
+
+# Generate Prisma client
+RUN npx prisma generate
 
 # Copy source
 COPY . .
 
-# Generate Prisma client and build
-RUN npm run db:generate
+# Build TypeScript
 RUN npm run build
 
 # Production stage
@@ -37,4 +39,4 @@ USER expressjs
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

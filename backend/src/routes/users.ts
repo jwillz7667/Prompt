@@ -162,7 +162,7 @@ userRouter.delete('/sessions/:id', async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    const sessionId = req.params['id'];
+    const sessionId = req.params.id as string;
 
     // Don't allow revoking current session via this endpoint
     if (sessionId === req.user.sessionId) {

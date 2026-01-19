@@ -193,9 +193,10 @@ promptRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
+    const promptId = req.params.id as string;
     const prompt = await prisma.prompt.findFirst({
       where: {
-        id: req.params['id'],
+        id: promptId,
         userId: req.user.id,
       },
     });
@@ -224,10 +225,11 @@ promptRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
     }
 
     const data = updatePromptSchema.parse(req.body);
+    const promptId = req.params.id as string;
 
     const prompt = await prisma.prompt.updateMany({
       where: {
-        id: req.params['id'],
+        id: promptId,
         userId: req.user.id,
       },
       data,
@@ -239,7 +241,7 @@ promptRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
     }
 
     const updated = await prisma.prompt.findUnique({
-      where: { id: req.params['id'] },
+      where: { id: promptId },
     });
 
     res.json({ prompt: updated });
@@ -264,9 +266,10 @@ promptRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
 
+    const promptId = req.params.id as string;
     const result = await prisma.prompt.deleteMany({
       where: {
-        id: req.params['id'],
+        id: promptId,
         userId: req.user.id,
       },
     });
