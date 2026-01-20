@@ -16,7 +16,7 @@ actor APIClient {
     #if DEBUG
     private let baseURL = "http://localhost:3000/api/v1"
     #else
-    private let baseURL = "https://your-railway-app.up.railway.app/api/v1"
+    private let baseURL = "https://backend-production-d538.up.railway.app/api/v1"
     #endif
 
     private var accessToken: String?
