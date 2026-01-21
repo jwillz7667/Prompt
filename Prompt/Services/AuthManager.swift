@@ -58,6 +58,7 @@ final class AuthManager: NSObject {
 
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = self
+        controller.presentationContextProvider = self
         controller.performRequests()
 
         isLoading = true
@@ -146,6 +147,9 @@ extension AuthManager: ASAuthorizationControllerDelegate {
                 )
 
                 currentUser = User(from: response.user)
+
+                // Sync subscription status after successful authentication
+                await StoreKitManager.shared.syncWithBackend()
             } catch {
                 self.error = .serverError(error.localizedDescription)
             }
@@ -218,6 +222,18 @@ struct AppleAuthRequest: Encodable, Sendable {
 struct FullName: Encodable, Sendable {
     let givenName: String?
     let familyName: String?
+}
+
+// MARK: - Presentation Context Provider
+
+extension AuthManager: ASAuthorizationControllerPresentationContextProviding {
+    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        // Get the first connected window scene's key window
+        let scenes = UIApplication.shared.connectedScenes
+        let windowScene = scenes.first as? UIWindowScene
+        let window = windowScene?.windows.first { $0.isKeyWindow }
+        return window ?? ASPresentationAnchor()
+    }
 }
 
 // MARK: - Auth Errors

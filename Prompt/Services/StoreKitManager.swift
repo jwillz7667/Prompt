@@ -196,6 +196,11 @@ final class StoreKitManager {
     // MARK: - Sync with Backend
 
     func syncWithBackend() async {
+        // Skip sync if user is not authenticated
+        guard await APIClient.shared.isAuthenticated else {
+            return
+        }
+
         do {
             let response: SubscriptionStatusResponse = try await APIClient.shared.request(
                 "/subscriptions/status",
