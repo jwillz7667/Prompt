@@ -4,7 +4,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'promptomize.com',
+        hostname: 'promptomize.app',
       },
     ],
   },

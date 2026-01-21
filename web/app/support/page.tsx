@@ -77,7 +77,7 @@ export default function Support() {
           {/* Contact Options */}
           <div className="grid md:grid-cols-2 gap-6 mb-16">
             <a
-              href="mailto:support@promptomize.com"
+              href="mailto:support@promptomize.app"
               className="feature-card bg-[var(--bg-secondary)] p-6 rounded-2xl border border-[var(--border)] flex items-start gap-4"
             >
               <div className="w-12 h-12 bg-[var(--bg-tertiary)] rounded-xl flex items-center justify-center flex-shrink-0">
@@ -86,7 +86,7 @@ export default function Support() {
               <div>
                 <h3 className="text-lg font-semibold mb-1">Email Support</h3>
                 <p className="text-[var(--text-secondary)] text-sm">
-                  support@promptomize.com
+                  support@promptomize.app
                 </p>
                 <p className="text-[var(--text-tertiary)] text-sm mt-1">
                   We typically respond within 24 hours
@@ -161,7 +161,7 @@ export default function Support() {
               Our support team is here to assist you with any questions or issues.
             </p>
             <a
-              href="mailto:support@promptomize.com"
+              href="mailto:support@promptomize.app"
               className="inline-flex items-center gap-2 bg-[var(--text-primary)] text-[var(--bg-primary)] px-6 py-3 rounded-xl font-medium hover:opacity-90 transition"
             >
               <Mail className="w-5 h-5" />

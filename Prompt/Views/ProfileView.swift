@@ -161,7 +161,7 @@ struct ProfileView: View {
                     statsRow(label: "Version", value: "1.0.0")
                     statsRow(label: "Build", value: "1")
 
-                    Link(destination: URL(string: "https://promptomize.com/support")!) {
+                    Link(destination: URL(string: "https://promptomize.app/support")!) {
                         HStack {
                             Label("Help & Support", systemImage: "questionmark.circle")
                                 .foregroundStyle(textPrimary)
@@ -172,7 +172,7 @@ struct ProfileView: View {
                     }
                     .listRowBackground(bgPrimary)
 
-                    Link(destination: URL(string: "https://promptomize.com/privacy")!) {
+                    Link(destination: URL(string: "https://promptomize.app/privacy")!) {
                         HStack {
                             Label("Privacy Policy", systemImage: "hand.raised")
                                 .foregroundStyle(textPrimary)
@@ -183,7 +183,7 @@ struct ProfileView: View {
                     }
                     .listRowBackground(bgPrimary)
 
-                    Link(destination: URL(string: "https://promptomize.com/terms")!) {
+                    Link(destination: URL(string: "https://promptomize.app/terms")!) {
                         HStack {
                             Label("Terms of Service", systemImage: "doc.text")
                                 .foregroundStyle(textPrimary)

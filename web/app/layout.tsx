@@ -9,11 +9,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Promptomize - AI-Powered Prompt Enhancement',
     description: 'Transform your prompts into powerful, optimized instructions for AI.',
-    url: 'https://promptomize.com',
+    url: 'https://promptomize.app',
     siteName: 'Promptomize',
     images: [
       {
-        url: 'https://promptomize.com/app-icon.png',
+        url: 'https://promptomize.app/app-icon.png',
         width: 1024,
         height: 1024,
         alt: 'Promptomize Logo',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Promptomize - AI-Powered Prompt Enhancement',
     description: 'Transform your prompts into powerful, optimized instructions for AI.',
-    images: ['https://promptomize.com/app-icon.png'],
+    images: ['https://promptomize.app/app-icon.png'],
   },
   icons: {
     icon: '/app-icon.png',

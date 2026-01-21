@@ -172,8 +172,8 @@ export default function TermsOfService() {
               If you have any questions about these Terms, please contact us:
             </p>
             <ul className="list-disc list-inside text-[var(--text-secondary)] mt-4 space-y-2">
-              <li>Email: legal@promptomize.com</li>
-              <li>Website: <Link href="https://promptomize.com/support" className="text-accent-purple hover:underline">https://promptomize.com/support</Link></li>
+              <li>Email: legal@promptomize.app</li>
+              <li>Website: <Link href="https://promptomize.app/support" className="text-accent-purple hover:underline">https://promptomize.app/support</Link></li>
             </ul>
           </section>
         </div>

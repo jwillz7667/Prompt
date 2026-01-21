@@ -144,7 +144,7 @@ export default function PrivacyPolicy() {
               <li><strong>Objection:</strong> Object to processing of your data</li>
             </ul>
             <p className="text-[var(--text-secondary)] mt-4">
-              To exercise these rights, please contact us at privacy@promptomize.com.
+              To exercise these rights, please contact us at privacy@promptomize.app.
             </p>
           </section>
 
@@ -168,8 +168,8 @@ export default function PrivacyPolicy() {
               If you have any questions about this Privacy Policy, please contact us:
             </p>
             <ul className="list-disc list-inside text-[var(--text-secondary)] mt-4 space-y-2">
-              <li>Email: privacy@promptomize.com</li>
-              <li>Website: <Link href="https://promptomize.com/support" className="text-accent-purple hover:underline">https://promptomize.com/support</Link></li>
+              <li>Email: privacy@promptomize.app</li>
+              <li>Website: <Link href="https://promptomize.app/support" className="text-accent-purple hover:underline">https://promptomize.app/support</Link></li>
             </ul>
           </section>
         </div>
