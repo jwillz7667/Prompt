@@ -94,8 +94,8 @@ enum DeepseekModel: String, CaseIterable, Identifiable, Sendable {
 
     var displayName: String {
         switch self {
-        case .reasoner: return "DeepSeek V3.2 Reasoner"
-        case .chat: return "DeepSeek V3.2 Chat"
+        case .reasoner: return "Advanced Reasoner"
+        case .chat: return "Fast Mode"
         }
     }
 

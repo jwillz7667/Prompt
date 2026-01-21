@@ -137,21 +137,8 @@ struct SettingsView: View {
                         Text("Powered by")
                             .foregroundStyle(textPrimary)
                         Spacer()
-                        Text("DeepSeek V3.2")
+                        Text("Advanced AI")
                             .foregroundStyle(textSecondary)
-                    }
-
-                    Link(destination: URL(string: "https://platform.deepseek.com/docs")!) {
-                        HStack {
-                            Image(systemName: "book.fill")
-                                .foregroundStyle(textPrimary)
-                                .frame(width: 28)
-                            Text("DeepSeek Documentation")
-                                .foregroundStyle(textPrimary)
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundStyle(textSecondary)
-                        }
                     }
                 } header: {
                     Text("About")

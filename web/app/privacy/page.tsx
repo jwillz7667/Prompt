@@ -116,7 +116,7 @@ export default function PrivacyPolicy() {
             <ul className="list-disc list-inside text-[var(--text-secondary)] space-y-2">
               <li><strong>Apple Sign In:</strong> For authentication</li>
               <li><strong>Apple App Store:</strong> For subscription processing</li>
-              <li><strong>DeepSeek AI:</strong> For prompt enhancement processing</li>
+              <li><strong>AI Processing Services:</strong> For prompt enhancement processing</li>
               <li><strong>Railway:</strong> For backend infrastructure hosting</li>
             </ul>
             <p className="text-[var(--text-secondary)] mt-4">
