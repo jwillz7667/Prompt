@@ -17,6 +17,7 @@ final class AuthManager: NSObject {
     var currentUser: User?
     var isAuthenticated: Bool { currentUser != nil }
     var isLoading = false
+    var isCheckingSession = true
     var error: AuthError?
 
     // MARK: - Singleton
@@ -33,6 +34,9 @@ final class AuthManager: NSObject {
     // MARK: - Session Check
 
     func checkExistingSession() async {
+        isCheckingSession = true
+        defer { isCheckingSession = false }
+
         await APIClient.shared.loadStoredTokens()
 
         guard await APIClient.shared.isAuthenticated else { return }

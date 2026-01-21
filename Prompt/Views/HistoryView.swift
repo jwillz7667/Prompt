@@ -3,17 +3,26 @@
 //  Prompt
 //
 //  Displays prompt history with search, filtering, and management
+//  AAA WCAG Compliant Colors
 //
 
 import SwiftUI
 
 struct HistoryView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(PromptHistoryManager.self) private var historyManager
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var selectedPrompt: PromptRecord?
     @State private var showDeleteConfirmation = false
     @State private var promptToDelete: PromptRecord?
+
+    // AAA Compliant Colors
+    private var textPrimary: Color { Color.adaptiveTextPrimary }
+    private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var textTertiary: Color { Color.adaptiveTextTertiary }
+    private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
+    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
     var body: some View {
         NavigationStack {
@@ -26,6 +35,7 @@ struct HistoryView: View {
                     promptsList
                 }
             }
+            .background(bgPrimary.ignoresSafeArea())
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -33,6 +43,8 @@ struct HistoryView: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(textPrimary)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -40,6 +52,7 @@ struct HistoryView: View {
                         Toggle("Favorites Only", isOn: Bindable(historyManager).showFavoritesOnly)
                     } label: {
                         Image(systemName: historyManager.showFavoritesOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                            .foregroundStyle(textPrimary)
                     }
                 }
             }
@@ -81,10 +94,13 @@ struct HistoryView: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
+                .tint(textPrimary)
             Text("Loading history...")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(textSecondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(bgPrimary)
     }
 
     // MARK: - Empty State
@@ -92,9 +108,13 @@ struct HistoryView: View {
     private var emptyStateView: some View {
         ContentUnavailableView {
             Label("No Prompts Yet", systemImage: "doc.text")
+                .foregroundStyle(textPrimary)
         } description: {
             Text("Your enhanced prompts will appear here")
+                .foregroundStyle(textSecondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(bgPrimary)
     }
 
     // MARK: - Prompts List
@@ -128,6 +148,7 @@ struct HistoryView: View {
                         }
                         .tint(.yellow)
                     }
+                    .listRowBackground(bgPrimary)
             }
 
             // Load more
@@ -135,9 +156,11 @@ struct HistoryView: View {
                 HStack {
                     Spacer()
                     ProgressView()
+                        .tint(textPrimary)
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
+                .listRowBackground(bgPrimary)
                 .onAppear {
                     Task {
                         await historyManager.loadNextPage()
@@ -146,6 +169,8 @@ struct HistoryView: View {
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(bgPrimary)
         .refreshable {
             await historyManager.fetchPrompts(refresh: true)
         }
@@ -155,13 +180,19 @@ struct HistoryView: View {
 // MARK: - Prompt Row View
 
 struct PromptRowView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let prompt: PromptRecord
+
+    private var textPrimary: Color { Color.adaptiveTextPrimary }
+    private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var textTertiary: Color { Color.adaptiveTextTertiary }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(prompt.title ?? prompt.originalPrompt.prefix(50) + "...")
+                Text(prompt.title ?? String(prompt.originalPrompt.prefix(50)) + "...")
                     .font(.headline)
+                    .foregroundStyle(textPrimary)
                     .lineLimit(1)
 
                 Spacer()
@@ -175,19 +206,19 @@ struct PromptRowView: View {
 
             Text(prompt.originalPrompt)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(textSecondary)
                 .lineLimit(2)
 
             HStack {
                 Label("\(prompt.totalTokens) tokens", systemImage: "number")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(textTertiary)
 
                 Spacer()
 
                 Text(prompt.createdAt, style: .relative)
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(textTertiary)
             }
         }
         .padding(.vertical, 4)
@@ -197,9 +228,15 @@ struct PromptRowView: View {
 // MARK: - Prompt Detail View
 
 struct PromptDetailView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let prompt: PromptRecord
     @Environment(\.dismiss) private var dismiss
     @State private var showCopiedToast = false
+
+    private var textPrimary: Color { Color.adaptiveTextPrimary }
+    private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
+    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
     var body: some View {
         NavigationStack {
@@ -209,13 +246,15 @@ struct PromptDetailView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Original Prompt", systemImage: "text.cursor")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(textPrimary)
 
                         Text(prompt.originalPrompt)
                             .font(.body)
+                            .foregroundStyle(textPrimary)
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(uiColor: .systemGray6))
+                            .background(bgSecondary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
 
@@ -224,7 +263,8 @@ struct PromptDetailView: View {
                         HStack {
                             Label("Enhanced Prompt", systemImage: "sparkles")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(textPrimary)
 
                             Spacer()
 
@@ -234,14 +274,17 @@ struct PromptDetailView: View {
                             } label: {
                                 Label("Copy", systemImage: "doc.on.doc")
                                     .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(textSecondary)
                             }
                         }
 
                         Text(prompt.enhancedPrompt)
                             .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(textPrimary)
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(uiColor: .systemGray6))
+                            .background(bgSecondary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .textSelection(.enabled)
                     }
@@ -250,23 +293,27 @@ struct PromptDetailView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Details", systemImage: "info.circle")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(textPrimary)
 
                         Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
                             GridRow {
                                 Text("Model")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(textSecondary)
                                 Text(prompt.model)
+                                    .foregroundStyle(textPrimary)
                             }
                             GridRow {
                                 Text("Tokens")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(textSecondary)
                                 Text("\(prompt.totalTokens)")
+                                    .foregroundStyle(textPrimary)
                             }
                             GridRow {
                                 Text("Created")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(textSecondary)
                                 Text(prompt.createdAt, format: .dateTime)
+                                    .foregroundStyle(textPrimary)
                             }
                         }
                         .font(.subheadline)
@@ -274,6 +321,7 @@ struct PromptDetailView: View {
                 }
                 .padding()
             }
+            .background(bgPrimary.ignoresSafeArea())
             .navigationTitle("Prompt Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -281,6 +329,8 @@ struct PromptDetailView: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(textPrimary)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -289,10 +339,12 @@ struct PromptDetailView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         Text("Copied!")
+                            .foregroundStyle(textPrimary)
                     }
                     .padding()
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
+                    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15), radius: 10, y: 5)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .onAppear {
                         Task {

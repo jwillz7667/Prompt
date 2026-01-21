@@ -1,7 +1,13 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
+import {
+  enforceQuota,
+  recordPromptUsage,
+  type RequestWithSubscription,
+} from '../middleware/quotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
+import { recordUsage } from '../services/subscriptionService.js';
 
 export const promptRouter = Router();
 
@@ -41,67 +47,85 @@ const listQuerySchema = z.object({
 });
 
 // ============================================================================
-// CREATE PROMPT
+// CREATE PROMPT (with quota enforcement)
 // ============================================================================
 
-promptRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
+promptRouter.post(
+  '/',
+  enforceQuota('enhance_prompt'),
+  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
 
-    const data = createPromptSchema.parse(req.body);
+      const data = createPromptSchema.parse(req.body);
 
-    const prompt = await prisma.prompt.create({
-      data: {
-        userId: req.user.id,
-        ...data,
-      },
-    });
+      const prompt = await prisma.prompt.create({
+        data: {
+          userId: req.user.id,
+          ...data,
+        },
+      });
 
-    // Update user stats
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        promptCount: { increment: 1 },
-        tokenUsage: { increment: BigInt(data.totalTokens) },
-      },
-    });
+      // Update user stats
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          promptCount: { increment: 1 },
+          tokenUsage: { increment: BigInt(data.totalTokens) },
+        },
+      });
 
-    // Update daily usage record
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+      // Update daily usage record (for general analytics)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    await prisma.usageRecord.upsert({
-      where: {
-        userId_date: {
+      await prisma.usageRecord.upsert({
+        where: {
+          userId_date: {
+            userId: req.user.id,
+            date: today,
+          },
+        },
+        update: {
+          promptCount: { increment: 1 },
+          tokenCount: { increment: BigInt(data.totalTokens) },
+        },
+        create: {
           userId: req.user.id,
           date: today,
+          promptCount: 1,
+          tokenCount: BigInt(data.totalTokens),
         },
-      },
-      update: {
-        promptCount: { increment: 1 },
-        tokenCount: { increment: BigInt(data.totalTokens) },
-      },
-      create: {
-        userId: req.user.id,
-        date: today,
-        promptCount: 1,
-        tokenCount: BigInt(data.totalTokens),
-      },
-    });
+      });
 
-    res.status(201).json({ prompt });
-  } catch (error) {
-    console.error('Create prompt error:', error);
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
-      return;
+      // Record usage for quota tracking
+      await recordUsage(req.user.id);
+
+      // Include subscription info in response for client-side prompt quality selection
+      res.status(201).json({
+        prompt,
+        subscription: req.subscription
+          ? {
+              tier: req.subscription.tier,
+              promptQuality: req.subscription.promptQuality,
+              dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
+              dailyPromptsLimit: req.subscription.dailyPromptsLimit,
+            }
+          : undefined,
+      });
+    } catch (error) {
+      console.error('Create prompt error:', error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to create prompt' });
     }
-    res.status(500).json({ error: 'Failed to create prompt' });
   }
-});
+);
 
 // ============================================================================
 // LIST PROMPTS (with pagination, search, filters)

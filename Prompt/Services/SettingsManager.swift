@@ -9,12 +9,47 @@ import Foundation
 import SwiftUI
 import Observation
 
+// MARK: - Appearance Mode
+
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system = "system"
+    case light = "light"
+    case dark = "dark"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 @Observable
 final class SettingsManager {
     let apiKey: String = "sk-30f4da11916a4f9890c34eaf2c133acb"
     var selectedModel: DeepseekModel = .reasoner
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
+    var appearanceMode: AppearanceMode = .system
 
     init() {
         loadPreferences()
@@ -31,12 +66,19 @@ final class SettingsManager {
         if savedTemp > 0 { temperature = savedTemp }
         let savedTokens = UserDefaults.standard.integer(forKey: "maxTokens")
         if savedTokens > 0 { maxTokens = savedTokens }
+
+        // Load appearance preference
+        if let appearanceRaw = UserDefaults.standard.string(forKey: "appearanceMode"),
+           let mode = AppearanceMode(rawValue: appearanceRaw) {
+            appearanceMode = mode
+        }
     }
 
     func savePreferences() {
         UserDefaults.standard.set(selectedModel.rawValue, forKey: "selectedModel")
         UserDefaults.standard.set(temperature, forKey: "temperature")
         UserDefaults.standard.set(maxTokens, forKey: "maxTokens")
+        UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
     }
 
     var hasValidAPIKey: Bool { true }

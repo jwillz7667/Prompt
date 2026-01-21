@@ -3,19 +3,30 @@
 //  Prompt
 //
 //  User profile with account management and statistics
+//  AAA WCAG Compliant Colors
 //
 
 import SwiftUI
 
 struct ProfileView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthManager.self) private var authManager
     @Environment(PromptHistoryManager.self) private var historyManager
+    @Environment(StoreKitManager.self) private var storeKit
     @Environment(\.dismiss) private var dismiss
 
     @State private var showSignOutAlert = false
     @State private var showDeleteAccountAlert = false
+    @State private var showPaywall = false
     @State private var stats: UserStats?
     @State private var isLoadingStats = false
+
+    // AAA Compliant Colors
+    private var textPrimary: Color { Color.adaptiveTextPrimary }
+    private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var textTertiary: Color { Color.adaptiveTextTertiary }
+    private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
+    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
     var body: some View {
         NavigationStack {
@@ -42,9 +53,10 @@ struct ProfileView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(user.name ?? "User")
                                     .font(.headline)
+                                    .foregroundStyle(textPrimary)
                                 Text(user.email)
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(textSecondary)
 
                                 if user.isPremium {
                                     Label("Premium", systemImage: "crown.fill")
@@ -54,38 +66,83 @@ struct ProfileView: View {
                             }
                         }
                         .padding(.vertical, 8)
+                        .listRowBackground(bgPrimary)
                     }
                 }
 
+                // Subscription section
+                Section {
+                    VStack(spacing: 16) {
+                        SubscriptionStatusCard()
+
+                        // Show upgrade button for non-premium users
+                        if storeKit.currentTier != .premium {
+                            Button {
+                                showPaywall = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: storeKit.currentTier == .free ? "crown.fill" : "arrow.up.circle.fill")
+                                        .foregroundStyle(storeKit.currentTier == .free ? .purple : .blue)
+                                    Text(storeKit.currentTier == .free ? "Upgrade to Premium" : "Upgrade Plan")
+                                        .foregroundStyle(textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundStyle(textTertiary)
+                                }
+                            }
+                        }
+
+                        // Trial banner
+                        if storeKit.isTrialing, let remaining = storeKit.subscriptionInfo?.trialDaysRemaining {
+                            TrialBanner(daysRemaining: remaining) {
+                                showPaywall = true
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(bgPrimary)
+                } header: {
+                    Text("Subscription")
+                        .foregroundStyle(textSecondary)
+                }
+
                 // Stats section
-                Section("Statistics") {
+                Section {
                     if isLoadingStats {
                         HStack {
                             Spacer()
                             ProgressView()
+                                .tint(textPrimary)
                             Spacer()
                         }
+                        .listRowBackground(bgPrimary)
                     } else if let stats = stats {
-                        LabeledContent("Total Prompts", value: "\(stats.totalPrompts)")
-                        LabeledContent("Favorite Prompts", value: "\(stats.favoritePrompts)")
-                        LabeledContent("Total Tokens Used", value: formatTokens(stats.totalTokens))
-                        LabeledContent("Member Since", value: stats.memberSince, format: .dateTime.month().year())
+                        statsRow(label: "Total Prompts", value: "\(stats.totalPrompts)")
+                        statsRow(label: "Favorite Prompts", value: "\(stats.favoritePrompts)")
+                        statsRow(label: "Total Tokens Used", value: formatTokens(stats.totalTokens))
+                        statsRow(label: "Member Since", value: stats.memberSince.formatted(.dateTime.month().year()))
                     }
+                } header: {
+                    Text("Statistics")
+                        .foregroundStyle(textSecondary)
                 }
 
                 // Settings section
-                Section("Account") {
+                Section {
                     NavigationLink {
                         SessionsView()
                     } label: {
                         Label("Active Sessions", systemImage: "iphone.and.arrow.forward")
+                            .foregroundStyle(textPrimary)
                     }
+                    .listRowBackground(bgPrimary)
 
                     Button(role: .destructive) {
                         showSignOutAlert = true
                     } label: {
                         Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                     }
+                    .listRowBackground(bgPrimary)
 
                     Button(role: .destructive) {
                         showDeleteAccountAlert = true
@@ -93,22 +150,46 @@ struct ProfileView: View {
                         Label("Delete Account", systemImage: "trash")
                             .foregroundStyle(.red)
                     }
+                    .listRowBackground(bgPrimary)
+                } header: {
+                    Text("Account")
+                        .foregroundStyle(textSecondary)
                 }
 
                 // App info
-                Section("About") {
-                    LabeledContent("Version", value: "1.0.0")
-                    LabeledContent("Build", value: "1")
+                Section {
+                    statsRow(label: "Version", value: "1.0.0")
+                    statsRow(label: "Build", value: "1")
 
                     Link(destination: URL(string: "https://example.com/support")!) {
-                        Label("Help & Support", systemImage: "questionmark.circle")
+                        HStack {
+                            Label("Help & Support", systemImage: "questionmark.circle")
+                                .foregroundStyle(textPrimary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundStyle(textTertiary)
+                        }
                     }
+                    .listRowBackground(bgPrimary)
 
                     Link(destination: URL(string: "https://example.com/privacy")!) {
-                        Label("Privacy Policy", systemImage: "hand.raised")
+                        HStack {
+                            Label("Privacy Policy", systemImage: "hand.raised")
+                                .foregroundStyle(textPrimary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundStyle(textTertiary)
+                        }
                     }
+                    .listRowBackground(bgPrimary)
+                } header: {
+                    Text("About")
+                        .foregroundStyle(textSecondary)
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(bgPrimary.ignoresSafeArea())
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -116,6 +197,8 @@ struct ProfileView: View {
                     Button("Done") {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(textPrimary)
                 }
             }
             .task {
@@ -143,18 +226,36 @@ struct ProfileView: View {
             } message: {
                 Text("This will permanently delete your account and all data. This action cannot be undone.")
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+            }
         }
     }
 
     private var avatarPlaceholder: some View {
         Circle()
-            .fill(Color(uiColor: .systemGray4))
+            .fill(bgSecondary)
             .frame(width: 60, height: 60)
             .overlay {
                 Image(systemName: "person.fill")
                     .font(.title)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(textSecondary)
             }
+    }
+
+    @ViewBuilder
+    private func statsRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(textPrimary)
+            Spacer()
+            Text(value)
+                .foregroundStyle(textSecondary)
+        }
+        .listRowBackground(bgPrimary)
     }
 
     private func loadStats() async {
@@ -227,8 +328,14 @@ struct StatsResponse: Decodable {
 // MARK: - Sessions View
 
 struct SessionsView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var sessions: [SessionInfo] = []
     @State private var isLoading = true
+
+    // AAA Compliant Colors
+    private var textPrimary: Color { Color.adaptiveTextPrimary }
+    private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
 
     var body: some View {
         List {
@@ -236,8 +343,10 @@ struct SessionsView: View {
                 HStack {
                     Spacer()
                     ProgressView()
+                        .tint(textPrimary)
                     Spacer()
                 }
+                .listRowBackground(bgPrimary)
             } else {
                 ForEach(sessions) { session in
                     HStack {
@@ -245,6 +354,7 @@ struct SessionsView: View {
                             HStack {
                                 Text(session.deviceName ?? "Unknown Device")
                                     .font(.headline)
+                                    .foregroundStyle(textPrimary)
 
                                 if session.isCurrent {
                                     Text("Current")
@@ -259,7 +369,7 @@ struct SessionsView: View {
 
                             Text("Last active: \(session.lastActiveAt, style: .relative)")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(textSecondary)
                         }
 
                         Spacer()
@@ -275,9 +385,12 @@ struct SessionsView: View {
                             }
                         }
                     }
+                    .listRowBackground(bgPrimary)
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(bgPrimary.ignoresSafeArea())
         .navigationTitle("Active Sessions")
         .task {
             await loadSessions()
@@ -341,4 +454,5 @@ struct SessionsResponse: Decodable {
     ProfileView()
         .environment(AuthManager.shared)
         .environment(PromptHistoryManager.shared)
+        .environment(StoreKitManager.shared)
 }

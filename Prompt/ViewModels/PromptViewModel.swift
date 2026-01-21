@@ -40,7 +40,7 @@ final class PromptViewModel {
 
     // MARK: - Actions
 
-    func enhancePrompt(settings: SettingsManager) async {
+    func enhancePrompt(settings: SettingsManager, tier: PromptTier = .advanced) async {
         guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         guard settings.hasValidAPIKey else {
@@ -59,7 +59,8 @@ final class PromptViewModel {
                 apiKey: settings.apiKey,
                 model: settings.selectedModel,
                 temperature: settings.temperature,
-                maxTokens: settings.maxTokens
+                maxTokens: settings.maxTokens,
+                tier: tier
             )
 
             enhancedPrompt = result.enhancedPrompt
