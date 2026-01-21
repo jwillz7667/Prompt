@@ -60,8 +60,15 @@ struct AuthView: View {
                     // Apple Sign In
                     SignInWithAppleButton(.signIn) { request in
                         request.requestedScopes = [.fullName, .email]
-                    } onCompletion: { _ in
-                        // Handled by AuthManager delegate
+                    } onCompletion: { result in
+                        switch result {
+                        case .success(let authorization):
+                            Task {
+                                await authManager.handleAppleSignIn(authorization: authorization)
+                            }
+                        case .failure(let error):
+                            print("[Auth] Apple Sign In failed: \(error)")
+                        }
                     }
                     .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                     .frame(height: 54)

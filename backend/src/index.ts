@@ -20,6 +20,9 @@ config();
 const app = express();
 const PORT = process.env['PORT'] || 3000;
 
+// Trust proxy (Railway, Vercel, etc.) for correct client IP in rate limiting
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({

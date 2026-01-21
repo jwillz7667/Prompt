@@ -52,17 +52,60 @@ final class AuthManager: NSObject {
 
     // MARK: - Apple Sign In
 
-    func signInWithApple() {
-        let request = ASAuthorizationAppleIDProvider().createRequest()
-        request.requestedScopes = [.fullName, .email]
-
-        let controller = ASAuthorizationController(authorizationRequests: [request])
-        controller.delegate = self
-        controller.presentationContextProvider = self
-        controller.performRequests()
-
+    func handleAppleSignIn(authorization: ASAuthorization) async {
+        print("[Auth] handleAppleSignIn called")
         isLoading = true
         error = nil
+
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let identityTokenData = credential.identityToken,
+              let identityToken = String(data: identityTokenData, encoding: .utf8),
+              let authCodeData = credential.authorizationCode,
+              let authCode = String(data: authCodeData, encoding: .utf8) else {
+            print("[Auth] Failed to extract credentials")
+            error = .invalidCredential
+            isLoading = false
+            return
+        }
+
+        print("[Auth] Credentials extracted, calling backend...")
+
+        do {
+            let request = AppleAuthRequest(
+                identityToken: identityToken,
+                authorizationCode: authCode,
+                fullName: credential.fullName.map {
+                    FullName(givenName: $0.givenName, familyName: $0.familyName)
+                },
+                deviceId: UIDevice.current.identifierForVendor?.uuidString,
+                deviceName: UIDevice.current.name
+            )
+
+            let response: AuthResponse = try await APIClient.shared.request(
+                "/auth/apple",
+                method: .post,
+                body: request,
+                requiresAuth: false
+            )
+
+            print("[Auth] Backend response received, setting tokens...")
+
+            await APIClient.shared.setTokens(
+                access: response.accessToken,
+                refresh: response.refreshToken
+            )
+
+            currentUser = User(from: response.user)
+            print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
+
+            // Sync subscription status after successful authentication
+            await StoreKitManager.shared.syncWithBackend()
+        } catch {
+            print("[Auth] Error: \(error)")
+            self.error = .serverError(error.localizedDescription)
+        }
+
+        isLoading = false
     }
 
     // MARK: - Google Sign In
@@ -114,14 +157,19 @@ extension AuthManager: ASAuthorizationControllerDelegate {
         Task { @MainActor in
             defer { isLoading = false }
 
+            print("[Auth] Apple Sign In delegate called")
+
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let identityTokenData = credential.identityToken,
                   let identityToken = String(data: identityTokenData, encoding: .utf8),
                   let authCodeData = credential.authorizationCode,
                   let authCode = String(data: authCodeData, encoding: .utf8) else {
+                print("[Auth] Failed to extract credentials")
                 error = .invalidCredential
                 return
             }
+
+            print("[Auth] Credentials extracted, calling backend...")
 
             do {
                 let request = AppleAuthRequest(
@@ -141,16 +189,20 @@ extension AuthManager: ASAuthorizationControllerDelegate {
                     requiresAuth: false
                 )
 
+                print("[Auth] Backend response received, setting tokens...")
+
                 await APIClient.shared.setTokens(
                     access: response.accessToken,
                     refresh: response.refreshToken
                 )
 
                 currentUser = User(from: response.user)
+                print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
 
                 // Sync subscription status after successful authentication
                 await StoreKitManager.shared.syncWithBackend()
             } catch {
+                print("[Auth] Error: \(error)")
                 self.error = .serverError(error.localizedDescription)
             }
         }
@@ -160,10 +212,13 @@ extension AuthManager: ASAuthorizationControllerDelegate {
         controller: ASAuthorizationController,
         didCompleteWithError error: Error
     ) {
+        print("[Auth] Error delegate called: \(error)")
+
         Task { @MainActor in
             isLoading = false
 
             if let authError = error as? ASAuthorizationError {
+                print("[Auth] ASAuthorizationError code: \(authError.code.rawValue)")
                 switch authError.code {
                 case .canceled:
                     self.error = nil // User canceled, not an error
