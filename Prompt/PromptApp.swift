@@ -85,7 +85,7 @@ struct SplashView: View {
                     value: isAnimating
                 )
 
-                Text("Promptomizer")
+                Text("Promptomize")
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundStyle(textPrimary)
 

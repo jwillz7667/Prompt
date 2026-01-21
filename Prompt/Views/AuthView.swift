@@ -42,7 +42,7 @@ struct AuthView: View {
                         }
                     }
 
-                    Text("Promptomizer")
+                    Text("Promptomize")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundStyle(textPrimary)
 
@@ -93,10 +93,10 @@ struct AuthView: View {
                         .foregroundStyle(textSecondary)
 
                     HStack(spacing: 4) {
-                        Link("Terms of Service", destination: URL(string: "https://example.com/terms")!)
+                        Link("Terms of Service", destination: URL(string: "https://promptomize.com/terms")!)
                         Text("and")
                             .foregroundStyle(textSecondary)
-                        Link("Privacy Policy", destination: URL(string: "https://example.com/privacy")!)
+                        Link("Privacy Policy", destination: URL(string: "https://promptomize.com/privacy")!)
                     }
                     .font(.caption)
                 }

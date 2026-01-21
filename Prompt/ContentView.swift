@@ -90,7 +90,7 @@ struct ContentView: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle("Promptomizer")
+            .navigationTitle("Promptomize")
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
