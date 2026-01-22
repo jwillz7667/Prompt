@@ -41,112 +41,103 @@ struct AIOrb: View {
                 .frame(width: size * 1.4, height: size * 1.4)
                 .blur(radius: 25)
 
-            // Orbital ring 1 - Horizontal
-            OrbitalRing(
-                size: size,
-                lineWidth: 2,
-                color: primaryColor.opacity(0.6),
-                dashPattern: [8, 4]
-            )
-            .rotationEffect(.degrees(rotation1))
-            .rotation3DEffect(.degrees(70), axis: (x: 1, y: 0, z: 0))
+            // Orbital ring 1 - Horizontal ellipse
+            Ellipse()
+                .stroke(
+                    AngularGradient(
+                        colors: [accentColor.opacity(0.2), accentColor, accentColor.opacity(0.2)],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                )
+                .frame(width: size, height: size * 0.3)
+                .rotationEffect(.degrees(rotation1))
 
-            // Orbital ring 2 - Tilted
-            OrbitalRing(
-                size: size * 0.85,
-                lineWidth: 1.5,
-                color: accentColor.opacity(0.5),
-                dashPattern: [4, 6]
-            )
-            .rotationEffect(.degrees(rotation2))
-            .rotation3DEffect(.degrees(60), axis: (x: 0.5, y: 1, z: 0))
+            // Orbital ring 2 - Tilted ellipse
+            Ellipse()
+                .stroke(
+                    AngularGradient(
+                        colors: [primaryColor.opacity(0.2), primaryColor.opacity(0.8), primaryColor.opacity(0.2)],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                )
+                .frame(width: size * 0.95, height: size * 0.35)
+                .rotationEffect(.degrees(-rotation2 + 60))
 
-            // Orbital ring 3 - Vertical
-            OrbitalRing(
-                size: size * 0.7,
-                lineWidth: 2.5,
-                color: primaryColor.opacity(0.4),
-                dashPattern: [12, 8]
-            )
-            .rotationEffect(.degrees(rotation3))
-            .rotation3DEffect(.degrees(80), axis: (x: 0, y: 1, z: 0.2))
+            // Orbital ring 3 - Another angle
+            Ellipse()
+                .stroke(
+                    AngularGradient(
+                        colors: [accentColor.opacity(0.1), accentColor.opacity(0.6), accentColor.opacity(0.1)],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
+                )
+                .frame(width: size * 0.9, height: size * 0.25)
+                .rotationEffect(.degrees(rotation3 - 30))
 
             // Core sphere with gradient
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            accentColor.opacity(0.9),
-                            accentColor.opacity(0.5),
-                            primaryColor.opacity(0.3)
+                            accentColor.opacity(0.95),
+                            accentColor.opacity(0.7),
+                            primaryColor.opacity(0.4)
                         ],
                         center: .topLeading,
                         startRadius: 0,
-                        endRadius: size * 0.3
+                        endRadius: size * 0.25
                     )
                 )
-                .frame(width: size * 0.35, height: size * 0.35)
+                .frame(width: size * 0.4, height: size * 0.4)
                 .scaleEffect(pulse)
-                .shadow(color: accentColor.opacity(0.5), radius: 15)
+                .shadow(color: accentColor.opacity(0.6), radius: 20)
 
-            // Inner highlight
+            // Inner highlight on sphere
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.8), Color.clear],
+                        colors: [Color.white.opacity(0.9), Color.clear],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: size * 0.15, height: size * 0.15)
-                .offset(x: -size * 0.05, y: -size * 0.05)
-                .blur(radius: 2)
+                .frame(width: size * 0.12, height: size * 0.12)
+                .offset(x: -size * 0.06, y: -size * 0.06)
+                .blur(radius: 3)
 
             // Orbiting particles
-            ForEach(0..<3, id: \.self) { index in
-                Circle()
-                    .fill(accentColor)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: accentColor, radius: 4)
-                    .offset(y: -size * 0.45)
-                    .rotationEffect(.degrees(rotation1 + Double(index) * 120))
-            }
+            Circle()
+                .fill(accentColor)
+                .frame(width: 8, height: 8)
+                .shadow(color: accentColor, radius: 6)
+                .offset(x: cos(rotation1 * .pi / 180) * size * 0.5,
+                        y: sin(rotation1 * .pi / 180) * size * 0.15)
+
+            Circle()
+                .fill(primaryColor)
+                .frame(width: 6, height: 6)
+                .shadow(color: primaryColor, radius: 4)
+                .offset(x: cos((-rotation2 + 60) * .pi / 180) * size * 0.475,
+                        y: sin((-rotation2 + 60) * .pi / 180) * size * 0.175)
         }
         .onAppear {
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
                 rotation1 = 360
             }
-            withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
-                rotation2 = -360
+            withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+                rotation2 = 360
             }
-            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
                 rotation3 = 360
             }
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                pulse = 1.15
-                glowIntensity = 0.6
+                pulse = 1.1
+                glowIntensity = 0.5
             }
         }
-    }
-}
-
-struct OrbitalRing: View {
-    let size: CGFloat
-    let lineWidth: CGFloat
-    let color: Color
-    let dashPattern: [CGFloat]
-
-    var body: some View {
-        Circle()
-            .stroke(
-                color,
-                style: StrokeStyle(
-                    lineWidth: lineWidth,
-                    lineCap: .round,
-                    dash: dashPattern
-                )
-            )
-            .frame(width: size, height: size)
     }
 }
 

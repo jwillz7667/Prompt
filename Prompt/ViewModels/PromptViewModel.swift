@@ -65,9 +65,10 @@ final class PromptViewModel {
             await EnhancementActivityManager.shared.updateProgress(stage: .enhancing)
 
             // Use streaming for real-time response
+            // effectiveModel returns reasoner if Deep Think is enabled, chat otherwise
             let result = try await service.enhancePromptStream(
                 userPrompt: userPrompt,
-                model: settings.selectedModel,
+                model: settings.effectiveModel,
                 temperature: settings.temperature,
                 maxTokens: settings.maxTokens
             ) { [weak self] token in

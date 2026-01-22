@@ -45,7 +45,8 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 @Observable
 final class SettingsManager {
-    var selectedModel: DeepseekModel = .reasoner
+    var selectedModel: DeepseekModel = .chat
+    var deepThinkEnabled: Bool = false
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
     var appearanceMode: AppearanceMode = .system
@@ -54,13 +55,18 @@ final class SettingsManager {
         loadPreferences()
     }
 
+    // MARK: - Computed Properties
+
+    /// Returns the actual model to use based on Deep Think setting
+    var effectiveModel: DeepseekModel {
+        deepThinkEnabled ? .reasoner : .chat
+    }
+
     // MARK: - User Defaults Preferences
 
     private func loadPreferences() {
-        if let modelRaw = UserDefaults.standard.string(forKey: "selectedModel"),
-           let model = DeepseekModel(rawValue: modelRaw) {
-            selectedModel = model
-        }
+        deepThinkEnabled = UserDefaults.standard.bool(forKey: "deepThinkEnabled")
+
         let savedTemp = UserDefaults.standard.double(forKey: "temperature")
         if savedTemp > 0 { temperature = savedTemp }
         let savedTokens = UserDefaults.standard.integer(forKey: "maxTokens")
@@ -74,7 +80,7 @@ final class SettingsManager {
     }
 
     func savePreferences() {
-        UserDefaults.standard.set(selectedModel.rawValue, forKey: "selectedModel")
+        UserDefaults.standard.set(deepThinkEnabled, forKey: "deepThinkEnabled")
         UserDefaults.standard.set(temperature, forKey: "temperature")
         UserDefaults.standard.set(maxTokens, forKey: "maxTokens")
         UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")

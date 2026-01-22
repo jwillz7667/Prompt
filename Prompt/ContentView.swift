@@ -63,6 +63,8 @@ struct ContentView: View {
                                 removal: .opacity.combined(with: .move(edge: .trailing))
                             ))
 
+                        deepThinkToggle
+
                         enhanceButton
 
                         // Show loading animation until first token arrives
@@ -357,6 +359,70 @@ struct ContentView: View {
             }
             .animation(.spring(response: 0.3), value: viewModel.userPrompt.isEmpty)
         }
+    }
+
+    // MARK: - Deep Think Toggle
+
+    private var isPremium: Bool {
+        storeKit.currentTier == .premium || storeKit.currentTier == .pro
+    }
+
+    private var deepThinkToggle: some View {
+        HStack(spacing: 12) {
+            Image(systemName: settings.deepThinkEnabled ? "brain.head.profile.fill" : "brain.head.profile")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(settings.deepThinkEnabled ? Color.blue : textSecondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Deep Think")
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(textPrimary)
+
+                    if !isPremium {
+                        Text("PRO")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.blue)
+                            .clipShape(Capsule())
+                    }
+                }
+
+                Text(settings.deepThinkEnabled ? "Slower but higher quality" : "Enable for better results")
+                    .font(.system(.caption))
+                    .foregroundStyle(textSecondary)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: Binding(
+                get: { settings.deepThinkEnabled },
+                set: { newValue in
+                    if newValue && !isPremium {
+                        showPaywall = true
+                    } else {
+                        withAnimation(.spring(response: 0.3)) {
+                            settings.deepThinkEnabled = newValue
+                            settings.savePreferences()
+                        }
+                        triggerHaptic(.light)
+                    }
+                }
+            ))
+            .labelsHidden()
+            .tint(.blue)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(bgSecondary)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(settings.deepThinkEnabled ? Color.blue.opacity(0.3) : borderColor, lineWidth: 1)
+        )
     }
 
     // MARK: - Enhance Button
