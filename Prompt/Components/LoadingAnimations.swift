@@ -7,86 +7,171 @@
 
 import SwiftUI
 
-// MARK: - Neural Network Loading Animation
+// MARK: - AI Orb Loading Animation
 
-struct NeuralNetworkLoader: View {
-    @State private var rotation: Double = 0
-    @State private var scale: CGFloat = 1.0
-    @State private var nodeOpacities: [Double] = Array(repeating: 0.3, count: 6)
-    @State private var connectionOpacities: [Double] = Array(repeating: 0.2, count: 8)
+struct AIOrb: View {
+    @State private var rotation1: Double = 0
+    @State private var rotation2: Double = 0
+    @State private var rotation3: Double = 0
+    @State private var pulse: CGFloat = 1.0
+    @State private var glowIntensity: Double = 0.4
 
     let size: CGFloat
     let primaryColor: Color
-    let secondaryColor: Color
+    let accentColor: Color
 
-    init(size: CGFloat = 80, primaryColor: Color = Color(white: 0.25), secondaryColor: Color = Color(white: 0.5)) {
+    init(size: CGFloat = 120, primaryColor: Color = .primary, accentColor: Color = .blue) {
         self.size = size
         self.primaryColor = primaryColor
-        self.secondaryColor = secondaryColor
+        self.accentColor = accentColor
     }
 
     var body: some View {
         ZStack {
-            // Outer rotating ring
-            Circle()
-                .stroke(
-                    AngularGradient(
-                        colors: [primaryColor.opacity(0.1), primaryColor.opacity(0.8), primaryColor.opacity(0.1)],
-                        center: .center
-                    ),
-                    lineWidth: 3
-                )
-                .frame(width: size, height: size)
-                .rotationEffect(.degrees(rotation))
-
-            // Inner pulsing core
+            // Outer glow
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [primaryColor.opacity(0.6), primaryColor.opacity(0.1)],
+                        colors: [accentColor.opacity(glowIntensity), Color.clear],
                         center: .center,
+                        startRadius: size * 0.2,
+                        endRadius: size * 0.7
+                    )
+                )
+                .frame(width: size * 1.4, height: size * 1.4)
+                .blur(radius: 25)
+
+            // Orbital ring 1 - Horizontal
+            OrbitalRing(
+                size: size,
+                lineWidth: 2,
+                color: primaryColor.opacity(0.6),
+                dashPattern: [8, 4]
+            )
+            .rotationEffect(.degrees(rotation1))
+            .rotation3DEffect(.degrees(70), axis: (x: 1, y: 0, z: 0))
+
+            // Orbital ring 2 - Tilted
+            OrbitalRing(
+                size: size * 0.85,
+                lineWidth: 1.5,
+                color: accentColor.opacity(0.5),
+                dashPattern: [4, 6]
+            )
+            .rotationEffect(.degrees(rotation2))
+            .rotation3DEffect(.degrees(60), axis: (x: 0.5, y: 1, z: 0))
+
+            // Orbital ring 3 - Vertical
+            OrbitalRing(
+                size: size * 0.7,
+                lineWidth: 2.5,
+                color: primaryColor.opacity(0.4),
+                dashPattern: [12, 8]
+            )
+            .rotationEffect(.degrees(rotation3))
+            .rotation3DEffect(.degrees(80), axis: (x: 0, y: 1, z: 0.2))
+
+            // Core sphere with gradient
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            accentColor.opacity(0.9),
+                            accentColor.opacity(0.5),
+                            primaryColor.opacity(0.3)
+                        ],
+                        center: .topLeading,
                         startRadius: 0,
                         endRadius: size * 0.3
                     )
                 )
-                .frame(width: size * 0.5, height: size * 0.5)
-                .scaleEffect(scale)
+                .frame(width: size * 0.35, height: size * 0.35)
+                .scaleEffect(pulse)
+                .shadow(color: accentColor.opacity(0.5), radius: 15)
 
-            // Neural nodes
-            ForEach(0..<6, id: \.self) { index in
+            // Inner highlight
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.8), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size * 0.15, height: size * 0.15)
+                .offset(x: -size * 0.05, y: -size * 0.05)
+                .blur(radius: 2)
+
+            // Orbiting particles
+            ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(primaryColor)
-                    .frame(width: 8, height: 8)
-                    .opacity(nodeOpacities[index])
-                    .offset(y: -size * 0.35)
-                    .rotationEffect(.degrees(Double(index) * 60))
+                    .fill(accentColor)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: accentColor, radius: 4)
+                    .offset(y: -size * 0.45)
+                    .rotationEffect(.degrees(rotation1 + Double(index) * 120))
             }
-
-            // Center sparkle
-            Image(systemName: "sparkle")
-                .font(.system(size: size * 0.25, weight: .light))
-                .foregroundStyle(primaryColor)
-                .opacity(scale > 1.05 ? 1 : 0.5)
         }
         .onAppear {
-            // Continuous rotation
-            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
-                rotation = 360
+            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                rotation1 = 360
             }
-
-            // Pulsing core
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                scale = 1.15
+            withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
+                rotation2 = -360
             }
+            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+                rotation3 = 360
+            }
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                pulse = 1.15
+                glowIntensity = 0.6
+            }
+        }
+    }
+}
 
-            // Animate nodes sequentially
-            for index in 0..<6 {
+struct OrbitalRing: View {
+    let size: CGFloat
+    let lineWidth: CGFloat
+    let color: Color
+    let dashPattern: [CGFloat]
+
+    var body: some View {
+        Circle()
+            .stroke(
+                color,
+                style: StrokeStyle(
+                    lineWidth: lineWidth,
+                    lineCap: .round,
+                    dash: dashPattern
+                )
+            )
+            .frame(width: size, height: size)
+    }
+}
+
+// MARK: - Waveform Visualizer
+
+struct WaveformVisualizer: View {
+    @State private var amplitudes: [CGFloat] = Array(repeating: 0.3, count: 5)
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<5, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color)
+                    .frame(width: 4, height: 12 + amplitudes[index] * 20)
+            }
+        }
+        .onAppear {
+            for i in 0..<5 {
                 withAnimation(
-                    .easeInOut(duration: 0.5)
+                    .easeInOut(duration: 0.4 + Double(i) * 0.1)
                     .repeatForever(autoreverses: true)
-                    .delay(Double(index) * 0.1)
+                    .delay(Double(i) * 0.1)
                 ) {
-                    nodeOpacities[index] = 1.0
+                    amplitudes[i] = CGFloat.random(in: 0.5...1.0)
                 }
             }
         }
@@ -98,77 +183,74 @@ struct NeuralNetworkLoader: View {
 struct PromptEnhancementLoader: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var currentPhase = 0
-    @State private var progress: CGFloat = 0
-    @State private var textOpacity: Double = 1
-    @State private var waveOffset: CGFloat = 0
+    @State private var displayedText = ""
+    @State private var isTyping = false
 
-    let phases = ["Analyzing prompt...", "Applying AI magic...", "Enhancing clarity...", "Optimizing structure..."]
+    let phases = [
+        "Analyzing your prompt",
+        "Applying AI enhancement",
+        "Optimizing structure",
+        "Refining output"
+    ]
 
-    // AAA Compliant Colors
     private var primaryColor: Color { Color.adaptiveTextPrimary }
     private var secondaryColor: Color { Color.adaptiveTextSecondary }
+    private var accentColor: Color {
+        colorScheme == .dark ? Color.blue.opacity(0.8) : Color.blue
+    }
 
     var body: some View {
-        VStack(spacing: 24) {
-            // Main loader
-            ZStack {
-                // Background glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [primaryColor.opacity(0.2), Color.clear],
-                            center: .center,
-                            startRadius: 20,
-                            endRadius: 80
-                        )
-                    )
-                    .frame(width: 160, height: 160)
-                    .blur(radius: 20)
+        VStack(spacing: 32) {
+            // Main orb animation
+            AIOrb(
+                size: 140,
+                primaryColor: primaryColor,
+                accentColor: accentColor
+            )
 
-                // Neural network animation
-                NeuralNetworkLoader(size: 100, primaryColor: primaryColor, secondaryColor: secondaryColor)
+            // Status section
+            VStack(spacing: 12) {
+                // Typing text with cursor
+                HStack(spacing: 2) {
+                    Text(displayedText)
+                        .font(.system(.body, design: .rounded, weight: .medium))
+                        .foregroundStyle(primaryColor)
 
-                // Progress ring
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(
-                        primaryColor,
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                    )
-                    .frame(width: 110, height: 110)
-                    .rotationEffect(.degrees(-90))
+                    // Blinking cursor
+                    Rectangle()
+                        .fill(accentColor)
+                        .frame(width: 2, height: 18)
+                        .opacity(isTyping ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isTyping)
+                }
+                .frame(height: 24)
+
+                // Waveform indicator
+                WaveformVisualizer(color: secondaryColor.opacity(0.6))
             }
-
-            // Phase text
-            Text(phases[currentPhase])
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                .foregroundStyle(secondaryColor)
-                .opacity(textOpacity)
-                .contentTransition(.numericText())
         }
         .onAppear {
-            startAnimations()
+            isTyping = true
+            typePhase()
         }
     }
 
-    private func startAnimations() {
-        // Progress animation
-        withAnimation(.easeInOut(duration: 8)) {
-            progress = 0.95
+    private func typePhase() {
+        let currentText = phases[currentPhase]
+        displayedText = ""
+
+        // Type out each character
+        for (index, character) in currentText.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.04) {
+                displayedText += String(character)
+            }
         }
 
-        // Phase cycling
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { timer in
-            withAnimation(.easeInOut(duration: 0.3)) {
-                textOpacity = 0
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                currentPhase = (currentPhase + 1) % phases.count
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    textOpacity = 1
-                }
-            }
+        // Wait, then move to next phase
+        let typingDuration = Double(currentText.count) * 0.04 + 1.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + typingDuration) {
+            currentPhase = (currentPhase + 1) % phases.count
+            typePhase()
         }
     }
 }
@@ -445,16 +527,29 @@ struct FloatingParticles: View {
 
 // MARK: - Preview
 
-#Preview("Neural Network Loader") {
-    NeuralNetworkLoader()
+#Preview("AI Orb") {
+    AIOrb()
         .padding(50)
         .background(Color(white: 0.95))
+}
+
+#Preview("AI Orb - Dark") {
+    AIOrb(primaryColor: .white, accentColor: .cyan)
+        .padding(50)
+        .background(Color(white: 0.1))
 }
 
 #Preview("Enhancement Loader") {
     PromptEnhancementLoader()
         .padding(50)
         .background(Color(white: 0.95))
+}
+
+#Preview("Enhancement Loader - Dark") {
+    PromptEnhancementLoader()
+        .padding(50)
+        .background(Color(white: 0.1))
+        .environment(\.colorScheme, .dark)
 }
 
 #Preview("Liquid Glass Card") {

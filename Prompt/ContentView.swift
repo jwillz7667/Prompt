@@ -65,12 +65,13 @@ struct ContentView: View {
 
                         enhanceButton
 
-                        if viewModel.isLoading && !viewModel.isStreaming {
+                        // Show loading animation until first token arrives
+                        if viewModel.isLoading && !viewModel.hasEnhancedPrompt {
                             loadingSection
                                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
 
-                        // Show output section during streaming or after completion
+                        // Show output section once we have content (streaming or complete)
                         if viewModel.hasEnhancedPrompt {
                             outputSection
                                 .transition(.asymmetric(

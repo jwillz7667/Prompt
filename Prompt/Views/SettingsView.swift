@@ -52,37 +52,6 @@ struct SettingsView: View {
                         .foregroundStyle(textSecondary)
                 }
 
-                // Model Section
-                Section {
-                    Picker(selection: $bindableSettings.selectedModel) {
-                        ForEach(DeepseekModel.allCases) { model in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(model.displayName)
-                                    .font(.body)
-                                    .foregroundStyle(textPrimary)
-                                Text(model.description)
-                                    .font(.caption)
-                                    .foregroundStyle(textSecondary)
-                            }
-                            .tag(model)
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "cpu.fill")
-                                .foregroundStyle(textPrimary)
-                                .frame(width: 28)
-                            Text("Model")
-                                .foregroundStyle(textPrimary)
-                        }
-                    }
-                } header: {
-                    Text("Model")
-                        .foregroundStyle(textSecondary)
-                } footer: {
-                    Text("Reasoner uses deep chain-of-thought for better prompt engineering")
-                        .foregroundStyle(textSecondary)
-                }
-
                 // Generation Settings Section
                 Section {
                     HStack {
@@ -113,7 +82,7 @@ struct SettingsView: View {
                     Text("Generation Settings")
                         .foregroundStyle(textSecondary)
                 } footer: {
-                    Text("Reasoner supports up to 64K output tokens. Higher temperature = more creative.")
+                    Text("Higher temperature = more creative responses.")
                         .foregroundStyle(textSecondary)
                 }
 
