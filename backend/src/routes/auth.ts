@@ -43,6 +43,9 @@ authRouter.post('/apple', async (req: Request, res: Response): Promise<void> => 
   try {
     const data = appleAuthSchema.parse(req.body);
 
+    console.log('[Apple Auth] Received request, verifying token...');
+    console.log('[Apple Auth] APPLE_CLIENT_ID configured:', !!process.env['APPLE_CLIENT_ID']);
+
     const result = await authenticateWithApple(
       data.identityToken,
       data.authorizationCode,
@@ -50,14 +53,16 @@ authRouter.post('/apple', async (req: Request, res: Response): Promise<void> => 
       { deviceId: data.deviceId, deviceName: data.deviceName }
     );
 
+    console.log('[Apple Auth] Success for user:', result.user.email);
     res.json(result);
   } catch (error) {
-    console.error('Apple auth error:', error);
+    console.error('[Apple Auth] Error:', error);
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
     }
-    res.status(401).json({ error: 'Authentication failed' });
+    const message = error instanceof Error ? error.message : 'Authentication failed';
+    res.status(401).json({ error: message });
   }
 });
 

@@ -29,12 +29,16 @@ export async function authenticateWithApple(
   fullName?: { givenName?: string; familyName?: string },
   deviceInfo?: { deviceId?: string; deviceName?: string }
 ): Promise<AuthResult> {
+  const clientId = process.env['APPLE_CLIENT_ID'];
+  console.log('[Apple Auth Service] Verifying token with audience:', clientId);
+
   // Verify the identity token with Apple
   const applePayload = await appleSignin.verifyIdToken(identityToken, {
-    audience: process.env['APPLE_CLIENT_ID'],
+    audience: clientId,
     ignoreExpiration: false,
   });
 
+  console.log('[Apple Auth Service] Token verified, sub:', applePayload.sub);
   const { sub: appleId, email } = applePayload;
 
   if (!email) {
