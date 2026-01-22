@@ -8,10 +8,23 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.res.promptomizer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>promptomize</string>
+			</array>
+		</dict>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>This helps us improve your experience by understanding how you use the app.</string>
 	<key>UIBackgroundModes</key>

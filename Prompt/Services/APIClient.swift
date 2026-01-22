@@ -26,21 +26,28 @@ actor APIClient {
     func setTokens(access: String, refresh: String) {
         self.accessToken = access
         self.refreshToken = refresh
-        // Persist tokens securely
-        KeychainHelper.save(key: "accessToken", value: access)
-        KeychainHelper.save(key: "refreshToken", value: refresh)
+        // Persist tokens securely using shared keychain for extension access
+        SharedKeychainHelper.save(key: .accessToken, value: access)
+        SharedKeychainHelper.save(key: .refreshToken, value: refresh)
+        // Also update shared data manager
+        SharedDataManager.shared.isAuthenticated = true
     }
 
     func loadStoredTokens() {
-        self.accessToken = KeychainHelper.load(key: "accessToken")
-        self.refreshToken = KeychainHelper.load(key: "refreshToken")
+        // Migrate from legacy keychain if needed
+        SharedKeychainHelper.migrateFromLegacyKeychain()
+        // Load from shared keychain
+        self.accessToken = SharedKeychainHelper.load(key: .accessToken)
+        self.refreshToken = SharedKeychainHelper.load(key: .refreshToken)
     }
 
     func clearTokens() {
         self.accessToken = nil
         self.refreshToken = nil
-        KeychainHelper.delete(key: "accessToken")
-        KeychainHelper.delete(key: "refreshToken")
+        SharedKeychainHelper.deleteAll()
+        // Update shared data manager
+        SharedDataManager.shared.isAuthenticated = false
+        SharedDataManager.shared.updateAuthState(isAuthenticated: false, name: nil, email: nil)
     }
 
     var isAuthenticated: Bool {

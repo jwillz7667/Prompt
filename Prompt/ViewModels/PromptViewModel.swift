@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import WidgetKit
 
 @Observable
 final class PromptViewModel {
@@ -40,11 +41,12 @@ final class PromptViewModel {
 
     // MARK: - Actions
 
-    func enhancePrompt(settings: SettingsManager, tier: PromptTier = .advanced) async {
+    func enhancePrompt(settings: SettingsManager) async {
         guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        guard settings.hasValidAPIKey else {
-            errorMessage = EnhancerError.noAPIKey.localizedDescription
+        // Check if user is authenticated
+        guard await APIClient.shared.isAuthenticated else {
+            errorMessage = EnhancerError.notAuthenticated.localizedDescription
             showError = true
             return
         }
@@ -53,21 +55,50 @@ final class PromptViewModel {
         errorMessage = nil
         enhancedPrompt = ""
 
+        // Start Live Activity
+        await EnhancementActivityManager.shared.startActivity(originalPrompt: userPrompt)
+
         do {
+            // Update to enhancing stage
+            await EnhancementActivityManager.shared.updateProgress(stage: .enhancing)
+
             let result = try await service.enhancePrompt(
                 userPrompt: userPrompt,
-                apiKey: settings.apiKey,
                 model: settings.selectedModel,
                 temperature: settings.temperature,
-                maxTokens: settings.maxTokens,
-                tier: tier
+                maxTokens: settings.maxTokens
             )
+
+            // Update to optimizing stage briefly
+            await EnhancementActivityManager.shared.updateProgress(stage: .optimizing)
 
             enhancedPrompt = result.enhancedPrompt
             tokensUsed = result.tokensUsed
+
+            // Complete the Live Activity
+            await EnhancementActivityManager.shared.completeActivity(enhancedPrompt: result.enhancedPrompt)
+
+            // Update shared storage for widgets
+            let promptId = UUID().uuidString
+            SharedDataManager.shared.addRecentPrompt(
+                id: promptId,
+                original: userPrompt,
+                enhanced: result.enhancedPrompt
+            )
+
+            // Reload widget timelines
+            WidgetCenter.shared.reloadAllTimelines()
+
+        } catch let error as APIError {
+            errorMessage = error.localizedDescription
+            showError = true
+            // Fail the Live Activity
+            await EnhancementActivityManager.shared.failActivity(errorMessage: error.localizedDescription)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+            // Fail the Live Activity
+            await EnhancementActivityManager.shared.failActivity(errorMessage: error.localizedDescription)
         }
 
         isLoading = false

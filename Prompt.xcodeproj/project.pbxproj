@@ -6,8 +6,42 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		2FE318DE2F229B1500F8305A /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2FE318DD2F229B1400F8305A /* WidgetKit.framework */; };
+		2FE318E02F229B1500F8305A /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2FE318DF2F229B1500F8305A /* SwiftUI.framework */; };
+		2FE318F12F229B1700F8305A /* PromptWidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2FE318DB2F229B1400F8305A /* PromptWidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		2FE318EF2F229B1700F8305A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2F2D040D2F1CCAB80090D110 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2FE318DA2F229B1400F8305A;
+			remoteInfo = PromptWidgetExtensionExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2FE318F62F229B1700F8305A /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2FE318F12F229B1700F8305A /* PromptWidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		2F2D04152F1CCAB80090D110 /* Prompt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Prompt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2FE318DB2F229B1400F8305A /* PromptWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PromptWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2FE318DD2F229B1400F8305A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		2FE318DF2F229B1500F8305A /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		2FE319022F229B9700F8305A /* PromptWidgetExtensionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PromptWidgetExtensionExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -17,6 +51,13 @@
 				Info.plist,
 			);
 			target = 2F2D04142F1CCAB80090D110 /* Prompt */;
+		};
+		2FE318F52F229B1700F8305A /* Exceptions for "PromptWidgetExtension" folder in "PromptWidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2FE318DA2F229B1400F8305A /* PromptWidgetExtensionExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -29,6 +70,14 @@
 			path = Prompt;
 			sourceTree = "<group>";
 		};
+		2FE318E12F229B1500F8305A /* PromptWidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2FE318F52F229B1700F8305A /* Exceptions for "PromptWidgetExtension" folder in "PromptWidgetExtensionExtension" target */,
+			);
+			path = PromptWidgetExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,13 +88,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2FE318D82F229B1400F8305A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2FE318E02F229B1500F8305A /* SwiftUI.framework in Frameworks */,
+				2FE318DE2F229B1500F8305A /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		2F2D040C2F1CCAB80090D110 = {
 			isa = PBXGroup;
 			children = (
+				2FE319022F229B9700F8305A /* PromptWidgetExtensionExtension.entitlements */,
 				2F2D04172F1CCAB80090D110 /* Prompt */,
+				2FE318E12F229B1500F8305A /* PromptWidgetExtension */,
+				2FE318DC2F229B1400F8305A /* Frameworks */,
 				2F2D04162F1CCAB80090D110 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,8 +115,18 @@
 			isa = PBXGroup;
 			children = (
 				2F2D04152F1CCAB80090D110 /* Prompt.app */,
+				2FE318DB2F229B1400F8305A /* PromptWidgetExtensionExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		2FE318DC2F229B1400F8305A /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				2FE318DD2F229B1400F8305A /* WidgetKit.framework */,
+				2FE318DF2F229B1500F8305A /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -68,10 +139,12 @@
 				2F2D04112F1CCAB80090D110 /* Sources */,
 				2F2D04122F1CCAB80090D110 /* Frameworks */,
 				2F2D04132F1CCAB80090D110 /* Resources */,
+				2FE318F62F229B1700F8305A /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				2FE318F02F229B1700F8305A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				2F2D04172F1CCAB80090D110 /* Prompt */,
@@ -82,6 +155,28 @@
 			productName = Prompt;
 			productReference = 2F2D04152F1CCAB80090D110 /* Prompt.app */;
 			productType = "com.apple.product-type.application";
+		};
+		2FE318DA2F229B1400F8305A /* PromptWidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2FE318F22F229B1700F8305A /* Build configuration list for PBXNativeTarget "PromptWidgetExtensionExtension" */;
+			buildPhases = (
+				2FE318D72F229B1400F8305A /* Sources */,
+				2FE318D82F229B1400F8305A /* Frameworks */,
+				2FE318D92F229B1400F8305A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2FE318E12F229B1500F8305A /* PromptWidgetExtension */,
+			);
+			name = PromptWidgetExtensionExtension;
+			packageProductDependencies = (
+			);
+			productName = PromptWidgetExtensionExtension;
+			productReference = 2FE318DB2F229B1400F8305A /* PromptWidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -94,6 +189,9 @@
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					2F2D04142F1CCAB80090D110 = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
+					2FE318DA2F229B1400F8305A = {
 						CreatedOnToolsVersion = 26.1.1;
 					};
 				};
@@ -113,12 +211,20 @@
 			projectRoot = "";
 			targets = (
 				2F2D04142F1CCAB80090D110 /* Prompt */,
+				2FE318DA2F229B1400F8305A /* PromptWidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		2F2D04132F1CCAB80090D110 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2FE318D92F229B1400F8305A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -135,7 +241,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2FE318D72F229B1400F8305A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2FE318F02F229B1700F8305A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2FE318DA2F229B1400F8305A /* PromptWidgetExtensionExtension */;
+			targetProxy = 2FE318EF2F229B1700F8305A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2F2D04242F1CCAB90090D110 /* Debug */ = {
@@ -331,6 +452,68 @@
 			};
 			name = Release;
 		};
+		2FE318F32F229B1700F8305A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = PromptWidgetExtensionExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 487LC4H9U4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PromptWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PromptWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.res.promptomizer.PromptWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2FE318F42F229B1700F8305A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = PromptWidgetExtensionExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 487LC4H9U4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PromptWidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PromptWidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.res.promptomizer.PromptWidgetExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -348,6 +531,15 @@
 			buildConfigurations = (
 				2F2D04242F1CCAB90090D110 /* Debug */,
 				2F2D04252F1CCAB90090D110 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2FE318F22F229B1700F8305A /* Build configuration list for PBXNativeTarget "PromptWidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2FE318F32F229B1700F8305A /* Debug */,
+				2FE318F42F229B1700F8305A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

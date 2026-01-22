@@ -2,7 +2,7 @@
 //  SettingsManager.swift
 //  Prompt
 //
-//  Manages API key storage (Keychain) and user preferences
+//  Manages user preferences for prompt enhancement
 //
 
 import Foundation
@@ -45,7 +45,6 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 @Observable
 final class SettingsManager {
-    let apiKey: String = "sk-30f4da11916a4f9890c34eaf2c133acb"
     var selectedModel: DeepseekModel = .reasoner
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
@@ -80,8 +79,6 @@ final class SettingsManager {
         UserDefaults.standard.set(maxTokens, forKey: "maxTokens")
         UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
     }
-
-    var hasValidAPIKey: Bool { true }
 }
 
 // MARK: - Model Enum

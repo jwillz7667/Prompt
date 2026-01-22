@@ -7,7 +7,8 @@ import {
   type RequestWithSubscription,
 } from '../middleware/quotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
-import { recordUsage } from '../services/subscriptionService.js';
+import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
+import { enhancePrompt, getPromptTierFromSubscription } from '../services/deepseekService.js';
 
 export const promptRouter = Router();
 
@@ -45,6 +46,133 @@ const listQuerySchema = z.object({
   sortBy: z.enum(['createdAt', 'updatedAt', 'title']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
+
+const enhancePromptSchema = z.object({
+  prompt: z.string().min(1).max(100000),
+  model: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().min(1).max(100000).optional(),
+});
+
+// ============================================================================
+// ENHANCE PROMPT (AI enhancement with quota enforcement)
+// ============================================================================
+
+promptRouter.post(
+  '/enhance',
+  enforceQuota('enhance_prompt'),
+  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const data = enhancePromptSchema.parse(req.body);
+
+      // Get user's subscription to determine prompt quality tier
+      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
+      const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+
+      // Apply tier-based max tokens limit
+      const maxTokens = Math.min(
+        data.maxTokens || subscriptionInfo.features.maxTokensPerPrompt,
+        subscriptionInfo.features.maxTokensPerPrompt
+      );
+
+      // Enhance the prompt using DeepSeek
+      const result = await enhancePrompt({
+        prompt: data.prompt,
+        tier: promptTier,
+        model: data.model,
+        temperature: data.temperature,
+        maxTokens,
+      });
+
+      // Save the prompt to the database
+      const savedPrompt = await prisma.prompt.create({
+        data: {
+          userId: req.user.id,
+          originalPrompt: data.prompt,
+          enhancedPrompt: result.enhancedPrompt,
+          model: result.model,
+          temperature: data.temperature || 0.7,
+          maxTokens,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          totalTokens: result.totalTokens,
+          processingMs: result.processingMs,
+        },
+      });
+
+      // Update user stats
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+          promptCount: { increment: 1 },
+          tokenUsage: { increment: BigInt(result.totalTokens) },
+        },
+      });
+
+      // Update daily usage record
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      await prisma.usageRecord.upsert({
+        where: {
+          userId_date: {
+            userId: req.user.id,
+            date: today,
+          },
+        },
+        update: {
+          promptCount: { increment: 1 },
+          tokenCount: { increment: BigInt(result.totalTokens) },
+        },
+        create: {
+          userId: req.user.id,
+          date: today,
+          promptCount: 1,
+          tokenCount: BigInt(result.totalTokens),
+        },
+      });
+
+      // Record usage for quota tracking
+      await recordUsage(req.user.id);
+
+      // Return enhanced prompt with subscription info
+      res.status(200).json({
+        enhancedPrompt: result.enhancedPrompt,
+        prompt: savedPrompt,
+        usage: {
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          totalTokens: result.totalTokens,
+          processingMs: result.processingMs,
+        },
+        subscription: req.subscription
+          ? {
+              tier: req.subscription.tier,
+              promptQuality: req.subscription.promptQuality,
+              dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
+              dailyPromptsLimit: req.subscription.dailyPromptsLimit,
+            }
+          : undefined,
+      });
+    } catch (error) {
+      console.error('Enhance prompt error:', error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        return;
+      }
+      if (error instanceof Error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to enhance prompt' });
+    }
+  }
+);
 
 // ============================================================================
 // CREATE PROMPT (with quota enforcement)

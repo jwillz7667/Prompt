@@ -223,8 +223,27 @@ final class StoreKitManager {
             )
 
             self.usageInfo = response.usage
+
+            // Sync to shared storage for widgets and extensions
+            syncToSharedStorage()
         } catch {
             print("Failed to sync with backend: \(error)")
+        }
+    }
+
+    // MARK: - Shared Storage Sync
+
+    private func syncToSharedStorage() {
+        let shared = SharedDataManager.shared
+
+        // Update quota data
+        if let usage = usageInfo {
+            shared.updateQuota(used: usage.dailyPromptsUsed, limit: usage.dailyPromptsLimit)
+        }
+
+        // Update subscription tier
+        if let sub = subscriptionInfo {
+            shared.updateSubscription(tier: sub.tier.rawValue)
         }
     }
 

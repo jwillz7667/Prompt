@@ -372,8 +372,8 @@ struct ContentView: View {
 
             Task {
                 let startTime = Date()
-                // Pass the prompt quality tier from subscription
-                await viewModel.enhancePrompt(settings: settings, tier: storeKit.promptQuality)
+                // Tier is now determined server-side based on subscription
+                await viewModel.enhancePrompt(settings: settings)
 
                 if viewModel.hasEnhancedPrompt {
                     triggerHaptic(.success)
