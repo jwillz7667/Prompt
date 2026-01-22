@@ -93,14 +93,17 @@ struct QuickEnhanceWidgetEntryView: View {
     var entry: QuickEnhanceEntry
 
     var body: some View {
-        switch family {
-        case .systemMedium:
-            MediumView(entry: entry)
-        case .systemLarge:
-            LargeView(entry: entry)
-        default:
-            MediumView(entry: entry)
+        Group {
+            switch family {
+            case .systemMedium:
+                MediumView(entry: entry)
+            case .systemLarge:
+                LargeView(entry: entry)
+            default:
+                MediumView(entry: entry)
+            }
         }
+        .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -144,7 +147,6 @@ struct MediumView: View {
             }
         }
         .padding()
-        .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -201,7 +203,6 @@ struct LargeView: View {
             }
         }
         .padding()
-        .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 

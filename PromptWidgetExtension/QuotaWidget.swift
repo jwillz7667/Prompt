@@ -75,18 +75,21 @@ struct QuotaWidgetEntryView: View {
     var entry: QuotaEntry
 
     var body: some View {
-        switch family {
-        case .accessoryCircular:
-            CircularView(entry: entry)
-        case .accessoryRectangular:
-            RectangularView(entry: entry)
-        case .accessoryInline:
-            InlineView(entry: entry)
-        case .systemSmall:
-            SmallView(entry: entry)
-        default:
-            SmallView(entry: entry)
+        Group {
+            switch family {
+            case .accessoryCircular:
+                CircularView(entry: entry)
+            case .accessoryRectangular:
+                RectangularView(entry: entry)
+            case .accessoryInline:
+                InlineView(entry: entry)
+            case .systemSmall:
+                SmallView(entry: entry)
+            default:
+                SmallView(entry: entry)
+            }
         }
+        .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -221,7 +224,6 @@ struct SmallView: View {
             }
         }
         .padding()
-        .containerBackground(.fill.tertiary, for: .widget)
     }
 
     var tierColor: Color {
