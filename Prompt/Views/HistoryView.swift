@@ -232,6 +232,7 @@ struct PromptDetailView: View {
     let prompt: PromptRecord
     @Environment(\.dismiss) private var dismiss
     @State private var showCopiedToast = false
+    @State private var showExportSheet = false
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
@@ -289,6 +290,35 @@ struct PromptDetailView: View {
                             .textSelection(.enabled)
                     }
 
+                    // Action buttons
+                    HStack(spacing: 12) {
+                        Button {
+                            ShareService.shared.presentShareSheet(items: [prompt.enhancedPrompt])
+                        } label: {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(bgSecondary)
+                                .foregroundStyle(textPrimary)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        Button {
+                            showExportSheet = true
+                        } label: {
+                            Label("Export", systemImage: "arrow.down.doc")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(bgSecondary)
+                                .foregroundStyle(textPrimary)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+
                     // Metadata
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Details", systemImage: "info.circle")
@@ -332,6 +362,22 @@ struct PromptDetailView: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(textPrimary)
                 }
+            }
+            .sheet(isPresented: $showExportSheet) {
+                ExportOptionsSheet(
+                    originalPrompt: prompt.originalPrompt,
+                    enhancedPrompt: prompt.enhancedPrompt
+                ) { format in
+                    if let url = ShareService.shared.sharePrompt(
+                        original: prompt.originalPrompt,
+                        enhanced: prompt.enhancedPrompt,
+                        format: format
+                    ) {
+                        ShareService.shared.presentShareSheet(items: [url])
+                    }
+                }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
             }
             .overlay(alignment: .bottom) {
                 if showCopiedToast {

@@ -15,12 +15,18 @@ actor DeepseekService {
         let model: String?
         let temperature: Double?
         let maxTokens: Int?
+        let tone: String?
+        let length: String?
+        let customInstructions: String?
 
         enum CodingKeys: String, CodingKey {
             case prompt
             case model
             case temperature
             case maxTokens
+            case tone
+            case length
+            case customInstructions
         }
     }
 
@@ -60,13 +66,19 @@ actor DeepseekService {
         userPrompt: String,
         model: DeepseekModel,
         temperature: Double,
-        maxTokens: Int
+        maxTokens: Int,
+        tone: ToneType? = nil,
+        length: OutputLength? = nil,
+        customInstructions: String? = nil
     ) async throws -> EnhancedPromptResult {
         let request = EnhanceRequest(
             prompt: userPrompt,
             model: model.rawValue,
             temperature: temperature,
-            maxTokens: maxTokens
+            maxTokens: maxTokens,
+            tone: tone?.rawValue,
+            length: length?.rawValue,
+            customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
         )
 
         let response: EnhanceResponse = try await APIClient.shared.request(
@@ -96,13 +108,19 @@ actor DeepseekService {
         model: DeepseekModel,
         temperature: Double,
         maxTokens: Int,
+        tone: ToneType? = nil,
+        length: OutputLength? = nil,
+        customInstructions: String? = nil,
         onToken: @escaping @Sendable (String) -> Void
     ) async throws -> EnhancedPromptResult {
         let request = EnhanceRequest(
             prompt: userPrompt,
             model: model.rawValue,
             temperature: temperature,
-            maxTokens: maxTokens
+            maxTokens: maxTokens,
+            tone: tone?.rawValue,
+            length: length?.rawValue,
+            customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
         )
 
         let stream = await APIClient.shared.requestStream(

@@ -70,7 +70,10 @@ final class PromptViewModel {
                 userPrompt: userPrompt,
                 model: settings.effectiveModel,
                 temperature: settings.temperature,
-                maxTokens: settings.maxTokens
+                maxTokens: settings.maxTokens,
+                tone: settings.selectedTone,
+                length: settings.outputLength,
+                customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
             ) { [weak self] token in
                 // Update UI with each token on main thread
                 Task { @MainActor in

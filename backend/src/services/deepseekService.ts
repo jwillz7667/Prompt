@@ -4,12 +4,21 @@ import { type TierFeatures } from './subscriptionService.js';
 // TYPES
 // ============================================================================
 
+// Tone options for prompt enhancement
+export type PromptTone = 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
+
+// Length options for output control
+export type OutputLength = 'concise' | 'standard' | 'detailed';
+
 export interface EnhancePromptRequest {
   prompt: string;
   tier: 'basic' | 'standard' | 'advanced';
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  tone?: PromptTone;
+  length?: OutputLength;
+  customInstructions?: string;
 }
 
 export interface EnhancePromptResult {
@@ -121,12 +130,61 @@ function buildMetaPrompt(tier: 'basic' | 'standard' | 'advanced'): string {
   }
 }
 
-function buildUserMessage(userPrompt: string, _tier: 'basic' | 'standard' | 'advanced'): string {
-  return `Enhance this prompt:
+function getToneInstructions(tone: PromptTone): string {
+  switch (tone) {
+    case 'professional':
+      return 'Use formal, business-appropriate language. Be precise and authoritative.';
+    case 'casual':
+      return 'Use relaxed, conversational language. Be approachable and friendly.';
+    case 'academic':
+      return 'Use scholarly, research-oriented language. Be thorough and cite-worthy.';
+    case 'creative':
+      return 'Use imaginative, expressive language. Be innovative and engaging.';
+    case 'technical':
+      return 'Use precise, technical language. Be accurate and detail-oriented.';
+    case 'friendly':
+      return 'Use warm, supportive language. Be encouraging and helpful.';
+    default:
+      return 'Use clear, professional language.';
+  }
+}
 
-${userPrompt}
+function getLengthInstructions(length: OutputLength): string {
+  switch (length) {
+    case 'concise':
+      return 'Keep the enhanced prompt brief and to the point. Focus on essential elements only. Target 100-200 words.';
+    case 'standard':
+      return 'Provide a balanced enhanced prompt with moderate detail. Target 200-400 words.';
+    case 'detailed':
+      return 'Create a comprehensive enhanced prompt with extensive detail, examples, and context. Target 400-800 words.';
+    default:
+      return 'Provide a balanced enhanced prompt with moderate detail.';
+  }
+}
 
-Return only the enhanced prompt in Markdown.`;
+function buildUserMessage(
+  userPrompt: string,
+  _tier: 'basic' | 'standard' | 'advanced',
+  tone?: PromptTone,
+  length?: OutputLength,
+  customInstructions?: string
+): string {
+  let message = `Enhance this prompt:\n\n${userPrompt}\n\n`;
+
+  if (tone) {
+    message += `TONE: ${getToneInstructions(tone)}\n\n`;
+  }
+
+  if (length) {
+    message += `LENGTH: ${getLengthInstructions(length)}\n\n`;
+  }
+
+  if (customInstructions && customInstructions.trim()) {
+    message += `ADDITIONAL INSTRUCTIONS: ${customInstructions}\n\n`;
+  }
+
+  message += 'Return only the enhanced prompt in Markdown.';
+  return message;
 }
 
 // ============================================================================
@@ -145,7 +203,13 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
   const tier = request.tier || 'advanced';
 
   const systemPrompt = buildMetaPrompt(tier);
-  const userMessage = buildUserMessage(request.prompt, tier);
+  const userMessage = buildUserMessage(
+    request.prompt,
+    tier,
+    request.tone,
+    request.length,
+    request.customInstructions
+  );
 
   const deepseekRequest: DeepSeekRequest = {
     model,
@@ -228,7 +292,13 @@ export async function enhancePromptStream(
   const tier = request.tier || 'advanced';
 
   const systemPrompt = buildMetaPrompt(tier);
-  const userMessage = buildUserMessage(request.prompt, tier);
+  const userMessage = buildUserMessage(
+    request.prompt,
+    tier,
+    request.tone,
+    request.length,
+    request.customInstructions
+  );
 
   const deepseekRequest = {
     model,

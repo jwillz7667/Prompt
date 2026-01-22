@@ -12,6 +12,9 @@ import { userRouter } from './routes/users.js';
 import { healthRouter } from './routes/health.js';
 import { subscriptionRouter } from './routes/subscriptions.js';
 import { webhookRouter } from './routes/webhooks.js';
+import { templateRouter } from './routes/templates.js';
+import { collectionRouter } from './routes/collections.js';
+import { analyticsRouter } from './routes/analytics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { prisma } from './utils/prisma.js';
 
@@ -59,6 +62,9 @@ app.use('/api/v1/prompts', promptRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/subscriptions', subscriptionRouter);
 app.use('/api/v1/webhooks', webhookRouter);
+app.use('/api/v1/templates', templateRouter);
+app.use('/api/v1/collections', collectionRouter);
+app.use('/api/v1/analytics', analyticsRouter);
 
 // Error handling
 app.use(errorHandler);

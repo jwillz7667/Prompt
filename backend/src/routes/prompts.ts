@@ -52,6 +52,9 @@ const enhancePromptSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().min(1).max(100000).optional(),
+  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly']).optional(),
+  length: z.enum(['concise', 'standard', 'detailed']).optional(),
+  customInstructions: z.string().max(2000).optional(),
 });
 
 // ============================================================================
@@ -87,6 +90,9 @@ promptRouter.post(
         model: data.model,
         temperature: data.temperature,
         maxTokens,
+        tone: data.tone,
+        length: data.length,
+        customInstructions: data.customInstructions,
       });
 
       // Save the prompt to the database
@@ -215,6 +221,9 @@ promptRouter.post(
           model: data.model,
           temperature: data.temperature,
           maxTokens,
+          tone: data.tone,
+          length: data.length,
+          customInstructions: data.customInstructions,
         },
         {
           onToken: (token) => {
@@ -634,3 +643,133 @@ promptRouter.post('/bulk/delete', async (req: AuthenticatedRequest, res: Respons
     res.status(500).json({ error: 'Failed to delete prompts' });
   }
 });
+
+// ============================================================================
+// BATCH ENHANCE (Premium feature - process multiple prompts)
+// ============================================================================
+
+const batchEnhanceSchema = z.object({
+  prompts: z.array(z.string().min(1).max(50000)).min(1).max(10),
+  model: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().min(1).max(50000).optional(),
+  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly']).optional(),
+  length: z.enum(['concise', 'standard', 'detailed']).optional(),
+});
+
+promptRouter.post(
+  '/enhance/batch',
+  enforceQuota('enhance_prompt'),
+  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      // Check if user has premium subscription
+      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
+      if (subscriptionInfo.tier !== 'PREMIUM') {
+        res.status(403).json({ error: 'Batch enhancement is a Premium feature' });
+        return;
+      }
+
+      const data = batchEnhanceSchema.parse(req.body);
+      const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+
+      const maxTokens = Math.min(
+        data.maxTokens || subscriptionInfo.features.maxTokensPerPrompt,
+        subscriptionInfo.features.maxTokensPerPrompt
+      );
+
+      const results: Array<{
+        index: number;
+        original: string;
+        enhanced: string;
+        success: boolean;
+        error?: string;
+      }> = [];
+
+      // Process prompts sequentially with rate limiting
+      for (let i = 0; i < data.prompts.length; i++) {
+        const prompt = data.prompts[i]!;
+
+        try {
+          const result = await enhancePrompt({
+            prompt,
+            tier: promptTier,
+            model: data.model,
+            temperature: data.temperature,
+            maxTokens,
+            tone: data.tone,
+            length: data.length,
+          });
+
+          // Save to database
+          const savedPrompt = await prisma.prompt.create({
+            data: {
+              userId: req.user.id,
+              originalPrompt: prompt,
+              enhancedPrompt: result.enhancedPrompt,
+              model: result.model,
+              temperature: data.temperature || 0.7,
+              maxTokens,
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+              totalTokens: result.totalTokens,
+              processingMs: result.processingMs,
+            },
+          });
+
+          results.push({
+            index: i,
+            original: prompt,
+            enhanced: result.enhancedPrompt,
+            success: true,
+          });
+
+          // Update user stats
+          await prisma.user.update({
+            where: { id: req.user.id },
+            data: {
+              promptCount: { increment: 1 },
+              tokenUsage: { increment: BigInt(result.totalTokens) },
+            },
+          });
+
+          // Small delay between requests to avoid rate limiting
+          if (i < data.prompts.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (error) {
+          results.push({
+            index: i,
+            original: prompt,
+            enhanced: '',
+            success: false,
+            error: error instanceof Error ? error.message : 'Enhancement failed',
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const failureCount = results.filter(r => !r.success).length;
+
+      res.json({
+        results,
+        summary: {
+          total: data.prompts.length,
+          success: successCount,
+          failed: failureCount,
+        },
+      });
+    } catch (error) {
+      console.error('Batch enhance error:', error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to batch enhance prompts' });
+    }
+  }
+);

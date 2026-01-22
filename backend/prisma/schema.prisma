@@ -53,6 +53,9 @@ model User {
   // Subscription (denormalized for fast access)
   subscriptionTier SubscriptionTier @default(FREE)
 
+  // User preferences
+  customInstructions String?     @db.Text
+
   // Usage tracking
   promptCount   Int              @default(0)
   tokenUsage    BigInt           @default(0)
@@ -311,4 +314,74 @@ model DailyUsage {
 
   @@unique([userId, date])
   @@index([userId, date(sort: Desc)])
+}
+
+// ============================================================================
+// TEMPLATES - Reusable prompt templates
+// ============================================================================
+
+model Template {
+  id          String   @id @default(cuid())
+  userId      String?  // null for built-in templates
+
+  name        String
+  content     String   @db.Text
+  description String?
+  category    String   @default("General")
+  icon        String?  @default("doc.text")
+
+  // Template type
+  isBuiltIn   Boolean  @default(false)
+  isPublic    Boolean  @default(false)
+
+  // Usage tracking
+  usageCount  Int      @default(0)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([category])
+  @@index([isBuiltIn])
+}
+
+// ============================================================================
+// COLLECTIONS - Organize prompts into folders
+// ============================================================================
+
+model Collection {
+  id          String   @id @default(cuid())
+  userId      String
+
+  name        String
+  description String?
+  color       String   @default("#007AFF")
+  icon        String   @default("folder.fill")
+
+  // Prompt count (denormalized for fast access)
+  promptCount Int      @default(0)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  prompts     PromptCollection[]
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// Junction table for many-to-many prompt-collection relationship
+model PromptCollection {
+  id           String     @id @default(cuid())
+  promptId     String
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  addedAt      DateTime   @default(now())
+
+  @@unique([promptId, collectionId])
+  @@index([promptId])
+  @@index([collectionId])
 }

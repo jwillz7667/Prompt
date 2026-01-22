@@ -43,6 +43,86 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Tone Type
+
+enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
+    case professional = "professional"
+    case casual = "casual"
+    case academic = "academic"
+    case creative = "creative"
+    case technical = "technical"
+    case friendly = "friendly"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .professional: return "Professional"
+        case .casual: return "Casual"
+        case .academic: return "Academic"
+        case .creative: return "Creative"
+        case .technical: return "Technical"
+        case .friendly: return "Friendly"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .professional: return "briefcase.fill"
+        case .casual: return "cup.and.saucer.fill"
+        case .academic: return "graduationcap.fill"
+        case .creative: return "paintbrush.fill"
+        case .technical: return "wrench.and.screwdriver.fill"
+        case .friendly: return "heart.fill"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .professional: return "Formal, business-appropriate"
+        case .casual: return "Relaxed, conversational"
+        case .academic: return "Scholarly, research-oriented"
+        case .creative: return "Imaginative, expressive"
+        case .technical: return "Precise, detail-oriented"
+        case .friendly: return "Warm, supportive"
+        }
+    }
+}
+
+// MARK: - Output Length
+
+enum OutputLength: String, CaseIterable, Identifiable, Codable, Sendable {
+    case concise = "concise"
+    case standard = "standard"
+    case detailed = "detailed"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .concise: return "Concise"
+        case .standard: return "Standard"
+        case .detailed: return "Detailed"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .concise: return "text.alignleft"
+        case .standard: return "text.justify"
+        case .detailed: return "doc.text.fill"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .concise: return "Brief, to the point"
+        case .standard: return "Balanced detail"
+        case .detailed: return "Comprehensive"
+        }
+    }
+}
+
 @Observable
 final class SettingsManager {
     var selectedModel: DeepseekModel = .chat
@@ -50,6 +130,17 @@ final class SettingsManager {
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
     var appearanceMode: AppearanceMode = .system
+
+    // Enhancement controls
+    var selectedTone: ToneType = .professional
+    var outputLength: OutputLength = .standard
+    var customInstructions: String = ""
+
+    // App Group for sharing with keyboard extension
+    private let appGroupId = "group.com.res.promptomizer"
+    private var sharedDefaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupId)
+    }
 
     init() {
         loadPreferences()
@@ -77,6 +168,23 @@ final class SettingsManager {
            let mode = AppearanceMode(rawValue: appearanceRaw) {
             appearanceMode = mode
         }
+
+        // Load tone preference
+        if let toneRaw = UserDefaults.standard.string(forKey: "selectedTone"),
+           let tone = ToneType(rawValue: toneRaw) {
+            selectedTone = tone
+        }
+
+        // Load length preference
+        if let lengthRaw = UserDefaults.standard.string(forKey: "outputLength"),
+           let length = OutputLength(rawValue: lengthRaw) {
+            outputLength = length
+        }
+
+        // Load custom instructions
+        if let instructions = UserDefaults.standard.string(forKey: "customInstructions") {
+            customInstructions = instructions
+        }
     }
 
     func savePreferences() {
@@ -84,6 +192,19 @@ final class SettingsManager {
         UserDefaults.standard.set(temperature, forKey: "temperature")
         UserDefaults.standard.set(maxTokens, forKey: "maxTokens")
         UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
+        UserDefaults.standard.set(selectedTone.rawValue, forKey: "selectedTone")
+        UserDefaults.standard.set(outputLength.rawValue, forKey: "outputLength")
+        UserDefaults.standard.set(customInstructions, forKey: "customInstructions")
+
+        // Sync to shared App Group for keyboard extension
+        syncToSharedDefaults()
+    }
+
+    /// Syncs enhancement preferences to App Group for keyboard extension access
+    private func syncToSharedDefaults() {
+        sharedDefaults?.set(selectedTone.rawValue, forKey: "selectedTone")
+        sharedDefaults?.set(outputLength.rawValue, forKey: "outputLength")
+        sharedDefaults?.set(customInstructions, forKey: "customInstructions")
     }
 }
 

@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showProfile = false
     @State private var showPaywall = false
+    @State private var showTemplates = false
 
     // Animation states
     @State private var headerScale: CGFloat = 1.0
@@ -64,6 +65,8 @@ struct ContentView: View {
                             ))
 
                         deepThinkToggle
+
+                        enhancementControls
 
                         enhanceButton
 
@@ -109,6 +112,11 @@ struct ContentView: View {
                                 UsageIndicator(used: usage.dailyPromptsUsed, limit: usage.dailyPromptsLimit)
                             }
                             .buttonStyle(.plain)
+                        }
+
+                        toolbarButton(icon: "doc.on.doc") {
+                            triggerHaptic(.light)
+                            showTemplates = true
                         }
 
                         toolbarButton(icon: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
@@ -162,6 +170,14 @@ struct ContentView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showTemplates) {
+                TemplatesView { template in
+                    viewModel.userPrompt = template.content
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(24)
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {
@@ -423,6 +439,30 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(settings.deepThinkEnabled ? Color.blue.opacity(0.3) : borderColor, lineWidth: 1)
         )
+    }
+
+    // MARK: - Enhancement Controls
+
+    private var enhancementControls: some View {
+        VStack(spacing: 12) {
+            // Tone Selector
+            ToneSelector(selectedTone: Binding(
+                get: { settings.selectedTone },
+                set: { newValue in
+                    settings.selectedTone = newValue
+                    settings.savePreferences()
+                }
+            ))
+
+            // Length Selector
+            LengthSelector(selectedLength: Binding(
+                get: { settings.outputLength },
+                set: { newValue in
+                    settings.outputLength = newValue
+                    settings.savePreferences()
+                }
+            ))
+        }
     }
 
     // MARK: - Enhance Button

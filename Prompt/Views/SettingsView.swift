@@ -86,6 +86,55 @@ struct SettingsView: View {
                         .foregroundStyle(textSecondary)
                 }
 
+                // Custom Instructions Section
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "text.bubble.fill")
+                                .foregroundStyle(textPrimary)
+                                .frame(width: 28)
+                            Text("Custom Instructions")
+                                .foregroundStyle(textPrimary)
+                        }
+
+                        TextEditor(text: $bindableSettings.customInstructions)
+                            .frame(minHeight: 100)
+                            .font(.body)
+                            .foregroundStyle(textPrimary)
+                            .scrollContentBackground(.hidden)
+                            .background(bgSecondary)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                } header: {
+                    Text("Personalization")
+                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Add custom instructions that will be included with every prompt enhancement. E.g., \"Always include code examples\" or \"Keep responses concise\".")
+                        .foregroundStyle(textSecondary)
+                }
+
+                // Analytics Section (Premium)
+                Section {
+                    NavigationLink {
+                        AnalyticsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "chart.bar.fill")
+                                .foregroundStyle(textPrimary)
+                                .frame(width: 28)
+                            Text("Analytics")
+                                .foregroundStyle(textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(textSecondary)
+                        }
+                    }
+                } header: {
+                    Text("Insights")
+                        .foregroundStyle(textSecondary)
+                }
+
                 // About Section
                 Section {
                     HStack {
