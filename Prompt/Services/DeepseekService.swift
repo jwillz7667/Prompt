@@ -88,6 +88,63 @@ actor DeepseekService {
             }
         )
     }
+
+    // MARK: - Streaming Enhancement Function
+
+    func enhancePromptStream(
+        userPrompt: String,
+        model: DeepseekModel,
+        temperature: Double,
+        maxTokens: Int,
+        onToken: @escaping @Sendable (String) -> Void
+    ) async throws -> EnhancedPromptResult {
+        let request = EnhanceRequest(
+            prompt: userPrompt,
+            model: model.rawValue,
+            temperature: temperature,
+            maxTokens: maxTokens
+        )
+
+        let stream = await APIClient.shared.requestStream(
+            "/prompts/enhance/stream",
+            method: .post,
+            body: request
+        )
+
+        var fullContent = ""
+        var finalResult: EnhancedPromptResult?
+
+        for try await event in stream {
+            switch event.type {
+            case .token:
+                if let content = event.content {
+                    fullContent += content
+                    onToken(content)
+                }
+            case .complete:
+                finalResult = EnhancedPromptResult(
+                    enhancedPrompt: fullContent,
+                    tokensUsed: event.usage?.totalTokens ?? 0,
+                    subscription: event.subscription.map { sub in
+                        EnhancedPromptResult.SubscriptionInfo(
+                            tier: sub.tier,
+                            promptQuality: sub.promptQuality,
+                            dailyPromptsUsed: sub.dailyPromptsUsed,
+                            dailyPromptsLimit: sub.dailyPromptsLimit
+                        )
+                    }
+                )
+            case .error:
+                throw EnhancerError.apiError(event.message ?? "Unknown error")
+            }
+        }
+
+        guard let result = finalResult else {
+            throw EnhancerError.emptyResponse
+        }
+
+        return result
+    }
 }
 
 // MARK: - Result & Error Types

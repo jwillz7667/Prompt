@@ -8,7 +8,7 @@ import {
 } from '../middleware/quotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
 import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
-import { enhancePrompt, getPromptTierFromSubscription } from '../services/deepseekService.js';
+import { enhancePrompt, enhancePromptStream, getPromptTierFromSubscription } from '../services/deepseekService.js';
 
 export const promptRouter = Router();
 
@@ -170,6 +170,143 @@ promptRouter.post(
         return;
       }
       res.status(500).json({ error: 'Failed to enhance prompt' });
+    }
+  }
+);
+
+// ============================================================================
+// ENHANCE PROMPT STREAMING (real-time SSE)
+// ============================================================================
+
+promptRouter.post(
+  '/enhance/stream',
+  enforceQuota('enhance_prompt'),
+  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const data = enhancePromptSchema.parse(req.body);
+
+      // Set up SSE headers
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+      res.flushHeaders();
+
+      // Get user's subscription to determine prompt quality tier
+      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
+      const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+
+      const maxTokens = Math.min(
+        data.maxTokens || subscriptionInfo.features.maxTokensPerPrompt,
+        subscriptionInfo.features.maxTokensPerPrompt
+      );
+
+      let savedPromptId: string | null = null;
+
+      await enhancePromptStream(
+        {
+          prompt: data.prompt,
+          tier: promptTier,
+          model: data.model,
+          temperature: data.temperature,
+          maxTokens,
+        },
+        {
+          onToken: (token) => {
+            res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+          },
+          onComplete: async (result) => {
+            // Save prompt to database
+            const savedPrompt = await prisma.prompt.create({
+              data: {
+                userId: req.user!.id,
+                originalPrompt: data.prompt,
+                enhancedPrompt: result.enhancedPrompt,
+                model: result.model,
+                temperature: data.temperature || 0.7,
+                maxTokens,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens,
+                processingMs: result.processingMs,
+              },
+            });
+            savedPromptId = savedPrompt.id;
+
+            // Update user stats in parallel
+            await Promise.all([
+              prisma.user.update({
+                where: { id: req.user!.id },
+                data: {
+                  promptCount: { increment: 1 },
+                  tokenUsage: { increment: BigInt(result.totalTokens) },
+                },
+              }),
+              prisma.usageRecord.upsert({
+                where: {
+                  userId_date: {
+                    userId: req.user!.id,
+                    date: new Date(new Date().setHours(0, 0, 0, 0)),
+                  },
+                },
+                update: {
+                  promptCount: { increment: 1 },
+                  tokenCount: { increment: BigInt(result.totalTokens) },
+                },
+                create: {
+                  userId: req.user!.id,
+                  date: new Date(new Date().setHours(0, 0, 0, 0)),
+                  promptCount: 1,
+                  tokenCount: BigInt(result.totalTokens),
+                },
+              }),
+              recordUsage(req.user!.id),
+            ]);
+
+            // Send completion event
+            res.write(
+              `data: ${JSON.stringify({
+                type: 'complete',
+                promptId: savedPromptId,
+                usage: {
+                  inputTokens: result.inputTokens,
+                  outputTokens: result.outputTokens,
+                  totalTokens: result.totalTokens,
+                  processingMs: result.processingMs,
+                },
+                subscription: req.subscription
+                  ? {
+                      tier: req.subscription.tier,
+                      promptQuality: req.subscription.promptQuality,
+                      dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
+                      dailyPromptsLimit: req.subscription.dailyPromptsLimit,
+                    }
+                  : undefined,
+              })}\n\n`
+            );
+            res.write('data: [DONE]\n\n');
+            res.end();
+          },
+          onError: (error) => {
+            console.error('Stream error:', error);
+            res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+            res.end();
+          },
+        }
+      );
+    } catch (error) {
+      console.error('Stream enhance error:', error);
+      if (error instanceof z.ZodError) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+      } else {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to enhance prompt' })}\n\n`);
+      }
+      res.end();
     }
   }
 );

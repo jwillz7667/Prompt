@@ -76,6 +76,85 @@ actor APIClient {
         _ = try await performRequest(endpoint, method: method, body: body, requiresAuth: requiresAuth)
     }
 
+    // MARK: - Streaming Request
+
+    func requestStream(
+        _ endpoint: String,
+        method: HTTPMethod = .post,
+        body: (any Encodable)? = nil
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+                        continuation.finish(throwing: APIError.invalidURL)
+                        return
+                    }
+
+                    var request = URLRequest(url: url)
+                    request.httpMethod = method.rawValue
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.timeoutInterval = 120 // Longer timeout for streaming
+
+                    let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
+                    request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
+
+                    guard let token = accessToken else {
+                        continuation.finish(throwing: APIError.notAuthenticated)
+                        return
+                    }
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+                    if let body = body {
+                        request.httpBody = try JSONEncoder().encode(body)
+                    }
+
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        continuation.finish(throwing: APIError.invalidResponse)
+                        return
+                    }
+
+                    if httpResponse.statusCode == 401 {
+                        continuation.finish(throwing: APIError.unauthorized)
+                        return
+                    }
+
+                    guard httpResponse.statusCode == 200 else {
+                        continuation.finish(throwing: APIError.httpError(httpResponse.statusCode))
+                        return
+                    }
+
+                    for try await line in bytes.lines {
+                        if line.hasPrefix("data: ") {
+                            let data = String(line.dropFirst(6))
+                            if data == "[DONE]" {
+                                continuation.finish()
+                                return
+                            }
+
+                            if let jsonData = data.data(using: .utf8),
+                               let event = try? JSONDecoder().decode(StreamEvent.self, from: jsonData) {
+                                continuation.yield(event)
+
+                                if case .error = event.type {
+                                    continuation.finish(throwing: APIError.badRequest(event.message ?? "Stream error"))
+                                    return
+                                }
+                            }
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
     // MARK: - Core Request Logic
 
     private func performRequest(
@@ -391,5 +470,36 @@ enum KeychainHelper {
             kSecAttrAccount as String: key
         ]
         SecItemDelete(query as CFDictionary)
+    }
+}
+
+// MARK: - Stream Event
+
+enum StreamEventType: String, Codable, Sendable {
+    case token
+    case complete
+    case error
+}
+
+struct StreamEvent: Codable, Sendable {
+    let type: StreamEventType
+    let content: String?
+    let message: String?
+    let promptId: String?
+    let usage: StreamUsage?
+    let subscription: StreamSubscription?
+
+    struct StreamUsage: Codable, Sendable {
+        let inputTokens: Int
+        let outputTokens: Int
+        let totalTokens: Int
+        let processingMs: Int
+    }
+
+    struct StreamSubscription: Codable, Sendable {
+        let tier: String
+        let promptQuality: String
+        let dailyPromptsUsed: Int
+        let dailyPromptsLimit: Int
     }
 }

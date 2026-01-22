@@ -16,6 +16,7 @@ final class PromptViewModel {
     var userPrompt: String = ""
     var enhancedPrompt: String = ""
     var isLoading: Bool = false
+    var isStreaming: Bool = false
     var errorMessage: String?
     var showError: Bool = false
     var tokensUsed: Int = 0
@@ -52,6 +53,7 @@ final class PromptViewModel {
         }
 
         isLoading = true
+        isStreaming = true
         errorMessage = nil
         enhancedPrompt = ""
 
@@ -62,17 +64,22 @@ final class PromptViewModel {
             // Update to enhancing stage
             await EnhancementActivityManager.shared.updateProgress(stage: .enhancing)
 
-            let result = try await service.enhancePrompt(
+            // Use streaming for real-time response
+            let result = try await service.enhancePromptStream(
                 userPrompt: userPrompt,
                 model: settings.selectedModel,
                 temperature: settings.temperature,
                 maxTokens: settings.maxTokens
-            )
+            ) { [weak self] token in
+                // Update UI with each token on main thread
+                Task { @MainActor in
+                    self?.enhancedPrompt += token
+                }
+            }
 
             // Update to optimizing stage briefly
             await EnhancementActivityManager.shared.updateProgress(stage: .optimizing)
 
-            enhancedPrompt = result.enhancedPrompt
             tokensUsed = result.tokensUsed
 
             // Complete the Live Activity
@@ -102,6 +109,7 @@ final class PromptViewModel {
         }
 
         isLoading = false
+        isStreaming = false
     }
 
     func copyToClipboard() {

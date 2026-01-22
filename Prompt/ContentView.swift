@@ -65,12 +65,13 @@ struct ContentView: View {
 
                         enhanceButton
 
-                        if viewModel.isLoading {
+                        if viewModel.isLoading && !viewModel.isStreaming {
                             loadingSection
                                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
 
-                        if viewModel.hasEnhancedPrompt && !viewModel.isLoading {
+                        // Show output section during streaming or after completion
+                        if viewModel.hasEnhancedPrompt {
                             outputSection
                                 .transition(.asymmetric(
                                     insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.95)),
@@ -458,6 +459,12 @@ struct ContentView: View {
                     .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(textPrimary)
                     .symbolEffect(.bounce, value: viewModel.hasEnhancedPrompt)
+
+                if viewModel.isStreaming {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .padding(.leading, 4)
+                }
 
                 Spacer()
 

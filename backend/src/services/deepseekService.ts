@@ -55,7 +55,7 @@ interface DeepSeekResponse {
 // ============================================================================
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const DEFAULT_MODEL = 'deepseek-reasoner';
+const DEFAULT_MODEL = 'deepseek-chat'; // Faster than deepseek-reasoner
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 8192;
 
@@ -359,4 +359,121 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
 
 export function getPromptTierFromSubscription(features: TierFeatures): 'basic' | 'standard' | 'advanced' {
   return features.promptQuality;
+}
+
+// ============================================================================
+// STREAMING SERVICE FUNCTION
+// ============================================================================
+
+export interface StreamCallbacks {
+  onToken: (token: string) => void;
+  onComplete: (result: EnhancePromptResult) => void;
+  onError: (error: Error) => void;
+}
+
+export async function enhancePromptStream(
+  request: EnhancePromptRequest,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const apiKey = process.env['DEEPSEEK_API_KEY'];
+  if (!apiKey) {
+    callbacks.onError(new Error('DEEPSEEK_API_KEY environment variable not configured'));
+    return;
+  }
+
+  const model = request.model || DEFAULT_MODEL;
+  const temperature = request.temperature ?? DEFAULT_TEMPERATURE;
+  const maxTokens = request.maxTokens || DEFAULT_MAX_TOKENS;
+  const tier = request.tier || 'advanced';
+
+  const systemPrompt = buildMetaPrompt(tier);
+  const userMessage = buildUserMessage(request.prompt, tier);
+
+  const deepseekRequest = {
+    model,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ],
+    temperature,
+    max_tokens: maxTokens,
+    stream: true,
+  };
+
+  const startTime = Date.now();
+  let fullContent = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(deepseekRequest),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('DeepSeek API error:', response.status, errorBody);
+      callbacks.onError(new Error(`DeepSeek API error: ${response.status}`));
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      callbacks.onError(new Error('No response body'));
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullContent += delta;
+              callbacks.onToken(delta);
+            }
+            // Capture usage from final chunk if available
+            if (parsed.usage) {
+              inputTokens = parsed.usage.prompt_tokens || 0;
+              outputTokens = parsed.usage.completion_tokens || 0;
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+        }
+      }
+    }
+
+    const processingMs = Date.now() - startTime;
+
+    callbacks.onComplete({
+      enhancedPrompt: fullContent,
+      model,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      processingMs,
+    });
+  } catch (error) {
+    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+  }
 }
