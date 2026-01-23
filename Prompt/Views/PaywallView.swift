@@ -1,3 +1,10 @@
+//
+//  PaywallView.swift
+//  Prompt
+//
+//  Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
+//
+
 import SwiftUI
 import StoreKit
 
@@ -12,6 +19,10 @@ struct PaywallView: View {
     @State private var errorMessage = ""
     @State private var showSuccess = false
     @State private var trialEligible = false
+
+    // Brand colors
+    private var accentColor: Color { Color.brandCyan }
+    private var brandPurple: Color { Color.brandPurple }
 
     private var theme: AppTheme {
         colorScheme == .dark ? .dark : .light
@@ -125,7 +136,7 @@ struct PaywallView: View {
         HStack(spacing: 12) {
             Image(systemName: "gift.fill")
                 .font(.title2)
-                .foregroundStyle(.purple)
+                .foregroundStyle(accentColor)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Try Premium Free for 7 Days")
@@ -149,16 +160,16 @@ struct PaywallView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(.purple)
+                    .background(brandPurple)
                     .clipShape(Capsule())
             }
         }
         .padding()
-        .background(Color.purple.opacity(0.1))
+        .background(brandPurple.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                .stroke(brandPurple.opacity(0.3), lineWidth: 1)
         )
     }
 
@@ -224,7 +235,7 @@ struct PaywallView: View {
 
             Text(premium)
                 .font(.caption.bold())
-                .foregroundStyle(.purple)
+                .foregroundStyle(accentColor)
                 .frame(width: 60)
         }
         .padding(.vertical, 10)
@@ -304,7 +315,7 @@ struct PaywallView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(.purple)
+                        .background(brandPurple)
                         .clipShape(Capsule())
                 }
 
@@ -366,12 +377,12 @@ struct PaywallView: View {
                 // Selection indicator
                 ZStack {
                     Circle()
-                        .stroke(isSelected ? (tier == .premium ? Color.purple : Color.adaptiveAccent) : Color.adaptiveBorder, lineWidth: 2)
+                        .stroke(isSelected ? (tier == .premium ? brandPurple : Color.adaptiveAccent) : Color.adaptiveBorder, lineWidth: 2)
                         .frame(width: 24, height: 24)
 
                     if isSelected {
                         Circle()
-                            .fill(tier == .premium ? Color.purple : Color.adaptiveAccent)
+                            .fill(tier == .premium ? brandPurple : Color.adaptiveAccent)
                             .frame(width: 16, height: 16)
                     }
                 }
@@ -382,7 +393,7 @@ struct PaywallView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? (tier == .premium ? Color.purple : Color.adaptiveAccent) : Color.adaptiveBorder, lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? (tier == .premium ? brandPurple : Color.adaptiveAccent) : Color.adaptiveBorder, lineWidth: isSelected ? 2 : 1)
             )
         }
         .buttonStyle(.plain)

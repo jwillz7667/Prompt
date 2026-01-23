@@ -2,25 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
+ * AAA WCAG Compliant Color System
+ */
+
 :root {
-  --text-primary: #000000;
-  --text-secondary: #3D3D3D;
-  --text-tertiary: #525252;
+  /* Light mode - AAA compliant text on white */
+  --text-primary: #1A0A4C;
+  --text-secondary: #3D2A6B;
+  --text-tertiary: #5C4A8C;
   --bg-primary: #FFFFFF;
-  --bg-secondary: #F5F5F5;
-  --bg-tertiary: #EBEBEB;
-  --border: #CCCCCC;
+  --bg-secondary: #F5F3FA;
+  --bg-tertiary: #EBE6F8;
+  --border: #C8BEE0;
+
+  /* Brand accent colors */
+  --accent-purple: #512AD4;
+  --accent-cyan: #00FFF9;
+  --accent-cyan-dark: #00DCD6;
+
+  /* Text on accent */
+  --text-on-accent: #1A0A4C;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    /* Dark mode - Brand purple background with AAA compliant text */
     --text-primary: #FFFFFF;
-    --text-secondary: #E5E5E5;
-    --text-tertiary: #B8B8B8;
-    --bg-primary: #000000;
-    --bg-secondary: #1C1C1E;
-    --bg-tertiary: #2C2C2E;
-    --border: #4D4D4D;
+    --text-secondary: #E8E4F0;
+    --text-tertiary: #C4BED4;
+    --bg-primary: #512AD4;
+    --bg-secondary: #5B34DE;
+    --bg-tertiary: #3D20A2;
+    --border: #7850FF;
+
+    /* Accent colors stay the same */
+    --accent-purple: #512AD4;
+    --accent-cyan: #00FFF9;
+    --accent-cyan-dark: #00DCD6;
+
+    /* Text on cyan button */
+    --text-on-accent: #1A0A4C;
   }
 }
 
@@ -34,7 +57,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar with brand colors */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -45,34 +68,34 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--text-tertiary);
+  background: var(--accent-cyan);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+  background: var(--accent-cyan-dark);
 }
 
-/* Gradient text */
+/* Brand gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #512AD4 0%, #00FFF9 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Glass effect */
+/* Glass effect with brand colors */
 .glass {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 255, 249, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
   .glass {
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(81, 42, 212, 0.4);
+    border: 1px solid rgba(0, 255, 249, 0.3);
   }
 }
 
@@ -83,11 +106,44 @@ body {
 
 .feature-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 40px rgba(81, 42, 212, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {
   .feature-card:hover {
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 20px 40px rgba(0, 255, 249, 0.15);
   }
+}
+
+/* Brand cyan button style */
+.btn-cyan {
+  background: var(--accent-cyan);
+  color: var(--text-on-accent);
+  transition: all 0.2s ease;
+}
+
+.btn-cyan:hover {
+  background: var(--accent-cyan-dark);
+  box-shadow: 0 8px 24px rgba(0, 255, 249, 0.4);
+}
+
+/* Brand purple button style */
+.btn-purple {
+  background: var(--accent-purple);
+  color: #FFFFFF;
+  transition: all 0.2s ease;
+}
+
+.btn-purple:hover {
+  background: #6540E8;
+  box-shadow: 0 8px 24px rgba(81, 42, 212, 0.4);
+}
+
+/* Glow effects */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 255, 249, 0.4);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(81, 42, 212, 0.4);
 }

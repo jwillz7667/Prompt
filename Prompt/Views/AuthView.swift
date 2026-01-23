@@ -3,6 +3,7 @@
 //  Prompt
 //
 //  Sign in screen with Apple and Google authentication
+//  Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
 //  AAA WCAG Compliant Colors
 //
 
@@ -16,12 +17,12 @@ struct AuthView: View {
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
+    private var accentColor: Color { Color.brandCyan }
 
     var body: some View {
         ZStack {
-            // Adaptive background
-            bgPrimary.ignoresSafeArea()
+            // Liquid Glass animated background
+            LiquidGlassBackground()
 
             VStack(spacing: 40) {
                 Spacer()

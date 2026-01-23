@@ -169,7 +169,7 @@ export default function PrivacyPolicy() {
             </p>
             <ul className="list-disc list-inside text-[var(--text-secondary)] mt-4 space-y-2">
               <li>Email: privacy@promptomize.app</li>
-              <li>Website: <Link href="https://promptomize.app/support" className="text-accent-purple hover:underline">https://promptomize.app/support</Link></li>
+              <li>Website: <Link href="https://promptomize.app/support" className="text-[var(--accent-cyan)] hover:underline">https://promptomize.app/support</Link></li>
             </ul>
           </section>
         </div>

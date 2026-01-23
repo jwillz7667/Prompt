@@ -3,11 +3,139 @@
 //  Prompt
 //
 //  Custom loading animations and micro-interactions for iOS 26
+//  Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
 //
 
 import SwiftUI
 
-// MARK: - AI Orb Loading Animation
+// MARK: - Logo Enhancement Animation
+
+/// Animation that uses the AppLogo with pulsing, rotating effects during prompt enhancement
+struct LogoEnhancementAnimation: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var rotation: Double = 0
+    @State private var pulse: CGFloat = 1.0
+    @State private var glowIntensity: Double = 0.4
+    @State private var ringRotation1: Double = 0
+    @State private var ringRotation2: Double = 0
+
+    let size: CGFloat
+
+    init(size: CGFloat = 120) {
+        self.size = size
+    }
+
+    var body: some View {
+        ZStack {
+            // Outer glow ring
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            Color.brandCyan.opacity(0.6),
+                            Color.brandPurple.opacity(0.3),
+                            Color.brandCyan.opacity(0.6)
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 3
+                )
+                .frame(width: size * 1.3, height: size * 1.3)
+                .rotationEffect(.degrees(ringRotation1))
+                .blur(radius: 2)
+
+            // Inner rotating ring
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            Color.brandCyan.opacity(0.8),
+                            Color.clear,
+                            Color.brandCyan.opacity(0.8)
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 2
+                )
+                .frame(width: size * 1.15, height: size * 1.15)
+                .rotationEffect(.degrees(-ringRotation2))
+
+            // Outer glow
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.brandCyan.opacity(glowIntensity * 0.6),
+                            Color.brandPurple.opacity(glowIntensity * 0.3),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: size * 0.2,
+                        endRadius: size * 0.8
+                    )
+                )
+                .frame(width: size * 1.5, height: size * 1.5)
+                .blur(radius: 20)
+
+            // Logo with effects
+            Group {
+                if UIImage(named: "AppLogo") != nil {
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.7, height: size * 0.7)
+                } else {
+                    // Fallback icon
+                    Image(systemName: "sparkles")
+                        .font(.system(size: size * 0.4, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.brandCyan, Color.white],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            }
+            .scaleEffect(pulse)
+            .shadow(color: Color.brandCyan.opacity(0.6), radius: 15)
+
+            // Orbiting particles
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.brandCyan, Color.brandCyan.opacity(0.3)],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 6
+                        )
+                    )
+                    .frame(width: 8, height: 8)
+                    .offset(x: cos((rotation + Double(index) * 120) * .pi / 180) * size * 0.55)
+                    .offset(y: sin((rotation + Double(index) * 120) * .pi / 180) * size * 0.55)
+                    .shadow(color: Color.brandCyan.opacity(0.8), radius: 4)
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
+                rotation = 360
+            }
+            withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+                ringRotation1 = 360
+            }
+            withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
+                ringRotation2 = 360
+            }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                pulse = 1.08
+                glowIntensity = 0.7
+            }
+        }
+    }
+}
+
+// MARK: - AI Orb Loading Animation (Updated with brand colors)
 
 struct AIOrb: View {
     @State private var rotation1: Double = 0
@@ -20,7 +148,7 @@ struct AIOrb: View {
     let primaryColor: Color
     let accentColor: Color
 
-    init(size: CGFloat = 120, primaryColor: Color = .primary, accentColor: Color = .blue) {
+    init(size: CGFloat = 120, primaryColor: Color = .white, accentColor: Color = Color.brandCyan) {
         self.size = size
         self.primaryColor = primaryColor
         self.accentColor = accentColor
@@ -84,7 +212,7 @@ struct AIOrb: View {
                         colors: [
                             accentColor.opacity(0.95),
                             accentColor.opacity(0.7),
-                            primaryColor.opacity(0.4)
+                            Color.brandPurple.opacity(0.4)
                         ],
                         center: .topLeading,
                         startRadius: 0,
@@ -147,6 +275,10 @@ struct WaveformVisualizer: View {
     @State private var amplitudes: [CGFloat] = Array(repeating: 0.3, count: 5)
     let color: Color
 
+    init(color: Color = Color.brandCyan) {
+        self.color = color
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             ForEach(0..<5, id: \.self) { index in
@@ -169,7 +301,7 @@ struct WaveformVisualizer: View {
     }
 }
 
-// MARK: - Prompt Enhancement Loader
+// MARK: - Prompt Enhancement Loader (Logo-based)
 
 struct PromptEnhancementLoader: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -186,18 +318,12 @@ struct PromptEnhancementLoader: View {
 
     private var primaryColor: Color { Color.adaptiveTextPrimary }
     private var secondaryColor: Color { Color.adaptiveTextSecondary }
-    private var accentColor: Color {
-        colorScheme == .dark ? Color.blue.opacity(0.8) : Color.blue
-    }
+    private var accentColor: Color { Color.brandCyan }
 
     var body: some View {
         VStack(spacing: 32) {
-            // Main orb animation
-            AIOrb(
-                size: 140,
-                primaryColor: primaryColor,
-                accentColor: accentColor
-            )
+            // Logo-based animation
+            LogoEnhancementAnimation(size: 140)
 
             // Status section
             VStack(spacing: 12) {
@@ -217,7 +343,7 @@ struct PromptEnhancementLoader: View {
                 .frame(height: 24)
 
                 // Waveform indicator
-                WaveformVisualizer(color: secondaryColor.opacity(0.6))
+                WaveformVisualizer(color: accentColor.opacity(0.8))
             }
         }
         .onAppear {
@@ -246,6 +372,86 @@ struct PromptEnhancementLoader: View {
     }
 }
 
+// MARK: - In-Place Transformation Animation
+
+/// Animation for transforming the original prompt into the enhanced prompt in place
+struct PromptTransformAnimation: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var isAnimating: Bool
+    let originalText: String
+    @Binding var transformedText: String
+
+    @State private var shimmerOffset: CGFloat = -1.0
+    @State private var glowPulse: CGFloat = 0.0
+    @State private var textOpacity: Double = 1.0
+
+    var body: some View {
+        ZStack {
+            // Glow background during transformation
+            if isAnimating {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.brandCyan.opacity(0.1 * glowPulse))
+                    .blur(radius: 20)
+            }
+
+            // Text content
+            VStack(alignment: .leading, spacing: 0) {
+                Text(transformedText.isEmpty ? originalText : transformedText)
+                    .font(.system(.body, design: .default))
+                    .foregroundStyle(Color.adaptiveTextPrimary)
+                    .opacity(textOpacity)
+                    .overlay {
+                        if isAnimating {
+                            // Shimmer effect
+                            GeometryReader { geometry in
+                                LinearGradient(
+                                    colors: [
+                                        Color.clear,
+                                        Color.brandCyan.opacity(0.4),
+                                        Color.clear
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                .frame(width: geometry.size.width * 0.3)
+                                .offset(x: shimmerOffset * geometry.size.width)
+                                .blur(radius: 3)
+                            }
+                            .mask(
+                                Text(transformedText.isEmpty ? originalText : transformedText)
+                                    .font(.system(.body, design: .default))
+                            )
+                        }
+                    }
+            }
+        }
+        .onChange(of: isAnimating) { _, newValue in
+            if newValue {
+                startAnimation()
+            } else {
+                stopAnimation()
+            }
+        }
+    }
+
+    private func startAnimation() {
+        // Shimmer animation
+        withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+            shimmerOffset = 1.5
+        }
+
+        // Glow pulse
+        withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+            glowPulse = 1.0
+        }
+    }
+
+    private func stopAnimation() {
+        shimmerOffset = -1.0
+        glowPulse = 0.0
+    }
+}
+
 // MARK: - Liquid Glass Card (Legacy - use .liquidGlass() modifier instead)
 
 struct LiquidGlassCard<Content: View>: View {
@@ -263,8 +469,8 @@ struct LiquidGlassCard<Content: View>: View {
     private var specularGradient: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.2), Color.white.opacity(0.05), Color.clear]
-                : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
+                ? [Color.brandCyan.opacity(0.15), Color.white.opacity(0.05), Color.clear]
+                : [Color.white.opacity(0.9), Color.brandPurple.opacity(0.1), Color.clear],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -273,8 +479,8 @@ struct LiquidGlassCard<Content: View>: View {
     private var borderGradient: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.35), Color.white.opacity(0.1), Color.white.opacity(0.15)]
-                : [Color.white.opacity(0.95), Color.white.opacity(0.4), Color.white.opacity(0.6)],
+                ? [Color.brandCyan.opacity(0.35), Color.white.opacity(0.1), Color.brandCyan.opacity(0.15)]
+                : [Color.white.opacity(0.95), Color.brandPurple.opacity(0.2), Color.white.opacity(0.6)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -293,8 +499,8 @@ struct LiquidGlassCard<Content: View>: View {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             colorScheme == .dark
-                                ? Color.white.opacity(0.03)
-                                : Color.white.opacity(0.5)
+                                ? Color.brandPurpleLight.opacity(0.1)
+                                : Color.brandPurple.opacity(0.03)
                         )
 
                     // Specular highlight
@@ -309,12 +515,16 @@ struct LiquidGlassCard<Content: View>: View {
                     .stroke(borderGradient, lineWidth: 1)
             }
             .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.1),
+                color: colorScheme == .dark
+                    ? Color.black.opacity(0.4)
+                    : Color.brandPurple.opacity(0.1),
                 radius: 16,
                 y: 8
             )
             .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.2 : 0.05),
+                color: colorScheme == .dark
+                    ? Color.black.opacity(0.2)
+                    : Color.brandPurple.opacity(0.05),
                 radius: 4,
                 y: 2
             )
@@ -333,9 +543,9 @@ struct ShimmerEffect: ViewModifier {
                 GeometryReader { geometry in
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0),
-                            Color.white.opacity(0.5),
-                            Color.white.opacity(0)
+                            Color.brandCyan.opacity(0),
+                            Color.brandCyan.opacity(0.5),
+                            Color.brandCyan.opacity(0)
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
@@ -399,7 +609,7 @@ struct GlowEffect: ViewModifier {
 }
 
 extension View {
-    func pulsingGlow(color: Color = Color(white: 0.3), radius: CGFloat = 15) -> some View {
+    func pulsingGlow(color: Color = Color.brandCyan, radius: CGFloat = 15) -> some View {
         modifier(GlowEffect(color: color, radius: radius))
     }
 }
@@ -451,7 +661,7 @@ struct SuccessCheckmark: View {
     let size: CGFloat
     let color: Color
 
-    init(size: CGFloat = 60, color: Color = .green) {
+    init(size: CGFloat = 60, color: Color = Color.brandCyan) {
         self.size = size
         self.color = color
     }
@@ -503,6 +713,11 @@ struct FloatingParticles: View {
         var opacity: Double
     }
 
+    init(count: Int = 15, color: Color = Color.brandCyan) {
+        self.count = count
+        self.color = color
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -551,29 +766,29 @@ struct FloatingParticles: View {
 
 // MARK: - Preview
 
+#Preview("Logo Enhancement Animation") {
+    LogoEnhancementAnimation()
+        .padding(50)
+        .background(Color.brandPurple)
+}
+
 #Preview("AI Orb") {
     AIOrb()
         .padding(50)
-        .background(Color(white: 0.95))
-}
-
-#Preview("AI Orb - Dark") {
-    AIOrb(primaryColor: .white, accentColor: .cyan)
-        .padding(50)
-        .background(Color(white: 0.1))
+        .background(Color.brandPurple)
 }
 
 #Preview("Enhancement Loader") {
     PromptEnhancementLoader()
         .padding(50)
-        .background(Color(white: 0.95))
+        .background(Color.brandPurple)
 }
 
-#Preview("Enhancement Loader - Dark") {
+#Preview("Enhancement Loader - Light") {
     PromptEnhancementLoader()
         .padding(50)
-        .background(Color(white: 0.1))
-        .environment(\.colorScheme, .dark)
+        .background(Color.white)
+        .environment(\.colorScheme, .light)
 }
 
 #Preview("Liquid Glass Card") {
@@ -581,13 +796,14 @@ struct FloatingParticles: View {
         VStack {
             Text("Liquid Glass")
                 .font(.headline)
+                .foregroundStyle(Color.adaptiveTextPrimary)
             Text("Beautiful translucent effect")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.adaptiveTextSecondary)
         }
     }
     .padding()
     .background(
-        LinearGradient(colors: [.blue.opacity(0.3), .purple.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(colors: [Color.brandPurple, Color.brandPurpleDark], startPoint: .topLeading, endPoint: .bottomTrailing)
     )
 }
