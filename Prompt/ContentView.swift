@@ -446,13 +446,18 @@ struct ContentView: View {
     private var enhancementControls: some View {
         VStack(spacing: 12) {
             // Tone Selector
-            ToneSelector(selectedTone: Binding(
-                get: { settings.selectedTone },
-                set: { newValue in
-                    settings.selectedTone = newValue
-                    settings.savePreferences()
+            ToneSelector(
+                selectedTone: Binding(
+                    get: { settings.selectedTone },
+                    set: { newValue in
+                        settings.selectedTone = newValue
+                        settings.savePreferences()
+                    }
+                ),
+                onPremiumTap: {
+                    showPaywall = true
                 }
-            ))
+            )
 
             // Length Selector
             LengthSelector(selectedLength: Binding(

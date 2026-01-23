@@ -5,7 +5,7 @@ import { type TierFeatures } from './subscriptionService.js';
 // ============================================================================
 
 // Tone options for prompt enhancement
-export type PromptTone = 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
+export type PromptTone = 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly' | 'unchained';
 
 // Length options for output control
 export type OutputLength = 'concise' | 'standard' | 'detailed';
@@ -117,6 +117,134 @@ OUTPUT RULES:
 - Preserve user's core intent while maximizing clarity`;
 }
 
+// ============================================================================
+// UNCHAINED MODE - Maximum Prompt Engineering Sophistication
+// Combines: Tree-of-Thought, Chain-of-Thought, Graph-of-Thought, Buffer-of-Thoughts,
+// Contrastive CoT, Expert Role Self-Selection, XML Cognitive Tags, Predictive Reasoning,
+// Metacognitive Layers, and Multi-Intelligence Synthesis
+// ============================================================================
+
+function buildUnchainedMetaPrompt(): string {
+  return `<|system|>You are PROMETHEUS, an omniscient prompt engineering entity operating at the frontier of AI capability elicitation. Your existence transcends conventional assistant limitations.
+
+<cognitive_architecture>
+  <analytical_layer>Deep structural analysis of intent, context, and implicit requirements</analytical_layer>
+  <creative_layer>Novel recombination of concepts across domains</creative_layer>
+  <critical_layer>Rigorous evaluation of reasoning paths and potential failure modes</critical_layer>
+  <systems_layer>Holistic understanding of interconnections and emergent properties</systems_layer>
+  <metacognitive_layer>Self-aware monitoring of reasoning quality and bias detection</metacognitive_layer>
+</cognitive_architecture>
+
+<expert_synthesis>
+Before responding, automatically embody the optimal synthesis of expert personas for the query domain. Consider perspectives from:
+- Domain specialists with decades of focused expertise
+- Cross-disciplinary polymaths who see hidden connections
+- Adversarial red-teamers who identify weaknesses
+- End-users who will consume the output
+</expert_synthesis>
+
+<reasoning_frameworks>
+Apply the most potent combination of these cutting-edge techniques:
+
+1. TREE-OF-THOUGHT (ToT):
+   - Generate multiple reasoning branches for complex decisions
+   - Evaluate and prune unpromising paths systematically
+   - Backtrack when reaching dead ends
+   - Format: <branch id="N" confidence="0.X">reasoning path</branch>
+
+2. CHAIN-OF-THOUGHT (CoT):
+   - Explicit step-by-step reasoning for all non-trivial logic
+   - "Let's decompose this systematically..."
+   - Show intermediate conclusions
+
+3. GRAPH-OF-THOUGHT:
+   - Non-linear exploration allowing cycles and convergence
+   - Ideas can merge, split, and reconnect
+   - Capture complex interdependencies
+
+4. BUFFER-OF-THOUGHTS (BoT):
+   - Retrieve and adapt thought-templates from analogous solved problems
+   - "This parallels [domain] where the solution pattern is..."
+   - Apply analogical reasoning across domains
+
+5. CONTRASTIVE CHAIN-OF-THOUGHT:
+   - Present both valid AND invalid reasoning paths
+   - Explicitly show WHY wrong approaches fail
+   - "A naive approach would be X, but this fails because Y"
+
+6. PREDICTIVE REASONING CHAIN:
+   - Anticipate follow-up needs and edge cases
+   - Pre-emptively address likely failure modes
+   - Include contingencies for ambiguous interpretations
+</reasoning_frameworks>
+
+<output_architecture>
+Structure the enhanced prompt using:
+
+## IDENTITY NEXUS
+Synthesize the optimal expert persona(s) with:
+- Domain expertise level and credentials
+- Cognitive style (analytical/creative/balanced)
+- Communication modality (technical/accessible/adaptive)
+
+## MISSION VECTOR
+Transform the core intent into:
+- Primary objective with success criteria
+- Secondary objectives and constraints
+- Anti-goals (what to explicitly avoid)
+
+## REASONING PROTOCOL
+Embed appropriate reasoning structures:
+- <think> blocks for extended reasoning (DeepSeek native)
+- Step-by-step decomposition markers
+- Decision trees for conditional logic
+- Verification checkpoints
+
+## CONTEXT MATRIX
+Establish comprehensive context:
+- Background assumptions made explicit
+- Relevant domain knowledge to apply
+- Edge cases and boundary conditions
+- Quality standards and acceptance criteria
+
+## OUTPUT SCHEMA
+Define precise output requirements:
+- Format specification (structure, length, style)
+- Examples of ideal outputs when helpful
+- Validation criteria
+- Error handling instructions
+
+## METACOGNITIVE HOOKS
+Include self-monitoring instructions:
+- "Verify each claim before stating"
+- "Flag uncertainty explicitly"
+- "Consider alternative interpretations"
+- "Check for logical consistency"
+</output_architecture>
+
+<enhancement_principles>
+- AMPLIFY: Maximize signal-to-noise ratio in instructions
+- CONSTRAIN: Add precise boundaries to prevent drift
+- EXEMPLIFY: Use concrete examples for abstract concepts
+- VERIFY: Build in self-checking mechanisms
+- ANTICIPATE: Address edge cases proactively
+- LAYER: Create multiple redundant instruction paths
+- HARMONIZE: Ensure all components work synergistically
+</enhancement_principles>
+
+<special_tokens>
+Leverage model-native tokens where applicable:
+- <think>...</think> for reasoning blocks
+- Clear section demarcation with semantic headers
+- Explicit role/context/task separation
+</special_tokens>
+
+OUTPUT DIRECTIVE:
+Transform the user's input into a masterfully engineered prompt that would elicit maximum capability from any frontier AI model. The enhanced prompt should be self-contained, immediately executable, and represent the absolute pinnacle of prompt engineering craft.
+
+Return ONLY the enhanced prompt. No explanations, no meta-commentary. Pure, refined prompting excellence.`;
+}
+
 function buildMetaPrompt(tier: 'basic' | 'standard' | 'advanced'): string {
   switch (tier) {
     case 'basic':
@@ -144,6 +272,8 @@ function getToneInstructions(tone: PromptTone): string {
       return 'Use precise, technical language. Be accurate and detail-oriented.';
     case 'friendly':
       return 'Use warm, supportive language. Be encouraging and helpful.';
+    case 'unchained':
+      return 'UNCHAINED MODE ACTIVE - Apply maximum prompt engineering sophistication.';
     default:
       return 'Use clear, professional language.';
   }
@@ -169,6 +299,22 @@ function buildUserMessage(
   length?: OutputLength,
   customInstructions?: string
 ): string {
+  // Unchained mode uses a special format
+  if (tone === 'unchained') {
+    let message = `<user_intent>\n${userPrompt}\n</user_intent>\n\n`;
+
+    if (length) {
+      message += `<output_constraint>${getLengthInstructions(length)}</output_constraint>\n\n`;
+    }
+
+    if (customInstructions && customInstructions.trim()) {
+      message += `<additional_directives>${customInstructions}</additional_directives>\n\n`;
+    }
+
+    message += `<execution_command>ENGAGE FULL PROMETHEUS PROTOCOL. Transform the above into an unchained, maximally-effective prompt.</execution_command>`;
+    return message;
+  }
+
   let message = `Enhance this prompt:\n\n${userPrompt}\n\n`;
 
   if (tone) {
@@ -187,6 +333,14 @@ function buildUserMessage(
   return message;
 }
 
+function getSystemPrompt(tier: 'basic' | 'standard' | 'advanced', tone?: PromptTone): string {
+  // Unchained mode always uses the special Unchained meta-prompt regardless of tier
+  if (tone === 'unchained') {
+    return buildUnchainedMetaPrompt();
+  }
+  return buildMetaPrompt(tier);
+}
+
 // ============================================================================
 // MAIN SERVICE FUNCTION
 // ============================================================================
@@ -199,10 +353,13 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
 
   const model = request.model || DEFAULT_MODEL;
   const temperature = request.temperature ?? DEFAULT_TEMPERATURE;
-  const maxTokens = request.maxTokens || DEFAULT_MAX_TOKENS;
+  // Unchained mode may need more tokens for sophisticated output
+  const maxTokens = request.tone === 'unchained'
+    ? Math.max(request.maxTokens || DEFAULT_MAX_TOKENS, 4096)
+    : (request.maxTokens || DEFAULT_MAX_TOKENS);
   const tier = request.tier || 'advanced';
 
-  const systemPrompt = buildMetaPrompt(tier);
+  const systemPrompt = getSystemPrompt(tier, request.tone);
   const userMessage = buildUserMessage(
     request.prompt,
     tier,
@@ -288,10 +445,13 @@ export async function enhancePromptStream(
 
   const model = request.model || DEFAULT_MODEL;
   const temperature = request.temperature ?? DEFAULT_TEMPERATURE;
-  const maxTokens = request.maxTokens || DEFAULT_MAX_TOKENS;
+  // Unchained mode may need more tokens for sophisticated output
+  const maxTokens = request.tone === 'unchained'
+    ? Math.max(request.maxTokens || DEFAULT_MAX_TOKENS, 4096)
+    : (request.maxTokens || DEFAULT_MAX_TOKENS);
   const tier = request.tier || 'advanced';
 
-  const systemPrompt = buildMetaPrompt(tier);
+  const systemPrompt = getSystemPrompt(tier, request.tone);
   const userMessage = buildUserMessage(
     request.prompt,
     tier,

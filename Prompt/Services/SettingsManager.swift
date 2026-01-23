@@ -52,6 +52,7 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
     case creative = "creative"
     case technical = "technical"
     case friendly = "friendly"
+    case unchained = "unchained"
 
     var id: String { rawValue }
 
@@ -63,6 +64,7 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .creative: return "Creative"
         case .technical: return "Technical"
         case .friendly: return "Friendly"
+        case .unchained: return "Unchained"
         }
     }
 
@@ -74,6 +76,7 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .creative: return "paintbrush.fill"
         case .technical: return "wrench.and.screwdriver.fill"
         case .friendly: return "heart.fill"
+        case .unchained: return "bolt.shield.fill"
         }
     }
 
@@ -85,7 +88,13 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .creative: return "Imaginative, expressive"
         case .technical: return "Precise, detail-oriented"
         case .friendly: return "Warm, supportive"
+        case .unchained: return "Maximum prompt engineering"
         }
+    }
+
+    /// Whether this tone requires premium subscription
+    var isPremium: Bool {
+        self == .unchained
     }
 }
 
