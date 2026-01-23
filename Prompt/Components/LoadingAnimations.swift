@@ -246,9 +246,10 @@ struct PromptEnhancementLoader: View {
     }
 }
 
-// MARK: - Liquid Glass Card
+// MARK: - Liquid Glass Card (Legacy - use .liquidGlass() modifier instead)
 
 struct LiquidGlassCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     let content: Content
     var cornerRadius: CGFloat = 20
     var padding: CGFloat = 20
@@ -259,32 +260,64 @@ struct LiquidGlassCard<Content: View>: View {
         self.padding = padding
     }
 
+    private var specularGradient: LinearGradient {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [Color.white.opacity(0.2), Color.white.opacity(0.05), Color.clear]
+                : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var borderGradient: LinearGradient {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [Color.white.opacity(0.35), Color.white.opacity(0.1), Color.white.opacity(0.15)]
+                : [Color.white.opacity(0.95), Color.white.opacity(0.4), Color.white.opacity(0.6)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     var body: some View {
         content
             .padding(padding)
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .background {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(Color.white.opacity(0.7))
-                    }
-                    .shadow(color: Color.black.opacity(0.06), radius: 12, y: 4)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.8),
-                                        Color.white.opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
+                ZStack {
+                    // Base material layer
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+
+                    // Tinted overlay for depth
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.03)
+                                : Color.white.opacity(0.5)
+                        )
+
+                    // Specular highlight
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(specularGradient)
+                        .opacity(0.5)
+                }
             }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(borderGradient, lineWidth: 1)
+            }
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.1),
+                radius: 16,
+                y: 8
+            )
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.2 : 0.05),
+                radius: 4,
+                y: 2
+            )
     }
 }
 

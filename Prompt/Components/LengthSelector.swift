@@ -2,8 +2,8 @@
 //  LengthSelector.swift
 //  Prompt
 //
-//  Segmented control for selecting output length
-//  AAA WCAG Compliant Colors
+//  iOS 26 Liquid Glass segmented control for selecting output length
+//  AAA WCAG Compliant Colors with Liquid Glass Design
 //
 
 import SwiftUI
@@ -16,10 +16,7 @@ struct LengthSelector: View {
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
     private var bgTertiary: Color { Color.adaptiveBackgroundTertiary }
-    private var borderColor: Color { Color.adaptiveBorder }
-    private var buttonPrimary: Color { Color.adaptiveButtonPrimary }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -35,7 +32,7 @@ struct LengthSelector: View {
                     .foregroundStyle(textSecondary)
             }
 
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
                 ForEach(OutputLength.allCases) { length in
                     LengthSegment(
                         length: length,
@@ -52,21 +49,29 @@ struct LengthSelector: View {
                     )
                 }
             }
-            .background(bgTertiary)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(borderColor, lineWidth: 1)
-            )
+            .padding(4)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(colorScheme == .dark ? 0.2 : 0.6),
+                                Color.white.opacity(colorScheme == .dark ? 0.05 : 0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(bgSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(borderColor, lineWidth: 1)
-        )
+        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.8)
     }
 
     private func triggerHaptic() {
@@ -85,9 +90,7 @@ struct LengthSegment: View {
     let isLast: Bool
     let action: () -> Void
 
-    private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var buttonPrimary: Color { Color.adaptiveButtonPrimary }
 
     var body: some View {
         Button(action: action) {
@@ -100,10 +103,17 @@ struct LengthSegment: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(isSelected ? buttonPrimary : .clear)
-            .foregroundStyle(isSelected ? (colorScheme == .dark ? .black : .white) : textSecondary)
+            .foregroundStyle(isSelected ? .white : textSecondary)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.adaptiveButtonPrimary)
+                        .shadow(color: Color.black.opacity(0.2), radius: 4, y: 2)
+                }
+            }
         }
         .buttonStyle(.plain)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
     }
 }
 

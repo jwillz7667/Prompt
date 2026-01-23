@@ -2,8 +2,8 @@
 //  ToneSelector.swift
 //  Prompt
 //
-//  Horizontal chip picker for selecting enhancement tone
-//  AAA WCAG Compliant Colors
+//  iOS 26 Liquid Glass horizontal chip picker for selecting enhancement tone
+//  AAA WCAG Compliant Colors with Liquid Glass Design
 //
 
 import SwiftUI
@@ -18,9 +18,6 @@ struct ToneSelector: View {
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
-    private var bgTertiary: Color { Color.adaptiveBackgroundTertiary }
-    private var borderColor: Color { Color.adaptiveBorder }
 
     private var isPremium: Bool {
         storeKit.currentTier == .premium
@@ -69,16 +66,12 @@ struct ToneSelector: View {
                     }
                 }
                 .padding(.horizontal, 2)
+                .padding(.vertical, 2)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(bgSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(borderColor, lineWidth: 1)
-        )
+        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.8)
     }
 
     private func triggerHaptic() {
@@ -98,18 +91,16 @@ struct ToneChip: View {
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgTertiary: Color { Color.adaptiveBackgroundTertiary }
-    private var buttonPrimary: Color { Color.adaptiveButtonPrimary }
 
     private var isLocked: Bool {
         tone.isPremium && !isPremiumUser
     }
 
-    private var chipBackground: Color {
-        if tone == .unchained && isSelected {
-            return Color.purple
+    private var accentColor: Color? {
+        if tone == .unchained {
+            return .purple
         }
-        return isSelected ? buttonPrimary : bgTertiary
+        return isSelected ? Color.adaptiveButtonPrimary : nil
     }
 
     var body: some View {
@@ -133,42 +124,21 @@ struct ToneChip: View {
                         .foregroundStyle(.yellow)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Group {
-                    if tone == .unchained && isSelected {
-                        LinearGradient(
-                            colors: [.purple, .indigo],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    } else if tone == .unchained && !isLocked {
-                        Color.purple.opacity(0.15)
-                    } else {
-                        chipBackground
-                    }
-                }
-            )
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .foregroundStyle(
                 isSelected
-                    ? (colorScheme == .dark ? .white : .white)
+                    ? .white
                     : (isLocked ? .gray : textSecondary)
             )
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(
-                        tone == .unchained
-                            ? (isSelected ? .clear : Color.purple.opacity(0.5))
-                            : (isSelected ? .clear : Color.adaptiveBorder),
-                        lineWidth: 1
-                    )
+            .liquidGlassChip(
+                isSelected: isSelected,
+                accentColor: tone == .unchained
+                    ? (isSelected ? .purple : nil)
+                    : (isSelected ? Color.adaptiveButtonPrimary : nil)
             )
         }
         .buttonStyle(.plain)
-        .scaleEffect(isSelected ? 1.02 : 1.0)
-        .animation(.spring(response: 0.2), value: isSelected)
         .opacity(isLocked ? 0.7 : 1.0)
     }
 }

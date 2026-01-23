@@ -4,7 +4,7 @@
 //
 //  Created by Justin Williams on 1/18/26.
 //
-//  iOS 26 Enhanced with Liquid Glass, Micro-animations, and AAA Contrast Compliance
+//  iOS 26 Liquid Glass Design with Micro-animations and AAA Contrast Compliance
 //
 
 import SwiftUI
@@ -248,14 +248,7 @@ struct ContentView: View {
     // MARK: - Background
 
     private var backgroundGradient: some View {
-        ZStack {
-            bgPrimary
-
-            // Subtle animated particles (reduced in dark mode)
-            FloatingParticles(count: 12, color: textTertiary)
-                .opacity(colorScheme == .dark ? 0.15 : 0.2)
-        }
-        .ignoresSafeArea()
+        LiquidGlassBackground()
     }
 
     // MARK: - Header Card
@@ -289,15 +282,7 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(24)
-        .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.08), radius: 12, y: 4)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(borderColor.opacity(0.5), lineWidth: 1)
-        }
+        .liquidGlass(cornerRadius: 24, shadowIntensity: 1.2, borderGlow: true)
     }
 
     // MARK: - Input Section
@@ -332,17 +317,7 @@ struct ContentView: View {
                     .frame(minHeight: 150, maxHeight: 250)
                     .padding(16)
                     .scrollContentBackground(.hidden)
-                    .background(bgSecondary)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(
-                                isTextEditorFocused ? textPrimary : borderColor,
-                                lineWidth: isTextEditorFocused ? 2 : 1
-                            )
-                            .animation(.easeInOut(duration: 0.2), value: isTextEditorFocused)
-                    )
-                    .shadow(color: Color.black.opacity(isTextEditorFocused ? 0.12 : 0.04), radius: isTextEditorFocused ? 12 : 5, y: 2)
+                    .liquidGlassInput(cornerRadius: 16, isFocused: isTextEditorFocused)
                     .focused($isTextEditorFocused)
 
                 if viewModel.userPrompt.isEmpty {
@@ -433,12 +408,16 @@ struct ContentView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(bgSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(settings.deepThinkEnabled ? Color.blue.opacity(0.3) : borderColor, lineWidth: 1)
+        .liquidGlass(
+            cornerRadius: 14,
+            shadowIntensity: settings.deepThinkEnabled ? 1.2 : 0.8
         )
+        .overlay {
+            if settings.deepThinkEnabled {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.blue.opacity(0.4), lineWidth: 1.5)
+            }
+        }
     }
 
     // MARK: - Enhancement Controls
@@ -539,10 +518,22 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(viewModel.canEnhance ? buttonPrimary : bgTertiary)
             .foregroundStyle(viewModel.canEnhance ? (colorScheme == .dark ? Color.black : Color.white) : textTertiary)
+            .background {
+                if viewModel.canEnhance {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(buttonPrimary)
+                        .shadow(color: Color.black.opacity(0.25), radius: 12, y: 6)
+                } else {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(bgTertiary.opacity(0.5))
+                        }
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: viewModel.canEnhance ? Color.black.opacity(0.2) : .clear, radius: 12, y: 6)
         }
         .buttonStyle(ElasticButtonStyle())
         .disabled(!viewModel.canEnhance)
@@ -586,8 +577,7 @@ struct ContentView: View {
                         .foregroundStyle(textSecondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(bgSecondary)
-                        .clipShape(Capsule())
+                        .liquidGlassChip(isSelected: false)
                 }
             }
 
@@ -600,13 +590,7 @@ struct ContentView: View {
             }
             .frame(minHeight: 180, maxHeight: 350)
             .padding(16)
-            .background(bgSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(textPrimary, lineWidth: 1.5)
-            )
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.08), radius: 8, y: 2)
+            .liquidGlass(cornerRadius: 16, shadowIntensity: 1.0, borderGlow: true)
 
             // Action Buttons
             HStack(spacing: 12) {
@@ -618,22 +602,18 @@ struct ContentView: View {
                         .font(.system(.subheadline, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(buttonSecondary)
                         .foregroundStyle(textPrimary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
-                .buttonStyle(ElasticButtonStyle())
+                .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 12))
 
                 ShareLink(item: viewModel.enhancedPrompt) {
                     Label("Share", systemImage: "square.and.arrow.up.fill")
                         .font(.system(.subheadline, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(buttonSecondary)
                         .foregroundStyle(textPrimary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .liquidGlassButton(cornerRadius: 12, isPressed: false)
                 }
-                .buttonStyle(ElasticButtonStyle())
             }
         }
     }
