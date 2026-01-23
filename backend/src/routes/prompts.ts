@@ -52,7 +52,7 @@ const enhancePromptSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().min(1).max(100000).optional(),
-  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly']).optional(),
+  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'unchained']).optional(),
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
   customInstructions: z.string().max(2000).optional(),
 });
@@ -653,7 +653,7 @@ const batchEnhanceSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().min(1).max(50000).optional(),
-  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly']).optional(),
+  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'unchained']).optional(),
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
 });
 
