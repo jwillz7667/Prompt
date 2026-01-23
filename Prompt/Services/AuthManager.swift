@@ -15,10 +15,47 @@ final class AuthManager: NSObject {
     // MARK: - State
 
     var currentUser: User?
-    var isAuthenticated: Bool { currentUser != nil }
+    var isAuthenticated: Bool { currentUser != nil || hasStoredSession }
     var isLoading = false
     var isCheckingSession = true
     var error: AuthError?
+
+    // MARK: - Persistent Session Storage
+
+    private let hasSignedInKey = "com.promptomize.hasSignedIn"
+    private let cachedUserKey = "com.promptomize.cachedUser"
+
+    /// Check if user has ever signed in (survives app restarts)
+    private var hasStoredSession: Bool {
+        UserDefaults.standard.bool(forKey: hasSignedInKey)
+    }
+
+    /// Store that user has signed in
+    private func markAsSignedIn() {
+        UserDefaults.standard.set(true, forKey: hasSignedInKey)
+    }
+
+    /// Clear sign-in state (only on explicit sign out)
+    private func clearSignedInState() {
+        UserDefaults.standard.removeObject(forKey: hasSignedInKey)
+        UserDefaults.standard.removeObject(forKey: cachedUserKey)
+    }
+
+    /// Cache user data locally
+    private func cacheUser(_ user: User) {
+        if let data = try? JSONEncoder().encode(user) {
+            UserDefaults.standard.set(data, forKey: cachedUserKey)
+        }
+    }
+
+    /// Load cached user data
+    private func loadCachedUser() -> User? {
+        guard let data = UserDefaults.standard.data(forKey: cachedUserKey),
+              let user = try? JSONDecoder().decode(User.self, from: data) else {
+            return nil
+        }
+        return user
+    }
 
     // MARK: - Singleton
 
@@ -37,16 +74,57 @@ final class AuthManager: NSObject {
         isCheckingSession = true
         defer { isCheckingSession = false }
 
+        // Load stored tokens from keychain
         await APIClient.shared.loadStoredTokens()
 
-        guard await APIClient.shared.isAuthenticated else { return }
+        // Check if we have tokens
+        let hasTokens = await APIClient.shared.isAuthenticated
 
-        do {
-            let response: MeResponse = try await APIClient.shared.request("/auth/me")
-            self.currentUser = User(from: response.user)
-        } catch {
-            // Token invalid, clear it
-            await APIClient.shared.clearTokens()
+        // If we have tokens, try to validate with backend
+        if hasTokens {
+            do {
+                let response: MeResponse = try await APIClient.shared.request("/auth/me")
+                self.currentUser = User(from: response.user)
+                cacheUser(self.currentUser!)
+                markAsSignedIn()
+                print("[Auth] Session restored from server")
+                return
+            } catch let error as APIError {
+                // Only clear tokens on explicit auth failures (401)
+                if case .unauthorized = error {
+                    print("[Auth] Token invalid (401), clearing session")
+                    await APIClient.shared.clearTokens()
+                    // Don't clear UserDefaults - let user stay "logged in" with cached data
+                } else {
+                    // Network or other transient error - use cached user
+                    print("[Auth] Transient error checking session: \(error)")
+                    if let cached = loadCachedUser() {
+                        self.currentUser = cached
+                        print("[Auth] Using cached user data")
+                        return
+                    }
+                }
+            } catch {
+                // Network error - use cached data if available
+                print("[Auth] Network error checking session: \(error)")
+                if let cached = loadCachedUser() {
+                    self.currentUser = cached
+                    print("[Auth] Using cached user data")
+                    return
+                }
+            }
+        }
+
+        // No tokens but user has signed in before - restore from cache
+        if hasStoredSession {
+            if let cached = loadCachedUser() {
+                self.currentUser = cached
+                print("[Auth] Session restored from cache (no tokens)")
+                return
+            }
+            // Has signed in before but no cache - create minimal user
+            print("[Auth] User previously signed in, allowing access")
+            // The user will need to re-auth if they try to use API features
         }
     }
 
@@ -96,6 +174,8 @@ final class AuthManager: NSObject {
             )
 
             currentUser = User(from: response.user)
+            cacheUser(currentUser!)
+            markAsSignedIn()
             print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
 
             // Sync subscription status after successful authentication
@@ -134,6 +214,7 @@ final class AuthManager: NSObject {
         }
 
         await APIClient.shared.clearTokens()
+        clearSignedInState()
         currentUser = nil
         isLoading = false
     }
@@ -143,6 +224,7 @@ final class AuthManager: NSObject {
     func signOutAllDevices() async throws {
         try await APIClient.shared.requestVoid("/auth/logout-all", method: .post)
         await APIClient.shared.clearTokens()
+        clearSignedInState()
         currentUser = nil
     }
 }
@@ -197,6 +279,8 @@ extension AuthManager: ASAuthorizationControllerDelegate {
                 )
 
                 currentUser = User(from: response.user)
+                cacheUser(currentUser!)
+                markAsSignedIn()
                 print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
 
                 // Sync subscription status after successful authentication

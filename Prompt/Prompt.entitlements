@@ -22,5 +22,9 @@
 	<array>
 		<string>group.com.res.promptomizer</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)group.com.res.promptomizer</string>
+	</array>
 </dict>
 </plist>
