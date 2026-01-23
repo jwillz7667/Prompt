@@ -51,7 +51,7 @@ struct UsageIndicator: View {
 
             // Text
             if isUnlimited {
-                Text("Unlimited")
+                Text("Pro")
                     .font(.caption)
                     .foregroundStyle(Color.adaptiveTextSecondary)
             } else {
