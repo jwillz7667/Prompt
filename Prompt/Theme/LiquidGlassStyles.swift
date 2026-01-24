@@ -3,7 +3,7 @@
 //  Prompt
 //
 //  iOS 26 Liquid Glass Design System
-//  Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
+//  Brand Colors: Indigo (#5B4CDB) and Cyan (#00FFFF)
 //  Translucent, depth-aware components with specular highlights and refractive effects
 //
 

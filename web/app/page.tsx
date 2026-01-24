@@ -163,7 +163,7 @@ export default function Home() {
 
           {/* App Preview */}
           <div className="mt-20 relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#512AD4]/30 to-[#00FFF9]/30 blur-3xl -z-10" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#5B4CDB]/30 to-[#00FFFF]/30 blur-3xl -z-10" />
             <div className="flex justify-center">
               <div className="relative">
                 <Image
@@ -194,7 +194,7 @@ export default function Home() {
                 key={index}
                 className="feature-card bg-[var(--bg-primary)] p-8 rounded-3xl border border-[var(--border)]"
               >
-                <div className="w-14 h-14 bg-gradient-to-br from-[#512AD4]/20 to-[#00FFF9]/20 rounded-2xl flex items-center justify-center mb-6">
+                <div className="w-14 h-14 bg-gradient-to-br from-[#5B4CDB]/20 to-[#00FFFF]/20 rounded-2xl flex items-center justify-center mb-6">
                   <feature.icon className="w-7 h-7 text-[var(--accent-cyan)]" />
                 </div>
                 <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
@@ -264,7 +264,7 @@ export default function Home() {
       {/* CTA Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[var(--bg-secondary)]">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#512AD4] to-[#00FFF9] rounded-2xl flex items-center justify-center glow-cyan">
+          <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#5B4CDB] to-[#00FFFF] rounded-2xl flex items-center justify-center glow-cyan">
             <Crown className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-4xl font-bold mb-4">Ready to Enhance Your Prompts?</h2>

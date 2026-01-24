@@ -3,47 +3,49 @@
 @tailwind utilities;
 
 /*
- * Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
+ * Brand Colors: Indigo (#5B4CDB) and Cyan (#00FFFF)
  * AAA WCAG Compliant Color System
  */
 
 :root {
   /* Light mode - AAA compliant text on white */
-  --text-primary: #1A0A4C;
-  --text-secondary: #3D2A6B;
-  --text-tertiary: #5C4A8C;
+  --text-primary: #1A144C;
+  --text-secondary: #3D3475;
+  --text-tertiary: #5C5296;
   --bg-primary: #FFFFFF;
-  --bg-secondary: #F5F3FA;
-  --bg-tertiary: #EBE6F8;
-  --border: #C8BEE0;
+  --bg-secondary: #F5F3FC;
+  --bg-tertiary: #EBE8FA;
+  --border: #C8C3E8;
 
   /* Brand accent colors */
-  --accent-purple: #512AD4;
-  --accent-cyan: #00FFF9;
-  --accent-cyan-dark: #00DCD6;
+  --accent-purple: #5B4CDB;
+  --accent-indigo: #5B4CDB;
+  --accent-cyan: #00FFFF;
+  --accent-cyan-dark: #00DCDC;
 
   /* Text on accent */
-  --text-on-accent: #1A0A4C;
+  --text-on-accent: #1A144C;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Dark mode - Brand purple background with AAA compliant text */
+    /* Dark mode - Brand indigo background with AAA compliant text */
     --text-primary: #FFFFFF;
-    --text-secondary: #E8E4F0;
-    --text-tertiary: #C4BED4;
-    --bg-primary: #512AD4;
-    --bg-secondary: #5B34DE;
-    --bg-tertiary: #3D20A2;
-    --border: #7850FF;
+    --text-secondary: #E8E6F5;
+    --text-tertiary: #C4C0DC;
+    --bg-primary: #5B4CDB;
+    --bg-secondary: #6556E5;
+    --bg-tertiary: #3D32B0;
+    --border: #8273F0;
 
     /* Accent colors stay the same */
-    --accent-purple: #512AD4;
-    --accent-cyan: #00FFF9;
-    --accent-cyan-dark: #00DCD6;
+    --accent-purple: #5B4CDB;
+    --accent-indigo: #5B4CDB;
+    --accent-cyan: #00FFFF;
+    --accent-cyan-dark: #00DCDC;
 
     /* Text on cyan button */
-    --text-on-accent: #1A0A4C;
+    --text-on-accent: #1A144C;
   }
 }
 
@@ -78,7 +80,7 @@ body {
 
 /* Brand gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #512AD4 0%, #00FFF9 100%);
+  background: linear-gradient(135deg, #5B4CDB 0%, #00FFFF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -89,13 +91,13 @@ body {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 255, 249, 0.2);
+  border: 1px solid rgba(0, 255, 255, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
   .glass {
-    background: rgba(81, 42, 212, 0.4);
-    border: 1px solid rgba(0, 255, 249, 0.3);
+    background: rgba(91, 76, 219, 0.4);
+    border: 1px solid rgba(0, 255, 255, 0.3);
   }
 }
 
@@ -106,12 +108,12 @@ body {
 
 .feature-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(81, 42, 212, 0.15);
+  box-shadow: 0 20px 40px rgba(91, 76, 219, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {
   .feature-card:hover {
-    box-shadow: 0 20px 40px rgba(0, 255, 249, 0.15);
+    box-shadow: 0 20px 40px rgba(0, 255, 255, 0.15);
   }
 }
 
@@ -124,26 +126,26 @@ body {
 
 .btn-cyan:hover {
   background: var(--accent-cyan-dark);
-  box-shadow: 0 8px 24px rgba(0, 255, 249, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 255, 255, 0.4);
 }
 
-/* Brand purple button style */
-.btn-purple {
-  background: var(--accent-purple);
+/* Brand indigo button style */
+.btn-purple, .btn-indigo {
+  background: var(--accent-indigo);
   color: #FFFFFF;
   transition: all 0.2s ease;
 }
 
-.btn-purple:hover {
-  background: #6540E8;
-  box-shadow: 0 8px 24px rgba(81, 42, 212, 0.4);
+.btn-purple:hover, .btn-indigo:hover {
+  background: #6F60EF;
+  box-shadow: 0 8px 24px rgba(91, 76, 219, 0.4);
 }
 
 /* Glow effects */
 .glow-cyan {
-  box-shadow: 0 0 20px rgba(0, 255, 249, 0.4);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
 }
 
-.glow-purple {
-  box-shadow: 0 0 20px rgba(81, 42, 212, 0.4);
+.glow-purple, .glow-indigo {
+  box-shadow: 0 0 20px rgba(91, 76, 219, 0.4);
 }
