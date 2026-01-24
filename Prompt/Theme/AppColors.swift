@@ -16,8 +16,8 @@ extension Color {
     /// Brand primary indigo #5B4CDB - blue-purple from logo
     static let brandPurple = Color(red: 91/255, green: 76/255, blue: 219/255)
 
-    /// Brand accent cyan #00FFFF - pure cyan from logo sparkles
-    static let brandCyan = Color(red: 0/255, green: 255/255, blue: 255/255)
+    /// Brand accent cyan #00E6E6 - softer teal-cyan from logo sparkles
+    static let brandCyan = Color(red: 0/255, green: 230/255, blue: 230/255)
 
     /// Darker variant of brand indigo for depth
     static let brandPurpleDark = Color(red: 61/255, green: 50/255, blue: 176/255)
@@ -26,7 +26,7 @@ extension Color {
     static let brandPurpleLight = Color(red: 111/255, green: 96/255, blue: 239/255)
 
     /// Darker cyan for text on light backgrounds
-    static let brandCyanDark = Color(red: 0/255, green: 200/255, blue: 200/255)
+    static let brandCyanDark = Color(red: 0/255, green: 180/255, blue: 180/255)
 }
 
 // MARK: - Semantic Text Colors (AAA Compliant)
@@ -129,11 +129,11 @@ extension Color {
     }
 
     static var adaptiveButtonPrimary: Color {
-        // Cyan accent for both modes
+        // Cyan accent for both modes - softer teal-cyan matching logo sparkles
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 0/255, green: 255/255, blue: 255/255, alpha: 1.0) // #00FFFF - pure cyan
-                : UIColor(red: 0/255, green: 220/255, blue: 220/255, alpha: 1.0) // Slightly darker cyan for light mode
+                ? UIColor(red: 0/255, green: 230/255, blue: 230/255, alpha: 1.0) // #00E6E6 - softer cyan for dark
+                : UIColor(red: 0/255, green: 200/255, blue: 200/255, alpha: 1.0) // #00C8C8 - teal for light mode
         })
     }
 
@@ -154,11 +154,11 @@ extension Color {
     }
 
     static var adaptiveAccent: Color {
-        // Cyan accent
+        // Cyan accent - softer teal-cyan matching logo
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 0/255, green: 255/255, blue: 255/255, alpha: 1.0) // #00FFFF - pure cyan
-                : UIColor(red: 0/255, green: 200/255, blue: 200/255, alpha: 1.0) // Darker cyan for light mode
+                ? UIColor(red: 0/255, green: 230/255, blue: 230/255, alpha: 1.0) // #00E6E6 - softer cyan
+                : UIColor(red: 0/255, green: 180/255, blue: 180/255, alpha: 1.0) // #00B4B4 - teal for light mode
         })
     }
 
@@ -221,14 +221,14 @@ struct AppTheme {
         backgroundTertiary: Color(red: 235/255, green: 232/255, blue: 250/255),  // #EBE8FA - light indigo
         backgroundElevated: Color.white,
 
-        // Buttons - Cyan accent
-        buttonPrimary: Color(red: 0/255, green: 220/255, blue: 220/255),  // Darker cyan for light mode
+        // Buttons - Softer teal-cyan accent
+        buttonPrimary: Color(red: 0/255, green: 200/255, blue: 200/255),  // #00C8C8 - teal for light mode
         buttonPrimaryText: Color(red: 26/255, green: 20/255, blue: 76/255),
         buttonSecondary: Color(red: 225/255, green: 222/255, blue: 248/255),
         buttonSecondaryText: Color(red: 61/255, green: 52/255, blue: 117/255),
         border: Color(red: 200/255, green: 195/255, blue: 225/255),
         borderStrong: Color(red: 150/255, green: 145/255, blue: 190/255),
-        accent: Color(red: 0/255, green: 200/255, blue: 200/255),
+        accent: Color(red: 0/255, green: 180/255, blue: 180/255),  // #00B4B4 - teal
 
         // Semantic
         success: Color(red: 0.1, green: 0.7, blue: 0.4),
@@ -237,7 +237,7 @@ struct AppTheme {
 
         // Brand
         brandPrimary: Color(red: 91/255, green: 76/255, blue: 219/255),   // #5B4CDB - indigo
-        brandAccent: Color(red: 0/255, green: 255/255, blue: 255/255)     // #00FFFF - pure cyan
+        brandAccent: Color(red: 0/255, green: 200/255, blue: 200/255)     // #00C8C8 - teal-cyan
     )
 
     // MARK: - Dark Theme (AAA Compliant - Brand Indigo Background)
@@ -256,14 +256,14 @@ struct AppTheme {
         backgroundTertiary: Color(red: 61/255, green: 50/255, blue: 176/255),    // Deeper indigo
         backgroundElevated: Color(red: 111/255, green: 96/255, blue: 239/255),   // Lighter indigo
 
-        // Buttons - Cyan accent
-        buttonPrimary: Color(red: 0/255, green: 255/255, blue: 255/255),  // #00FFFF - pure cyan
+        // Buttons - Softer teal-cyan accent
+        buttonPrimary: Color(red: 0/255, green: 230/255, blue: 230/255),  // #00E6E6 - softer cyan for dark
         buttonPrimaryText: Color(red: 26/255, green: 20/255, blue: 76/255),
         buttonSecondary: Color(red: 71/255, green: 60/255, blue: 189/255),
         buttonSecondaryText: Color.white,
         border: Color(red: 130/255, green: 115/255, blue: 230/255).opacity(0.5),
         borderStrong: Color(red: 160/255, green: 145/255, blue: 240/255),
-        accent: Color(red: 0/255, green: 255/255, blue: 255/255),
+        accent: Color(red: 0/255, green: 230/255, blue: 230/255),  // #00E6E6 - softer cyan
 
         // Semantic
         success: Color(red: 0.2, green: 0.85, blue: 0.5),
@@ -272,7 +272,7 @@ struct AppTheme {
 
         // Brand
         brandPrimary: Color(red: 91/255, green: 76/255, blue: 219/255),   // #5B4CDB - indigo
-        brandAccent: Color(red: 0/255, green: 255/255, blue: 255/255)     // #00FFFF - pure cyan
+        brandAccent: Color(red: 0/255, green: 230/255, blue: 230/255)     // #00E6E6 - softer cyan
     )
 }
 
