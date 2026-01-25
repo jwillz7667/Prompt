@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var showProfile = false
     @State private var showPaywall = false
     @State private var showTemplates = false
+    @ObservedObject private var networkMonitor = NetworkMonitor.shared
 
     // Animation states
     @State private var headerScale: CGFloat = 1.0
@@ -205,6 +206,13 @@ struct ContentView: View {
                 }
             } message: {
                 Text(viewModel.errorMessage ?? "An unknown error occurred")
+            }
+            .errorAlert(handler: ErrorHandler.shared) { action in
+                handleErrorAction(action)
+            }
+            .overlay(alignment: .top) {
+                OfflineBanner()
+                    .animation(.spring(response: 0.3), value: networkMonitor.isConnected)
             }
             .overlay(alignment: .bottom) {
                 if viewModel.showCopiedToast {
@@ -771,6 +779,35 @@ struct ContentView: View {
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.impactOccurred()
+    }
+
+    // MARK: - Error Action Handling
+
+    private func handleErrorAction(_ action: ErrorAction) {
+        switch action {
+        case .retry:
+            // Retry the last action if applicable
+            if !viewModel.userPrompt.isEmpty && !viewModel.isLoading {
+                performEnhancement()
+            }
+        case .signIn:
+            showProfile = true
+        case .upgrade:
+            showPaywall = true
+        case .contactSupport:
+            if let url = URL(string: "mailto:support@promptomize.app") {
+                UIApplication.shared.open(url)
+            }
+        case .checkConnection:
+            // Just dismiss - user can check network settings
+            triggerHaptic(.warning)
+        case .refreshApp:
+            Task {
+                await storeKit.syncWithBackend()
+            }
+        case .none:
+            break
+        }
     }
 }
 

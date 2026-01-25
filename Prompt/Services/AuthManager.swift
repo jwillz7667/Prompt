@@ -97,7 +97,7 @@ final class AuthManager: NSObject {
                     // Don't clear UserDefaults - let user stay "logged in" with cached data
                 } else {
                     // Network or other transient error - use cached user
-                    print("[Auth] Transient error checking session: \(error)")
+                    ErrorHandler.shared.handleSilently(error, context: "checkExistingSession")
                     if let cached = loadCachedUser() {
                         self.currentUser = cached
                         print("[Auth] Using cached user data")
@@ -106,7 +106,7 @@ final class AuthManager: NSObject {
                 }
             } catch {
                 // Network error - use cached data if available
-                print("[Auth] Network error checking session: \(error)")
+                ErrorHandler.shared.handleSilently(error, context: "checkExistingSession")
                 if let cached = loadCachedUser() {
                     self.currentUser = cached
                     print("[Auth] Using cached user data")
@@ -180,8 +180,12 @@ final class AuthManager: NSObject {
 
             // Sync subscription status after successful authentication
             await StoreKitManager.shared.syncWithBackend()
+
+            // Track successful sign-in
+            AnalyticsService.shared.trackSignIn(provider: "apple", success: true)
         } catch {
-            print("[Auth] Error: \(error)")
+            ErrorHandler.shared.handle(error, context: "handleAppleSignIn")
+            AnalyticsService.shared.trackSignIn(provider: "apple", success: false, error: error)
             self.error = .serverError(error.localizedDescription)
         }
 
@@ -285,8 +289,12 @@ extension AuthManager: ASAuthorizationControllerDelegate {
 
                 // Sync subscription status after successful authentication
                 await StoreKitManager.shared.syncWithBackend()
+
+                // Track successful sign-in
+                AnalyticsService.shared.trackSignIn(provider: "apple", success: true)
             } catch {
-                print("[Auth] Error: \(error)")
+                ErrorHandler.shared.handle(error, context: "authorizationController")
+                AnalyticsService.shared.trackSignIn(provider: "apple", success: false, error: error)
                 self.error = .serverError(error.localizedDescription)
             }
         }
@@ -297,6 +305,10 @@ extension AuthManager: ASAuthorizationControllerDelegate {
         didCompleteWithError error: Error
     ) {
         print("[Auth] Error delegate called: \(error)")
+        // Track the auth error
+        Task { @MainActor in
+            ErrorHandler.shared.handleSilently(error, context: "authorizationController")
+        }
 
         Task { @MainActor in
             isLoading = false

@@ -114,6 +114,7 @@ final class StoreKitManager {
             }
         } catch {
             isLoading = false
+            ErrorHandler.shared.handle(error, context: "purchase")
             if let storeError = error as? StoreError {
                 self.error = storeError
                 throw storeError
@@ -188,6 +189,7 @@ final class StoreKitManager {
             isLoading = false
         } catch {
             isLoading = false
+            ErrorHandler.shared.handle(error, context: "restorePurchases")
             self.error = .restoreFailed(error)
             throw StoreError.restoreFailed(error)
         }
@@ -227,7 +229,7 @@ final class StoreKitManager {
             // Sync to shared storage for widgets and extensions
             syncToSharedStorage()
         } catch {
-            print("Failed to sync with backend: \(error)")
+            ErrorHandler.shared.handleSilently(error, context: "syncWithBackend")
         }
     }
 
@@ -268,6 +270,7 @@ final class StoreKitManager {
             isLoading = false
         } catch {
             isLoading = false
+            ErrorHandler.shared.handle(error, context: "startFreeTrial")
             if let storeError = error as? StoreError {
                 self.error = storeError
                 throw storeError

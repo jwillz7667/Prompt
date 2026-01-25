@@ -101,15 +101,19 @@ final class PromptViewModel {
             WidgetCenter.shared.reloadAllTimelines()
 
         } catch let error as APIError {
-            errorMessage = error.localizedDescription
+            let appError = ErrorHandler.shared.mapToAppError(error)
+            errorMessage = appError.userMessage
             showError = true
+            ErrorHandler.shared.handleSilently(error, context: "enhancePrompt")
             // Fail the Live Activity
-            await EnhancementActivityManager.shared.failActivity(errorMessage: error.localizedDescription)
+            await EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
         } catch {
-            errorMessage = error.localizedDescription
+            let appError = ErrorHandler.shared.mapToAppError(error)
+            errorMessage = appError.userMessage
             showError = true
+            ErrorHandler.shared.handleSilently(error, context: "enhancePrompt")
             // Fail the Live Activity
-            await EnhancementActivityManager.shared.failActivity(errorMessage: error.localizedDescription)
+            await EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
         }
 
         isLoading = false
