@@ -19,16 +19,28 @@ export default function LoginPage() {
 
     try {
       // Redirect to Apple OAuth
+      const clientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || 'com.res.promptomize.webapp'
+      const redirectUri = `${window.location.origin}/api/auth/apple/callback`
+
+      // Debug: Log what's being sent to Apple
+      console.log('Apple Sign-In Debug:')
+      console.log('  client_id:', clientId)
+      console.log('  redirect_uri:', redirectUri)
+      console.log('  origin:', window.location.origin)
+
       const params = new URLSearchParams({
-        client_id: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || 'com.res.promptomize.webapp',
-        redirect_uri: `${window.location.origin}/api/auth/apple/callback`,
+        client_id: clientId,
+        redirect_uri: redirectUri,
         response_type: 'code id_token',
         scope: 'name email',
         response_mode: 'form_post',
         state: crypto.randomUUID(),
       })
 
-      window.location.href = `https://appleid.apple.com/auth/authorize?${params.toString()}`
+      const authUrl = `https://appleid.apple.com/auth/authorize?${params.toString()}`
+      console.log('  Full URL:', authUrl)
+
+      window.location.href = authUrl
     } catch (err) {
       setError('Failed to initiate Apple Sign In')
       setIsLoading(null)
