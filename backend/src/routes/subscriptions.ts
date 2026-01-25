@@ -14,6 +14,7 @@ import {
   processVerifiedTransaction,
 } from '../services/appleStoreService.js';
 import { subscriptionLogger } from '../utils/logger.js';
+import { prisma } from '../utils/prisma.js';
 
 export const subscriptionRouter = Router();
 
@@ -34,7 +35,13 @@ subscriptionRouter.get('/status', async (req: AuthenticatedRequest, res: Respons
     // Ensure subscription record exists
     await ensureSubscriptionExists(req.user.id);
 
-    const subscriptionInfo = await getSubscriptionInfo(req.user.id);
+    const [subscriptionInfo, user] = await Promise.all([
+      getSubscriptionInfo(req.user.id),
+      prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { stripeCustomerId: true },
+      }),
+    ]);
 
     res.json({
       subscription: {
@@ -50,6 +57,8 @@ subscriptionRouter.get('/status', async (req: AuthenticatedRequest, res: Respons
         canCreatePrompt: subscriptionInfo.canPerformAction,
       },
       features: subscriptionInfo.features,
+      // Stripe customer ID for web portal
+      stripeCustomerId: user?.stripeCustomerId || null,
     });
   } catch (error) {
     subscriptionLogger.error({ err: error, userId: req.user?.id }, 'Failed to get subscription status');

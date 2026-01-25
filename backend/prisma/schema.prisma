@@ -53,6 +53,9 @@ model User {
   // Subscription (denormalized for fast access)
   subscriptionTier SubscriptionTier @default(FREE)
 
+  // Stripe (for web payments)
+  stripeCustomerId String?          @unique
+
   // User preferences
   customInstructions String?     @db.Text
 
@@ -245,6 +248,11 @@ model Subscription {
   originalTransactionId String?            @unique
   productId             String?
 
+  // Stripe (for web payments)
+  stripeSubscriptionId  String?            @unique
+  stripePriceId         String?
+  cancelAtPeriodEnd     Boolean            @default(false)
+
   // Dates
   expiresAt             DateTime?
   trialEndDate          DateTime?
@@ -265,6 +273,7 @@ model Subscription {
   @@index([userId])
   @@index([status, expiresAt])
   @@index([originalTransactionId])
+  @@index([stripeSubscriptionId])
 }
 
 model AppStoreTransaction {
