@@ -12,7 +12,8 @@ export async function POST(request: NextRequest) {
     const userJson = formData.get('user') as string | null
 
     if (!code || !idToken) {
-      return NextResponse.redirect(new URL('/login?error=invalid_response', request.url))
+      // Use 303 to convert POST to GET
+      return NextResponse.redirect(new URL('/login?error=invalid_response', request.url), 303)
     }
 
     // Parse user info if provided (first-time sign in)
@@ -45,7 +46,8 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Authentication failed' }))
       console.error('Apple auth error:', error)
-      return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message || 'auth_failed')}`, request.url))
+      // Use 303 to convert POST to GET
+      return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message || 'auth_failed')}`, request.url), 303)
     }
 
     const data = await response.json()
@@ -64,14 +66,16 @@ export async function POST(request: NextRequest) {
     })
 
     // Redirect to dashboard with tokens in URL (to be captured by client)
+    // Use 303 to convert POST to GET
     const redirectUrl = new URL('/dashboard', request.url)
     redirectUrl.searchParams.set('token', data.accessToken)
     redirectUrl.searchParams.set('expiresIn', data.expiresIn.toString())
 
-    return NextResponse.redirect(redirectUrl)
+    return NextResponse.redirect(redirectUrl, 303)
   } catch (error) {
     console.error('Apple auth callback error:', error)
-    return NextResponse.redirect(new URL('/login?error=server_error', request.url))
+    // Use 303 to convert POST to GET
+    return NextResponse.redirect(new URL('/login?error=server_error', request.url), 303)
   }
 }
 
