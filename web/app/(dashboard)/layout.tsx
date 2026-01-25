@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
@@ -13,89 +13,69 @@ import { setTokens } from '@/lib/api/client'
 import { cn } from '@/lib/utils/cn'
 import { toast } from '@/lib/stores/uiStore'
 
-// Separate component for search params handling to enable Suspense boundary
-function AuthCallbackHandler() {
+// Inner component that handles search params (needs Suspense)
+function DashboardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { checkAuth } = useAuthStore()
-  const { refreshAfterPurchase } = useSubscriptionStore()
-
-  useEffect(() => {
-    const token = searchParams.get('token')
-    const expiresIn = searchParams.get('expiresIn')
-    const checkout = searchParams.get('checkout')
-
-    console.log('AuthCallbackHandler:', { token: !!token, expiresIn, checkout })
-
-    if (token && expiresIn) {
-      console.log('Setting tokens from callback...')
-      // Store tokens from OAuth callback
-      setTokens(token, '', parseInt(expiresIn, 10))
-      // Clean up URL
-      router.replace('/dashboard')
-      // Refresh auth state
-      console.log('Calling checkAuth...')
-      checkAuth().then((result) => {
-        console.log('checkAuth result:', result)
-      }).catch((err) => {
-        console.error('checkAuth error:', err)
-      })
-    } else {
-      console.log('No token in URL, calling checkAuth...')
-      checkAuth().then((result) => {
-        console.log('checkAuth result:', result)
-      }).catch((err) => {
-        console.error('checkAuth error:', err)
-      })
-    }
-
-    // Handle Stripe checkout success
-    if (checkout === 'success') {
-      toast.success('Subscription activated!', 'Thank you for your purchase')
-      refreshAfterPurchase()
-      router.replace('/dashboard')
-    } else if (checkout === 'canceled') {
-      toast.info('Checkout canceled', 'No charges were made')
-      router.replace('/upgrade')
-    }
-  }, [searchParams, router, checkAuth, refreshAfterPurchase])
-
-  return null
-}
-
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const router = useRouter()
   const { isAuthenticated, isLoading: authLoading, checkAuth } = useAuthStore()
-  const { fetchSubscription } = useSubscriptionStore()
+  const { fetchSubscription, refreshAfterPurchase } = useSubscriptionStore()
   const { sidebarCollapsed } = useUIStore()
+  const [isInitialized, setIsInitialized] = useState(false)
 
-  console.log('DashboardLayout render:', { authLoading, isAuthenticated })
+  console.log('DashboardContent render:', { authLoading, isAuthenticated, isInitialized })
 
-  // Check auth on mount - this must run before the early return
+  // Handle OAuth callback tokens and initial auth check
   useEffect(() => {
-    console.log('Checking auth on mount...')
-    checkAuth()
-  }, [checkAuth])
+    const initAuth = async () => {
+      const token = searchParams.get('token')
+      const expiresIn = searchParams.get('expiresIn')
+      const checkout = searchParams.get('checkout')
 
+      console.log('initAuth:', { token: !!token, expiresIn, checkout })
+
+      if (token && expiresIn) {
+        console.log('Setting tokens from callback...')
+        setTokens(token, '', parseInt(expiresIn, 10))
+        router.replace('/dashboard')
+      }
+
+      // Handle Stripe checkout
+      if (checkout === 'success') {
+        toast.success('Subscription activated!', 'Thank you for your purchase')
+        refreshAfterPurchase()
+        router.replace('/dashboard')
+      } else if (checkout === 'canceled') {
+        toast.info('Checkout canceled', 'No charges were made')
+        router.replace('/upgrade')
+      }
+
+      // Now check auth (after token is stored)
+      console.log('Calling checkAuth...')
+      const result = await checkAuth()
+      console.log('checkAuth result:', result)
+      setIsInitialized(true)
+    }
+
+    initAuth()
+  }, []) // Run once on mount
+
+  // Redirect to login if not authenticated
   useEffect(() => {
-    console.log('DashboardLayout effect:', { authLoading, isAuthenticated })
-    if (!authLoading && !isAuthenticated) {
+    if (isInitialized && !authLoading && !isAuthenticated) {
       console.log('Redirecting to login...')
       router.push('/login')
     }
-  }, [authLoading, isAuthenticated, router])
+  }, [isInitialized, authLoading, isAuthenticated, router])
 
+  // Fetch subscription when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchSubscription()
     }
   }, [isAuthenticated, fetchSubscription])
 
-  if (authLoading) {
+  // Show loading while initializing or checking auth
+  if (!isInitialized || authLoading) {
     return <LoadingState fullScreen message="Loading your workspace..." />
   }
 
@@ -105,11 +85,6 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      {/* Auth callback handler wrapped in Suspense */}
-      <Suspense fallback={null}>
-        <AuthCallbackHandler />
-      </Suspense>
-
       {/* Sidebar - desktop only */}
       <div className="hidden lg:block">
         <Sidebar />
@@ -133,5 +108,17 @@ export default function DashboardLayout({
         </div>
       </main>
     </div>
+  )
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <Suspense fallback={<LoadingState fullScreen message="Loading..." />}>
+      <DashboardContent>{children}</DashboardContent>
+    </Suspense>
   )
 }
