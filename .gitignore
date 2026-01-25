@@ -1,1 +1,6 @@
 Prompt/GoogleService-Info.plist
+
+# Web
+web/.next/
+web/node_modules/
+web/next-env.d.ts
