@@ -27,30 +27,50 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   // Handle OAuth callback tokens and initial auth check
   useEffect(() => {
     const initAuth = async () => {
-      const token = searchParams.get('token')
-      const expiresIn = searchParams.get('expiresIn')
+      // Check for token in URL params (legacy)
+      const tokenParam = searchParams.get('token')
+      const expiresInParam = searchParams.get('expiresIn')
       const checkout = searchParams.get('checkout')
-      const fullUrl = typeof window !== 'undefined' ? window.location.href : 'SSR'
+
+      // Check for token in cookies (new method)
+      const getCookie = (name: string) => {
+        if (typeof document === 'undefined') return null
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+        return match ? match[2] : null
+      }
+
+      const tokenCookie = getCookie('accessToken')
+      const expiresInCookie = getCookie('tokenExpiresIn')
+
+      // Use cookie if available, fallback to URL params
+      const token = tokenCookie || tokenParam
+      const expiresIn = expiresInCookie || expiresInParam
 
       console.log('initAuth:', {
-        token: token ? token.substring(0, 20) + '...' : null,
+        tokenCookie: tokenCookie ? tokenCookie.substring(0, 20) + '...' : null,
+        tokenParam: tokenParam ? tokenParam.substring(0, 20) + '...' : null,
         expiresIn,
         checkout,
-        fullUrl,
-        searchParamsString: searchParams.toString()
       })
 
       if (token && expiresIn) {
         console.log('Setting tokens from callback...')
         setTokens(token, '', parseInt(expiresIn, 10))
-        // Check if token was stored
-        const storedToken = typeof window !== 'undefined' ? sessionStorage.getItem('accessToken') : null
-        console.log('Token stored in sessionStorage:', storedToken ? storedToken.substring(0, 20) + '...' : null)
-        router.replace('/dashboard')
+
+        // Clear the temporary cookies
+        if (typeof document !== 'undefined') {
+          document.cookie = 'accessToken=; Max-Age=0; path=/'
+          document.cookie = 'tokenExpiresIn=; Max-Age=0; path=/'
+        }
+
+        // Clean up URL if it had params
+        if (tokenParam) {
+          router.replace('/dashboard')
+        }
       } else {
         // Check if there's already a token in storage
         const existingToken = typeof window !== 'undefined' ? sessionStorage.getItem('accessToken') : null
-        console.log('No token in URL, existing token in storage:', existingToken ? existingToken.substring(0, 20) + '...' : null)
+        console.log('No token found, existing in storage:', existingToken ? existingToken.substring(0, 20) + '...' : null)
       }
 
       // Handle Stripe checkout

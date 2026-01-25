@@ -51,11 +51,11 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
+    console.log('Apple auth successful, got tokens')
 
     // Set tokens in cookies
     const cookieStore = await cookies()
 
-    // Access token in session storage (handled by client)
     // Refresh token in HTTP-only cookie
     cookieStore.set('refreshToken', data.refreshToken, {
       httpOnly: true,
@@ -65,11 +65,28 @@ export async function POST(request: NextRequest) {
       path: '/',
     })
 
-    // Redirect to dashboard with tokens in URL (to be captured by client)
+    // Access token in a readable cookie (short-lived, for client to pick up)
+    // This avoids query param issues with redirects
+    cookieStore.set('accessToken', data.accessToken, {
+      httpOnly: false, // Client JS needs to read this
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60, // 1 minute - just long enough to be read
+      path: '/',
+    })
+
+    cookieStore.set('tokenExpiresIn', data.expiresIn.toString(), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60,
+      path: '/',
+    })
+
+    // Redirect to dashboard
     // Use 303 to convert POST to GET
     const redirectUrl = new URL('/dashboard', request.url)
-    redirectUrl.searchParams.set('token', data.accessToken)
-    redirectUrl.searchParams.set('expiresIn', data.expiresIn.toString())
+    console.log('Redirecting to:', redirectUrl.toString())
 
     return NextResponse.redirect(redirectUrl, 303)
   } catch (error) {
