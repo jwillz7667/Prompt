@@ -75,6 +75,12 @@ export default function DashboardLayout({
 
   console.log('DashboardLayout render:', { authLoading, isAuthenticated })
 
+  // Check auth on mount - this must run before the early return
+  useEffect(() => {
+    console.log('Checking auth on mount...')
+    checkAuth()
+  }, [checkAuth])
+
   useEffect(() => {
     console.log('DashboardLayout effect:', { authLoading, isAuthenticated })
     if (!authLoading && !isAuthenticated) {
