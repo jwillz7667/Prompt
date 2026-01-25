@@ -25,7 +25,8 @@ import { storeLogger } from '../utils/logger.js';
 
 const APPLE_ISSUER_ID = process.env['APPLE_ISSUER_ID'] || '';
 const APPLE_KEY_ID = process.env['APPLE_KEY_ID'] || '';
-const APPLE_PRIVATE_KEY = process.env['APPLE_PRIVATE_KEY'] || '';
+// Convert escaped \n to actual newlines (needed for Vercel/Railway env vars)
+const APPLE_PRIVATE_KEY = (process.env['APPLE_PRIVATE_KEY'] || '').replace(/\\n/g, '\n');
 const APPLE_BUNDLE_ID = process.env['APPLE_BUNDLE_ID'] || 'com.res.promptomizer';
 const APPLE_APP_ID = process.env['APPLE_APP_ID'] || '';
 
