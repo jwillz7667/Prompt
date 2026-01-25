@@ -22,7 +22,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const { sidebarCollapsed } = useUIStore()
   const [isInitialized, setIsInitialized] = useState(false)
 
-  console.log('DashboardContent render:', { authLoading, isAuthenticated, isInitialized })
 
   // Handle OAuth callback tokens and initial auth check
   useEffect(() => {
@@ -46,15 +45,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       const token = tokenCookie || tokenParam
       const expiresIn = expiresInCookie || expiresInParam
 
-      console.log('initAuth:', {
-        tokenCookie: tokenCookie ? tokenCookie.substring(0, 20) + '...' : null,
-        tokenParam: tokenParam ? tokenParam.substring(0, 20) + '...' : null,
-        expiresIn,
-        checkout,
-      })
 
       if (token && expiresIn) {
-        console.log('Setting tokens from callback...')
         setTokens(token, '', parseInt(expiresIn, 10))
 
         // Clear the temporary cookies
@@ -67,10 +59,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         if (tokenParam) {
           router.replace('/dashboard')
         }
-      } else {
-        // Check if there's already a token in storage
-        const existingToken = typeof window !== 'undefined' ? sessionStorage.getItem('accessToken') : null
-        console.log('No token found, existing in storage:', existingToken ? existingToken.substring(0, 20) + '...' : null)
       }
 
       // Handle Stripe checkout
@@ -84,13 +72,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       }
 
       // Now check auth (after token is stored)
-      console.log('Calling checkAuth...')
-      try {
-        const result = await checkAuth()
-        console.log('checkAuth result:', result)
-      } catch (err) {
-        console.error('checkAuth error:', err)
-      }
+      await checkAuth()
       setIsInitialized(true)
     }
 

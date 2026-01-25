@@ -46,13 +46,10 @@ export const useAuthStore = create<AuthState>()(
 
         // If no access token, try to refresh using the HTTP-only refresh token cookie
         if (!token) {
-          console.log('No access token, attempting refresh...')
           try {
             const response = await refreshTokens()
             token = response.accessToken
-            console.log('Refresh successful, got new token')
-          } catch (err) {
-            console.log('Refresh failed:', err)
+          } catch {
             set({ user: null, isAuthenticated: false, isLoading: false })
             return false
           }
@@ -60,11 +57,9 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const user = await getCurrentUser()
-          console.log('Got user:', user.email)
           set({ user, isAuthenticated: true, isLoading: false })
           return true
-        } catch (err) {
-          console.log('getCurrentUser failed:', err)
+        } catch {
           // Token invalid - clear everything and require re-login
           clearTokens()
           set({ user: null, isAuthenticated: false, isLoading: false })
