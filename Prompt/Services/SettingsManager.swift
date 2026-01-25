@@ -145,13 +145,26 @@ final class SettingsManager {
     var outputLength: OutputLength = .standard
     var customInstructions: String = ""
 
-    // App Group for sharing with keyboard extension
+    // App Group for sharing with keyboard extension AND persistence across updates
     private let appGroupId = "group.com.res.promptomizer"
-    private var sharedDefaults: UserDefaults? {
+    private var appGroupDefaults: UserDefaults? {
         UserDefaults(suiteName: appGroupId)
     }
 
+    // Keys for settings
+    private enum Keys {
+        static let deepThinkEnabled = "deepThinkEnabled"
+        static let temperature = "temperature"
+        static let maxTokens = "maxTokens"
+        static let appearanceMode = "appearanceMode"
+        static let selectedTone = "selectedTone"
+        static let outputLength = "outputLength"
+        static let customInstructions = "customInstructions"
+        static let settingsMigrated = "settingsMigratedToAppGroup"
+    }
+
     init() {
+        migrateToAppGroupIfNeeded()
         loadPreferences()
     }
 
@@ -162,58 +175,104 @@ final class SettingsManager {
         deepThinkEnabled ? .reasoner : .chat
     }
 
-    // MARK: - User Defaults Preferences
+    // MARK: - Migration
+
+    /// Migrate settings from standard UserDefaults to App Group (one-time)
+    private func migrateToAppGroupIfNeeded() {
+        guard let defaults = appGroupDefaults else { return }
+
+        // Check if already migrated
+        if defaults.bool(forKey: Keys.settingsMigrated) { return }
+
+        print("[Settings] Migrating settings to App Group")
+
+        // Migrate each setting if it exists in standard UserDefaults
+        if UserDefaults.standard.object(forKey: Keys.deepThinkEnabled) != nil {
+            defaults.set(UserDefaults.standard.bool(forKey: Keys.deepThinkEnabled), forKey: Keys.deepThinkEnabled)
+        }
+        if UserDefaults.standard.double(forKey: Keys.temperature) > 0 {
+            defaults.set(UserDefaults.standard.double(forKey: Keys.temperature), forKey: Keys.temperature)
+        }
+        if UserDefaults.standard.integer(forKey: Keys.maxTokens) > 0 {
+            defaults.set(UserDefaults.standard.integer(forKey: Keys.maxTokens), forKey: Keys.maxTokens)
+        }
+        if let value = UserDefaults.standard.string(forKey: Keys.appearanceMode) {
+            defaults.set(value, forKey: Keys.appearanceMode)
+        }
+        if let value = UserDefaults.standard.string(forKey: Keys.selectedTone) {
+            defaults.set(value, forKey: Keys.selectedTone)
+        }
+        if let value = UserDefaults.standard.string(forKey: Keys.outputLength) {
+            defaults.set(value, forKey: Keys.outputLength)
+        }
+        if let value = UserDefaults.standard.string(forKey: Keys.customInstructions) {
+            defaults.set(value, forKey: Keys.customInstructions)
+        }
+
+        // Mark as migrated
+        defaults.set(true, forKey: Keys.settingsMigrated)
+        print("[Settings] Migration complete")
+    }
+
+    // MARK: - Load Preferences (from App Group)
 
     private func loadPreferences() {
-        deepThinkEnabled = UserDefaults.standard.bool(forKey: "deepThinkEnabled")
+        guard let defaults = appGroupDefaults else {
+            print("[Settings] Warning: App Group UserDefaults not available, using defaults")
+            return
+        }
 
-        let savedTemp = UserDefaults.standard.double(forKey: "temperature")
+        deepThinkEnabled = defaults.bool(forKey: Keys.deepThinkEnabled)
+
+        let savedTemp = defaults.double(forKey: Keys.temperature)
         if savedTemp > 0 { temperature = savedTemp }
-        let savedTokens = UserDefaults.standard.integer(forKey: "maxTokens")
+
+        let savedTokens = defaults.integer(forKey: Keys.maxTokens)
         if savedTokens > 0 { maxTokens = savedTokens }
 
         // Load appearance preference
-        if let appearanceRaw = UserDefaults.standard.string(forKey: "appearanceMode"),
+        if let appearanceRaw = defaults.string(forKey: Keys.appearanceMode),
            let mode = AppearanceMode(rawValue: appearanceRaw) {
             appearanceMode = mode
         }
 
         // Load tone preference
-        if let toneRaw = UserDefaults.standard.string(forKey: "selectedTone"),
+        if let toneRaw = defaults.string(forKey: Keys.selectedTone),
            let tone = ToneType(rawValue: toneRaw) {
             selectedTone = tone
         }
 
         // Load length preference
-        if let lengthRaw = UserDefaults.standard.string(forKey: "outputLength"),
+        if let lengthRaw = defaults.string(forKey: Keys.outputLength),
            let length = OutputLength(rawValue: lengthRaw) {
             outputLength = length
         }
 
         // Load custom instructions
-        if let instructions = UserDefaults.standard.string(forKey: "customInstructions") {
+        if let instructions = defaults.string(forKey: Keys.customInstructions) {
             customInstructions = instructions
         }
+
+        print("[Settings] Loaded preferences from App Group")
     }
+
+    // MARK: - Save Preferences (to App Group)
 
     func savePreferences() {
-        UserDefaults.standard.set(deepThinkEnabled, forKey: "deepThinkEnabled")
-        UserDefaults.standard.set(temperature, forKey: "temperature")
-        UserDefaults.standard.set(maxTokens, forKey: "maxTokens")
-        UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode")
-        UserDefaults.standard.set(selectedTone.rawValue, forKey: "selectedTone")
-        UserDefaults.standard.set(outputLength.rawValue, forKey: "outputLength")
-        UserDefaults.standard.set(customInstructions, forKey: "customInstructions")
+        guard let defaults = appGroupDefaults else {
+            print("[Settings] Warning: App Group UserDefaults not available")
+            return
+        }
 
-        // Sync to shared App Group for keyboard extension
-        syncToSharedDefaults()
-    }
+        defaults.set(deepThinkEnabled, forKey: Keys.deepThinkEnabled)
+        defaults.set(temperature, forKey: Keys.temperature)
+        defaults.set(maxTokens, forKey: Keys.maxTokens)
+        defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)
+        defaults.set(selectedTone.rawValue, forKey: Keys.selectedTone)
+        defaults.set(outputLength.rawValue, forKey: Keys.outputLength)
+        defaults.set(customInstructions, forKey: Keys.customInstructions)
 
-    /// Syncs enhancement preferences to App Group for keyboard extension access
-    private func syncToSharedDefaults() {
-        sharedDefaults?.set(selectedTone.rawValue, forKey: "selectedTone")
-        sharedDefaults?.set(outputLength.rawValue, forKey: "outputLength")
-        sharedDefaults?.set(customInstructions, forKey: "customInstructions")
+        print("[Settings] Saved preferences to App Group")
     }
 }
 

@@ -20,41 +20,92 @@ final class AuthManager: NSObject {
     var isCheckingSession = true
     var error: AuthError?
 
-    // MARK: - Persistent Session Storage
+    // MARK: - Persistent Session Storage (App Group for update persistence)
 
+    private let appGroupId = "group.com.res.promptomizer"
     private let hasSignedInKey = "com.promptomize.hasSignedIn"
     private let cachedUserKey = "com.promptomize.cachedUser"
 
-    /// Check if user has ever signed in (survives app restarts)
+    /// App Group UserDefaults - persists across app updates
+    private var appGroupDefaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupId)
+    }
+
+    /// Check if user has ever signed in (survives app restarts and updates)
     private var hasStoredSession: Bool {
-        UserDefaults.standard.bool(forKey: hasSignedInKey)
+        // Check App Group first, fallback to standard for migration
+        if let value = appGroupDefaults?.object(forKey: hasSignedInKey) as? Bool {
+            return value
+        }
+        // Migrate from standard UserDefaults if exists
+        if UserDefaults.standard.bool(forKey: hasSignedInKey) {
+            migrateAuthDataToAppGroup()
+            return appGroupDefaults?.bool(forKey: hasSignedInKey) ?? false
+        }
+        return false
     }
 
     /// Store that user has signed in
     private func markAsSignedIn() {
-        UserDefaults.standard.set(true, forKey: hasSignedInKey)
+        appGroupDefaults?.set(true, forKey: hasSignedInKey)
+        // Also update SharedDataManager
+        SharedDataManager.shared.isAuthenticated = true
+        if let user = currentUser {
+            SharedDataManager.shared.updateAuthState(isAuthenticated: true, name: user.name, email: user.email)
+        }
     }
 
     /// Clear sign-in state (only on explicit sign out)
     private func clearSignedInState() {
+        appGroupDefaults?.removeObject(forKey: hasSignedInKey)
+        appGroupDefaults?.removeObject(forKey: cachedUserKey)
+        // Also clear from standard UserDefaults (migration cleanup)
         UserDefaults.standard.removeObject(forKey: hasSignedInKey)
         UserDefaults.standard.removeObject(forKey: cachedUserKey)
+        // Update SharedDataManager
+        SharedDataManager.shared.updateAuthState(isAuthenticated: false, name: nil, email: nil)
     }
 
-    /// Cache user data locally
+    /// Cache user data locally in App Group
     private func cacheUser(_ user: User) {
         if let data = try? JSONEncoder().encode(user) {
-            UserDefaults.standard.set(data, forKey: cachedUserKey)
+            appGroupDefaults?.set(data, forKey: cachedUserKey)
         }
+        // Also update SharedDataManager for widgets/extensions
+        SharedDataManager.shared.updateAuthState(isAuthenticated: true, name: user.name, email: user.email)
     }
 
-    /// Load cached user data
+    /// Load cached user data from App Group
     private func loadCachedUser() -> User? {
-        guard let data = UserDefaults.standard.data(forKey: cachedUserKey),
-              let user = try? JSONDecoder().decode(User.self, from: data) else {
-            return nil
+        // Try App Group first
+        if let data = appGroupDefaults?.data(forKey: cachedUserKey),
+           let user = try? JSONDecoder().decode(User.self, from: data) {
+            return user
         }
-        return user
+        // Fallback to standard UserDefaults for migration
+        if let data = UserDefaults.standard.data(forKey: cachedUserKey),
+           let user = try? JSONDecoder().decode(User.self, from: data) {
+            // Migrate to App Group
+            cacheUser(user)
+            UserDefaults.standard.removeObject(forKey: cachedUserKey)
+            return user
+        }
+        return nil
+    }
+
+    /// Migrate auth data from standard UserDefaults to App Group
+    private func migrateAuthDataToAppGroup() {
+        print("[Auth] Migrating auth data to App Group")
+        // Migrate hasSignedIn flag
+        if UserDefaults.standard.bool(forKey: hasSignedInKey) {
+            appGroupDefaults?.set(true, forKey: hasSignedInKey)
+            UserDefaults.standard.removeObject(forKey: hasSignedInKey)
+        }
+        // Migrate cached user
+        if let data = UserDefaults.standard.data(forKey: cachedUserKey) {
+            appGroupDefaults?.set(data, forKey: cachedUserKey)
+            UserDefaults.standard.removeObject(forKey: cachedUserKey)
+        }
     }
 
     // MARK: - Singleton
