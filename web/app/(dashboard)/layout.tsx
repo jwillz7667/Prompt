@@ -25,15 +25,28 @@ function AuthCallbackHandler() {
     const expiresIn = searchParams.get('expiresIn')
     const checkout = searchParams.get('checkout')
 
+    console.log('AuthCallbackHandler:', { token: !!token, expiresIn, checkout })
+
     if (token && expiresIn) {
+      console.log('Setting tokens from callback...')
       // Store tokens from OAuth callback
       setTokens(token, '', parseInt(expiresIn, 10))
       // Clean up URL
       router.replace('/dashboard')
       // Refresh auth state
-      checkAuth()
+      console.log('Calling checkAuth...')
+      checkAuth().then((result) => {
+        console.log('checkAuth result:', result)
+      }).catch((err) => {
+        console.error('checkAuth error:', err)
+      })
     } else {
-      checkAuth()
+      console.log('No token in URL, calling checkAuth...')
+      checkAuth().then((result) => {
+        console.log('checkAuth result:', result)
+      }).catch((err) => {
+        console.error('checkAuth error:', err)
+      })
     }
 
     // Handle Stripe checkout success
@@ -60,8 +73,12 @@ export default function DashboardLayout({
   const { fetchSubscription } = useSubscriptionStore()
   const { sidebarCollapsed } = useUIStore()
 
+  console.log('DashboardLayout render:', { authLoading, isAuthenticated })
+
   useEffect(() => {
+    console.log('DashboardLayout effect:', { authLoading, isAuthenticated })
     if (!authLoading && !isAuthenticated) {
+      console.log('Redirecting to login...')
       router.push('/login')
     }
   }, [authLoading, isAuthenticated, router])
