@@ -30,13 +30,27 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       const token = searchParams.get('token')
       const expiresIn = searchParams.get('expiresIn')
       const checkout = searchParams.get('checkout')
+      const fullUrl = typeof window !== 'undefined' ? window.location.href : 'SSR'
 
-      console.log('initAuth:', { token: !!token, expiresIn, checkout })
+      console.log('initAuth:', {
+        token: token ? token.substring(0, 20) + '...' : null,
+        expiresIn,
+        checkout,
+        fullUrl,
+        searchParamsString: searchParams.toString()
+      })
 
       if (token && expiresIn) {
         console.log('Setting tokens from callback...')
         setTokens(token, '', parseInt(expiresIn, 10))
+        // Check if token was stored
+        const storedToken = typeof window !== 'undefined' ? sessionStorage.getItem('accessToken') : null
+        console.log('Token stored in sessionStorage:', storedToken ? storedToken.substring(0, 20) + '...' : null)
         router.replace('/dashboard')
+      } else {
+        // Check if there's already a token in storage
+        const existingToken = typeof window !== 'undefined' ? sessionStorage.getItem('accessToken') : null
+        console.log('No token in URL, existing token in storage:', existingToken ? existingToken.substring(0, 20) + '...' : null)
       }
 
       // Handle Stripe checkout
@@ -51,8 +65,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
       // Now check auth (after token is stored)
       console.log('Calling checkAuth...')
-      const result = await checkAuth()
-      console.log('checkAuth result:', result)
+      try {
+        const result = await checkAuth()
+        console.log('checkAuth result:', result)
+      } catch (err) {
+        console.error('checkAuth error:', err)
+      }
       setIsInitialized(true)
     }
 
