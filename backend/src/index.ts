@@ -30,8 +30,40 @@ app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
+
+// CORS configuration - handle credentials properly
+const allowedOrigins = [
+  'https://promptomize.app',
+  'https://www.promptomize.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+];
+
+// Add any custom origins from env
+const envOrigin = process.env['CORS_ORIGIN'];
+if (envOrigin && envOrigin !== '*') {
+  envOrigin.split(',').forEach(origin => {
+    if (!allowedOrigins.includes(origin.trim())) {
+      allowedOrigins.push(origin.trim());
+    }
+  });
+}
+
 app.use(cors({
-  origin: process.env['CORS_ORIGIN'] || '*',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // In development, allow any origin
+    if (process.env['NODE_ENV'] !== 'production') {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-ID'],
