@@ -1,6 +1,16 @@
 Prompt/GoogleService-Info.plist
 
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+*.env
+
 # Web
 web/.next/
 web/node_modules/
 web/next-env.d.ts
+
+# Backend
+backend/node_modules/
+backend/dist/
