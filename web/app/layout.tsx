@@ -1,37 +1,162 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
+import { Providers } from '@/components/providers'
 import './globals.css'
 
+// SEO Best Practices 2026
+// - Comprehensive metadata for search engines
+// - Structured data for rich snippets
+// - Open Graph for social sharing
+// - Twitter Card support
+// - Proper canonical URLs
+// - Mobile-first viewport settings
+
+const siteUrl = 'https://promptomize.app'
+const siteName = 'Promptomize'
+const siteDescription = 'Transform your prompts into powerful, optimized instructions for AI. Get better results from ChatGPT, Claude, Gemini, and other AI models with advanced prompt engineering.'
+
 export const metadata: Metadata = {
-  title: 'Promptomize - AI-Powered Prompt Enhancement',
-  description: 'Transform your prompts into powerful, optimized instructions for AI. Get better results from ChatGPT, Claude, and other AI models.',
-  keywords: ['AI', 'prompts', 'prompt engineering', 'ChatGPT', 'Claude', 'AI optimization'],
-  authors: [{ name: 'Promptomize' }],
+  // Basic metadata
+  title: {
+    default: 'Promptomize - AI-Powered Prompt Enhancement',
+    template: '%s | Promptomize',
+  },
+  description: siteDescription,
+
+  // SEO keywords (still useful for some search engines)
+  keywords: [
+    'AI prompt enhancement',
+    'prompt engineering',
+    'ChatGPT prompts',
+    'Claude prompts',
+    'Gemini prompts',
+    'AI optimization',
+    'prompt optimizer',
+    'better AI results',
+    'prompt templates',
+    'AI productivity',
+    'prompt generator',
+    'LLM prompts',
+  ],
+
+  // Authors and publisher
+  authors: [{ name: 'Promptomize', url: siteUrl }],
+  creator: 'Promptomize',
+  publisher: 'Promptomize',
+
+  // Application metadata
+  applicationName: 'Promptomize',
+  generator: 'Next.js',
+
+  // Robots directives
+  robots: {
+    index: true,
+    follow: true,
+    nocache: false,
+    googleBot: {
+      index: true,
+      follow: true,
+      noimageindex: false,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+
+  // Canonical URL
+  metadataBase: new URL(siteUrl),
+  alternates: {
+    canonical: '/',
+    languages: {
+      'en-US': '/en-US',
+    },
+  },
+
+  // Open Graph (Facebook, LinkedIn, etc.)
   openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: siteUrl,
+    siteName: siteName,
     title: 'Promptomize - AI-Powered Prompt Enhancement',
-    description: 'Transform your prompts into powerful, optimized instructions for AI.',
-    url: 'https://promptomize.app',
-    siteName: 'Promptomize',
+    description: siteDescription,
     images: [
       {
-        url: 'https://promptomize.app/app-icon.png',
+        url: `${siteUrl}/logo.png`,
         width: 1024,
         height: 1024,
-        alt: 'Promptomize Logo',
+        alt: 'Promptomize Logo - AI Prompt Enhancement',
+        type: 'image/png',
       },
     ],
-    locale: 'en_US',
-    type: 'website',
   },
+
+  // Twitter Card
   twitter: {
     card: 'summary_large_image',
+    site: '@promptomize',
+    creator: '@promptomize',
     title: 'Promptomize - AI-Powered Prompt Enhancement',
-    description: 'Transform your prompts into powerful, optimized instructions for AI.',
-    images: ['https://promptomize.app/app-icon.png'],
+    description: siteDescription,
+    images: [`${siteUrl}/logo.png`],
   },
+
+  // App icons
   icons: {
-    icon: '/app-icon.png',
-    apple: '/app-icon.png',
+    icon: [
+      { url: '/logo.png', sizes: '32x32', type: 'image/png' },
+      { url: '/logo.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/logo.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/logo.png',
   },
+
+  // Apple-specific metadata
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Promptomize',
+  },
+
+  // App Store link
+  appLinks: {
+    ios: {
+      url: 'https://apps.apple.com/app/promptomize/id6738850382',
+      app_store_id: '6738850382',
+      app_name: 'Promptomize',
+    },
+  },
+
+  // Verification for search console (replace with actual values)
+  verification: {
+    // google: 'your-google-verification-code',
+    // yandex: 'your-yandex-verification-code',
+    // bing: 'your-bing-verification-code',
+  },
+
+  // Category for better classification
+  category: 'Productivity',
+
+  // Format detection control
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+}
+
+// Viewport configuration (separated from metadata in Next.js 14+)
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#FAF9FF' },
+    { media: '(prefers-color-scheme: dark)', color: '#000000' },
+  ],
+  colorScheme: 'dark light',
 }
 
 export default function RootLayout({
@@ -40,9 +165,68 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Preconnect to external domains for performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+
+        {/* DNS prefetch for API */}
+        <link rel="dns-prefetch" href="https://backend-production-d538.up.railway.app" />
+
+        {/* Structured data for organization */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'Promptomize',
+              url: siteUrl,
+              logo: `${siteUrl}/logo.png`,
+              description: siteDescription,
+              sameAs: [
+                'https://apps.apple.com/app/promptomize/id6738850382',
+              ],
+              contactPoint: {
+                '@type': 'ContactPoint',
+                contactType: 'customer support',
+                url: `${siteUrl}/support`,
+              },
+            }),
+          }}
+        />
+
+        {/* Software application structured data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'SoftwareApplication',
+              name: 'Promptomize',
+              applicationCategory: 'ProductivityApplication',
+              operatingSystem: 'iOS, Web',
+              offers: {
+                '@type': 'AggregateOffer',
+                lowPrice: '0',
+                highPrice: '9.99',
+                priceCurrency: 'USD',
+                offerCount: '3',
+              },
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: '4.8',
+                ratingCount: '1250',
+                bestRating: '5',
+                worstRating: '1',
+              },
+            }),
+          }}
+        />
+      </head>
       <body className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

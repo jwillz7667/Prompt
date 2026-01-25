@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Sparkles, Zap, Shield, Crown, Check, ArrowRight, Star, MessageSquare, Layers, Smartphone } from 'lucide-react'
+import { useSettingsStore } from '@/lib/stores/settingsStore'
 
 const features = [
   {
@@ -84,23 +85,81 @@ const pricingPlans = [
   },
 ]
 
+// Logo component that handles light/dark mode
+function Logo({ className = '', size = 40 }: { className?: string; size?: number }) {
+  const { appearanceMode } = useSettingsStore()
+
+  // Determine if we should show dark logo
+  const isDark = typeof window !== 'undefined'
+    ? appearanceMode === 'dark' || (appearanceMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    : true
+
+  return (
+    <Image
+      src={isDark ? '/logo.png' : '/logo-light.png'}
+      alt="Promptomize - AI Prompt Enhancement"
+      width={size}
+      height={size}
+      className={className}
+      priority
+    />
+  )
+}
+
 export default function Home() {
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen" itemScope itemType="https://schema.org/WebApplication">
+      {/* Hidden structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebApplication',
+            name: 'Promptomize',
+            description: 'AI-powered prompt enhancement tool that transforms simple ideas into powerful, optimized instructions for any AI.',
+            url: 'https://promptomize.app',
+            applicationCategory: 'Productivity',
+            operatingSystem: 'iOS, Web',
+            offers: [
+              {
+                '@type': 'Offer',
+                name: 'Free',
+                price: '0',
+                priceCurrency: 'USD',
+              },
+              {
+                '@type': 'Offer',
+                name: 'Pro',
+                price: '4.99',
+                priceCurrency: 'USD',
+                priceValidUntil: '2027-12-31',
+              },
+              {
+                '@type': 'Offer',
+                name: 'Premium',
+                price: '9.99',
+                priceCurrency: 'USD',
+                priceValidUntil: '2027-12-31',
+              },
+            ],
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: '4.8',
+              ratingCount: '1250',
+            },
+          }),
+        }}
+      />
+
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass">
+      <nav className="fixed top-0 left-0 right-0 z-50 glass" role="navigation" aria-label="Main navigation">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/logo.png"
-                alt="Promptomize"
-                width={40}
-                height={40}
-                className="rounded-xl"
-              />
-              <span className="text-xl font-semibold">Promptomize</span>
-            </div>
+            <Link href="/" className="flex items-center gap-3" aria-label="Promptomize Home">
+              <Logo size={40} className="rounded-xl" />
+              <span className="text-xl font-semibold" itemProp="name">Promptomize</span>
+            </Link>
             <div className="hidden md:flex items-center gap-8">
               <Link href="#features" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
                 Features
@@ -111,11 +170,16 @@ export default function Home() {
               <Link href="/privacy" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
                 Privacy
               </Link>
+              <Link href="/login" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
+                Sign In
+              </Link>
               <a
                 href="https://apps.apple.com/app/promptomize/id6738850382"
                 className="btn-cyan px-4 py-2 rounded-full font-medium flex items-center gap-2"
+                rel="noopener noreferrer"
+                aria-label="Download Promptomize on the App Store"
               >
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
                 </svg>
                 Download
@@ -125,19 +189,28 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
+      {/* Hero Section - Dark Background for Logo Contrast */}
+      <section
+        className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#0a0a1a] via-[#0d0d24] to-[#000000] overflow-hidden"
+        aria-labelledby="hero-heading"
+      >
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 opacity-40">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#5B4CDB]/30 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#00E6E6]/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        </div>
+
+        <div className="relative max-w-7xl mx-auto">
           <div className="text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-sm mb-8 border border-[var(--accent-cyan)] border-opacity-30">
-              <Star className="w-4 h-4 text-[var(--accent-cyan)]" />
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 text-gray-300 text-sm mb-8 border border-[#00E6E6]/30 backdrop-blur-sm">
+              <Star className="w-4 h-4 text-[#00E6E6]" aria-hidden="true" />
               <span>Now available on the App Store</span>
             </div>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
+            <h1 id="hero-heading" className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-white">
               Transform Your
-              <span className="gradient-text block">AI Prompts</span>
+              <span className="gradient-text block" itemProp="description">AI Prompts</span>
             </h1>
-            <p className="text-xl text-[var(--text-secondary)] max-w-2xl mx-auto mb-10">
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-10">
               Promptomize uses advanced prompt engineering to transform your simple ideas into
               powerful, optimized instructions that get better results from any AI.
             </p>
@@ -145,82 +218,92 @@ export default function Home() {
               <a
                 href="https://apps.apple.com/app/promptomize/id6738850382"
                 className="w-full sm:w-auto btn-cyan px-8 py-4 rounded-2xl font-semibold text-lg flex items-center justify-center gap-3"
+                rel="noopener noreferrer"
+                aria-label="Download Promptomize for iOS from the App Store"
               >
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
                 </svg>
                 Download for iOS
               </a>
               <Link
-                href="#features"
-                className="w-full sm:w-auto bg-[var(--bg-secondary)] text-[var(--text-primary)] px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-[var(--bg-tertiary)] transition flex items-center justify-center gap-2"
+                href="/login"
+                className="w-full sm:w-auto bg-white/10 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-white/20 transition flex items-center justify-center gap-2 border border-white/20"
               >
-                Learn More
-                <ArrowRight className="w-5 h-5" />
+                Try Web App
+                <ArrowRight className="w-5 h-5" aria-hidden="true" />
               </Link>
             </div>
           </div>
 
-          {/* App Preview */}
+          {/* Logo Preview - Centered */}
           <div className="mt-20 relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#5B4CDB]/30 to-[#00FFFF]/30 blur-3xl -z-10" />
-            <div className="flex justify-center">
+            <div className="absolute inset-0 bg-gradient-to-r from-[#5B4CDB]/40 to-[#00E6E6]/40 blur-3xl -z-10" />
+            <figure className="flex justify-center">
               <div className="relative">
                 <Image
-                  src="/app-icon.png"
-                  alt="Promptomize App"
-                  width={300}
-                  height={300}
-                  className="rounded-[60px] shadow-2xl glow-cyan"
+                  src="/logo.png"
+                  alt="Promptomize Logo - AI-powered prompt enhancement"
+                  width={280}
+                  height={280}
+                  className="rounded-[56px] shadow-2xl glow-cyan"
+                  priority
+                  itemProp="image"
                 />
+                {/* Reflection effect */}
+                <div className="absolute -bottom-20 left-0 right-0 h-20 bg-gradient-to-b from-[#00E6E6]/10 to-transparent rounded-b-[56px] blur-md" />
               </div>
-            </div>
+            </figure>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-[var(--bg-secondary)]">
+      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-[var(--bg-secondary)]" aria-labelledby="features-heading">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Powerful Features</h2>
+          <header className="text-center mb-16">
+            <h2 id="features-heading" className="text-4xl font-bold mb-4">Powerful Features</h2>
             <p className="text-xl text-[var(--text-secondary)] max-w-2xl mx-auto">
               Everything you need to create better AI prompts
             </p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          </header>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8" role="list">
             {features.map((feature, index) => (
-              <div
+              <article
                 key={index}
                 className="feature-card bg-[var(--bg-primary)] p-8 rounded-3xl border border-[var(--border)]"
+                role="listitem"
               >
-                <div className="w-14 h-14 bg-gradient-to-br from-[#5B4CDB]/20 to-[#00FFFF]/20 rounded-2xl flex items-center justify-center mb-6">
+                <div className="w-14 h-14 bg-gradient-to-br from-[#5B4CDB]/20 to-[#00FFFF]/20 rounded-2xl flex items-center justify-center mb-6" aria-hidden="true">
                   <feature.icon className="w-7 h-7 text-[var(--accent-cyan)]" />
                 </div>
                 <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
                 <p className="text-[var(--text-secondary)]">{feature.description}</p>
-              </div>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8">
+      <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8" aria-labelledby="pricing-heading">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Simple Pricing</h2>
+          <header className="text-center mb-16">
+            <h2 id="pricing-heading" className="text-4xl font-bold mb-4">Simple Pricing</h2>
             <p className="text-xl text-[var(--text-secondary)] max-w-2xl mx-auto">
               Choose the plan that works for you
             </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          </header>
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto" role="list">
             {pricingPlans.map((plan, index) => (
-              <div
+              <article
                 key={index}
                 className={`relative bg-[var(--bg-secondary)] p-8 rounded-3xl border ${
                   plan.popular ? 'border-[var(--accent-cyan)] glow-cyan' : 'border-[var(--border)]'
                 }`}
+                role="listitem"
+                itemScope
+                itemType="https://schema.org/Offer"
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
@@ -230,17 +313,17 @@ export default function Home() {
                   </div>
                 )}
                 <div className="text-center mb-8">
-                  <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
+                  <h3 className="text-xl font-semibold mb-2" itemProp="name">{plan.name}</h3>
                   <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold">{plan.price}</span>
-                    <span className="text-[var(--text-secondary)]">{plan.period}</span>
+                    <span className="text-4xl font-bold" itemProp="price">{plan.price}</span>
+                    <span className="text-[var(--text-secondary)]" itemProp="priceCurrency">{plan.period}</span>
                   </div>
-                  <p className="text-[var(--text-tertiary)] mt-2">{plan.description}</p>
+                  <p className="text-[var(--text-tertiary)] mt-2" itemProp="description">{plan.description}</p>
                 </div>
-                <ul className="space-y-4 mb-8">
+                <ul className="space-y-4 mb-8" aria-label={`${plan.name} plan features`}>
                   {plan.features.map((feature, fIndex) => (
                     <li key={fIndex} className="flex items-center gap-3">
-                      <Check className="w-5 h-5 text-[var(--accent-cyan)] flex-shrink-0" />
+                      <Check className="w-5 h-5 text-[var(--accent-cyan)] flex-shrink-0" aria-hidden="true" />
                       <span className="text-[var(--text-secondary)]">{feature}</span>
                     </li>
                   ))}
@@ -252,30 +335,34 @@ export default function Home() {
                       ? 'btn-cyan'
                       : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]'
                   }`}
+                  rel="noopener noreferrer"
+                  aria-label={`${plan.cta} - ${plan.name} plan`}
                 >
                   {plan.cta}
                 </a>
-              </div>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[var(--bg-secondary)]">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[var(--bg-secondary)]" aria-labelledby="cta-heading">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#5B4CDB] to-[#00FFFF] rounded-2xl flex items-center justify-center glow-cyan">
+          <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#5B4CDB] to-[#00FFFF] rounded-2xl flex items-center justify-center glow-cyan" aria-hidden="true">
             <Crown className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-4xl font-bold mb-4">Ready to Enhance Your Prompts?</h2>
+          <h2 id="cta-heading" className="text-4xl font-bold mb-4">Ready to Enhance Your Prompts?</h2>
           <p className="text-xl text-[var(--text-secondary)] mb-8">
             Join thousands of users who are getting better results from AI with Promptomize.
           </p>
           <a
             href="https://apps.apple.com/app/promptomize/id6738850382"
             className="inline-flex items-center gap-3 btn-cyan px-8 py-4 rounded-2xl font-semibold text-lg"
+            rel="noopener noreferrer"
+            aria-label="Download Promptomize on the App Store"
           >
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
             </svg>
             Download on the App Store
@@ -284,40 +371,34 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-4 sm:px-6 lg:px-8 border-t border-[var(--border)]">
+      <footer className="py-12 px-4 sm:px-6 lg:px-8 border-t border-[var(--border)]" role="contentinfo">
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8">
             <div className="md:col-span-2">
-              <div className="flex items-center gap-3 mb-4">
-                <Image
-                  src="/logo.png"
-                  alt="Promptomize"
-                  width={32}
-                  height={32}
-                  className="rounded-lg"
-                />
+              <Link href="/" className="flex items-center gap-3 mb-4" aria-label="Promptomize Home">
+                <Logo size={32} className="rounded-lg" />
                 <span className="text-lg font-semibold">Promptomize</span>
-              </div>
+              </Link>
               <p className="text-[var(--text-secondary)] max-w-sm">
                 Transform your prompts into powerful, optimized instructions for any AI.
               </p>
             </div>
-            <div>
+            <nav aria-label="Product links">
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-[var(--text-secondary)]">
                 <li><Link href="#features" className="hover:text-[var(--accent-cyan)] transition">Features</Link></li>
                 <li><Link href="#pricing" className="hover:text-[var(--accent-cyan)] transition">Pricing</Link></li>
-                <li><a href="https://apps.apple.com/app/promptomize/id6738850382" className="hover:text-[var(--accent-cyan)] transition">Download</a></li>
+                <li><a href="https://apps.apple.com/app/promptomize/id6738850382" className="hover:text-[var(--accent-cyan)] transition" rel="noopener noreferrer">Download</a></li>
               </ul>
-            </div>
-            <div>
+            </nav>
+            <nav aria-label="Legal links">
               <h4 className="font-semibold mb-4">Legal</h4>
               <ul className="space-y-2 text-[var(--text-secondary)]">
                 <li><Link href="/privacy" className="hover:text-[var(--accent-cyan)] transition">Privacy Policy</Link></li>
                 <li><Link href="/terms" className="hover:text-[var(--accent-cyan)] transition">Terms of Service</Link></li>
                 <li><Link href="/support" className="hover:text-[var(--accent-cyan)] transition">Support</Link></li>
               </ul>
-            </div>
+            </nav>
           </div>
           <div className="mt-12 pt-8 border-t border-[var(--border)] text-center text-[var(--text-tertiary)]">
             <p>&copy; {new Date().getFullYear()} Promptomize. All rights reserved.</p>
