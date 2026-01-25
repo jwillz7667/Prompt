@@ -30,12 +30,16 @@ export async function authenticateWithApple(
   fullName?: { givenName?: string; familyName?: string },
   deviceInfo?: { deviceId?: string; deviceName?: string }
 ): Promise<AuthResult> {
-  const clientId = process.env['APPLE_CLIENT_ID'];
-  authLogger.debug({ audience: clientId }, 'Verifying Apple identity token');
+  // Accept both iOS app ID and web Services ID
+  const iosClientId = process.env['APPLE_CLIENT_ID'];
+  const webClientId = process.env['APPLE_WEB_CLIENT_ID'];
+  const audiences = [iosClientId, webClientId].filter(Boolean) as string[];
 
-  // Verify the identity token with Apple
+  authLogger.debug({ audiences }, 'Verifying Apple identity token');
+
+  // Verify the identity token with Apple (accepts array of valid audiences)
   const applePayload = await appleSignin.verifyIdToken(identityToken, {
-    audience: clientId,
+    audience: audiences,
     ignoreExpiration: false,
   });
 
