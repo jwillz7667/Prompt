@@ -20,7 +20,7 @@ export default function LoginPage() {
     try {
       // Redirect to Apple OAuth
       const params = new URLSearchParams({
-        client_id: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || 'com.res.prompt.service',
+        client_id: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || 'com.res.promptomize.webapp',
         redirect_uri: `${window.location.origin}/api/auth/apple/callback`,
         response_type: 'code id_token',
         scope: 'name email',
