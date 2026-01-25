@@ -19,8 +19,13 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount)
 }
 
-export function formatDate(date: string | Date): string {
+export function formatDate(date: string | Date | null | undefined): string {
+  if (!date) return 'Unknown'
+
   const d = typeof date === 'string' ? new Date(date) : date
+
+  // Check if date is valid
+  if (isNaN(d.getTime())) return 'Unknown'
 
   if (isToday(d)) {
     return `Today at ${format(d, 'h:mm a')}`
@@ -41,8 +46,14 @@ export function formatDate(date: string | Date): string {
   return format(d, 'MMM d, yyyy')
 }
 
-export function formatRelativeTime(date: string | Date): string {
+export function formatRelativeTime(date: string | Date | null | undefined): string {
+  if (!date) return 'Unknown'
+
   const d = typeof date === 'string' ? new Date(date) : date
+
+  // Check if date is valid
+  if (isNaN(d.getTime())) return 'Unknown'
+
   return formatDistanceToNow(d, { addSuffix: true })
 }
 
