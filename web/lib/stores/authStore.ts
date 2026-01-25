@@ -65,12 +65,7 @@ export const useAuthStore = create<AuthState>()(
           return true
         } catch (err) {
           console.log('getCurrentUser failed:', err)
-          // Token invalid or expired - try to use cached user
-          const cachedUser = get().user
-          if (cachedUser) {
-            set({ isLoading: false })
-            return true
-          }
+          // Token invalid - clear everything and require re-login
           clearTokens()
           set({ user: null, isAuthenticated: false, isLoading: false })
           return false
