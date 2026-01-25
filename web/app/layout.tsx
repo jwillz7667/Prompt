@@ -100,17 +100,8 @@ export const metadata: Metadata = {
     images: [`${siteUrl}/logo.png`],
   },
 
-  // App icons
-  icons: {
-    icon: [
-      { url: '/logo.png', sizes: '32x32', type: 'image/png' },
-      { url: '/logo.png', sizes: '192x192', type: 'image/png' },
-    ],
-    apple: [
-      { url: '/logo.png', sizes: '180x180', type: 'image/png' },
-    ],
-    shortcut: '/logo.png',
-  },
+  // App icons (auto-detected from /app directory: favicon.ico, icon.png, icon.svg, apple-icon.png)
+  // manifest.json is also auto-detected
 
   // Apple-specific metadata
   appleWebApp: {
