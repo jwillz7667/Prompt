@@ -216,7 +216,7 @@ struct PromptRowView: View {
 
                 Spacer()
 
-                Text(prompt.createdAt, style: .relative)
+                Text(prompt.createdAt, format: .dateTime.month().day().hour().minute())
                     .font(.caption)
                     .foregroundStyle(textTertiary)
             }
