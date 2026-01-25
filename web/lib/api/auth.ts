@@ -28,9 +28,19 @@ export async function signInWithGoogle(request: GoogleAuthRequest): Promise<Auth
 }
 
 export async function refreshTokens(): Promise<RefreshResponse> {
-  const response = await api.post<RefreshResponse>('/auth/refresh', undefined, { skipAuth: true })
-  setTokens(response.accessToken, response.refreshToken, response.expiresIn)
-  return response
+  // Call our Next.js API route which reads the HTTP-only refresh token cookie
+  const response = await fetch('/api/auth/refresh', {
+    method: 'POST',
+    credentials: 'include', // Include cookies
+  })
+
+  if (!response.ok) {
+    throw new Error('Refresh failed')
+  }
+
+  const data: RefreshResponse = await response.json()
+  setTokens(data.accessToken, data.refreshToken, data.expiresIn)
+  return data
 }
 
 export async function getCurrentUser(): Promise<User> {

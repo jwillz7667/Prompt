@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User } from '@/lib/types/models'
 import { setTokens, clearTokens, getAccessToken } from '@/lib/api/client'
-import { getCurrentUser, logout as apiLogout, logoutAllDevices as apiLogoutAll } from '@/lib/api/auth'
+import { getCurrentUser, logout as apiLogout, logoutAllDevices as apiLogoutAll, refreshTokens } from '@/lib/api/auth'
 
 interface AuthState {
   user: User | null
@@ -41,18 +41,30 @@ export const useAuthStore = create<AuthState>()(
       },
 
       checkAuth: async () => {
-        const token = getAccessToken()
+        set({ isLoading: true })
+        let token = getAccessToken()
+
+        // If no access token, try to refresh using the HTTP-only refresh token cookie
         if (!token) {
-          set({ user: null, isAuthenticated: false, isLoading: false })
-          return false
+          console.log('No access token, attempting refresh...')
+          try {
+            const response = await refreshTokens()
+            token = response.accessToken
+            console.log('Refresh successful, got new token')
+          } catch (err) {
+            console.log('Refresh failed:', err)
+            set({ user: null, isAuthenticated: false, isLoading: false })
+            return false
+          }
         }
 
         try {
-          set({ isLoading: true })
           const user = await getCurrentUser()
+          console.log('Got user:', user.email)
           set({ user, isAuthenticated: true, isLoading: false })
           return true
-        } catch {
+        } catch (err) {
+          console.log('getCurrentUser failed:', err)
           // Token invalid or expired - try to use cached user
           const cachedUser = get().user
           if (cachedUser) {
