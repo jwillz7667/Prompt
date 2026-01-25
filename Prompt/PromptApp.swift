@@ -14,6 +14,11 @@ struct PromptApp: App {
     @State private var historyManager = PromptHistoryManager.shared
     @State private var storeKitManager = StoreKitManager.shared
 
+    init() {
+        // Configure Firebase Analytics and Crashlytics
+        AnalyticsService.shared.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

@@ -3,6 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../utils/prisma.js';
 import { generateTokenPair, verifyRefreshToken, type TokenPayload } from '../utils/jwt.js';
+import { authLogger } from '../utils/logger.js';
 
 const googleClient = new OAuth2Client(process.env['GOOGLE_CLIENT_ID']);
 
@@ -30,7 +31,7 @@ export async function authenticateWithApple(
   deviceInfo?: { deviceId?: string; deviceName?: string }
 ): Promise<AuthResult> {
   const clientId = process.env['APPLE_CLIENT_ID'];
-  console.log('[Apple Auth Service] Verifying token with audience:', clientId);
+  authLogger.debug({ audience: clientId }, 'Verifying Apple identity token');
 
   // Verify the identity token with Apple
   const applePayload = await appleSignin.verifyIdToken(identityToken, {
@@ -38,7 +39,7 @@ export async function authenticateWithApple(
     ignoreExpiration: false,
   });
 
-  console.log('[Apple Auth Service] Token verified, sub:', applePayload.sub);
+  authLogger.debug({ appleId: applePayload.sub }, 'Apple token verified');
   const { sub: appleId, email } = applePayload;
 
   if (!email) {

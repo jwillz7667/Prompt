@@ -8,6 +8,7 @@ import {
   logoutAllDevices,
 } from '../services/authService.js';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
+import { authLogger } from '../utils/logger.js';
 
 export const authRouter = Router();
 
@@ -43,8 +44,7 @@ authRouter.post('/apple', async (req: Request, res: Response): Promise<void> => 
   try {
     const data = appleAuthSchema.parse(req.body);
 
-    console.log('[Apple Auth] Received request, verifying token...');
-    console.log('[Apple Auth] APPLE_CLIENT_ID configured:', !!process.env['APPLE_CLIENT_ID']);
+    authLogger.debug({ appleClientConfigured: !!process.env['APPLE_CLIENT_ID'] }, 'Apple auth request received');
 
     const result = await authenticateWithApple(
       data.identityToken,
@@ -53,10 +53,10 @@ authRouter.post('/apple', async (req: Request, res: Response): Promise<void> => 
       { deviceId: data.deviceId, deviceName: data.deviceName }
     );
 
-    console.log('[Apple Auth] Success for user:', result.user.email);
+    authLogger.info({ userId: result.user.id }, 'Apple auth successful');
     res.json(result);
   } catch (error) {
-    console.error('[Apple Auth] Error:', error);
+    authLogger.error({ err: error }, 'Apple auth failed');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -79,9 +79,10 @@ authRouter.post('/google', async (req: Request, res: Response): Promise<void> =>
       deviceName: data.deviceName,
     });
 
+    authLogger.info({ userId: result.user.id }, 'Google auth successful');
     res.json(result);
   } catch (error) {
-    console.error('Google auth error:', error);
+    authLogger.error({ err: error }, 'Google auth failed');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -100,7 +101,7 @@ authRouter.post('/refresh', async (req: Request, res: Response): Promise<void> =
     const result = await refreshTokens(data.refreshToken);
     res.json(result);
   } catch (error) {
-    console.error('Refresh error:', error);
+    authLogger.warn({ err: error }, 'Token refresh failed');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data' });
       return;
@@ -119,9 +120,10 @@ authRouter.post('/logout', authenticate, async (req: AuthenticatedRequest, res: 
     if (authHeader) {
       await logout(authHeader.substring(7));
     }
+    authLogger.debug({ userId: req.user?.id }, 'User logged out');
     res.json({ success: true });
   } catch (error) {
-    console.error('Logout error:', error);
+    authLogger.error({ err: error }, 'Logout failed');
     res.status(500).json({ error: 'Logout failed' });
   }
 });
@@ -133,9 +135,10 @@ authRouter.post('/logout-all', authenticate, async (req: AuthenticatedRequest, r
       return;
     }
     await logoutAllDevices(req.user.id);
+    authLogger.info({ userId: req.user.id }, 'User logged out from all devices');
     res.json({ success: true });
   } catch (error) {
-    console.error('Logout all error:', error);
+    authLogger.error({ err: error }, 'Logout all devices failed');
     res.status(500).json({ error: 'Logout failed' });
   }
 });
@@ -173,7 +176,7 @@ authRouter.get('/me', authenticate, async (req: AuthenticatedRequest, res: Respo
 
     res.json({ user });
   } catch (error) {
-    console.error('Get me error:', error);
+    authLogger.error({ err: error, userId: req.user?.id }, 'Failed to get user info');
     res.status(500).json({ error: 'Failed to get user info' });
   }
 });

@@ -3,49 +3,50 @@
 @tailwind utilities;
 
 /*
- * Brand Colors: Indigo (#5B4CDB) and Cyan (#00FFFF)
+ * Brand Colors: Indigo (#5B4CDB) and Cyan (#00E6E6)
  * AAA WCAG Compliant Color System
+ * Dark Mode: Standard black background with brand accents
  */
 
 :root {
-  /* Light mode - AAA compliant text on white */
+  /* Light mode - AAA compliant text on light background */
   --text-primary: #1A144C;
   --text-secondary: #3D3475;
   --text-tertiary: #5C5296;
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F5F3FC;
+  --bg-primary: #FAF9FF;    /* Slight indigo tint for contrast with cards */
+  --bg-secondary: #FFFFFF;   /* White for cards/elevated content */
   --bg-tertiary: #EBE8FA;
-  --border: #C8C3E8;
+  --border: #B4AFD2;         /* More visible border */
 
   /* Brand accent colors */
   --accent-purple: #5B4CDB;
   --accent-indigo: #5B4CDB;
-  --accent-cyan: #00FFFF;
-  --accent-cyan-dark: #00DCDC;
+  --accent-cyan: #00E6E6;
+  --accent-cyan-dark: #00C8C8;
 
-  /* Text on accent */
-  --text-on-accent: #1A144C;
+  /* Text on accent - white for indigo buttons */
+  --text-on-accent: #FFFFFF;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Dark mode - Brand indigo background with AAA compliant text */
+    /* Dark mode - Standard black background with brand accents */
     --text-primary: #FFFFFF;
-    --text-secondary: #E8E6F5;
-    --text-tertiary: #C4C0DC;
-    --bg-primary: #5B4CDB;
-    --bg-secondary: #6556E5;
-    --bg-tertiary: #3D32B0;
-    --border: #8273F0;
+    --text-secondary: #8E8E93;   /* iOS systemGray */
+    --text-tertiary: #636366;    /* iOS systemGray2 */
+    --bg-primary: #000000;       /* Pure black for OLED */
+    --bg-secondary: #1C1C1E;     /* iOS elevated surface */
+    --bg-tertiary: #2C2C2E;      /* iOS tertiary */
+    --border: #38383A;           /* iOS separator */
 
-    /* Accent colors stay the same */
+    /* Brand accent colors (used for highlights and accents) */
     --accent-purple: #5B4CDB;
     --accent-indigo: #5B4CDB;
-    --accent-cyan: #00FFFF;
-    --accent-cyan-dark: #00DCDC;
+    --accent-cyan: #00E6E6;
+    --accent-cyan-dark: #00C8C8;
 
     /* Text on cyan button */
-    --text-on-accent: #1A144C;
+    --text-on-accent: #000000;
   }
 }
 
@@ -91,13 +92,13 @@ body {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 255, 255, 0.2);
+  border: 1px solid rgba(91, 76, 219, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
   .glass {
-    background: rgba(91, 76, 219, 0.4);
-    border: 1px solid rgba(0, 255, 255, 0.3);
+    background: rgba(28, 28, 30, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 }
 
@@ -113,7 +114,7 @@ body {
 
 @media (prefers-color-scheme: dark) {
   .feature-card:hover {
-    box-shadow: 0 20px 40px rgba(0, 255, 255, 0.15);
+    box-shadow: 0 20px 40px rgba(0, 230, 230, 0.1);
   }
 }
 

@@ -17,6 +17,7 @@ import {
   getTierFromProductId,
 } from './subscriptionService.js';
 import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
+import { storeLogger } from '../utils/logger.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -213,7 +214,7 @@ export async function processAppStoreNotification(
     const subtype = notification.subtype;
     const data = notification.data;
 
-    console.log(`Processing App Store notification: ${notificationType} (${subtype || 'none'})`);
+    storeLogger.info({ notificationType, subtype: subtype || 'none' }, 'Processing App Store notification');
 
     // Extract transaction info
     let transaction: VerifiedTransaction | null = null;
@@ -241,10 +242,10 @@ export async function processAppStoreNotification(
     }
 
     if (!userId) {
-      console.warn('Could not find user for notification', {
+      storeLogger.warn({
         notificationType,
         originalTransactionId: transaction?.originalTransactionId,
-      });
+      }, 'Could not find user for notification');
       return { success: true, message: 'User not found, notification acknowledged' };
     }
 
@@ -333,12 +334,12 @@ export async function processAppStoreNotification(
         break;
 
       default:
-        console.log(`Unhandled notification type: ${notificationType}`);
+        storeLogger.debug({ notificationType }, 'Unhandled notification type');
     }
 
     return { success: true, message: `Processed ${notificationType}` };
   } catch (error) {
-    console.error('Error processing App Store notification:', error);
+    storeLogger.error({ err: error }, 'Error processing App Store notification');
     throw error;
   }
 }

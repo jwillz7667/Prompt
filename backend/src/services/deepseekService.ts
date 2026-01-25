@@ -1,4 +1,5 @@
 import { type TierFeatures } from './subscriptionService.js';
+import { promptLogger } from '../utils/logger.js';
 
 // ============================================================================
 // TYPES
@@ -394,7 +395,7 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error('DeepSeek API error:', response.status, errorBody);
+    promptLogger.error({ status: response.status, body: errorBody }, 'DeepSeek API error');
     throw new Error(`DeepSeek API error: ${response.status} - ${errorBody}`);
   }
 
@@ -488,7 +489,7 @@ export async function enhancePromptStream(
 
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error('DeepSeek API error:', response.status, errorBody);
+      promptLogger.error({ status: response.status, body: errorBody }, 'DeepSeek API streaming error');
       callbacks.onError(new Error(`DeepSeek API error: ${response.status}`));
       return;
     }

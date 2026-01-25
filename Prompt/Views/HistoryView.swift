@@ -148,7 +148,7 @@ struct HistoryView: View {
                         }
                         .tint(.yellow)
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
             }
 
             // Load more
@@ -160,7 +160,7 @@ struct HistoryView: View {
                     Spacer()
                 }
                 .listRowSeparator(.hidden)
-                .listRowBackground(bgPrimary)
+                .listRowBackground(bgSecondary)
                 .onAppear {
                     Task {
                         await historyManager.loadNextPage()

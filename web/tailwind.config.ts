@@ -24,23 +24,23 @@ const config: Config = {
         },
         // Light mode colors (AAA Compliant)
         light: {
-          'text-primary': '#1A144C',      // Dark indigo for AAA contrast on white
+          'text-primary': '#1A144C',      // Dark indigo for AAA contrast
           'text-secondary': '#3D3475',    // Medium indigo
           'text-tertiary': '#5C5296',     // Lighter indigo
-          'bg-primary': '#FFFFFF',
-          'bg-secondary': '#F5F3FC',      // Light indigo tint
-          'bg-tertiary': '#EBE8FA',       // Slightly darker indigo tint
-          'border': '#C8C3E8',            // Indigo-tinted border
+          'bg-primary': '#FAF9FF',        // Slight indigo tint for contrast with cards
+          'bg-secondary': '#FFFFFF',      // White for cards/elevated content
+          'bg-tertiary': '#EBE8FA',       // Light indigo tint
+          'border': '#B4AFD2',            // More visible indigo border
         },
-        // Dark mode colors (Brand Indigo Background, AAA Compliant)
+        // Dark mode colors (Standard iOS Black Background, AAA Compliant)
         dark: {
-          'text-primary': '#FFFFFF',      // White for high contrast on #5B4CDB
-          'text-secondary': '#E8E6F5',    // Light indigo for 8:1 contrast
-          'text-tertiary': '#C4C0DC',     // Muted indigo for 7:1 contrast
-          'bg-primary': '#5B4CDB',        // Brand indigo
-          'bg-secondary': '#6556E5',      // Lighter indigo
-          'bg-tertiary': '#3D32B0',       // Deeper indigo
-          'border': '#8273F0',            // Indigo border
+          'text-primary': '#FFFFFF',      // White for high contrast
+          'text-secondary': '#8E8E93',    // iOS systemGray
+          'text-tertiary': '#636366',     // iOS systemGray2
+          'bg-primary': '#000000',        // Pure black for OLED
+          'bg-secondary': '#1C1C1E',      // iOS elevated surface
+          'bg-tertiary': '#2C2C2E',       // iOS tertiary
+          'border': '#38383A',            // iOS separator
         },
         // Accent colors
         accent: {
@@ -49,8 +49,8 @@ const config: Config = {
           cyan: '#00FFFF',                // Brand cyan (pure cyan)
           gold: '#F5A623',
         },
-        // Text on cyan (dark color for contrast)
-        'text-on-cyan': '#1A144C',
+        // Text on cyan (dark color for contrast in dark mode, white in light)
+        'text-on-cyan': '#000000',
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Segoe UI', 'Roboto', 'sans-serif'],

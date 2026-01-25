@@ -3,7 +3,8 @@
 //  Prompt
 //
 //  iOS 26 Liquid Glass Design System
-//  Brand Colors: Indigo (#5B4CDB) and Cyan (#00FFFF)
+//  Brand Colors: Indigo (#5B4CDB) and Cyan (#00E6E6)
+//  Dark Mode: Standard iOS black with brand accents
 //  Translucent, depth-aware components with specular highlights and refractive effects
 //
 
@@ -47,7 +48,7 @@ struct LiquidGlassModifier: ViewModifier {
     private var specularGradient: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.brandCyan.opacity(0.15), Color.white.opacity(0.08), Color.clear]
+                ? [Color.white.opacity(0.08), Color.white.opacity(0.03), Color.clear]
                 : [Color.white.opacity(0.9), Color.brandPurple.opacity(0.1), Color.clear],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -57,7 +58,7 @@ struct LiquidGlassModifier: ViewModifier {
     private var borderGradient: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.brandCyan.opacity(0.4), Color.white.opacity(0.1), Color.brandCyan.opacity(0.2)]
+                ? [Color.white.opacity(0.15), Color.white.opacity(0.05)]
                 : [Color.white.opacity(0.95), Color.brandPurple.opacity(0.2), Color.white.opacity(0.6)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -66,24 +67,40 @@ struct LiquidGlassModifier: ViewModifier {
 
     private var shadowColor: Color {
         colorScheme == .dark
-            ? Color.black.opacity(0.5 * shadowIntensity)
+            ? Color.black.opacity(0.6 * shadowIntensity)
             : Color.brandPurple.opacity(0.15 * shadowIntensity)
+    }
+
+    private var cardBorderColor: Color {
+        if colorScheme == .dark {
+            return borderGlow ? Color.brandCyan.opacity(0.4) : Color.white.opacity(0.1)
+        } else {
+            return Color.white.opacity(0.8)
+        }
     }
 
     func body(content: Content) -> some View {
         content
             .background {
                 ZStack {
-                    // Base material layer
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    // Tinted overlay for depth - purple tint
+                    // Solid base - iOS elevated surface in dark, white in light
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             colorScheme == .dark
-                                ? Color.brandPurpleLight.opacity(0.15)
-                                : Color.brandPurple.opacity(0.05)
+                                ? Color(red: 28/255, green: 28/255, blue: 30/255) // #1C1C1E - iOS elevated
+                                : Color.white
+                        )
+
+                    // Material layer for glass effect
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+
+                    // Subtle tinted overlay
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.02)
+                                : Color.brandPurple.opacity(0.03)
                         )
 
                     // Specular highlight layer
@@ -96,7 +113,7 @@ struct LiquidGlassModifier: ViewModifier {
             .overlay {
                 // Border with gradient for glass edge effect
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(borderGradient, lineWidth: borderGlow ? 1.5 : 1)
+                    .stroke(cardBorderColor, lineWidth: borderGlow ? 2 : 1)
             }
             .shadow(color: shadowColor, radius: 16, y: 8)
             .shadow(color: shadowColor.opacity(0.5), radius: 4, y: 2)
@@ -115,44 +132,54 @@ struct LiquidGlassButtonModifier: ViewModifier {
         isPressed ? 0.97 : 1.0
     }
 
+    private var buttonBorderGradient: LinearGradient {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [Color.white.opacity(0.1), Color.white.opacity(0.05)]
+                : [Color.brandPurple.opacity(0.25), Color.brandPurple.opacity(0.15)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var buttonHighlightGradient: LinearGradient {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [Color.white.opacity(0.08), Color.white.opacity(0.02)]
+                : [Color.white.opacity(0.9), Color.brandPurple.opacity(0.1)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     func body(content: Content) -> some View {
         content
             .background {
                 ZStack {
+                    // Solid base - iOS elevated surface
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            colorScheme == .dark
+                                ? Color(red: 44/255, green: 44/255, blue: 46/255) // #2C2C2E - iOS tertiary
+                                : Color.white
+                        )
+
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
 
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: colorScheme == .dark
-                                    ? [Color.brandCyan.opacity(0.1), Color.white.opacity(0.05)]
-                                    : [Color.white.opacity(0.9), Color.brandPurple.opacity(0.1)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(buttonHighlightGradient)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                colorScheme == .dark ? Color.brandCyan.opacity(0.3) : Color.white.opacity(0.8),
-                                colorScheme == .dark ? Color.white.opacity(0.1) : Color.brandPurple.opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                    .stroke(buttonBorderGradient, lineWidth: 1)
             }
             .shadow(
                 color: colorScheme == .dark
-                    ? Color.black.opacity(0.4)
-                    : Color.brandPurple.opacity(0.15),
+                    ? Color.black.opacity(0.5)
+                    : Color.brandPurple.opacity(0.2),
                 radius: isPressed ? 4 : 10,
                 y: isPressed ? 2 : 5
             )
@@ -175,19 +202,33 @@ struct LiquidGlassInputModifier: ViewModifier {
             : Color.brandPurple.opacity(0.5)
     }
 
+    private var defaultBorderColor: Color {
+        colorScheme == .dark
+            ? Color(red: 56/255, green: 56/255, blue: 58/255) // #38383A - iOS separator
+            : Color(red: 180/255, green: 175/255, blue: 210/255) // Indigo border
+    }
+
     func body(content: Content) -> some View {
         content
             .background {
                 ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    // Inner shadow effect for recessed appearance
+                    // Solid base - iOS elevated surface
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             colorScheme == .dark
-                                ? Color.brandPurpleDark.opacity(0.3)
-                                : Color.white.opacity(0.7)
+                                ? Color(red: 28/255, green: 28/255, blue: 30/255) // #1C1C1E - iOS elevated
+                                : Color.white
+                        )
+
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+
+                    // Subtle inner layer
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.02)
+                                : Color.white.opacity(0.8)
                         )
                 }
             }
@@ -195,7 +236,7 @@ struct LiquidGlassInputModifier: ViewModifier {
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        isFocused ? focusBorderColor : Color.clear,
+                        isFocused ? focusBorderColor : defaultBorderColor,
                         lineWidth: isFocused ? 2 : 1
                     )
                     .animation(.easeInOut(duration: 0.2), value: isFocused)
@@ -206,7 +247,7 @@ struct LiquidGlassInputModifier: ViewModifier {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                colorScheme == .dark ? Color.brandCyan.opacity(0.15) : Color.white.opacity(0.6),
+                                colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.6),
                                 Color.clear
                             ],
                             startPoint: .top,
@@ -218,8 +259,8 @@ struct LiquidGlassInputModifier: ViewModifier {
             }
             .shadow(
                 color: colorScheme == .dark
-                    ? Color.black.opacity(0.3)
-                    : Color.brandPurple.opacity(0.1),
+                    ? Color.black.opacity(0.5)
+                    : Color.brandPurple.opacity(0.15),
                 radius: isFocused ? 12 : 6,
                 y: isFocused ? 6 : 3
             )
@@ -237,22 +278,17 @@ struct LiquidGlassChipModifier: ViewModifier {
     private var highlightGradient: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.brandCyan.opacity(0.08), Color.white.opacity(0.03)]
+                ? [Color.white.opacity(0.06), Color.white.opacity(0.02)]
                 : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.1)],
             startPoint: .top,
             endPoint: .bottom
         )
     }
 
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                colorScheme == .dark ? Color.brandCyan.opacity(0.25) : Color.white.opacity(0.7),
-                colorScheme == .dark ? Color.white.opacity(0.1) : Color.brandPurple.opacity(0.2)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private var borderColor: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.1)
+            : Color.brandPurple.opacity(0.2)
     }
 
     private var shadowColor: Color {
@@ -260,7 +296,7 @@ struct LiquidGlassChipModifier: ViewModifier {
             return accent.opacity(0.4)
         }
         return colorScheme == .dark
-            ? Color.black.opacity(0.3)
+            ? Color.black.opacity(0.4)
             : Color.brandPurple.opacity(0.1)
     }
 
@@ -278,14 +314,23 @@ struct LiquidGlassChipModifier: ViewModifier {
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: [accent, accent.opacity(0.8)],
+                        colors: [accent, accent.opacity(0.85)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
         } else {
-            Capsule()
-                .fill(.ultraThinMaterial)
+            ZStack {
+                // Solid base - iOS elevated surface
+                Capsule()
+                    .fill(
+                        colorScheme == .dark
+                            ? Color(red: 44/255, green: 44/255, blue: 46/255) // #2C2C2E - iOS tertiary
+                            : Color.white
+                    )
+                Capsule()
+                    .fill(.ultraThinMaterial)
+            }
         }
     }
 
@@ -302,7 +347,7 @@ struct LiquidGlassChipModifier: ViewModifier {
         if isSelected && accentColor != nil {
             Capsule().stroke(Color.clear, lineWidth: 1)
         } else {
-            Capsule().stroke(borderGradient, lineWidth: 1)
+            Capsule().stroke(borderColor, lineWidth: 1)
         }
     }
 
@@ -363,7 +408,7 @@ struct LiquidGlassDivider: View {
                     colors: [
                         Color.clear,
                         colorScheme == .dark
-                            ? Color.brandCyan.opacity(0.3)
+                            ? Color.white.opacity(0.15)
                             : Color.brandPurple.opacity(0.15),
                         Color.clear
                     ],
@@ -455,8 +500,8 @@ struct LiquidGlassBackground: View {
 
     private var backgroundColor: Color {
         colorScheme == .dark
-            ? Color.brandPurple
-            : Color.white
+            ? Color.black // Pure black for OLED
+            : Color(red: 250/255, green: 249/255, blue: 255/255) // #FAF9FF - slight indigo tint
     }
 
     var body: some View {
@@ -464,10 +509,10 @@ struct LiquidGlassBackground: View {
             // Base color
             backgroundColor
 
-            // Animated mesh gradient simulation
+            // Subtle animated gradient blobs (much more subtle in dark mode)
             GeometryReader { geometry in
                 liquidGradientBlobs(in: geometry)
-                    .blur(radius: 60)
+                    .blur(radius: colorScheme == .dark ? 80 : 60)
             }
         }
         .ignoresSafeArea()
@@ -482,10 +527,10 @@ struct LiquidGlassBackground: View {
     private func liquidGradientBlobs(in geometry: GeometryProxy) -> some View {
         let size = geometry.size
         ZStack {
-            // Blob 1 - Cyan accent
+            // Blob 1 - Cyan accent (very subtle in dark mode)
             liquidBlob(
                 color: Color.brandCyan,
-                opacity: colorScheme == .dark ? 0.25 : 0.15,
+                opacity: colorScheme == .dark ? 0.08 : 0.15,
                 frameWidth: size.width * 0.8,
                 endRadius: size.width * 0.5,
                 offset: animateGradient
@@ -493,10 +538,10 @@ struct LiquidGlassBackground: View {
                     : CGSize(width: -size.width * 0.1, height: size.height * 0.1)
             )
 
-            // Blob 2 - Purple accent
+            // Blob 2 - Purple accent (very subtle in dark mode)
             liquidBlob(
-                color: Color.brandPurpleLight,
-                opacity: colorScheme == .dark ? 0.2 : 0.1,
+                color: Color.brandPurple,
+                opacity: colorScheme == .dark ? 0.06 : 0.1,
                 frameWidth: size.width * 0.7,
                 endRadius: size.width * 0.6,
                 offset: animateGradient
@@ -504,10 +549,10 @@ struct LiquidGlassBackground: View {
                     : CGSize(width: size.width * 0.1, height: size.height * 0.2)
             )
 
-            // Blob 3 - Deep purple
+            // Blob 3 - Deep purple (minimal in dark mode)
             liquidBlob(
                 color: Color.brandPurpleDark,
-                opacity: colorScheme == .dark ? 0.15 : 0.08,
+                opacity: colorScheme == .dark ? 0.04 : 0.08,
                 frameWidth: size.width * 0.5,
                 endRadius: size.width * 0.4,
                 offset: animateGradient
@@ -515,10 +560,10 @@ struct LiquidGlassBackground: View {
                     : CGSize(width: size.width * 0.2, height: size.height * 0.4)
             )
 
-            // Blob 4 - Cyan glow at bottom
+            // Blob 4 - Cyan glow at bottom (subtle in dark mode)
             liquidBlob(
                 color: Color.brandCyan,
-                opacity: colorScheme == .dark ? 0.15 : 0.1,
+                opacity: colorScheme == .dark ? 0.05 : 0.1,
                 frameWidth: size.width * 0.6,
                 endRadius: size.width * 0.5,
                 offset: animateGradient

@@ -649,7 +649,7 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .foregroundStyle(viewModel.canEnhance ? Color.adaptiveTextOnAccent : textTertiary)
+                    .foregroundStyle(viewModel.canEnhance ? .white : textTertiary)
                     .background {
                         if viewModel.canEnhance {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)

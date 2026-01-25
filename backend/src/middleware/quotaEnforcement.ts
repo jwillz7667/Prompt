@@ -6,6 +6,7 @@ import {
   recordUsage,
   type QuotaAction,
 } from '../services/subscriptionService.js';
+import { subscriptionLogger } from '../utils/logger.js';
 
 // Extend AuthenticatedRequest to include subscription info
 export interface RequestWithSubscription extends AuthenticatedRequest {
@@ -61,7 +62,7 @@ export function enforceQuota(action: QuotaAction) {
 
       next();
     } catch (error) {
-      console.error('Quota enforcement error:', error);
+      subscriptionLogger.error({ err: error, userId: req.user?.id, action }, 'Quota enforcement error');
       res.status(500).json({ error: 'Failed to check quota' });
     }
   };
@@ -84,7 +85,7 @@ export function recordPromptUsage() {
       // Only record usage on successful prompt creation (201 status)
       if (res.statusCode === 201 && req.user) {
         recordUsage(req.user.id).catch((err) => {
-          console.error('Failed to record usage:', err);
+          subscriptionLogger.error({ err, userId: req.user?.id }, 'Failed to record usage');
         });
       }
       return originalJson(body);
@@ -121,7 +122,7 @@ export async function attachSubscriptionInfo(
 
     next();
   } catch (error) {
-    console.error('Failed to attach subscription info:', error);
+    subscriptionLogger.warn({ err: error, userId: req.user?.id }, 'Failed to attach subscription info');
     // Don't block the request if subscription check fails
     next();
   }

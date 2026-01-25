@@ -3,14 +3,15 @@
 //  Prompt
 //
 //  AAA WCAG Compliant Color System for Light and Dark Modes
-//  Brand Colors: Primary Indigo (#5B4CDB), Accent Cyan (#00FFFF)
+//  Brand Colors: Primary Indigo (#5B4CDB), Accent Cyan (#00E6E6)
+//  Dark Mode: Standard iOS black background with brand accents
 //  All colors meet WCAG 2.1 AAA contrast requirements (7:1 for normal text, 4.5:1 for large text)
 //
 
 import SwiftUI
 import UIKit
 
-// MARK: - Brand Colors
+// MARK: - Brand Colors (Accent Only)
 
 extension Color {
     /// Brand primary indigo #5B4CDB - blue-purple from logo
@@ -75,98 +76,114 @@ extension Color {
     static let accent = Color("Accent")
 }
 
-// MARK: - Adaptive Colors (Fallback if asset catalog not configured)
+// MARK: - Adaptive Colors (Standard iOS Dark Mode with Black Background)
 
 extension Color {
-    // Text colors with proper contrast on brand purple background
+    // Text colors - White on black for dark mode, dark purple on light
 
     static var adaptiveTextPrimary: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
                 ? UIColor.white
-                : UIColor(red: 26/255, green: 10/255, blue: 76/255, alpha: 1.0) // #1A0A4C - dark purple
+                : UIColor(red: 26/255, green: 20/255, blue: 76/255, alpha: 1.0) // #1A144C - dark indigo
         })
     }
 
     static var adaptiveTextSecondary: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 232/255, green: 228/255, blue: 240/255, alpha: 1.0) // #E8E4F0
-                : UIColor(red: 61/255, green: 42/255, blue: 107/255, alpha: 1.0) // #3D2A6B
+                ? UIColor(red: 142/255, green: 142/255, blue: 147/255, alpha: 1.0) // iOS systemGray
+                : UIColor(red: 61/255, green: 52/255, blue: 117/255, alpha: 1.0) // #3D3475 - medium indigo
         })
     }
 
     static var adaptiveTextTertiary: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 196/255, green: 190/255, blue: 212/255, alpha: 1.0) // #C4BED4
-                : UIColor(red: 92/255, green: 74/255, blue: 140/255, alpha: 1.0) // #5C4A8C
+                ? UIColor(red: 99/255, green: 99/255, blue: 102/255, alpha: 1.0) // iOS systemGray2
+                : UIColor(red: 92/255, green: 82/255, blue: 150/255, alpha: 1.0) // #5C5296 - light indigo
         })
     }
+
+    // MARK: - Backgrounds (Standard iOS Dark Mode)
 
     static var adaptiveBackgroundPrimary: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 91/255, green: 76/255, blue: 219/255, alpha: 1.0) // #5B4CDB - brand indigo
-                : UIColor.white
+                ? UIColor.black // Pure black for OLED
+                : UIColor(red: 250/255, green: 249/255, blue: 255/255, alpha: 1.0) // #FAF9FF - slight indigo tint
         })
     }
 
     static var adaptiveBackgroundSecondary: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 101/255, green: 86/255, blue: 229/255, alpha: 0.6) // Lighter indigo with transparency
-                : UIColor(red: 245/255, green: 243/255, blue: 252/255, alpha: 1.0) // #F5F3FC - very light indigo tint
+                ? UIColor(red: 28/255, green: 28/255, blue: 30/255, alpha: 1.0) // #1C1C1E - iOS elevated surface
+                : UIColor.white
         })
     }
 
     static var adaptiveBackgroundTertiary: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 61/255, green: 50/255, blue: 176/255, alpha: 0.8) // Deeper indigo
+                ? UIColor(red: 44/255, green: 44/255, blue: 46/255, alpha: 1.0) // #2C2C2E - iOS tertiary
                 : UIColor(red: 235/255, green: 232/255, blue: 250/255, alpha: 1.0) // #EBE8FA - light indigo
         })
     }
 
-    static var adaptiveButtonPrimary: Color {
-        // Cyan accent for both modes - softer teal-cyan matching logo sparkles
+    /// Elevated background for cards with brand accent hint
+    static var adaptiveBackgroundElevated: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 0/255, green: 230/255, blue: 230/255, alpha: 1.0) // #00E6E6 - softer cyan for dark
-                : UIColor(red: 0/255, green: 200/255, blue: 200/255, alpha: 1.0) // #00C8C8 - teal for light mode
+                ? UIColor(red: 38/255, green: 38/255, blue: 40/255, alpha: 1.0) // #262628 - slightly lighter
+                : UIColor.white
+        })
+    }
+
+    // MARK: - Buttons (Brand Accents)
+
+    static var adaptiveButtonPrimary: Color {
+        // Brand colors for primary actions
+        Color(uiColor: UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 0/255, green: 230/255, blue: 230/255, alpha: 1.0) // #00E6E6 - cyan accent
+                : UIColor(red: 91/255, green: 76/255, blue: 219/255, alpha: 1.0) // #5B4CDB - indigo
         })
     }
 
     static var adaptiveButtonSecondary: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 71/255, green: 60/255, blue: 189/255, alpha: 1.0) // Muted indigo
+                ? UIColor(red: 58/255, green: 58/255, blue: 60/255, alpha: 1.0) // #3A3A3C - iOS gray button
                 : UIColor(red: 225/255, green: 222/255, blue: 248/255, alpha: 1.0) // Light indigo
         })
     }
 
+    // MARK: - UI Elements
+
     static var adaptiveBorder: Color {
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 130/255, green: 115/255, blue: 230/255, alpha: 0.5) // Semi-transparent indigo
-                : UIColor(red: 200/255, green: 195/255, blue: 225/255, alpha: 1.0) // Light indigo border
+                ? UIColor(red: 56/255, green: 56/255, blue: 58/255, alpha: 1.0) // #38383A - iOS separator dark
+                : UIColor(red: 180/255, green: 175/255, blue: 210/255, alpha: 1.0) // #B4AFD2 - indigo border
         })
     }
 
     static var adaptiveAccent: Color {
-        // Cyan accent - softer teal-cyan matching logo
+        // Cyan accent - consistent across modes
         Color(uiColor: UIColor { traitCollection in
             traitCollection.userInterfaceStyle == .dark
-                ? UIColor(red: 0/255, green: 230/255, blue: 230/255, alpha: 1.0) // #00E6E6 - softer cyan
-                : UIColor(red: 0/255, green: 180/255, blue: 180/255, alpha: 1.0) // #00B4B4 - teal for light mode
+                ? UIColor(red: 0/255, green: 230/255, blue: 230/255, alpha: 1.0) // #00E6E6 - cyan
+                : UIColor(red: 91/255, green: 76/255, blue: 219/255, alpha: 1.0) // #5B4CDB - indigo for light
         })
     }
 
-    // Text color for use on cyan accent background
+    // Text color for use on accent backgrounds
     static var adaptiveTextOnAccent: Color {
         Color(uiColor: UIColor { traitCollection in
-            // Dark text on cyan background for proper contrast
-            UIColor(red: 26/255, green: 10/255, blue: 76/255, alpha: 1.0) // #1A0A4C
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 0/255, green: 0/255, blue: 0/255, alpha: 1.0) // Black on cyan
+                : UIColor.white // White on indigo
         })
     }
 }
@@ -215,20 +232,20 @@ struct AppTheme {
         textInverse: Color.white,
         textOnAccent: Color(red: 26/255, green: 20/255, blue: 76/255),     // Dark on cyan
 
-        // Backgrounds
-        backgroundPrimary: Color.white,
-        backgroundSecondary: Color(red: 245/255, green: 243/255, blue: 252/255), // #F5F3FC - indigo tint
+        // Backgrounds - More contrast between levels
+        backgroundPrimary: Color(red: 250/255, green: 249/255, blue: 255/255), // #FAF9FF - slight indigo tint
+        backgroundSecondary: Color.white,                                        // #FFFFFF - cards/inputs
         backgroundTertiary: Color(red: 235/255, green: 232/255, blue: 250/255),  // #EBE8FA - light indigo
         backgroundElevated: Color.white,
 
         // Buttons - Softer teal-cyan accent
-        buttonPrimary: Color(red: 0/255, green: 200/255, blue: 200/255),  // #00C8C8 - teal for light mode
-        buttonPrimaryText: Color(red: 26/255, green: 20/255, blue: 76/255),
+        buttonPrimary: Color(red: 91/255, green: 76/255, blue: 219/255),  // #5B4CDB - brand indigo for primary buttons
+        buttonPrimaryText: Color.white,
         buttonSecondary: Color(red: 225/255, green: 222/255, blue: 248/255),
         buttonSecondaryText: Color(red: 61/255, green: 52/255, blue: 117/255),
-        border: Color(red: 200/255, green: 195/255, blue: 225/255),
-        borderStrong: Color(red: 150/255, green: 145/255, blue: 190/255),
-        accent: Color(red: 0/255, green: 180/255, blue: 180/255),  // #00B4B4 - teal
+        border: Color(red: 180/255, green: 175/255, blue: 210/255),       // #B4AFD2 - more visible border
+        borderStrong: Color(red: 140/255, green: 135/255, blue: 180/255), // #8C87B4 - stronger border
+        accent: Color(red: 0/255, green: 180/255, blue: 180/255),         // #00B4B4 - teal
 
         // Semantic
         success: Color(red: 0.1, green: 0.7, blue: 0.4),
@@ -240,39 +257,39 @@ struct AppTheme {
         brandAccent: Color(red: 0/255, green: 200/255, blue: 200/255)     // #00C8C8 - teal-cyan
     )
 
-    // MARK: - Dark Theme (AAA Compliant - Brand Indigo Background)
+    // MARK: - Dark Theme (Standard iOS Black Background with Brand Accents)
 
     static let dark = AppTheme(
-        // Text - All AAA compliant on brand indigo background
-        textPrimary: Color.white,                                           // High contrast on #5B4CDB
-        textSecondary: Color(red: 232/255, green: 230/255, blue: 245/255), // #E8E6F5 - light indigo tint
-        textTertiary: Color(red: 196/255, green: 192/255, blue: 220/255),  // #C4C0DC - muted light
-        textInverse: Color(red: 26/255, green: 20/255, blue: 76/255),
-        textOnAccent: Color(red: 26/255, green: 20/255, blue: 76/255),     // Dark on cyan
+        // Text - iOS standard colors on black background
+        textPrimary: Color.white,
+        textSecondary: Color(red: 142/255, green: 142/255, blue: 147/255), // iOS systemGray
+        textTertiary: Color(red: 99/255, green: 99/255, blue: 102/255),   // iOS systemGray2
+        textInverse: Color.black,
+        textOnAccent: Color.black,                                          // Black text on cyan buttons
 
-        // Backgrounds - Brand indigo based
-        backgroundPrimary: Color(red: 91/255, green: 76/255, blue: 219/255),     // #5B4CDB - brand indigo
-        backgroundSecondary: Color(red: 101/255, green: 86/255, blue: 229/255).opacity(0.6),
-        backgroundTertiary: Color(red: 61/255, green: 50/255, blue: 176/255),    // Deeper indigo
-        backgroundElevated: Color(red: 111/255, green: 96/255, blue: 239/255),   // Lighter indigo
+        // Backgrounds - Standard iOS dark mode
+        backgroundPrimary: Color.black,                                     // Pure black for OLED
+        backgroundSecondary: Color(red: 28/255, green: 28/255, blue: 30/255), // #1C1C1E - iOS elevated
+        backgroundTertiary: Color(red: 44/255, green: 44/255, blue: 46/255),  // #2C2C2E - iOS tertiary
+        backgroundElevated: Color(red: 38/255, green: 38/255, blue: 40/255),  // #262628
 
-        // Buttons - Softer teal-cyan accent
-        buttonPrimary: Color(red: 0/255, green: 230/255, blue: 230/255),  // #00E6E6 - softer cyan for dark
-        buttonPrimaryText: Color(red: 26/255, green: 20/255, blue: 76/255),
-        buttonSecondary: Color(red: 71/255, green: 60/255, blue: 189/255),
+        // Buttons - Brand accent colors
+        buttonPrimary: Color(red: 0/255, green: 230/255, blue: 230/255),   // #00E6E6 - cyan accent
+        buttonPrimaryText: Color.black,
+        buttonSecondary: Color(red: 58/255, green: 58/255, blue: 60/255),  // #3A3A3C - iOS gray
         buttonSecondaryText: Color.white,
-        border: Color(red: 130/255, green: 115/255, blue: 230/255).opacity(0.5),
-        borderStrong: Color(red: 160/255, green: 145/255, blue: 240/255),
-        accent: Color(red: 0/255, green: 230/255, blue: 230/255),  // #00E6E6 - softer cyan
+        border: Color(red: 56/255, green: 56/255, blue: 58/255),           // #38383A - iOS separator
+        borderStrong: Color(red: 72/255, green: 72/255, blue: 74/255),     // #48484A
+        accent: Color(red: 0/255, green: 230/255, blue: 230/255),          // #00E6E6 - cyan
 
-        // Semantic
-        success: Color(red: 0.2, green: 0.85, blue: 0.5),
-        error: Color(red: 1.0, green: 0.4, blue: 0.45),
-        warning: Color(red: 1.0, green: 0.75, blue: 0.3),
+        // Semantic - iOS standard
+        success: Color(red: 48/255, green: 209/255, blue: 88/255),         // iOS green
+        error: Color(red: 255/255, green: 69/255, blue: 58/255),           // iOS red
+        warning: Color(red: 255/255, green: 159/255, blue: 10/255),        // iOS orange
 
-        // Brand
-        brandPrimary: Color(red: 91/255, green: 76/255, blue: 219/255),   // #5B4CDB - indigo
-        brandAccent: Color(red: 0/255, green: 230/255, blue: 230/255)     // #00E6E6 - softer cyan
+        // Brand (used as accents)
+        brandPrimary: Color(red: 91/255, green: 76/255, blue: 219/255),    // #5B4CDB - indigo
+        brandAccent: Color(red: 0/255, green: 230/255, blue: 230/255)      // #00E6E6 - cyan
     )
 }
 

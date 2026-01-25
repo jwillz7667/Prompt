@@ -107,7 +107,7 @@ struct LengthSegment: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.adaptiveButtonPrimary)
+                        .fill(Color.brandPurple)
                         .shadow(color: Color.black.opacity(0.2), radius: 4, y: 2)
                 }
             }
@@ -177,7 +177,7 @@ struct InlineLengthPicker: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgTertiary: Color { Color.adaptiveBackgroundTertiary }
-    private var buttonPrimary: Color { Color.adaptiveButtonPrimary }
+    private var buttonPrimary: Color { Color.brandPurple }
 
     var body: some View {
         HStack(spacing: 8) {

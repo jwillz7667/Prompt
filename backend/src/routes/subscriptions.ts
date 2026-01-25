@@ -13,6 +13,7 @@ import {
   verifySignedTransaction,
   processVerifiedTransaction,
 } from '../services/appleStoreService.js';
+import { subscriptionLogger } from '../utils/logger.js';
 
 export const subscriptionRouter = Router();
 
@@ -51,7 +52,7 @@ subscriptionRouter.get('/status', async (req: AuthenticatedRequest, res: Respons
       features: subscriptionInfo.features,
     });
   } catch (error) {
-    console.error('Get subscription status error:', error);
+    subscriptionLogger.error({ err: error, userId: req.user?.id }, 'Failed to get subscription status');
     res.status(500).json({ error: 'Failed to get subscription status' });
   }
 });
@@ -92,7 +93,7 @@ subscriptionRouter.post('/verify', async (req: AuthenticatedRequest, res: Respon
       features: subscriptionInfo.features,
     });
   } catch (error) {
-    console.error('Verify purchase error:', error);
+    subscriptionLogger.error({ err: error, userId: req.user?.id }, 'Purchase verification failed');
 
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
@@ -162,7 +163,7 @@ subscriptionRouter.post('/restore', async (req: AuthenticatedRequest, res: Respo
           }
         }
       } catch (e) {
-        console.warn('Failed to verify transaction during restore:', e);
+        subscriptionLogger.warn({ err: e, userId: req.user?.id }, 'Failed to verify transaction during restore');
         continue;
       }
     }
@@ -190,7 +191,7 @@ subscriptionRouter.post('/restore', async (req: AuthenticatedRequest, res: Respo
       });
     }
   } catch (error) {
-    console.error('Restore purchases error:', error);
+    subscriptionLogger.error({ err: error, userId: req.user?.id }, 'Restore purchases failed');
 
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
@@ -236,7 +237,7 @@ subscriptionRouter.post('/trial', async (req: AuthenticatedRequest, res: Respons
       features: subscriptionInfo.features,
     });
   } catch (error) {
-    console.error('Start trial error:', error);
+    subscriptionLogger.error({ err: error, userId: req.user?.id }, 'Start trial failed');
     res.status(500).json({ error: 'Failed to start trial' });
   }
 });
@@ -259,7 +260,7 @@ subscriptionRouter.get('/trial/eligibility', async (req: AuthenticatedRequest, r
       trialDays: parseInt(process.env['FREE_TRIAL_DAYS'] || '7', 10),
     });
   } catch (error) {
-    console.error('Check trial eligibility error:', error);
+    subscriptionLogger.error({ err: error, userId: req.user?.id }, 'Check trial eligibility failed');
     res.status(500).json({ error: 'Failed to check trial eligibility' });
   }
 });
@@ -286,7 +287,7 @@ subscriptionRouter.get('/products', async (req: AuthenticatedRequest, res: Respo
       trialEligible: !usedTrial,
     });
   } catch (error) {
-    console.error('Get products error:', error);
+    subscriptionLogger.error({ err: error, userId: req.user?.id }, 'Get products failed');
     res.status(500).json({ error: 'Failed to get products' });
   }
 });

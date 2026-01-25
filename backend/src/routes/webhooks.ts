@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { processAppStoreNotification, requestTestNotification } from '../services/appleStoreService.js';
+import { webhookLogger } from '../utils/logger.js';
+import { idempotencyGuard, appStoreKeyExtractor } from '../middleware/idempotency.js';
 
 export const webhookRouter = Router();
 
@@ -12,10 +14,17 @@ const appStoreNotificationSchema = z.object({
   signedPayload: z.string().min(1),
 });
 
-webhookRouter.post('/appstore', async (req: Request, res: Response): Promise<void> => {
+// Apply idempotency guard to prevent duplicate webhook processing
+webhookRouter.post(
+  '/appstore',
+  idempotencyGuard({
+    endpoint: '/api/v1/webhooks/appstore',
+    keyExtractor: appStoreKeyExtractor,
+    ttlMs: 24 * 60 * 60 * 1000, // 24 hours
+  }),
+  async (req: Request, res: Response): Promise<void> => {
   try {
-    // Log incoming webhook for debugging
-    console.log('Received App Store webhook');
+    webhookLogger.debug('Received App Store webhook');
 
     const { signedPayload } = appStoreNotificationSchema.parse(req.body);
 
@@ -27,7 +36,7 @@ webhookRouter.post('/appstore', async (req: Request, res: Response): Promise<voi
       message: result.message,
     });
   } catch (error) {
-    console.error('App Store webhook error:', error);
+    webhookLogger.error({ err: error }, 'App Store webhook error');
 
     if (error instanceof z.ZodError) {
       // Still return 200 to prevent Apple from retrying for malformed requests
@@ -63,7 +72,7 @@ webhookRouter.post('/appstore/test', async (req: Request, res: Response): Promis
       testNotificationToken: token,
     });
   } catch (error) {
-    console.error('Test notification error:', error);
+    webhookLogger.error({ err: error }, 'Test notification error');
     res.status(500).json({ error: 'Failed to request test notification' });
   }
 });

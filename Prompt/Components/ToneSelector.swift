@@ -100,7 +100,7 @@ struct ToneChip: View {
         if tone == .unchained {
             return .purple
         }
-        return isSelected ? Color.adaptiveButtonPrimary : nil
+        return isSelected ? Color.brandPurple : nil
     }
 
     var body: some View {
@@ -135,7 +135,7 @@ struct ToneChip: View {
                 isSelected: isSelected,
                 accentColor: tone == .unchained
                     ? (isSelected ? .purple : nil)
-                    : (isSelected ? Color.adaptiveButtonPrimary : nil)
+                    : (isSelected ? Color.brandPurple : nil)
             )
         }
         .buttonStyle(.plain)

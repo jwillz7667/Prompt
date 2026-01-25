@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { config } from 'dotenv';
 
@@ -16,7 +15,10 @@ import { templateRouter } from './routes/templates.js';
 import { collectionRouter } from './routes/collections.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import { logger } from './utils/logger.js';
 import { prisma } from './utils/prisma.js';
+import { startIdempotencyCleanupScheduler } from './middleware/idempotency.js';
 
 config();
 
@@ -50,9 +52,9 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Logging
+// Structured request logging
 if (process.env['NODE_ENV'] !== 'test') {
-  app.use(morgan('combined'));
+  app.use(requestLogger());
 }
 
 // Routes
@@ -74,9 +76,21 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// Start server
+const port = typeof PORT === 'string' ? parseInt(PORT, 10) : PORT;
+
+// Start idempotency cleanup scheduler (runs hourly)
+let cleanupInterval: NodeJS.Timeout | null = null;
+if (process.env['NODE_ENV'] !== 'test') {
+  cleanupInterval = startIdempotencyCleanupScheduler(60 * 60 * 1000); // 1 hour
+}
+
 // Graceful shutdown
 const shutdown = async () => {
-  console.log('Shutting down gracefully...');
+  logger.info('Shutting down gracefully...');
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+  }
   await prisma.$disconnect();
   process.exit(0);
 };
@@ -84,14 +98,13 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-// Start server
-const port = typeof PORT === 'string' ? parseInt(PORT, 10) : PORT;
-
 // Start server immediately without blocking on database
 app.listen(port, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${port}`);
-  console.log(`📊 Environment: ${process.env['NODE_ENV'] || 'development'}`);
-  console.log(`📦 Database URL: ${process.env['DATABASE_URL'] ? 'configured' : 'NOT SET'}`);
+  logger.info({
+    port,
+    env: process.env['NODE_ENV'] || 'development',
+    database: process.env['DATABASE_URL'] ? 'configured' : 'NOT SET',
+  }, 'Server started');
 });
 
 export default app;

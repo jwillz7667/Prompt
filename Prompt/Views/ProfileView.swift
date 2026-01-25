@@ -66,7 +66,7 @@ struct ProfileView: View {
                             }
                         }
                         .padding(.vertical, 8)
-                        .listRowBackground(bgPrimary)
+                        .listRowBackground(bgSecondary)
                     }
                 }
 
@@ -100,7 +100,7 @@ struct ProfileView: View {
                         }
                     }
                     .padding(.vertical, 4)
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
                 } header: {
                     Text("Subscription")
                         .foregroundStyle(textSecondary)
@@ -115,7 +115,7 @@ struct ProfileView: View {
                                 .tint(textPrimary)
                             Spacer()
                         }
-                        .listRowBackground(bgPrimary)
+                        .listRowBackground(bgSecondary)
                     } else if let stats = stats {
                         statsRow(label: "Total Prompts", value: "\(stats.totalPrompts)")
                         statsRow(label: "Favorite Prompts", value: "\(stats.favoritePrompts)")
@@ -135,14 +135,14 @@ struct ProfileView: View {
                         Label("Active Sessions", systemImage: "iphone.and.arrow.forward")
                             .foregroundStyle(textPrimary)
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
 
                     Button(role: .destructive) {
                         showSignOutAlert = true
                     } label: {
                         Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
 
                     Button(role: .destructive) {
                         showDeleteAccountAlert = true
@@ -150,7 +150,7 @@ struct ProfileView: View {
                         Label("Delete Account", systemImage: "trash")
                             .foregroundStyle(.red)
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
                 } header: {
                     Text("Account")
                         .foregroundStyle(textSecondary)
@@ -170,7 +170,7 @@ struct ProfileView: View {
                                 .foregroundStyle(textTertiary)
                         }
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
 
                     Link(destination: URL(string: "https://promptomize.app/privacy")!) {
                         HStack {
@@ -181,7 +181,7 @@ struct ProfileView: View {
                                 .foregroundStyle(textTertiary)
                         }
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
 
                     Link(destination: URL(string: "https://promptomize.app/terms")!) {
                         HStack {
@@ -192,7 +192,7 @@ struct ProfileView: View {
                                 .foregroundStyle(textTertiary)
                         }
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
                 } header: {
                     Text("About")
                         .foregroundStyle(textSecondary)
@@ -266,7 +266,7 @@ struct ProfileView: View {
             Text(value)
                 .foregroundStyle(textSecondary)
         }
-        .listRowBackground(bgPrimary)
+        .listRowBackground(bgSecondary)
     }
 
     private func loadStats() async {
@@ -347,6 +347,7 @@ struct SessionsView: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
+    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
     var body: some View {
         List {
@@ -357,7 +358,7 @@ struct SessionsView: View {
                         .tint(textPrimary)
                     Spacer()
                 }
-                .listRowBackground(bgPrimary)
+                .listRowBackground(bgSecondary)
             } else {
                 ForEach(sessions) { session in
                     HStack {
@@ -396,7 +397,7 @@ struct SessionsView: View {
                             }
                         }
                     }
-                    .listRowBackground(bgPrimary)
+                    .listRowBackground(bgSecondary)
                 }
             }
         }

@@ -419,7 +419,7 @@ struct PaywallView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(selectedProduct != nil ? Color.adaptiveButtonPrimary : Color.adaptiveBackgroundTertiary)
-            .foregroundStyle(selectedProduct != nil ? (colorScheme == .dark ? .black : .white) : Color.adaptiveTextTertiary)
+            .foregroundStyle(selectedProduct != nil ? .white : Color.adaptiveTextTertiary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
         .disabled(selectedProduct == nil || isProcessing)

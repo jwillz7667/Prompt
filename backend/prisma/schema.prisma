@@ -385,3 +385,30 @@ model PromptCollection {
   @@index([promptId])
   @@index([collectionId])
 }
+
+// ============================================================================
+// WEBHOOK IDEMPOTENCY - Prevent duplicate processing of webhooks
+// ============================================================================
+
+enum IdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model WebhookIdempotencyKey {
+  id             String            @id @default(cuid())
+  idempotencyKey String            @unique
+  endpoint       String
+  payload        Json?
+  statusCode     Int?
+  responseBody   Json?
+  status         IdempotencyStatus @default(PROCESSING)
+  createdAt      DateTime          @default(now())
+  completedAt    DateTime?
+  expiresAt      DateTime
+
+  @@index([idempotencyKey])
+  @@index([expiresAt])
+  @@index([status])
+}
