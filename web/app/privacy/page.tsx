@@ -4,7 +4,31 @@ import Image from 'next/image'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy - Promptomize',
-  description: 'Privacy Policy for Promptomize - AI-Powered Prompt Enhancement App',
+  description: 'Privacy Policy for Promptomize. Learn how we collect, use, and protect your data. Your prompts are processed securely and never shared for advertising.',
+  keywords: [
+    'promptomize privacy',
+    'AI prompt privacy',
+    'data protection',
+    'prompt security',
+  ],
+  openGraph: {
+    title: 'Privacy Policy - Promptomize',
+    description: 'Learn how Promptomize protects your data and privacy.',
+    url: 'https://promptomize.app/privacy',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Privacy Policy - Promptomize',
+    description: 'Learn how Promptomize protects your data and privacy.',
+  },
+  alternates: {
+    canonical: '/privacy',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 }
 
 export default function PrivacyPolicy() {

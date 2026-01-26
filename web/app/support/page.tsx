@@ -4,8 +4,29 @@ import Image from 'next/image'
 import { Mail, MessageCircle, FileText, HelpCircle } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'Support - Promptomize',
-  description: 'Get help and support for Promptomize - AI-Powered Prompt Enhancement App',
+  title: 'Support & Help Center - Promptomize',
+  description: 'Get help with Promptomize AI prompt enhancement. Find answers to FAQs about subscriptions, prompts, billing, and more. Contact our support team.',
+  keywords: [
+    'promptomize support',
+    'promptomize help',
+    'AI prompt help',
+    'promptomize FAQ',
+    'prompt enhancement support',
+  ],
+  openGraph: {
+    title: 'Support & Help Center - Promptomize',
+    description: 'Get help with Promptomize. Find answers to FAQs or contact support.',
+    url: 'https://promptomize.app/support',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Support & Help Center - Promptomize',
+    description: 'Get help with Promptomize. Find answers to FAQs or contact support.',
+  },
+  alternates: {
+    canonical: '/support',
+  },
 }
 
 const faqs = [
@@ -43,9 +64,30 @@ const faqs = [
   },
 ]
 
+// Generate FAQ structured data for SEO
+const faqStructuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((faq) => ({
+    '@type': 'Question',
+    name: faq.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: faq.answer,
+    },
+  })),
+}
+
 export default function Support() {
   return (
     <main className="min-h-screen">
+      {/* FAQ Structured Data for Google Rich Results */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqStructuredData),
+        }}
+      />
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -4,7 +4,31 @@ import Image from 'next/image'
 
 export const metadata: Metadata = {
   title: 'Terms of Service - Promptomize',
-  description: 'Terms of Service for Promptomize - AI-Powered Prompt Enhancement App',
+  description: 'Terms of Service for Promptomize. Read our terms for using the AI-powered prompt enhancement app, subscription plans, and user guidelines.',
+  keywords: [
+    'promptomize terms',
+    'AI prompt terms of service',
+    'user agreement',
+    'subscription terms',
+  ],
+  openGraph: {
+    title: 'Terms of Service - Promptomize',
+    description: 'Read the Terms of Service for Promptomize.',
+    url: 'https://promptomize.app/terms',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Terms of Service - Promptomize',
+    description: 'Read the Terms of Service for Promptomize.',
+  },
+  alternates: {
+    canonical: '/terms',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 }
 
 export default function TermsOfService() {
