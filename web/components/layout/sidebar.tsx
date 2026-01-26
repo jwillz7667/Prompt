@@ -116,11 +116,11 @@ export function Sidebar() {
         {!sidebarCollapsed && tier === 'FREE' && (
           <Link
             href="/upgrade"
-            className="mb-4 rounded-xl bg-gradient-to-r from-brand-indigo/10 to-brand-cyan/10 border border-brand-indigo/20 p-4 hover:border-brand-indigo/40 transition-colors"
+            className="mb-4 rounded-xl bg-brand-indigo/10 dark:bg-brand-cyan/10 border border-brand-indigo/20 dark:border-brand-cyan/20 p-4 hover:border-brand-indigo/40 dark:hover:border-brand-cyan/40 transition-colors"
             aria-label="Upgrade to Pro for more features"
           >
             <div className="flex items-center gap-2 mb-2">
-              <Crown className="h-5 w-5 text-brand-indigo" aria-hidden="true" />
+              <Crown className="h-5 w-5 text-brand-indigo dark:text-brand-cyan" aria-hidden="true" />
               <span className="font-semibold text-[var(--text-primary)]">Upgrade to Pro</span>
             </div>
             <p className="text-xs text-[var(--text-secondary)]">

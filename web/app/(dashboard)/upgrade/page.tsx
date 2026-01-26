@@ -167,11 +167,11 @@ export default function UpgradePage() {
 
       {/* Trial banner */}
       {trialEligible && currentTier === 'FREE' && !isTrialing && (
-        <Card className="bg-gradient-to-r from-brand-indigo/10 to-brand-cyan/10 border-brand-indigo/20">
+        <Card className="bg-brand-indigo/10 dark:bg-brand-cyan/10 border-brand-indigo/20 dark:border-brand-cyan/20">
           <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/20">
-                <Rocket className="h-6 w-6 text-brand-indigo" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/20 dark:bg-brand-cyan/20">
+                <Rocket className="h-6 w-6 text-brand-indigo dark:text-brand-cyan" />
               </div>
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)]">
@@ -289,8 +289,8 @@ export default function UpgradePage() {
                     className={cn(
                       'flex h-12 w-12 items-center justify-center rounded-xl',
                       plan.tier === 'PREMIUM'
-                        ? 'bg-gradient-to-br from-brand-indigo to-brand-cyan text-white'
-                        : 'bg-brand-indigo/10 text-brand-indigo'
+                        ? 'bg-brand-indigo dark:bg-brand-cyan text-white dark:text-black'
+                        : 'bg-brand-indigo/10 text-brand-indigo dark:bg-brand-cyan/10 dark:text-brand-cyan'
                     )}
                   >
                     {plan.icon}

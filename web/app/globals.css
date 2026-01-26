@@ -24,6 +24,9 @@
   --accent-cyan: #00E6E6;
   --accent-cyan-dark: #00C8C8;
 
+  /* Primary brand accent - purple in light mode */
+  --brand-accent: #5B4CDB;
+
   /* Text on accent - white for indigo buttons */
   --text-on-accent: #FFFFFF;
 }
@@ -44,6 +47,9 @@
     --accent-indigo: #5B4CDB;
     --accent-cyan: #00E6E6;
     --accent-cyan-dark: #00C8C8;
+
+    /* Primary brand accent - cyan in dark mode */
+    --brand-accent: #00E6E6;
 
     /* Text on cyan button */
     --text-on-accent: #000000;
@@ -79,12 +85,9 @@ body {
   background: var(--accent-cyan-dark);
 }
 
-/* Brand gradient text */
+/* Brand accent text - purple in light mode, cyan in dark mode */
 .gradient-text {
-  background: linear-gradient(135deg, #5B4CDB 0%, #00FFFF 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--brand-accent);
 }
 
 /* Glass effect with brand colors */
@@ -230,5 +233,6 @@ body {
   --bg-tertiary: #2C2C2E;
   --border: #38383A;
   --accent-cyan: #00E6E6;
+  --brand-accent: #00E6E6;
   --text-on-accent: #000000;
 }

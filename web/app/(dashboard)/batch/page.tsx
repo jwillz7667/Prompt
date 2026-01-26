@@ -306,7 +306,7 @@ export default function BatchPage() {
                     className={cn(
                       'min-h-[100px] p-3 rounded-xl text-sm',
                       item.enhanced
-                        ? 'bg-gradient-to-br from-brand-indigo/5 to-brand-cyan/5 border border-brand-indigo/20'
+                        ? 'bg-brand-indigo/5 dark:bg-brand-cyan/5 border border-brand-indigo/20 dark:border-brand-cyan/20'
                         : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]'
                     )}
                   >

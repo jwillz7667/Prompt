@@ -185,7 +185,7 @@ export default function DashboardPage() {
 
           {/* Output Section */}
           {(hasOutput || isEnhancing || error) && (
-            <div className="p-6 bg-gradient-to-br from-brand-indigo/5 to-brand-cyan/5">
+            <div className="p-6 bg-brand-indigo/5 dark:bg-brand-cyan/5">
               {error ? (
                 <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4">
                   <p className="text-red-500">{error}</p>
@@ -199,8 +199,8 @@ export default function DashboardPage() {
                         <div
                           className={cn(
                             'absolute left-0 top-0 h-full rounded-full transition-all duration-300',
-                            progress === 'starting' && 'w-1/4 bg-brand-indigo animate-pulse',
-                            progress === 'streaming' && 'w-3/4 bg-gradient-to-r from-brand-indigo to-brand-cyan',
+                            progress === 'starting' && 'w-1/4 bg-brand-indigo dark:bg-brand-cyan animate-pulse',
+                            progress === 'streaming' && 'w-3/4 bg-brand-indigo dark:bg-brand-cyan',
                             progress === 'completing' && 'w-full bg-brand-cyan'
                           )}
                         />

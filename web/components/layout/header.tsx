@@ -103,7 +103,7 @@ export function Header() {
           {/* Profile */}
           <Link
             href="/profile"
-            className="flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden bg-gradient-to-br from-brand-indigo to-brand-cyan"
+            className="flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden bg-brand-indigo dark:bg-brand-cyan"
             aria-label={`Profile for ${user?.name || user?.email || 'User'}`}
           >
             {user?.avatarUrl ? (
@@ -113,7 +113,7 @@ export function Header() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <span className="text-sm font-bold text-white" aria-hidden="true">
+              <span className="text-sm font-bold text-white dark:text-black" aria-hidden="true">
                 {user?.name?.charAt(0) || user?.email?.charAt(0) || '?'}
               </span>
             )}

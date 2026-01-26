@@ -15,8 +15,8 @@ const badgeVariants = cva(
         warning: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
         danger: 'bg-red-500/10 text-red-600 dark:text-red-400',
         outline: 'border border-[var(--border)] text-[var(--text-secondary)]',
-        pro: 'bg-gradient-to-r from-brand-indigo to-brand-indigo-light text-white',
-        premium: 'bg-gradient-to-r from-brand-indigo via-brand-cyan to-brand-cyan text-white',
+        pro: 'bg-brand-indigo text-white dark:bg-brand-cyan dark:text-black',
+        premium: 'bg-brand-cyan text-black dark:bg-brand-cyan dark:text-black',
       },
     },
     defaultVariants: {

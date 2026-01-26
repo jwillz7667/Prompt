@@ -71,7 +71,7 @@ export function Slider({
             'disabled:opacity-50 disabled:cursor-not-allowed'
           )}
           style={{
-            background: `linear-gradient(to right, var(--accent-indigo) 0%, var(--accent-indigo) ${percentage}%, var(--border) ${percentage}%, var(--border) 100%)`,
+            background: `linear-gradient(to right, var(--brand-accent) 0%, var(--brand-accent) ${percentage}%, var(--border) ${percentage}%, var(--border) 100%)`,
           }}
         />
       </div>

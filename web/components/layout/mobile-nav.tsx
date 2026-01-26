@@ -100,7 +100,7 @@ export function MobileNav() {
 
         {/* User info */}
         <div className="flex items-center gap-3 border-b border-[var(--border)] p-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden bg-gradient-to-br from-brand-indigo to-brand-cyan">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden bg-brand-indigo dark:bg-brand-cyan">
             {user?.avatarUrl ? (
               <img
                 src={user.avatarUrl}
@@ -108,7 +108,7 @@ export function MobileNav() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <span className="text-lg font-bold text-white" aria-hidden="true">
+              <span className="text-lg font-bold text-white dark:text-black" aria-hidden="true">
                 {user?.name?.charAt(0) || user?.email?.charAt(0) || '?'}
               </span>
             )}
@@ -164,11 +164,11 @@ export function MobileNav() {
             <Link
               href="/upgrade"
               onClick={closeMobileMenu}
-              className="mt-4 block rounded-xl bg-gradient-to-r from-brand-indigo/10 to-brand-cyan/10 border border-brand-indigo/20 p-4 hover:border-brand-indigo/40 transition-colors"
+              className="mt-4 block rounded-xl bg-brand-indigo/10 dark:bg-brand-cyan/10 border border-brand-indigo/20 dark:border-brand-cyan/20 p-4 hover:border-brand-indigo/40 dark:hover:border-brand-cyan/40 transition-colors"
               aria-label="Upgrade to Pro for more features"
             >
               <div className="flex items-center gap-2 mb-2">
-                <Crown className="h-5 w-5 text-brand-indigo" aria-hidden="true" />
+                <Crown className="h-5 w-5 text-brand-indigo dark:text-brand-cyan" aria-hidden="true" />
                 <span className="font-semibold text-[var(--text-primary)]">Upgrade to Pro</span>
               </div>
               <p className="text-xs text-[var(--text-secondary)]">

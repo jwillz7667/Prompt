@@ -13,8 +13,8 @@ export default function MarketingLayout({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-indigo to-brand-cyan">
-                <Zap className="h-5 w-5 text-white" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-indigo dark:bg-brand-cyan">
+                <Zap className="h-5 w-5 text-white dark:text-black" />
               </div>
               <span className="text-lg font-bold gradient-text">Promptomize</span>
             </Link>
@@ -59,8 +59,8 @@ export default function MarketingLayout({
             {/* Brand */}
             <div className="col-span-1">
               <Link href="/" className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-indigo to-brand-cyan">
-                  <Zap className="h-5 w-5 text-white" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-indigo dark:bg-brand-cyan">
+                  <Zap className="h-5 w-5 text-white dark:text-black" />
                 </div>
                 <span className="text-lg font-bold gradient-text">Promptomize</span>
               </Link>

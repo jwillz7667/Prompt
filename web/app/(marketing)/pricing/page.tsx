@@ -102,8 +102,8 @@ export default function PricingPage() {
                       className={cn(
                         'flex h-10 w-10 items-center justify-center rounded-xl',
                         plan.name === 'Premium'
-                          ? 'bg-gradient-to-br from-brand-indigo to-brand-cyan text-white'
-                          : 'bg-brand-indigo/10 text-brand-indigo'
+                          ? 'bg-brand-indigo dark:bg-brand-cyan text-white dark:text-black'
+                          : 'bg-brand-indigo/10 text-brand-indigo dark:bg-brand-cyan/10 dark:text-brand-cyan'
                       )}
                     >
                       {plan.icon}

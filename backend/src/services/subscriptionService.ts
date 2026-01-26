@@ -56,7 +56,7 @@ const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
     promptQuality: 'advanced',
     canExport: true,
     canUseBatchMode: true,
-    maxTokensPerPrompt: 65536,
+    maxTokensPerPrompt: 8192, // DeepSeek API limit
   },
 };
 

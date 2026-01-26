@@ -105,7 +105,7 @@ export default function ProfilePage() {
       <Card>
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden bg-gradient-to-br from-brand-indigo to-brand-cyan flex-shrink-0">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden bg-brand-indigo dark:bg-brand-cyan flex-shrink-0">
               {user?.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
@@ -113,7 +113,7 @@ export default function ProfilePage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="text-2xl font-bold text-white">
+                <span className="text-2xl font-bold text-white dark:text-black">
                   {user?.name?.charAt(0) || user?.email?.charAt(0) || '?'}
                 </span>
               )}

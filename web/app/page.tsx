@@ -238,7 +238,7 @@ export default function Home() {
 
           {/* Logo Preview - Centered */}
           <div className="mt-20 relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#5B4CDB]/40 to-[#00E6E6]/40 blur-3xl -z-10" />
+            <div className="absolute inset-0 bg-[#00E6E6]/30 blur-3xl -z-10" />
             <figure className="flex justify-center">
               <div className="relative">
                 <Image
@@ -274,7 +274,7 @@ export default function Home() {
                 className="feature-card bg-[var(--bg-primary)] p-8 rounded-3xl border border-[var(--border)]"
                 role="listitem"
               >
-                <div className="w-14 h-14 bg-gradient-to-br from-[#5B4CDB]/20 to-[#00FFFF]/20 rounded-2xl flex items-center justify-center mb-6" aria-hidden="true">
+                <div className="w-14 h-14 bg-[var(--brand-accent)]/20 rounded-2xl flex items-center justify-center mb-6" aria-hidden="true">
                   <feature.icon className="w-7 h-7 text-[var(--accent-cyan)]" />
                 </div>
                 <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
@@ -349,8 +349,8 @@ export default function Home() {
       {/* CTA Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[var(--bg-secondary)]" aria-labelledby="cta-heading">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-[#5B4CDB] to-[#00FFFF] rounded-2xl flex items-center justify-center glow-cyan" aria-hidden="true">
-            <Crown className="w-8 h-8 text-white" />
+          <div className="w-16 h-16 mx-auto mb-6 bg-[var(--brand-accent)] rounded-2xl flex items-center justify-center glow-cyan" aria-hidden="true">
+            <Crown className="w-8 h-8 text-white dark:text-black" />
           </div>
           <h2 id="cta-heading" className="text-4xl font-bold mb-4">Ready to Enhance Your Prompts?</h2>
           <p className="text-xl text-[var(--text-secondary)] mb-8">
