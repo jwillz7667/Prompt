@@ -237,22 +237,16 @@ export default function Home() {
           </div>
 
           {/* Logo Preview - Centered */}
-          <div className="mt-20 relative">
-            <div className="absolute inset-0 bg-[#00E6E6]/30 blur-3xl -z-10" />
+          <div className="mt-20">
             <figure className="flex justify-center">
-              <div className="relative">
-                <Image
-                  src="/logo.png"
-                  alt="Promptomize Logo - AI-powered prompt enhancement"
-                  width={280}
-                  height={280}
-                  className="rounded-[56px] shadow-2xl glow-cyan"
-                  priority
-                  itemProp="image"
-                />
-                {/* Reflection effect */}
-                <div className="absolute -bottom-20 left-0 right-0 h-20 bg-gradient-to-b from-[#00E6E6]/10 to-transparent rounded-b-[56px] blur-md" />
-              </div>
+              <Image
+                src="/logo.png"
+                alt="Promptomize Logo - AI-powered prompt enhancement"
+                width={280}
+                height={280}
+                priority
+                itemProp="image"
+              />
             </figure>
           </div>
         </div>
