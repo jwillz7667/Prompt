@@ -121,10 +121,10 @@ export default function DashboardPage() {
       )}
 
       {/* Main enhancement card */}
-      <Card variant="elevated" className="overflow-hidden">
+      <Card variant="elevated">
         <CardContent className="p-0">
           {/* Input Section */}
-          <div className="p-6 border-b border-[var(--border)]">
+          <div className="p-6 pb-4 border-b border-[var(--border)]">
             <Textarea
               placeholder="Enter your prompt here... e.g., 'Write a blog post about AI'"
               value={prompt}
@@ -134,26 +134,36 @@ export default function DashboardPage() {
             />
 
             {/* Options Row */}
-            <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-[var(--border)]">
-              <Select
-                options={toneOptions}
-                value={selectedTone}
-                onChange={(value) => setTone(value as ToneType)}
-                placeholder="Select tone"
-                className="w-40"
-                disabled={isEnhancing}
-              />
+            <div className="flex flex-wrap items-end gap-4 mt-4 pt-4 border-t border-[var(--border)]">
+              <div className="relative z-20">
+                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                  Tone
+                </label>
+                <Select
+                  options={toneOptions}
+                  value={selectedTone}
+                  onChange={(value) => setTone(value as ToneType)}
+                  placeholder="Select tone"
+                  className="w-44"
+                  disabled={isEnhancing}
+                />
+              </div>
 
-              <Select
-                options={lengthOptions}
-                value={outputLength}
-                onChange={(value) => setOutputLength(value as OutputLength)}
-                placeholder="Output length"
-                className="w-40"
-                disabled={isEnhancing}
-              />
+              <div className="relative z-10">
+                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                  Length
+                </label>
+                <Select
+                  options={lengthOptions}
+                  value={outputLength}
+                  onChange={(value) => setOutputLength(value as OutputLength)}
+                  placeholder="Output length"
+                  className="w-44"
+                  disabled={isEnhancing}
+                />
+              </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pb-2.5">
                 <Switch
                   checked={canDeepThink && deepThinkEnabled}
                   onChange={setDeepThink}
