@@ -38,6 +38,10 @@ struct ContentView: View {
     @State private var showEnhancedView = false
     @State private var transformationPhase: TransformationPhase = .idle
 
+    // Pulsing animation states
+    @State private var pulsingScale: CGFloat = 1.0
+    @State private var pulsingOpacity: Double = 0.7
+
     enum TransformationPhase {
         case idle
         case analyzing
@@ -105,12 +109,6 @@ struct ContentView: View {
                     .padding(.top, 16)
                 }
                 .scrollDismissesKeyboard(.interactively)
-
-                // Overlay loading animation during transformation
-                if isTransforming {
-                    transformationOverlay
-                        .transition(.opacity)
-                }
             }
             .navigationTitle("Promptomize")
             .navigationBarTitleDisplayMode(.large)
@@ -406,25 +404,65 @@ struct ContentView: View {
     }
 
     private var inputView: some View {
-        ZStack(alignment: .topLeading) {
-            TextEditor(text: $viewModel.userPrompt)
-                .font(.system(.body, design: .default))
-                .foregroundStyle(textPrimary)
-                .frame(minHeight: 180, maxHeight: 300)
-                .padding(16)
-                .scrollContentBackground(.hidden)
-                .liquidGlassInput(cornerRadius: 16, isFocused: isTextEditorFocused)
-                .focused($isTextEditorFocused)
+        ZStack {
+            // Text editor layer
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $viewModel.userPrompt)
+                    .font(.system(.body, design: .default))
+                    .foregroundStyle(textPrimary)
+                    .frame(minHeight: 180, maxHeight: 300)
+                    .padding(16)
+                    .scrollContentBackground(.hidden)
+                    .liquidGlassInput(cornerRadius: 16, isFocused: isTextEditorFocused)
+                    .focused($isTextEditorFocused)
+                    .opacity(isTransforming ? 0.3 : 1.0)
+                    .blur(radius: isTransforming ? 3 : 0)
 
-            if viewModel.userPrompt.isEmpty {
-                Text("Describe what you want to achieve...")
-                    .font(.body)
-                    .foregroundStyle(textTertiary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 24)
-                    .allowsHitTesting(false)
+                if viewModel.userPrompt.isEmpty && !isTransforming {
+                    Text("Describe what you want to achieve...")
+                        .font(.body)
+                        .foregroundStyle(textTertiary)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 24)
+                        .allowsHitTesting(false)
+                }
+            }
+
+            // Pulsing logo overlay during transformation
+            if isTransforming {
+                VStack(spacing: 16) {
+                    // App logo with pulsing animation
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+                        .scaleEffect(pulsingScale)
+                        .opacity(pulsingOpacity)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                                pulsingScale = 1.15
+                                pulsingOpacity = 1.0
+                            }
+                        }
+                        .onDisappear {
+                            pulsingScale = 1.0
+                            pulsingOpacity = 0.7
+                        }
+
+                    Text(transformationPhaseText)
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .contentTransition(.numericText())
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial.opacity(0.8))
+                )
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: isTransforming)
     }
 
     private var enhancedPromptView: some View {
@@ -465,42 +503,12 @@ struct ContentView: View {
         .shadow(color: accentColor.opacity(0.2), radius: 20, y: 8)
     }
 
-    // MARK: - Transformation Overlay
-
-    private var transformationOverlay: some View {
-        ZStack {
-            // Dimmed background
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-
-            // Logo enhancement animation
-            VStack(spacing: 32) {
-                LogoEnhancementAnimation(size: 160)
-
-                VStack(spacing: 12) {
-                    Text(transformationPhaseText)
-                        .font(.system(.body, design: .rounded, weight: .medium))
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText())
-
-                    WaveformVisualizer(color: accentColor)
-                }
-            }
-            .padding(40)
-            .background {
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .environment(\.colorScheme, .dark)
-            }
-        }
-    }
-
     private var transformationPhaseText: String {
         switch transformationPhase {
         case .idle: return "Preparing..."
-        case .analyzing: return "Analyzing your prompt..."
-        case .transforming: return "Applying AI enhancement..."
-        case .complete: return "Finalizing..."
+        case .analyzing: return "Analyzing..."
+        case .transforming: return "Enhancing..."
+        case .complete: return "Done!"
         }
     }
 
@@ -575,30 +583,47 @@ struct ContentView: View {
     // MARK: - Enhancement Controls
 
     private var enhancementControls: some View {
-        VStack(spacing: 12) {
-            // Tone Selector
-            ToneSelector(
-                selectedTone: Binding(
-                    get: { settings.selectedTone },
+        HStack(spacing: 12) {
+            // Tone Selector (Dropdown)
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Tone", systemImage: "mic.fill")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(textSecondary)
+
+                CompactToneSelector(
+                    selectedTone: Binding(
+                        get: { settings.selectedTone },
+                        set: { newValue in
+                            settings.selectedTone = newValue
+                            settings.savePreferences()
+                        }
+                    ),
+                    onPremiumTap: {
+                        showPaywall = true
+                    }
+                )
+            }
+
+            // Length Selector (Dropdown)
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Length", systemImage: "ruler")
+                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(textSecondary)
+
+                CompactLengthSelector(selectedLength: Binding(
+                    get: { settings.outputLength },
                     set: { newValue in
-                        settings.selectedTone = newValue
+                        settings.outputLength = newValue
                         settings.savePreferences()
                     }
-                ),
-                onPremiumTap: {
-                    showPaywall = true
-                }
-            )
+                ))
+            }
 
-            // Length Selector
-            LengthSelector(selectedLength: Binding(
-                get: { settings.outputLength },
-                set: { newValue in
-                    settings.outputLength = newValue
-                    settings.savePreferences()
-                }
-            ))
+            Spacer()
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.8)
     }
 
     // MARK: - Action Button (Enhance / Edit Original)
