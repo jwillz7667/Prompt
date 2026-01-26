@@ -177,6 +177,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         {/* DNS prefetch for API */}
         <link rel="dns-prefetch" href="https://backend-production-d538.up.railway.app" />
 
+        {/* PWA manifest and icons */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="mobile-web-app-capable" content="yes" />
+
         {/* Structured data for organization */}
         <script
           type="application/ld+json"
@@ -229,6 +236,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         />
       </head>
       <body className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased">
+        {/* Skip to main content for accessibility */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-[var(--brand-accent)] focus:text-[var(--text-on-accent)] focus:rounded-lg focus:outline-none"
+        >
+          Skip to main content
+        </a>
+
         {/* Google Tag Manager (noscript) */}
         <noscript>
           <iframe
@@ -236,10 +251,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             height="0"
             width="0"
             style={{ display: 'none', visibility: 'hidden' }}
+            title="Google Tag Manager"
           />
         </noscript>
         {/* End Google Tag Manager (noscript) */}
-        <Providers>{children}</Providers>
+
+        <div id="main-content">
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   )

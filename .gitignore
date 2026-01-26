@@ -11,6 +11,14 @@ web/.next/
 web/node_modules/
 web/next-env.d.ts
 
+# PWA generated files
+web/public/sw.js
+web/public/sw.js.map
+web/public/workbox-*.js
+web/public/workbox-*.js.map
+web/public/worker-*.js
+web/public/worker-*.js.map
+
 # Backend
 backend/node_modules/
 backend/dist/
