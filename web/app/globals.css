@@ -31,29 +31,28 @@
   --text-on-accent: #FFFFFF;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Dark mode - Standard black background with brand accents */
-    --text-primary: #FFFFFF;
-    --text-secondary: #8E8E93;   /* iOS systemGray */
-    --text-tertiary: #636366;    /* iOS systemGray2 */
-    --bg-primary: #000000;       /* Pure black for OLED */
-    --bg-secondary: #1C1C1E;     /* iOS elevated surface */
-    --bg-tertiary: #2C2C2E;      /* iOS tertiary */
-    --border: #38383A;           /* iOS separator */
+/* Dark mode variables - applied via .dark class */
+.dark {
+  /* Dark mode - Standard black background with brand accents */
+  --text-primary: #FFFFFF;
+  --text-secondary: #8E8E93;   /* iOS systemGray */
+  --text-tertiary: #636366;    /* iOS systemGray2 */
+  --bg-primary: #000000;       /* Pure black for OLED */
+  --bg-secondary: #1C1C1E;     /* iOS elevated surface */
+  --bg-tertiary: #2C2C2E;      /* iOS tertiary */
+  --border: #38383A;           /* iOS separator */
 
-    /* Brand accent colors (used for highlights and accents) */
-    --accent-purple: #5B4CDB;
-    --accent-indigo: #5B4CDB;
-    --accent-cyan: #00E6E6;
-    --accent-cyan-dark: #00C8C8;
+  /* Brand accent colors (used for highlights and accents) */
+  --accent-purple: #5B4CDB;
+  --accent-indigo: #5B4CDB;
+  --accent-cyan: #00E6E6;
+  --accent-cyan-dark: #00C8C8;
 
-    /* Primary brand accent - cyan in dark mode */
-    --brand-accent: #00E6E6;
+  /* Primary brand accent - cyan in dark mode */
+  --brand-accent: #00E6E6;
 
-    /* Text on cyan button */
-    --text-on-accent: #000000;
-  }
+  /* Text on cyan button */
+  --text-on-accent: #000000;
 }
 
 html {
@@ -92,17 +91,15 @@ body {
 
 /* Glass effect with brand colors */
 .glass {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(91, 76, 219, 0.2);
 }
 
-@media (prefers-color-scheme: dark) {
-  .glass {
-    background: rgba(28, 28, 30, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
+.dark .glass {
+  background: rgba(28, 28, 30, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Feature card hover effect */
@@ -115,20 +112,28 @@ body {
   box-shadow: 0 20px 40px rgba(91, 76, 219, 0.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  .feature-card:hover {
-    box-shadow: 0 20px 40px rgba(0, 230, 230, 0.1);
-  }
+.dark .feature-card:hover {
+  box-shadow: 0 20px 40px rgba(0, 230, 230, 0.1);
 }
 
-/* Brand cyan button style */
+/* Brand accent button style - purple in light, cyan in dark */
 .btn-cyan {
-  background: var(--accent-cyan);
-  color: var(--text-on-accent);
+  background: var(--accent-indigo);
+  color: #FFFFFF;
   transition: all 0.2s ease;
 }
 
 .btn-cyan:hover {
+  background: #6F60EF;
+  box-shadow: 0 8px 24px rgba(91, 76, 219, 0.4);
+}
+
+.dark .btn-cyan {
+  background: var(--accent-cyan);
+  color: #000000;
+}
+
+.dark .btn-cyan:hover {
   background: var(--accent-cyan-dark);
   box-shadow: 0 8px 24px rgba(0, 255, 255, 0.4);
 }
@@ -223,16 +228,3 @@ body {
   box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
 }
 
-/* Dark mode class support */
-.dark {
-  --text-primary: #FFFFFF;
-  --text-secondary: #8E8E93;
-  --text-tertiary: #636366;
-  --bg-primary: #000000;
-  --bg-secondary: #1C1C1E;
-  --bg-tertiary: #2C2C2E;
-  --border: #38383A;
-  --accent-cyan: #00E6E6;
-  --brand-accent: #00E6E6;
-  --text-on-accent: #000000;
-}

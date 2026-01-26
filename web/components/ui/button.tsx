@@ -15,7 +15,7 @@ const buttonVariants = cva(
         secondary:
           'bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] focus-visible:ring-brand-indigo',
         cyan:
-          'bg-brand-cyan text-black hover:bg-brand-cyan-dark focus-visible:ring-brand-cyan shadow-lg hover:shadow-xl hover:shadow-brand-cyan/25',
+          'bg-brand-indigo dark:bg-brand-cyan text-white dark:text-black hover:bg-brand-indigo-light dark:hover:bg-brand-cyan-dark focus-visible:ring-brand-indigo dark:focus-visible:ring-brand-cyan shadow-lg hover:shadow-xl hover:shadow-brand-indigo/25 dark:hover:shadow-brand-cyan/25',
         ghost:
           'text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] focus-visible:ring-brand-indigo',
         danger:

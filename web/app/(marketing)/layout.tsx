@@ -1,5 +1,8 @@
+'use client'
+
 import Link from 'next/link'
 import { Zap, Twitter, Github } from 'lucide-react'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 export default function MarketingLayout({
   children,
@@ -19,25 +22,26 @@ export default function MarketingLayout({
               <span className="text-lg font-bold gradient-text">Promptomize</span>
             </Link>
 
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
               <Link
                 href="/pricing"
-                className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Pricing
               </Link>
               <Link
                 href="/support"
-                className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Support
               </Link>
               <Link
                 href="/login"
-                className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Sign In
               </Link>
+              <ThemeToggle />
               <Link
                 href="/login"
                 className="btn-cyan px-4 py-2 rounded-xl text-sm font-medium"

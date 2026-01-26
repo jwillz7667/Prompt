@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/stores/authStore'
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
 import { useUIStore } from '@/lib/stores/uiStore'
 import { Badge } from '@/components/ui/badge'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { Logo } from '@/components/shared/logo'
 import { Menu, Bell, Crown } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
@@ -87,6 +88,9 @@ export function Header() {
             {tier === 'PREMIUM' && <Crown className="h-3 w-3 mr-1" aria-hidden="true" />}
             {tier}
           </Badge>
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
 
           {/* Notifications */}
           <button
