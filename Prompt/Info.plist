@@ -25,8 +25,6 @@
 	<string>public.app-category.productivity</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>This helps us improve your experience by understanding how you use the app.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
