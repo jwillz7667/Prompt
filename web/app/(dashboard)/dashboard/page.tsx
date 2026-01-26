@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,6 +21,7 @@ import {
   Zap,
   Crown,
   AlertCircle,
+  Flame,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -33,6 +34,29 @@ const toneOptions: SelectOption[] = [
   { value: 'friendly', label: 'Friendly', description: 'Warm and approachable' },
 ]
 
+// Track unchained usage for free users (stored in localStorage)
+const UNCHAINED_STORAGE_KEY = 'unchained_daily_usage'
+
+function getUnchainedUsageToday(): number {
+  if (typeof window === 'undefined') return 0
+  const stored = localStorage.getItem(UNCHAINED_STORAGE_KEY)
+  if (!stored) return 0
+  try {
+    const { date, count } = JSON.parse(stored)
+    const today = new Date().toDateString()
+    return date === today ? count : 0
+  } catch {
+    return 0
+  }
+}
+
+function incrementUnchainedUsage(): void {
+  if (typeof window === 'undefined') return
+  const today = new Date().toDateString()
+  const current = getUnchainedUsageToday()
+  localStorage.setItem(UNCHAINED_STORAGE_KEY, JSON.stringify({ date: today, count: current + 1 }))
+}
+
 const lengthOptions: SelectOption[] = [
   { value: 'concise', label: 'Concise', description: 'Brief and to the point' },
   { value: 'standard', label: 'Standard', description: 'Balanced detail level' },
@@ -42,14 +66,27 @@ const lengthOptions: SelectOption[] = [
 export default function DashboardPage() {
   const [prompt, setPrompt] = useState('')
   const [copied, setCopied] = useState(false)
+  const [unchainedEnabled, setUnchainedEnabled] = useState(false)
+  const [unchainedUsedToday, setUnchainedUsedToday] = useState(0)
   const { selectedTone, setTone, outputLength, setOutputLength, deepThinkEnabled, setDeepThink } =
     useSettingsStore()
   const { subscription, usage } = useSubscription()
   const { isEnhancing, streamedContent, result, error, progress, enhance, reset } = useEnhance()
 
+  // Load unchained usage on mount
+  useEffect(() => {
+    setUnchainedUsedToday(getUnchainedUsageToday())
+  }, [])
+
   const tier = subscription.tier
+  const isTrialing = subscription.isTrialing
   const canDeepThink = tier === 'PRO' || tier === 'PREMIUM'
   const canEnhance = usage.canCreatePrompt
+
+  // Unchained access: Premium/Trial = unlimited, Free = 1/day
+  const hasUnlimitedUnchained = tier === 'PREMIUM' || isTrialing
+  const freeUnchainedRemaining = 1 - unchainedUsedToday
+  const canUseUnchained = hasUnlimitedUnchained || freeUnchainedRemaining > 0
 
   const handleEnhance = useCallback(async () => {
     if (!prompt.trim()) {
@@ -62,17 +99,33 @@ export default function DashboardPage() {
       return
     }
 
+    // Check unchained quota for free users
+    if (unchainedEnabled && !hasUnlimitedUnchained && freeUnchainedRemaining <= 0) {
+      toast.error('Unchained limit reached', 'Free users get 1 Unchained prompt per day')
+      return
+    }
+
     try {
+      // Use 'unchained' tone when enabled, otherwise use selected tone
+      const effectiveTone = unchainedEnabled ? 'unchained' : selectedTone
+
       await enhance(prompt, {
-        tone: selectedTone,
+        tone: effectiveTone as ToneType,
         outputLength,
         deepThink: canDeepThink && deepThinkEnabled,
       })
+
+      // Track unchained usage for free users
+      if (unchainedEnabled && !hasUnlimitedUnchained) {
+        incrementUnchainedUsage()
+        setUnchainedUsedToday(prev => prev + 1)
+      }
+
       toast.success('Prompt enhanced!')
     } catch (err) {
       // Error already shown in state
     }
-  }, [prompt, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance])
+  }, [prompt, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, unchainedEnabled, hasUnlimitedUnchained, freeUnchainedRemaining])
 
   const handleCopy = useCallback(async () => {
     const textToCopy = result?.enhancedPrompt || streamedContent
@@ -173,6 +226,30 @@ export default function DashboardPage() {
                 {!canDeepThink && (
                   <Badge variant="pro" className="text-[10px]">
                     PRO
+                  </Badge>
+                )}
+              </div>
+
+              {/* Unchained Mode Toggle */}
+              <div className="flex items-center gap-2 pb-2.5">
+                <Switch
+                  checked={unchainedEnabled}
+                  onChange={(checked) => {
+                    if (checked && !canUseUnchained) {
+                      toast.info('Unchained limit reached', 'Upgrade for unlimited Unchained prompts')
+                      return
+                    }
+                    setUnchainedEnabled(checked)
+                  }}
+                  disabled={isEnhancing}
+                />
+                <div className="flex items-center gap-1.5">
+                  <Flame className={cn('h-4 w-4', unchainedEnabled ? 'text-orange-500' : 'text-[var(--text-tertiary)]')} />
+                  <span className="text-sm text-[var(--text-secondary)]">Unchained</span>
+                </div>
+                {!hasUnlimitedUnchained && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {freeUnchainedRemaining}/1
                   </Badge>
                 )}
               </div>
