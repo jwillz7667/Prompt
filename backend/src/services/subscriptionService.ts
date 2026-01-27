@@ -1,5 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { SubscriptionTier, SubscriptionStatus, Prisma } from '@prisma/client';
+import { cache } from '../utils/redis.js';
+import { logger } from '../utils/logger.js';
 
 // ============================================================================
 // TYPES
@@ -74,7 +76,43 @@ const FREE_TRIAL_DAYS = parseInt(process.env['FREE_TRIAL_DAYS'] || '7', 10);
 // ============================================================================
 
 export async function getSubscriptionInfo(userId: string): Promise<SubscriptionInfo> {
-  const [subscription, dailyUsage] = await Promise.all([
+  // Get today's date key for cache
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dateKey = today.toISOString().split('T')[0];
+
+  // Try to get cached subscription info
+  const cachedSub = await cache.getSubscription(userId);
+  const cachedUsage = await cache.getDailyUsage(userId, dateKey);
+
+  let subscription;
+  let dailyUsage;
+
+  if (cachedSub && cachedUsage) {
+    // Use cached data (fast path)
+    logger.debug({ userId }, 'Subscription cache hit');
+    const limits = TIER_LIMITS[cachedSub.tier as SubscriptionTier];
+    return {
+      tier: cachedSub.tier as SubscriptionTier,
+      status: cachedSub.status as SubscriptionStatus,
+      expiresAt: cachedSub.expiresAt ? new Date(cachedSub.expiresAt) : null,
+      isTrialing: false,
+      trialEndsAt: null,
+      dailyPromptsUsed: cachedUsage.promptCount,
+      dailyPromptsLimit: limits.dailyPrompts,
+      canPerformAction: limits.dailyPrompts === -1 || cachedUsage.promptCount < limits.dailyPrompts,
+      features: {
+        promptQuality: limits.promptQuality,
+        canExport: limits.canExport,
+        canUseBatchMode: limits.canUseBatchMode,
+        maxTokensPerPrompt: limits.maxTokensPerPrompt,
+      },
+    };
+  }
+
+  // Cache miss - query database
+  logger.debug({ userId }, 'Subscription cache miss - querying database');
+  [subscription, dailyUsage] = await Promise.all([
     prisma.subscription.findUnique({
       where: { userId },
       include: { user: true },
@@ -119,6 +157,21 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
 
   // Check if user can perform action (hasn't exceeded quota)
   const canPerformAction = dailyPromptsLimit === -1 || dailyPromptsUsed < dailyPromptsLimit;
+
+  // Populate cache for future requests
+  await cache.setSubscription(userId, {
+    tier: effectiveTier,
+    status,
+    expiresAt: expiresAt?.toISOString() || null,
+    dailyLimit: limits.dailyPrompts,
+    maxTokens: limits.maxTokensPerPrompt,
+    promptQuality: limits.promptQuality,
+  });
+
+  await cache.setDailyUsage(userId, dateKey, {
+    promptCount: dailyPromptsUsed,
+    date: dateKey,
+  });
 
   return {
     tier: effectiveTier,
@@ -215,6 +268,7 @@ async function getTodayUsage(userId: string) {
 export async function recordUsage(userId: string): Promise<void> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const dateKey = today.toISOString().split('T')[0];
 
   await prisma.dailyUsage.upsert({
     where: {
@@ -232,6 +286,9 @@ export async function recordUsage(userId: string): Promise<void> {
       promptCount: 1,
     },
   });
+
+  // Invalidate daily usage cache so next request gets fresh data
+  await cache.invalidateDailyUsage(userId, dateKey);
 }
 
 // ============================================================================
@@ -298,6 +355,10 @@ export async function startFreeTrial(userId: string): Promise<{
     where: { id: userId },
     data: { subscriptionTier: SubscriptionTier.PREMIUM },
   });
+
+  // Invalidate subscription cache
+  await cache.invalidateSubscription(userId);
+  await cache.invalidateUser(userId);
 
   return {
     success: true,
@@ -372,6 +433,10 @@ export async function updateSubscription(
       isPremium: data.tier !== SubscriptionTier.FREE,
     },
   });
+
+  // Invalidate subscription cache
+  await cache.invalidateSubscription(userId);
+  await cache.invalidateUser(userId);
 }
 
 export async function cancelSubscription(userId: string): Promise<void> {
@@ -382,6 +447,9 @@ export async function cancelSubscription(userId: string): Promise<void> {
       autoRenewEnabled: false,
     },
   });
+
+  // Invalidate subscription cache
+  await cache.invalidateSubscription(userId);
 }
 
 export async function handleGracePeriod(

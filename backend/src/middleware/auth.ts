@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, type DecodedToken } from '../utils/jwt.js';
 import { prisma } from '../utils/prisma.js';
+import { cache } from '../utils/redis.js';
+import { logger } from '../utils/logger.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -26,13 +28,34 @@ export const authenticate = async (
     const token = authHeader.substring(7);
     const decoded: DecodedToken = verifyAccessToken(token);
 
-    // Verify user exists and session is valid
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, email: true, isActive: true, tokenVersion: true },
-    });
+    // Check cache first for user data
+    let user = await cache.getUser(decoded.userId);
 
-    if (!user || !user.isActive) {
+    if (!user) {
+      // Cache miss - query database
+      logger.debug({ userId: decoded.userId }, 'User cache miss - querying database');
+      const dbUser = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, email: true, isActive: true, tokenVersion: true, subscriptionTier: true },
+      });
+
+      if (!dbUser) {
+        res.status(401).json({ error: 'User not found or inactive' });
+        return;
+      }
+
+      // Populate cache
+      user = {
+        id: dbUser.id,
+        email: dbUser.email,
+        isActive: dbUser.isActive,
+        tokenVersion: dbUser.tokenVersion,
+        subscriptionTier: dbUser.subscriptionTier,
+      };
+      await cache.setUser(decoded.userId, user);
+    }
+
+    if (!user.isActive) {
       res.status(401).json({ error: 'User not found or inactive' });
       return;
     }
@@ -70,10 +93,28 @@ export const optionalAuth = async (
       const token = authHeader.substring(7);
       const decoded = verifyAccessToken(token);
 
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        select: { id: true, email: true, isActive: true, tokenVersion: true },
-      });
+      // Check cache first for user data
+      let user = await cache.getUser(decoded.userId);
+
+      if (!user) {
+        // Cache miss - query database
+        const dbUser = await prisma.user.findUnique({
+          where: { id: decoded.userId },
+          select: { id: true, email: true, isActive: true, tokenVersion: true, subscriptionTier: true },
+        });
+
+        if (dbUser) {
+          // Populate cache
+          user = {
+            id: dbUser.id,
+            email: dbUser.email,
+            isActive: dbUser.isActive,
+            tokenVersion: dbUser.tokenVersion,
+            subscriptionTier: dbUser.subscriptionTier,
+          };
+          await cache.setUser(decoded.userId, user);
+        }
+      }
 
       if (user && user.isActive && user.tokenVersion === decoded.tokenVersion) {
         req.user = {

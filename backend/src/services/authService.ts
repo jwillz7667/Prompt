@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../utils/prisma.js';
 import { generateTokenPair, verifyRefreshToken, type TokenPayload } from '../utils/jwt.js';
 import { authLogger } from '../utils/logger.js';
+import { cache } from '../utils/redis.js';
 
 const googleClient = new OAuth2Client(process.env['GOOGLE_CLIENT_ID']);
 
@@ -261,10 +262,15 @@ export async function refreshTokens(refreshToken: string): Promise<AuthResult> {
 // LOGOUT
 // ============================================================================
 
-export async function logout(accessToken: string): Promise<void> {
+export async function logout(accessToken: string, userId?: string): Promise<void> {
   await prisma.session.deleteMany({
     where: { accessToken },
   });
+
+  // Invalidate user cache if userId is provided
+  if (userId) {
+    await cache.invalidateUser(userId);
+  }
 }
 
 export async function logoutAllDevices(userId: string): Promise<void> {
@@ -277,4 +283,8 @@ export async function logoutAllDevices(userId: string): Promise<void> {
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
   });
+
+  // Invalidate all user caches
+  await cache.invalidateUser(userId);
+  await cache.invalidateSubscription(userId);
 }

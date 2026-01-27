@@ -19,8 +19,16 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { logger } from './utils/logger.js';
 import { prisma } from './utils/prisma.js';
 import { startIdempotencyCleanupScheduler } from './middleware/idempotency.js';
+import { initRedis, closeRedis } from './utils/redis.js';
+import { initQueues, closeQueues } from './utils/queue.js';
 
 config();
+
+// Initialize Redis and Queues
+(async () => {
+  await initRedis();
+  await initQueues();
+})();
 
 const app = express();
 const PORT = process.env['PORT'] || 3000;
@@ -123,6 +131,8 @@ const shutdown = async () => {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
   }
+  await closeRedis();
+  await closeQueues();
   await prisma.$disconnect();
   process.exit(0);
 };
