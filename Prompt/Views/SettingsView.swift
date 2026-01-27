@@ -13,6 +13,8 @@ struct SettingsView: View {
     @Environment(SettingsManager.self) private var settings
     @Environment(\.dismiss) private var dismiss
 
+    @State private var showSupport = false
+
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
@@ -142,6 +144,31 @@ struct SettingsView: View {
                         .foregroundStyle(textSecondary)
                 }
 
+                // Support Section
+                Section {
+                    Button {
+                        showSupport = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .foregroundStyle(textPrimary)
+                                .frame(width: 28)
+                            Text("Contact Support")
+                                .foregroundStyle(textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(textSecondary)
+                        }
+                    }
+                } header: {
+                    Text("Help")
+                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Chat with our AI assistant or create a support ticket.")
+                        .foregroundStyle(textSecondary)
+                }
+
                 // About Section
                 Section {
                     HStack {
@@ -162,7 +189,7 @@ struct SettingsView: View {
                         Text("Powered by")
                             .foregroundStyle(textPrimary)
                         Spacer()
-                        Text("Advanced AI")
+                        Text("DeepSeek AI")
                             .foregroundStyle(textSecondary)
                     }
                 } header: {
@@ -187,6 +214,11 @@ struct SettingsView: View {
             .onChange(of: settings.appearanceMode) { _, _ in
                 // Save appearance immediately for instant feedback
                 settings.savePreferences()
+            }
+            // Apply color scheme directly so this view updates immediately on toggle
+            .preferredColorScheme(settings.appearanceMode.colorScheme)
+            .sheet(isPresented: $showSupport) {
+                SupportView()
             }
         }
     }

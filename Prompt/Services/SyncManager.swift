@@ -99,12 +99,16 @@ final class SyncManager {
     /// Sync all pending changes to server
     func syncPendingChanges() async {
         guard networkMonitor.isConnected else {
+            #if DEBUG
             print("[SyncManager] Offline - skipping sync")
+            #endif
             return
         }
 
         guard !isSyncing else {
+            #if DEBUG
             print("[SyncManager] Sync already in progress")
+            #endif
             return
         }
 
@@ -117,7 +121,9 @@ final class SyncManager {
         isSyncing = true
         lastError = nil
 
+        #if DEBUG
         print("[SyncManager] Syncing \(pending.count) pending changes")
+        #endif
 
         for record in pending {
             guard let action = record.pendingAction else { continue }
@@ -141,7 +147,9 @@ final class SyncManager {
                 dataManager.markAsSynced(id: record.id)
 
             } catch {
+                #if DEBUG
                 print("[SyncManager] Failed to sync \(record.id): \(error)")
+                #endif
                 lastError = error.localizedDescription
                 // Continue with other items
             }

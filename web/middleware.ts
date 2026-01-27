@@ -8,7 +8,6 @@ const protectedRoutes = [
   '/templates',
   '/collections',
   '/analytics',
-  '/batch',
   '/settings',
   '/profile',
   '/upgrade',

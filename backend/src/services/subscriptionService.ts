@@ -22,7 +22,6 @@ export interface SubscriptionInfo {
 export interface TierFeatures {
   promptQuality: 'basic' | 'standard' | 'advanced';
   canExport: boolean;
-  canUseBatchMode: boolean;
   maxTokensPerPrompt: number;
 }
 
@@ -30,7 +29,6 @@ export interface TierLimits {
   dailyPrompts: number; // -1 = unlimited
   promptQuality: 'basic' | 'standard' | 'advanced';
   canExport: boolean;
-  canUseBatchMode: boolean;
   maxTokensPerPrompt: number;
 }
 
@@ -43,21 +41,18 @@ const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
     dailyPrompts: 10,
     promptQuality: 'basic',
     canExport: false,
-    canUseBatchMode: false,
     maxTokensPerPrompt: 4096,
   },
   PRO: {
     dailyPrompts: 100,
     promptQuality: 'standard',
     canExport: true,
-    canUseBatchMode: false,
     maxTokensPerPrompt: 8192,
   },
   PREMIUM: {
     dailyPrompts: -1, // Unlimited
     promptQuality: 'advanced',
     canExport: true,
-    canUseBatchMode: true,
     maxTokensPerPrompt: 8192, // DeepSeek API limit
   },
 };
@@ -104,7 +99,6 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
       features: {
         promptQuality: limits.promptQuality,
         canExport: limits.canExport,
-        canUseBatchMode: limits.canUseBatchMode,
         maxTokensPerPrompt: limits.maxTokensPerPrompt,
       },
     };
@@ -185,7 +179,6 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
     features: {
       promptQuality: limits.promptQuality,
       canExport: limits.canExport,
-      canUseBatchMode: limits.canUseBatchMode,
       maxTokensPerPrompt: limits.maxTokensPerPrompt,
     },
   };
@@ -195,7 +188,7 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
 // QUOTA CHECKING
 // ============================================================================
 
-export type QuotaAction = 'enhance_prompt' | 'export' | 'batch_mode';
+export type QuotaAction = 'enhance_prompt' | 'export';
 
 export async function canPerformAction(userId: string, action: QuotaAction): Promise<{
   allowed: boolean;
@@ -224,16 +217,6 @@ export async function canPerformAction(userId: string, action: QuotaAction): Pro
 
     case 'export': {
       if (!info.features.canExport) {
-        return {
-          allowed: false,
-          reason: 'FEATURE_LOCKED',
-        };
-      }
-      return { allowed: true };
-    }
-
-    case 'batch_mode': {
-      if (!info.features.canUseBatchMode) {
         return {
           allowed: false,
           reason: 'FEATURE_LOCKED',

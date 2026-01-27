@@ -87,7 +87,9 @@ final class AnalyticsService {
 
         // Check if GoogleService-Info.plist exists
         guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
+            #if DEBUG
             print("[Analytics] GoogleService-Info.plist not found - Firebase disabled")
+            #endif
             return
         }
 
@@ -102,7 +104,9 @@ final class AnalyticsService {
         #endif
 
         isConfigured = true
+        #if DEBUG
         print("[Analytics] Firebase configured successfully")
+        #endif
     }
 
     // MARK: - User Identification
@@ -273,14 +277,3 @@ final class AnalyticsService {
     }
 }
 
-// MARK: - Test Crash (Debug Only)
-
-#if DEBUG
-extension AnalyticsService {
-    /// Force a test crash - DEBUG ONLY
-    /// Remove or guard this in production
-    func forceCrash() {
-        fatalError("Test crash for Crashlytics")
-    }
-}
-#endif

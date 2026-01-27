@@ -14,6 +14,7 @@ import { webhookRouter } from './routes/webhooks.js';
 import { templateRouter } from './routes/templates.js';
 import { collectionRouter } from './routes/collections.js';
 import { analyticsRouter } from './routes/analytics.js';
+import { supportRouter } from './routes/support.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { logger } from './utils/logger.js';
@@ -107,6 +108,7 @@ app.use('/api/v1/webhooks', webhookRouter);
 app.use('/api/v1/templates', templateRouter);
 app.use('/api/v1/collections', collectionRouter);
 app.use('/api/v1/analytics', analyticsRouter);
+app.use('/api/v1/support', supportRouter);
 
 // Error handling
 app.use(errorHandler);

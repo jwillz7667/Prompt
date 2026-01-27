@@ -76,7 +76,6 @@ const pricingPlans = [
     features: [
       'Unlimited prompts',
       'Advanced prompt quality',
-      'Batch mode',
       '7-day free trial',
       'All Pro features',
     ],

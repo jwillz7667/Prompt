@@ -172,7 +172,7 @@ struct UpgradePromptCard: View {
         case .free:
             return "Get better prompts and more daily uses"
         case .pro:
-            return "Unlock unlimited prompts and batch mode"
+            return "Unlock unlimited prompts and advanced features"
         case .premium:
             return "Enjoying all premium features"
         }

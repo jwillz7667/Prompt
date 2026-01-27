@@ -32,7 +32,6 @@ const defaultSubscription: SubscriptionInfo = {
   features: {
     promptQuality: 'basic',
     canExport: false,
-    canUseBatchMode: false,
     maxTokensPerPrompt: 4096,
   },
 }
@@ -117,6 +116,3 @@ export const useDailyUsage = () =>
 
 export const useCanExport = () =>
   useSubscriptionStore((state) => state.features.canExport)
-
-export const useCanBatch = () =>
-  useSubscriptionStore((state) => state.features.canUseBatchMode)

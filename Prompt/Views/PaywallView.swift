@@ -72,7 +72,14 @@ struct PaywallView: View {
                 await loadData()
             }
             .alert("Error", isPresented: $showError) {
-                Button("OK") { }
+                Button("Try Again") {
+                    Task {
+                        await loadData()
+                    }
+                }
+                Button("OK", role: .cancel) {
+                    errorMessage = ""
+                }
             } message: {
                 Text(errorMessage)
             }
@@ -205,7 +212,6 @@ struct PaywallView: View {
                 featureRow("Daily Prompts", free: "10", pro: "100", premium: "Unlimited")
                 featureRow("Prompt Quality", free: "Basic", pro: "Standard", premium: "Advanced")
                 featureRow("Export Prompts", free: false, pro: true, premium: true)
-                featureRow("Batch Mode", free: false, pro: false, premium: true)
             }
             .background(Color.adaptiveBackgroundSecondary)
             .clipShape(RoundedRectangle(cornerRadius: 12))

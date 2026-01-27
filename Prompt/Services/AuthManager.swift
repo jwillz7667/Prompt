@@ -95,7 +95,9 @@ final class AuthManager: NSObject {
 
     /// Migrate auth data from standard UserDefaults to App Group
     private func migrateAuthDataToAppGroup() {
+        #if DEBUG
         print("[Auth] Migrating auth data to App Group")
+        #endif
         // Migrate hasSignedIn flag
         if UserDefaults.standard.bool(forKey: hasSignedInKey) {
             appGroupDefaults?.set(true, forKey: hasSignedInKey)
@@ -138,12 +140,16 @@ final class AuthManager: NSObject {
                 self.currentUser = User(from: response.user)
                 cacheUser(self.currentUser!)
                 markAsSignedIn()
+                #if DEBUG
                 print("[Auth] Session restored from server")
+                #endif
                 return
             } catch let error as APIError {
                 // Only clear tokens on explicit auth failures (401)
                 if case .unauthorized = error {
+                    #if DEBUG
                     print("[Auth] Token invalid (401), clearing session")
+                    #endif
                     await APIClient.shared.clearTokens()
                     // Don't clear UserDefaults - let user stay "logged in" with cached data
                 } else {
@@ -151,7 +157,9 @@ final class AuthManager: NSObject {
                     ErrorHandler.shared.handleSilently(error, context: "checkExistingSession")
                     if let cached = loadCachedUser() {
                         self.currentUser = cached
+                        #if DEBUG
                         print("[Auth] Using cached user data")
+                        #endif
                         return
                     }
                 }
@@ -160,7 +168,9 @@ final class AuthManager: NSObject {
                 ErrorHandler.shared.handleSilently(error, context: "checkExistingSession")
                 if let cached = loadCachedUser() {
                     self.currentUser = cached
+                    #if DEBUG
                     print("[Auth] Using cached user data")
+                    #endif
                     return
                 }
             }
@@ -170,11 +180,15 @@ final class AuthManager: NSObject {
         if hasStoredSession {
             if let cached = loadCachedUser() {
                 self.currentUser = cached
+                #if DEBUG
                 print("[Auth] Session restored from cache (no tokens)")
+                #endif
                 return
             }
             // Has signed in before but no cache - create minimal user
+            #if DEBUG
             print("[Auth] User previously signed in, allowing access")
+            #endif
             // The user will need to re-auth if they try to use API features
         }
     }
@@ -182,7 +196,9 @@ final class AuthManager: NSObject {
     // MARK: - Apple Sign In
 
     func handleAppleSignIn(authorization: ASAuthorization) async {
+        #if DEBUG
         print("[Auth] handleAppleSignIn called")
+        #endif
         isLoading = true
         error = nil
 
@@ -191,13 +207,17 @@ final class AuthManager: NSObject {
               let identityToken = String(data: identityTokenData, encoding: .utf8),
               let authCodeData = credential.authorizationCode,
               let authCode = String(data: authCodeData, encoding: .utf8) else {
+            #if DEBUG
             print("[Auth] Failed to extract credentials")
+            #endif
             error = .invalidCredential
             isLoading = false
             return
         }
 
+        #if DEBUG
         print("[Auth] Credentials extracted, calling backend...")
+        #endif
 
         do {
             let request = AppleAuthRequest(
@@ -217,7 +237,9 @@ final class AuthManager: NSObject {
                 requiresAuth: false
             )
 
+            #if DEBUG
             print("[Auth] Backend response received, setting tokens...")
+            #endif
 
             await APIClient.shared.setTokens(
                 access: response.accessToken,
@@ -227,7 +249,9 @@ final class AuthManager: NSObject {
             currentUser = User(from: response.user)
             cacheUser(currentUser!)
             markAsSignedIn()
+            #if DEBUG
             print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
+            #endif
 
             // Sync subscription status after successful authentication
             await StoreKitManager.shared.syncWithBackend()
@@ -265,7 +289,9 @@ final class AuthManager: NSObject {
             try await APIClient.shared.requestVoid("/auth/logout", method: .post)
         } catch {
             // Continue with local logout even if server call fails
+            #if DEBUG
             print("Logout API error: \(error)")
+            #endif
         }
 
         await APIClient.shared.clearTokens()
@@ -294,19 +320,25 @@ extension AuthManager: ASAuthorizationControllerDelegate {
         Task { @MainActor in
             defer { isLoading = false }
 
+            #if DEBUG
             print("[Auth] Apple Sign In delegate called")
+            #endif
 
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let identityTokenData = credential.identityToken,
                   let identityToken = String(data: identityTokenData, encoding: .utf8),
                   let authCodeData = credential.authorizationCode,
                   let authCode = String(data: authCodeData, encoding: .utf8) else {
+                #if DEBUG
                 print("[Auth] Failed to extract credentials")
+                #endif
                 error = .invalidCredential
                 return
             }
 
+            #if DEBUG
             print("[Auth] Credentials extracted, calling backend...")
+            #endif
 
             do {
                 let request = AppleAuthRequest(
@@ -326,7 +358,9 @@ extension AuthManager: ASAuthorizationControllerDelegate {
                     requiresAuth: false
                 )
 
+                #if DEBUG
                 print("[Auth] Backend response received, setting tokens...")
+                #endif
 
                 await APIClient.shared.setTokens(
                     access: response.accessToken,
@@ -336,7 +370,9 @@ extension AuthManager: ASAuthorizationControllerDelegate {
                 currentUser = User(from: response.user)
                 cacheUser(currentUser!)
                 markAsSignedIn()
+                #if DEBUG
                 print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
+                #endif
 
                 // Sync subscription status after successful authentication
                 await StoreKitManager.shared.syncWithBackend()
@@ -355,7 +391,9 @@ extension AuthManager: ASAuthorizationControllerDelegate {
         controller: ASAuthorizationController,
         didCompleteWithError error: Error
     ) {
+        #if DEBUG
         print("[Auth] Error delegate called: \(error)")
+        #endif
         // Track the auth error
         Task { @MainActor in
             ErrorHandler.shared.handleSilently(error, context: "authorizationController")
@@ -365,7 +403,9 @@ extension AuthManager: ASAuthorizationControllerDelegate {
             isLoading = false
 
             if let authError = error as? ASAuthorizationError {
+                #if DEBUG
                 print("[Auth] ASAuthorizationError code: \(authError.code.rawValue)")
+                #endif
                 switch authError.code {
                 case .canceled:
                     self.error = nil // User canceled, not an error

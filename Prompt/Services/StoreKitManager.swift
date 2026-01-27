@@ -138,7 +138,9 @@ final class StoreKitManager {
                     purchasedIds.insert(transaction.productID)
                 }
             } catch {
+                #if DEBUG
                 print("Failed to verify transaction: \(error)")
+                #endif
             }
         }
 
@@ -308,7 +310,9 @@ final class StoreKitManager {
                         await self?.checkEntitlements()
                     }
                 } catch {
+                    #if DEBUG
                     print("Transaction listener error: \(error)")
+                    #endif
                 }
             }
         }
@@ -330,7 +334,9 @@ final class StoreKitManager {
     private func syncTransactionWithBackend(_ transaction: Transaction) async {
         // Get the JWS representation for backend verification
         guard let signedTransaction = transaction.jwsRepresentation else {
+            #if DEBUG
             print("No JWS representation available for transaction")
+            #endif
             return
         }
 
@@ -342,7 +348,9 @@ final class StoreKitManager {
                 body: request
             )
         } catch {
+            #if DEBUG
             print("Failed to verify purchase with backend: \(error)")
+            #endif
         }
     }
 

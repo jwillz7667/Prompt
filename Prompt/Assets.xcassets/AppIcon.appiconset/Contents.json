@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "app-icon.png",
+      "filename" : "app-icon-purp.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "star-dark.png",
+      "filename" : "app-icon-stars-dark.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "Untitled 2-iOS-ClearDark-1024x1024@1x.png",
+      "filename" : "star-icon-iOS-ClearDark-1024x1024@1x.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

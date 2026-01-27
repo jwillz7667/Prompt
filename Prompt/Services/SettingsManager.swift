@@ -184,7 +184,9 @@ final class SettingsManager {
         // Check if already migrated
         if defaults.bool(forKey: Keys.settingsMigrated) { return }
 
+        #if DEBUG
         print("[Settings] Migrating settings to App Group")
+        #endif
 
         // Migrate each setting if it exists in standard UserDefaults
         if UserDefaults.standard.object(forKey: Keys.deepThinkEnabled) != nil {
@@ -211,14 +213,18 @@ final class SettingsManager {
 
         // Mark as migrated
         defaults.set(true, forKey: Keys.settingsMigrated)
+        #if DEBUG
         print("[Settings] Migration complete")
+        #endif
     }
 
     // MARK: - Load Preferences (from App Group)
 
     private func loadPreferences() {
         guard let defaults = appGroupDefaults else {
+            #if DEBUG
             print("[Settings] Warning: App Group UserDefaults not available, using defaults")
+            #endif
             return
         }
 
@@ -253,14 +259,18 @@ final class SettingsManager {
             customInstructions = instructions
         }
 
+        #if DEBUG
         print("[Settings] Loaded preferences from App Group")
+        #endif
     }
 
     // MARK: - Save Preferences (to App Group)
 
     func savePreferences() {
         guard let defaults = appGroupDefaults else {
+            #if DEBUG
             print("[Settings] Warning: App Group UserDefaults not available")
+            #endif
             return
         }
 
@@ -272,7 +282,9 @@ final class SettingsManager {
         defaults.set(outputLength.rawValue, forKey: Keys.outputLength)
         defaults.set(customInstructions, forKey: Keys.customInstructions)
 
+        #if DEBUG
         print("[Settings] Saved preferences to App Group")
+        #endif
     }
 }
 

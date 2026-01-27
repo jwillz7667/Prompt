@@ -23,13 +23,33 @@ struct PromptApp: App {
 
     var body: some Scene {
         WindowGroup {
+            contentView
+        }
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        if let modelContainer = SwiftDataManager.shared.modelContainer {
             RootView()
                 .environment(settingsManager)
                 .environment(authManager)
                 .environment(historyManager)
                 .environment(storeKitManager)
                 .environment(syncManager)
-                .modelContainer(SwiftDataManager.shared.modelContainer)
+                .modelContainer(modelContainer)
+                .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
+                .task {
+                    // Load subscription data when app starts
+                    await storeKitManager.checkEntitlements()
+                }
+        } else {
+            // Fallback when database is unavailable - app still works without persistence
+            RootView()
+                .environment(settingsManager)
+                .environment(authManager)
+                .environment(historyManager)
+                .environment(storeKitManager)
+                .environment(syncManager)
                 .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
                 .task {
                     // Load subscription data when app starts

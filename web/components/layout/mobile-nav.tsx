@@ -19,7 +19,6 @@ import {
   Settings,
   User,
   Crown,
-  Layers,
   X,
   LogOut,
 } from 'lucide-react'
@@ -30,7 +29,6 @@ const navigation = [
   { name: 'Templates', href: '/templates', icon: FileText },
   { name: 'Collections', href: '/collections', icon: FolderOpen },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Batch', href: '/batch', icon: Layers, premium: true },
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Profile', href: '/profile', icon: User },
 ]

@@ -32,7 +32,9 @@ enum SharedKeychainHelper {
 
     nonisolated static func save(key: Key, value: String) {
         guard let data = value.data(using: .utf8) else {
+            #if DEBUG
             print("[Keychain] Failed to encode value for key: \(key.rawValue)")
+            #endif
             return
         }
 
@@ -53,9 +55,13 @@ enum SharedKeychainHelper {
 
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         if status == errSecSuccess {
+            #if DEBUG
             print("[Keychain] Saved \(key.rawValue) successfully")
+            #endif
         } else if status == errSecDuplicateItem {
+            #if DEBUG
             print("[Keychain] Duplicate item for \(key.rawValue), attempting update")
+            #endif
             // Try update instead
             let updateQuery: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
@@ -69,12 +75,18 @@ enum SharedKeychainHelper {
             ]
             let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttrs as CFDictionary)
             if updateStatus == errSecSuccess {
+                #if DEBUG
                 print("[Keychain] Updated \(key.rawValue) successfully")
+                #endif
             } else {
+                #if DEBUG
                 print("[Keychain] Update failed for \(key.rawValue): \(updateStatus)")
+                #endif
             }
         } else {
+            #if DEBUG
             print("[Keychain] Save error for \(key.rawValue): \(status) - \(securityErrorMessage(status))")
+            #endif
         }
     }
 
@@ -108,10 +120,14 @@ enum SharedKeychainHelper {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         if status == errSecSuccess, let data = result as? Data {
+            #if DEBUG
             print("[Keychain] Loaded \(key.rawValue) from primary location")
+            #endif
             return String(data: data, encoding: .utf8)
         } else if status != errSecItemNotFound {
+            #if DEBUG
             print("[Keychain] Load error for \(key.rawValue): \(status) - \(securityErrorMessage(status))")
+            #endif
         }
 
         return nil
@@ -135,7 +151,9 @@ enum SharedKeychainHelper {
 
         for (location, loader) in legacyLoaders {
             if let value = loader() {
+                #if DEBUG
                 print("[Keychain] Found \(key.rawValue) in legacy location: \(location), migrating...")
+                #endif
                 // Save to primary location
                 save(key: key, value: value)
                 return value
@@ -149,7 +167,9 @@ enum SharedKeychainHelper {
 
     nonisolated static func delete(key: Key) {
         deleteAllVariants(key: key)
+        #if DEBUG
         print("[Keychain] Deleted \(key.rawValue)")
+        #endif
     }
 
     /// Deletes from all possible keychain locations to ensure clean state
@@ -192,7 +212,9 @@ enum SharedKeychainHelper {
     // MARK: - Delete All
 
     nonisolated static func deleteAll() {
+        #if DEBUG
         print("[Keychain] Deleting all tokens")
+        #endif
         delete(key: .accessToken)
         delete(key: .refreshToken)
     }
@@ -206,7 +228,9 @@ enum SharedKeychainHelper {
     // MARK: - Migration (called on app launch)
 
     nonisolated static func migrateFromLegacyKeychain() {
+        #if DEBUG
         print("[Keychain] Checking for legacy keychain items to migrate")
+        #endif
 
         // The load() function now handles migration automatically
         // Just attempt to load each key to trigger migration if needed
@@ -315,7 +339,9 @@ enum SharedKeychainHelper {
                 kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String
             ]
             if thisDeviceOnlyValues.contains(accessible) {
+                #if DEBUG
                 print("[Keychain] Found \(key.rawValue) with ThisDeviceOnly accessibility, will migrate")
+                #endif
                 // Don't delete here - save() will handle deletion and re-creation with new accessibility
                 return String(data: data, encoding: .utf8)
             }

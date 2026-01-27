@@ -66,7 +66,6 @@ enum PromptTier: String, Codable {
 struct TierFeatures: Codable {
     let promptQuality: String
     let canExport: Bool
-    let canUseBatchMode: Bool
     let maxTokensPerPrompt: Int
 
     var promptTier: PromptTier {
@@ -202,7 +201,6 @@ struct TierFeatureLimits: Codable {
     let dailyPrompts: Int
     let promptQuality: String
     let canExport: Bool
-    let canUseBatchMode: Bool
     let maxTokensPerPrompt: Int
 
     var isUnlimited: Bool {

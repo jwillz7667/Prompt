@@ -28,6 +28,15 @@ struct ProfileView: View {
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
+    // App version from bundle
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -158,8 +167,8 @@ struct ProfileView: View {
 
                 // App info
                 Section {
-                    statsRow(label: "Version", value: "1.0.0")
-                    statsRow(label: "Build", value: "1")
+                    statsRow(label: "Version", value: appVersion)
+                    statsRow(label: "Build", value: buildNumber)
 
                     Link(destination: URL(string: "https://promptomize.app/support")!) {
                         HStack {
@@ -277,7 +286,9 @@ struct ProfileView: View {
             let response: StatsResponse = try await APIClient.shared.request("/users/stats")
             stats = response.stats
         } catch {
+            #if DEBUG
             print("Failed to load stats: \(error)")
+            #endif
         }
     }
 
@@ -417,7 +428,9 @@ struct SessionsView: View {
             let response: SessionsResponse = try await APIClient.shared.request("/users/sessions")
             sessions = response.sessions
         } catch {
+            #if DEBUG
             print("Failed to load sessions: \(error)")
+            #endif
         }
     }
 
@@ -426,7 +439,9 @@ struct SessionsView: View {
             try await APIClient.shared.requestVoid("/users/sessions/\(session.id)", method: .delete)
             sessions.removeAll { $0.id == session.id }
         } catch {
+            #if DEBUG
             print("Failed to revoke session: \(error)")
+            #endif
         }
     }
 }

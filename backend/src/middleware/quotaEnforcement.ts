@@ -16,7 +16,6 @@ export interface RequestWithSubscription extends AuthenticatedRequest {
     dailyPromptsUsed: number;
     dailyPromptsLimit: number;
     canExport: boolean;
-    canUseBatchMode: boolean;
     maxTokensPerPrompt: number;
   };
 }
@@ -56,7 +55,6 @@ export function enforceQuota(action: QuotaAction) {
         dailyPromptsUsed: subscriptionInfo.dailyPromptsUsed,
         dailyPromptsLimit: subscriptionInfo.dailyPromptsLimit,
         canExport: subscriptionInfo.features.canExport,
-        canUseBatchMode: subscriptionInfo.features.canUseBatchMode,
         maxTokensPerPrompt: subscriptionInfo.features.maxTokensPerPrompt,
       };
 
@@ -116,7 +114,6 @@ export async function attachSubscriptionInfo(
       dailyPromptsUsed: subscriptionInfo.dailyPromptsUsed,
       dailyPromptsLimit: subscriptionInfo.dailyPromptsLimit,
       canExport: subscriptionInfo.features.canExport,
-      canUseBatchMode: subscriptionInfo.features.canUseBatchMode,
       maxTokensPerPrompt: subscriptionInfo.features.maxTokensPerPrompt,
     };
 

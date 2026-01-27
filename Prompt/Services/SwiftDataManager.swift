@@ -18,7 +18,12 @@ final class SwiftDataManager {
 
     // MARK: - Model Container
 
-    let modelContainer: ModelContainer
+    private(set) var modelContainer: ModelContainer?
+
+    /// Indicates whether the database is available for use
+    var isAvailable: Bool {
+        modelContainer != nil
+    }
 
     private init() {
         // Configure for App Group to share with widget extension
@@ -28,7 +33,7 @@ final class SwiftDataManager {
             LocalTemplate.self,
         ])
 
-        let config = ModelConfiguration(
+        let primaryConfig = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
             allowsSave: true,
@@ -39,17 +44,44 @@ final class SwiftDataManager {
         do {
             modelContainer = try ModelContainer(
                 for: schema,
-                configurations: [config]
+                configurations: [primaryConfig]
             )
         } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
+            // Log error for analytics
+            ErrorHandler.shared.handleSilently(
+                AppError.dataCorrupted,
+                context: "SwiftDataManager.init"
+            )
+            #if DEBUG
+            print("[SwiftDataManager] Primary container failed: \(error)")
+            #endif
+
+            // Fallback to in-memory container (app still works, just no persistence)
+            let fallbackConfig = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true,
+                allowsSave: true
+            )
+
+            do {
+                modelContainer = try ModelContainer(for: schema, configurations: [fallbackConfig])
+                #if DEBUG
+                print("[SwiftDataManager] Using in-memory fallback container")
+                #endif
+            } catch {
+                // Last resort - nil container, operations will gracefully fail
+                modelContainer = nil
+                #if DEBUG
+                print("[SwiftDataManager] All container initialization failed: \(error)")
+                #endif
+            }
         }
     }
 
     // MARK: - Context
 
-    var context: ModelContext {
-        modelContainer.mainContext
+    var context: ModelContext? {
+        modelContainer?.mainContext
     }
 
     // MARK: - Prompt Operations
@@ -94,16 +126,32 @@ final class SwiftDataManager {
             descriptor.predicate = first
         }
 
+        guard let context else {
+            #if DEBUG
+            print("[SwiftDataManager] Context unavailable for fetchPrompts")
+            #endif
+            return []
+        }
+
         do {
             return try context.fetch(descriptor)
         } catch {
+            #if DEBUG
             print("[SwiftDataManager] Failed to fetch prompts: \(error)")
+            #endif
             return []
         }
     }
 
     /// Fetch prompts with pending actions (for sync)
     func fetchPendingPrompts() -> [LocalPromptRecord] {
+        guard let context else {
+            #if DEBUG
+            print("[SwiftDataManager] Context unavailable for fetchPendingPrompts")
+            #endif
+            return []
+        }
+
         let descriptor = FetchDescriptor<LocalPromptRecord>(
             predicate: #Predicate { $0.pendingActionRaw != nil },
             sortBy: [SortDescriptor(\.createdAt)]
@@ -112,7 +160,9 @@ final class SwiftDataManager {
         do {
             return try context.fetch(descriptor)
         } catch {
+            #if DEBUG
             print("[SwiftDataManager] Failed to fetch pending prompts: \(error)")
+            #endif
             return []
         }
     }
@@ -124,6 +174,13 @@ final class SwiftDataManager {
 
     /// Insert or update prompts from API response
     func upsertPrompts(_ records: [PromptRecord]) {
+        guard let context else {
+            #if DEBUG
+            print("[SwiftDataManager] Context unavailable for upsertPrompts")
+            #endif
+            return
+        }
+
         for record in records {
             let descriptor = FetchDescriptor<LocalPromptRecord>(
                 predicate: #Predicate { $0.id == record.id }
@@ -151,7 +208,9 @@ final class SwiftDataManager {
                     context.insert(local)
                 }
             } catch {
+                #if DEBUG
                 print("[SwiftDataManager] Failed to upsert prompt \(record.id): \(error)")
+                #endif
             }
         }
 
@@ -160,6 +219,8 @@ final class SwiftDataManager {
 
     /// Get a single prompt by ID
     func getPrompt(id: String) -> LocalPromptRecord? {
+        guard let context else { return nil }
+
         let descriptor = FetchDescriptor<LocalPromptRecord>(
             predicate: #Predicate { $0.id == id }
         )
@@ -173,12 +234,19 @@ final class SwiftDataManager {
 
     /// Insert a new prompt (created locally)
     func insertPrompt(_ record: LocalPromptRecord) {
+        guard let context else {
+            #if DEBUG
+            print("[SwiftDataManager] Context unavailable for insertPrompt")
+            #endif
+            return
+        }
         context.insert(record)
         saveContext()
     }
 
     /// Mark a prompt for deletion
     func markPromptForDeletion(id: String) {
+        guard let context else { return }
         if let prompt = getPrompt(id: id) {
             if prompt.isSynced {
                 prompt.pendingAction = .delete
@@ -217,6 +285,7 @@ final class SwiftDataManager {
 
     /// Delete a prompt after successful server deletion
     func deletePrompt(id: String) {
+        guard let context else { return }
         if let prompt = getPrompt(id: id) {
             context.delete(prompt)
             saveContext()
@@ -225,11 +294,14 @@ final class SwiftDataManager {
 
     /// Clear all local prompts (for logout)
     func clearAllPrompts() {
+        guard let context else { return }
         do {
             try context.delete(model: LocalPromptRecord.self)
             saveContext()
         } catch {
+            #if DEBUG
             print("[SwiftDataManager] Failed to clear prompts: \(error)")
+            #endif
         }
     }
 
@@ -237,6 +309,13 @@ final class SwiftDataManager {
 
     /// Fetch all templates
     func fetchTemplates(category: String? = nil) -> [LocalTemplate] {
+        guard let context else {
+            #if DEBUG
+            print("[SwiftDataManager] Context unavailable for fetchTemplates")
+            #endif
+            return []
+        }
+
         var descriptor = FetchDescriptor<LocalTemplate>(
             sortBy: [SortDescriptor(\.usageCount, order: .reverse)]
         )
@@ -248,13 +327,22 @@ final class SwiftDataManager {
         do {
             return try context.fetch(descriptor)
         } catch {
+            #if DEBUG
             print("[SwiftDataManager] Failed to fetch templates: \(error)")
+            #endif
             return []
         }
     }
 
     /// Insert or update templates from API response
     func upsertTemplates(_ templates: [Template]) {
+        guard let context else {
+            #if DEBUG
+            print("[SwiftDataManager] Context unavailable for upsertTemplates")
+            #endif
+            return
+        }
+
         for template in templates {
             let descriptor = FetchDescriptor<LocalTemplate>(
                 predicate: #Predicate { $0.id == template.id }
@@ -277,7 +365,9 @@ final class SwiftDataManager {
                     context.insert(local)
                 }
             } catch {
+                #if DEBUG
                 print("[SwiftDataManager] Failed to upsert template \(template.id): \(error)")
+                #endif
             }
         }
 
@@ -286,21 +376,27 @@ final class SwiftDataManager {
 
     /// Clear all local templates
     func clearAllTemplates() {
+        guard let context else { return }
         do {
             try context.delete(model: LocalTemplate.self)
             saveContext()
         } catch {
+            #if DEBUG
             print("[SwiftDataManager] Failed to clear templates: \(error)")
+            #endif
         }
     }
 
     // MARK: - Save
 
     private func saveContext() {
+        guard let context else { return }
         do {
             try context.save()
         } catch {
+            #if DEBUG
             print("[SwiftDataManager] Failed to save context: \(error)")
+            #endif
         }
     }
 }

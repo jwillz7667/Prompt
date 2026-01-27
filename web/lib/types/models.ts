@@ -39,7 +39,6 @@ export interface UsageInfo {
 export interface FeatureFlags {
   promptQuality: 'basic' | 'standard' | 'advanced'
   canExport: boolean
-  canUseBatchMode: boolean
   maxTokensPerPrompt: number
 }
 
@@ -174,21 +173,3 @@ export interface StripeProduct {
   currency: string
 }
 
-// Batch Enhancement
-export interface BatchItem {
-  id: string
-  originalPrompt: string
-  enhancedPrompt?: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  error?: string
-}
-
-export interface BatchEnhancement {
-  id: string
-  items: BatchItem[]
-  totalCount: number
-  completedCount: number
-  failedCount: number
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  createdAt: string
-}

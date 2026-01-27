@@ -50,7 +50,6 @@ const plans = [
       'Advanced quality enhancements',
       'Up to 64K tokens per prompt',
       'Deep Think mode',
-      'Batch processing',
       'Export to all formats',
       'Priority support',
       'Collections & organization',

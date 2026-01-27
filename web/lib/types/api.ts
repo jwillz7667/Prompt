@@ -11,7 +11,6 @@ import type {
   OutputLength,
   DeepseekModel,
   SubscriptionTier,
-  BatchEnhancement,
   StripeProduct,
 } from './models'
 
@@ -148,17 +147,6 @@ export interface UserStatsResponse {
 
 export interface SessionsListResponse {
   sessions: Session[]
-}
-
-// Batch
-export interface BatchEnhanceRequest {
-  prompts: string[]
-  tone?: ToneType
-  outputLength?: OutputLength
-}
-
-export interface BatchEnhanceResponse {
-  batch: BatchEnhancement
 }
 
 // Generic

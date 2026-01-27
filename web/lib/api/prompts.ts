@@ -88,11 +88,3 @@ export async function bulkFavorite(ids: string[], isFavorite: boolean): Promise<
 export async function bulkDelete(ids: string[]): Promise<SuccessResponse> {
   return api.post<SuccessResponse>('/prompts/bulk/delete', { ids })
 }
-
-export async function batchEnhance(request: {
-  prompts: string[]
-  tone?: string
-  outputLength?: string
-}): Promise<EnhanceResponse[]> {
-  return api.post<EnhanceResponse[]>('/prompts/enhance/batch', request)
-}

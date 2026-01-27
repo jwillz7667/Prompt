@@ -141,41 +141,55 @@ struct AnalyticsView: View {
     // MARK: - Prompts Chart Section
 
     private func promptsChartSection(_ analytics: AnalyticsData) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // Convert string dates to Date objects for proper chart spacing
+        let chartData = analytics.charts.promptsByDay.compactMap { item -> (date: Date, count: Int)? in
+            guard let date = parseDate(item.date) else { return nil }
+            return (date: date, count: item.count)
+        }
+
+        return VStack(alignment: .leading, spacing: 12) {
             Text("Prompts Over Time")
                 .font(.headline)
                 .foregroundStyle(textPrimary)
 
-            Chart(analytics.charts.promptsByDay, id: \.date) { item in
-                BarMark(
-                    x: .value("Date", item.date),
-                    y: .value("Count", item.count)
-                )
-                .foregroundStyle(buttonPrimary.gradient)
-                .cornerRadius(4)
-            }
-            .frame(height: 200)
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 5)) { value in
-                    AxisValueLabel {
-                        if let dateStr = value.as(String.self) {
-                            Text(formatChartDate(dateStr))
-                                .font(.caption2)
-                                .foregroundStyle(textTertiary)
+            if chartData.isEmpty {
+                Text("No data for this period")
+                    .font(.subheadline)
+                    .foregroundStyle(textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 60)
+            } else {
+                Chart(chartData, id: \.date) { item in
+                    BarMark(
+                        x: .value("Date", item.date, unit: .day),
+                        y: .value("Count", item.count)
+                    )
+                    .foregroundStyle(buttonPrimary.gradient)
+                    .cornerRadius(4)
+                }
+                .frame(height: 200)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: xAxisStride)) { value in
+                        AxisValueLabel {
+                            if let date = value.as(Date.self) {
+                                Text(formatAxisDate(date))
+                                    .font(.caption2)
+                                    .foregroundStyle(textTertiary)
+                            }
                         }
                     }
                 }
-            }
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisValueLabel {
-                        if let intValue = value.as(Int.self) {
-                            Text("\(intValue)")
-                                .font(.caption2)
-                                .foregroundStyle(textTertiary)
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisValueLabel {
+                            if let intValue = value.as(Int.self) {
+                                Text("\(intValue)")
+                                    .font(.caption2)
+                                    .foregroundStyle(textTertiary)
+                            }
                         }
+                        AxisGridLine()
                     }
-                    AxisGridLine()
                 }
             }
         }
@@ -183,6 +197,20 @@ struct AnalyticsView: View {
         .background(bgSecondary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
+    }
+
+    /// Determine the X-axis stride based on selected period to avoid label overlap
+    private var xAxisStride: Calendar.Component {
+        switch selectedPeriod {
+        case 7:
+            return .day
+        case 30:
+            return .weekOfYear
+        case 90:
+            return .weekOfYear
+        default:
+            return .day
+        }
     }
 
     // MARK: - Model Usage Section
@@ -270,14 +298,30 @@ struct AnalyticsView: View {
         return "\(number)"
     }
 
-    private func formatChartDate(_ dateStr: String) -> String {
+    /// Parse ISO8601 date string to Date object
+    private func parseDate(_ dateStr: String) -> Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
-        guard let date = formatter.date(from: dateStr) else { return dateStr }
+        return formatter.date(from: dateStr)
+    }
 
-        let displayFormatter = DateFormatter()
-        displayFormatter.dateFormat = "M/d"
-        return displayFormatter.string(from: date)
+    /// Format axis date based on selected period
+    private func formatAxisDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        switch selectedPeriod {
+        case 7:
+            // Show day abbreviation for 7-day view (Mon, Tue, etc.)
+            formatter.dateFormat = "E"
+        case 30:
+            // Show month/day for 30-day view
+            formatter.dateFormat = "M/d"
+        case 90:
+            // Show abbreviated month and day for 90-day view
+            formatter.dateFormat = "MMM d"
+        default:
+            formatter.dateFormat = "M/d"
+        }
+        return formatter.string(from: date)
     }
 
     private func formatModelName(_ model: String) -> String {
@@ -391,7 +435,9 @@ final class AnalyticsViewModel {
         do {
             streak = try await APIClient.shared.request("/analytics/streak")
         } catch {
+            #if DEBUG
             print("Failed to fetch streak: \(error)")
+            #endif
         }
     }
 }

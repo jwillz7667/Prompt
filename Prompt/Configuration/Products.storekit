@@ -137,7 +137,7 @@
           },
           "localizations" : [
             {
-              "description" : "Unlimited prompts with advanced quality + batch mode",
+              "description" : "Unlimited prompts with advanced quality",
               "displayName" : "Premium Monthly",
               "locale" : "en_US"
             }
@@ -166,7 +166,7 @@
           },
           "localizations" : [
             {
-              "description" : "Unlimited prompts with advanced quality + batch mode - 2 months free",
+              "description" : "Unlimited prompts with advanced quality - 2 months free",
               "displayName" : "Premium Annual",
               "locale" : "en_US"
             }
