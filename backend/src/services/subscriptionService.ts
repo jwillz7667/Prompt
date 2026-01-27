@@ -79,7 +79,7 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
   // Get today's date key for cache
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dateKey = today.toISOString().split('T')[0];
+  const dateKey = today.toISOString().split('T')[0] as string;
 
   // Try to get cached subscription info
   const cachedSub = await cache.getSubscription(userId);
@@ -268,7 +268,7 @@ async function getTodayUsage(userId: string) {
 export async function recordUsage(userId: string): Promise<void> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dateKey = today.toISOString().split('T')[0];
+  const dateKey = today.toISOString().split('T')[0] as string;
 
   await prisma.dailyUsage.upsert({
     where: {
