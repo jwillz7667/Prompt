@@ -19,6 +19,13 @@ struct SettingsView: View {
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
+    // App version from bundle
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
     var body: some View {
         @Bindable var bindableSettings = settings
 
@@ -144,7 +151,7 @@ struct SettingsView: View {
                         Text("Version")
                             .foregroundStyle(textPrimary)
                         Spacer()
-                        Text("1.0.0")
+                        Text(appVersion)
                             .foregroundStyle(textSecondary)
                     }
 
