@@ -527,10 +527,10 @@ struct LiquidGlassBackground: View {
     private func liquidGradientBlobs(in geometry: GeometryProxy) -> some View {
         let size = geometry.size
         ZStack {
-            // Blob 1 - Cyan accent (very subtle in dark mode)
+            // Blob 1 - Cyan in dark mode only, purple in light mode
             liquidBlob(
-                color: Color.brandCyan,
-                opacity: colorScheme == .dark ? 0.08 : 0.15,
+                color: colorScheme == .dark ? Color.brandCyan : Color.brandPurple,
+                opacity: colorScheme == .dark ? 0.08 : 0.08,
                 frameWidth: size.width * 0.8,
                 endRadius: size.width * 0.5,
                 offset: animateGradient
@@ -538,10 +538,10 @@ struct LiquidGlassBackground: View {
                     : CGSize(width: -size.width * 0.1, height: size.height * 0.1)
             )
 
-            // Blob 2 - Purple accent (very subtle in dark mode)
+            // Blob 2 - Purple accent
             liquidBlob(
                 color: Color.brandPurple,
-                opacity: colorScheme == .dark ? 0.06 : 0.1,
+                opacity: colorScheme == .dark ? 0.06 : 0.06,
                 frameWidth: size.width * 0.7,
                 endRadius: size.width * 0.6,
                 offset: animateGradient
@@ -549,10 +549,10 @@ struct LiquidGlassBackground: View {
                     : CGSize(width: size.width * 0.1, height: size.height * 0.2)
             )
 
-            // Blob 3 - Deep purple (minimal in dark mode)
+            // Blob 3 - Deep purple
             liquidBlob(
                 color: Color.brandPurpleDark,
-                opacity: colorScheme == .dark ? 0.04 : 0.08,
+                opacity: colorScheme == .dark ? 0.04 : 0.05,
                 frameWidth: size.width * 0.5,
                 endRadius: size.width * 0.4,
                 offset: animateGradient
@@ -560,10 +560,10 @@ struct LiquidGlassBackground: View {
                     : CGSize(width: size.width * 0.2, height: size.height * 0.4)
             )
 
-            // Blob 4 - Cyan glow at bottom (subtle in dark mode)
+            // Blob 4 - Cyan in dark mode only, purple light in light mode
             liquidBlob(
-                color: Color.brandCyan,
-                opacity: colorScheme == .dark ? 0.05 : 0.1,
+                color: colorScheme == .dark ? Color.brandCyan : Color.brandPurpleLight,
+                opacity: colorScheme == .dark ? 0.05 : 0.04,
                 frameWidth: size.width * 0.6,
                 endRadius: size.width * 0.5,
                 offset: animateGradient

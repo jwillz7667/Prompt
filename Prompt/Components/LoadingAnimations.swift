@@ -15,7 +15,6 @@ struct LogoEnhancementAnimation: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var rotation: Double = 0
     @State private var pulse: CGFloat = 1.0
-    @State private var glowIntensity: Double = 0.4
     @State private var ringRotation1: Double = 0
     @State private var ringRotation2: Double = 0
 
@@ -25,16 +24,21 @@ struct LogoEnhancementAnimation: View {
         self.size = size
     }
 
+    // Adaptive accent color - purple in light mode, cyan in dark mode
+    private var accentColor: Color {
+        colorScheme == .light ? Color.brandPurple : Color.brandCyan
+    }
+
     var body: some View {
         ZStack {
-            // Outer glow ring
+            // Outer rotating ring
             Circle()
                 .stroke(
                     AngularGradient(
                         colors: [
-                            Color.brandCyan.opacity(0.6),
+                            accentColor.opacity(0.6),
                             Color.brandPurple.opacity(0.3),
-                            Color.brandCyan.opacity(0.6)
+                            accentColor.opacity(0.6)
                         ],
                         center: .center
                     ),
@@ -49,9 +53,9 @@ struct LogoEnhancementAnimation: View {
                 .stroke(
                     AngularGradient(
                         colors: [
-                            Color.brandCyan.opacity(0.8),
+                            accentColor.opacity(0.8),
                             Color.clear,
-                            Color.brandCyan.opacity(0.8)
+                            accentColor.opacity(0.8)
                         ],
                         center: .center
                     ),
@@ -60,24 +64,7 @@ struct LogoEnhancementAnimation: View {
                 .frame(width: size * 1.15, height: size * 1.15)
                 .rotationEffect(.degrees(-ringRotation2))
 
-            // Outer glow
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.brandCyan.opacity(glowIntensity * 0.6),
-                            Color.brandPurple.opacity(glowIntensity * 0.3),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: size * 0.2,
-                        endRadius: size * 0.8
-                    )
-                )
-                .frame(width: size * 1.5, height: size * 1.5)
-                .blur(radius: 20)
-
-            // Logo with effects
+            // Logo without glow
             Group {
                 if UIImage(named: "AppLogo") != nil {
                     Image("AppLogo")
@@ -90,7 +77,7 @@ struct LogoEnhancementAnimation: View {
                         .font(.system(size: size * 0.4, weight: .medium))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [Color.brandCyan, Color.white],
+                                colors: [accentColor, Color.white],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -98,14 +85,13 @@ struct LogoEnhancementAnimation: View {
                 }
             }
             .scaleEffect(pulse)
-            .shadow(color: Color.brandCyan.opacity(0.6), radius: 15)
 
             // Orbiting particles
             ForEach(0..<3, id: \.self) { index in
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color.brandCyan, Color.brandCyan.opacity(0.3)],
+                            colors: [accentColor, accentColor.opacity(0.3)],
                             center: .center,
                             startRadius: 0,
                             endRadius: 6
@@ -114,7 +100,6 @@ struct LogoEnhancementAnimation: View {
                     .frame(width: 8, height: 8)
                     .offset(x: cos((rotation + Double(index) * 120) * .pi / 180) * size * 0.55)
                     .offset(y: sin((rotation + Double(index) * 120) * .pi / 180) * size * 0.55)
-                    .shadow(color: Color.brandCyan.opacity(0.8), radius: 4)
             }
         }
         .onAppear {
@@ -129,7 +114,6 @@ struct LogoEnhancementAnimation: View {
             }
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 pulse = 1.08
-                glowIntensity = 0.7
             }
         }
     }
@@ -138,36 +122,32 @@ struct LogoEnhancementAnimation: View {
 // MARK: - AI Orb Loading Animation (Updated with brand colors)
 
 struct AIOrb: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var rotation1: Double = 0
     @State private var rotation2: Double = 0
     @State private var rotation3: Double = 0
     @State private var pulse: CGFloat = 1.0
-    @State private var glowIntensity: Double = 0.4
 
     let size: CGFloat
     let primaryColor: Color
-    let accentColor: Color
+    let providedAccentColor: Color?
 
-    init(size: CGFloat = 120, primaryColor: Color = .white, accentColor: Color = Color.brandCyan) {
+    // Use purple in light mode, cyan in dark mode
+    private var accentColor: Color {
+        if let provided = providedAccentColor {
+            return colorScheme == .light ? Color.brandPurple : provided
+        }
+        return colorScheme == .light ? Color.brandPurple : Color.brandCyan
+    }
+
+    init(size: CGFloat = 120, primaryColor: Color = .white, accentColor: Color? = nil) {
         self.size = size
         self.primaryColor = primaryColor
-        self.accentColor = accentColor
+        self.providedAccentColor = accentColor
     }
 
     var body: some View {
         ZStack {
-            // Outer glow
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [accentColor.opacity(glowIntensity), Color.clear],
-                        center: .center,
-                        startRadius: size * 0.2,
-                        endRadius: size * 0.7
-                    )
-                )
-                .frame(width: size * 1.4, height: size * 1.4)
-                .blur(radius: 25)
 
             // Orbital ring 1 - Horizontal ellipse
             Ellipse()
@@ -205,7 +185,7 @@ struct AIOrb: View {
                 .frame(width: size * 0.9, height: size * 0.25)
                 .rotationEffect(.degrees(rotation3 - 30))
 
-            // Core sphere with gradient
+            // Core sphere with gradient (no glow shadow)
             Circle()
                 .fill(
                     RadialGradient(
@@ -221,7 +201,6 @@ struct AIOrb: View {
                 )
                 .frame(width: size * 0.4, height: size * 0.4)
                 .scaleEffect(pulse)
-                .shadow(color: accentColor.opacity(0.6), radius: 20)
 
             // Inner highlight on sphere
             Circle()
@@ -263,7 +242,6 @@ struct AIOrb: View {
             }
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 pulse = 1.1
-                glowIntensity = 0.5
             }
         }
     }
