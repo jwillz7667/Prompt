@@ -307,6 +307,7 @@ struct QuickEnhanceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: QuickEnhanceProvider()) { entry in
             QuickEnhanceWidgetEntryView(entry: entry)
+                .widgetURL(URL(string: "promptomize://enhance"))
         }
         .configurationDisplayName("Quick Enhance")
         .description("Recent prompts and quick access to enhancement")

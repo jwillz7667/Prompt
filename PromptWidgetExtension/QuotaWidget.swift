@@ -174,56 +174,70 @@ struct InlineView: View {
 struct SmallView: View {
     let entry: QuotaEntry
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "sparkles")
-                    .font(.title2)
-                    .foregroundStyle(.blue)
-                Spacer()
-                Text(entry.tier)
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(tierColor.opacity(0.2))
-                    .foregroundStyle(tierColor)
-                    .clipShape(Capsule())
-            }
-
-            Spacer()
-
-            if entry.isUnlimited {
-                Text("Unlimited")
-                    .font(.system(.title, design: .rounded))
-                    .fontWeight(.bold)
-                Text("prompts available")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("\(entry.remaining)")
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                Text("prompts left today")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                // Progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(.gray.opacity(0.2))
-                            .frame(height: 4)
-
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(progressColor)
-                            .frame(width: geo.size.width * (1 - entry.progress), height: 4)
-                    }
-                }
-                .frame(height: 4)
-            }
+    /// Deeplink destination based on quota status
+    private var destination: URL {
+        if entry.remaining == 0 && !entry.isUnlimited {
+            // Out of quota - open paywall
+            return URL(string: "promptomize://paywall")!
+        } else {
+            // Has quota - open enhance
+            return URL(string: "promptomize://enhance")!
         }
-        .padding()
+    }
+
+    var body: some View {
+        Link(destination: destination) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "sparkles")
+                        .font(.title2)
+                        .foregroundStyle(.blue)
+                    Spacer()
+                    Text(entry.tier)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(tierColor.opacity(0.2))
+                        .foregroundStyle(tierColor)
+                        .clipShape(Capsule())
+                }
+
+                Spacer()
+
+                if entry.isUnlimited {
+                    Text("Unlimited")
+                        .font(.system(.title, design: .rounded))
+                        .fontWeight(.bold)
+                    Text("prompts available")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(entry.remaining)")
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(entry.remaining == 0 ? .red : .primary)
+                    Text(entry.remaining == 0 ? "Tap to upgrade" : "prompts left today")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    // Progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(.gray.opacity(0.2))
+                                .frame(height: 4)
+
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(progressColor)
+                                .frame(width: geo.size.width * (1 - entry.progress), height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+                }
+            }
+            .padding()
+        }
     }
 
     var tierColor: Color {
@@ -253,6 +267,7 @@ struct QuotaWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: QuotaProvider()) { entry in
             QuotaWidgetEntryView(entry: entry)
+                .widgetURL(URL(string: "promptomize://enhance"))
         }
         .configurationDisplayName("Prompt Quota")
         .description("Track your daily prompt usage")
