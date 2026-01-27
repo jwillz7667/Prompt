@@ -1,6 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import type { TicketCategory, TicketPriority, TicketStatus } from '@prisma/client';
+import { sendTicketCreated } from './emailService.js';
 
 // ============================================================================
 // TYPES
@@ -320,6 +321,55 @@ export async function createTicket(params: CreateTicketParams): Promise<Ticket> 
   });
 
   logger.info({ ticketId: ticket.id, userId, category }, 'Support ticket created');
+
+  // Send ticket created email (fire-and-forget)
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, name: true },
+  });
+
+  if (user) {
+    // Build messages array for email
+    const messages: Array<{ role: string; content: string; createdAt: Date; isFromAI: boolean }> = [];
+
+    if (conversationHistory) {
+      for (const msg of conversationHistory) {
+        messages.push({
+          role: msg.role,
+          content: msg.content,
+          createdAt: ticket.createdAt,
+          isFromAI: msg.role === 'assistant',
+        });
+      }
+    }
+
+    messages.push({
+      role: 'user',
+      content: initialMessage,
+      createdAt: ticket.createdAt,
+      isFromAI: false,
+    });
+
+    if (aiSummary) {
+      messages.push({
+        role: 'assistant',
+        content: aiSummary,
+        createdAt: ticket.createdAt,
+        isFromAI: true,
+      });
+    }
+
+    sendTicketCreated(user.email, user.name, {
+      id: ticket.id,
+      subject: ticket.subject,
+      category: ticket.category,
+      status: ticket.status,
+      createdAt: ticket.createdAt,
+      messages,
+    }).catch((err) => {
+      logger.warn({ error: err, ticketId: ticket.id }, 'Failed to send ticket created email');
+    });
+  }
 
   return ticket;
 }

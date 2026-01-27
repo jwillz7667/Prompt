@@ -5,6 +5,7 @@ import { prisma } from '../utils/prisma.js';
 import { generateTokenPair, verifyRefreshToken, type TokenPayload } from '../utils/jwt.js';
 import { authLogger } from '../utils/logger.js';
 import { cache } from '../utils/redis.js';
+import { sendWelcomeEmail } from './emailService.js';
 
 const googleClient = new OAuth2Client(process.env['GOOGLE_CLIENT_ID']);
 
@@ -81,6 +82,11 @@ export async function authenticateWithApple(
           name,
           emailVerified: new Date(),
         },
+      });
+
+      // Send welcome email (fire-and-forget)
+      sendWelcomeEmail(email, name).catch((err) => {
+        authLogger.warn({ error: err, email }, 'Failed to send welcome email');
       });
     }
   }
@@ -168,6 +174,11 @@ export async function authenticateWithGoogle(
           avatarUrl: picture || null,
           emailVerified: new Date(),
         },
+      });
+
+      // Send welcome email (fire-and-forget)
+      sendWelcomeEmail(email, name || null).catch((err) => {
+        authLogger.warn({ error: err, email }, 'Failed to send welcome email');
       });
     }
   }

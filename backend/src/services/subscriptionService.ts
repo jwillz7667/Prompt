@@ -2,6 +2,12 @@ import { prisma } from '../utils/prisma.js';
 import { SubscriptionTier, SubscriptionStatus, Prisma } from '@prisma/client';
 import { cache } from '../utils/redis.js';
 import { logger } from '../utils/logger.js';
+import {
+  sendSubscriptionConfirmation,
+  sendSubscriptionCancelled,
+  sendSubscriptionExpired,
+  sendDailyLimitReached,
+} from './emailService.js';
 
 // ============================================================================
 // TYPES
@@ -409,7 +415,7 @@ export async function updateSubscription(
   }
 
   // Update user's tier (denormalized for fast access)
-  await prisma.user.update({
+  const user = await prisma.user.update({
     where: { id: userId },
     data: {
       subscriptionTier: data.tier,
@@ -420,19 +426,39 @@ export async function updateSubscription(
   // Invalidate subscription cache
   await cache.invalidateSubscription(userId);
   await cache.invalidateUser(userId);
+
+  // Send subscription confirmation email (fire-and-forget)
+  if (data.tier !== SubscriptionTier.FREE) {
+    sendSubscriptionConfirmation(user.email, user.name, data.tier, data.expiresAt).catch((err) => {
+      logger.warn({ error: err, userId }, 'Failed to send subscription confirmation email');
+    });
+  }
 }
 
 export async function cancelSubscription(userId: string): Promise<void> {
-  await prisma.subscription.update({
+  const subscription = await prisma.subscription.update({
     where: { userId },
     data: {
       status: SubscriptionStatus.CANCELED,
       autoRenewEnabled: false,
     },
+    include: { user: true },
   });
 
   // Invalidate subscription cache
   await cache.invalidateSubscription(userId);
+
+  // Send cancellation email (fire-and-forget)
+  if (subscription.expiresAt) {
+    sendSubscriptionCancelled(
+      subscription.user.email,
+      subscription.user.name,
+      subscription.tier,
+      subscription.expiresAt
+    ).catch((err) => {
+      logger.warn({ error: err, userId }, 'Failed to send subscription cancellation email');
+    });
+  }
 }
 
 export async function handleGracePeriod(
@@ -470,6 +496,15 @@ async function handleExpiredSubscription(subscriptionId: string): Promise<void> 
       isPremium: false,
     },
   });
+
+  // Send expiration email (fire-and-forget)
+  sendSubscriptionExpired(
+    subscription.user.email,
+    subscription.user.name,
+    subscription.tier
+  ).catch((err) => {
+    logger.warn({ error: err, userId: subscription.userId }, 'Failed to send subscription expiration email');
+  });
 }
 
 async function handleExpiredTrial(subscriptionId: string): Promise<void> {
@@ -490,6 +525,15 @@ async function handleExpiredTrial(subscriptionId: string): Promise<void> {
       subscriptionTier: SubscriptionTier.FREE,
       isPremium: false,
     },
+  });
+
+  // Send trial expiration email (fire-and-forget)
+  sendSubscriptionExpired(
+    subscription.user.email,
+    subscription.user.name,
+    'PREMIUM' // Trial was for Premium
+  ).catch((err) => {
+    logger.warn({ error: err, userId: subscription.userId }, 'Failed to send trial expiration email');
   });
 }
 

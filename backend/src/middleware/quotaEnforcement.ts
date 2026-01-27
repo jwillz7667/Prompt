@@ -7,6 +7,8 @@ import {
   type QuotaAction,
 } from '../services/subscriptionService.js';
 import { subscriptionLogger } from '../utils/logger.js';
+import { sendDailyLimitReached } from '../services/emailService.js';
+import { prisma } from '../utils/prisma.js';
 
 // Extend AuthenticatedRequest to include subscription info
 export interface RequestWithSubscription extends AuthenticatedRequest {
@@ -38,6 +40,28 @@ export function enforceQuota(action: QuotaAction) {
       const result = await canPerformAction(req.user.id, action);
 
       if (!result.allowed) {
+        // Send daily limit reached email when quota is first exceeded
+        if (result.reason === 'QUOTA_EXCEEDED') {
+          const subscriptionInfo = await getSubscriptionInfo(req.user.id);
+          // Only send email when user is exactly at limit (first time hitting it today)
+          if (subscriptionInfo.dailyPromptsUsed === subscriptionInfo.dailyPromptsLimit) {
+            const user = await prisma.user.findUnique({
+              where: { id: req.user.id },
+              select: { email: true, name: true },
+            });
+            if (user) {
+              sendDailyLimitReached(
+                user.email,
+                user.name,
+                subscriptionInfo.tier,
+                subscriptionInfo.dailyPromptsLimit
+              ).catch((err) => {
+                subscriptionLogger.warn({ err, userId: req.user?.id }, 'Failed to send daily limit email');
+              });
+            }
+          }
+        }
+
         res.status(403).json({
           error: 'Quota exceeded',
           code: result.reason,

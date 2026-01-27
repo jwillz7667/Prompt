@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { prisma } from '../utils/prisma.js';
+import { sendAccountDeleted } from '../services/emailService.js';
 
 export const userRouter = Router();
 
@@ -195,10 +196,23 @@ userRouter.delete('/account', async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
+    // Get user info before deletion for email
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { email: true, name: true },
+    });
+
     // Delete all user data (cascades to sessions, prompts, etc.)
     await prisma.user.delete({
       where: { id: req.user.id },
     });
+
+    // Send account deleted email (fire-and-forget)
+    if (user) {
+      sendAccountDeleted(user.email, user.name).catch((err) => {
+        console.error('Failed to send account deleted email:', err);
+      });
+    }
 
     res.json({ success: true });
   } catch (error) {
