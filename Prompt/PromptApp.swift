@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct PromptApp: App {
@@ -13,6 +14,7 @@ struct PromptApp: App {
     @State private var authManager = AuthManager.shared
     @State private var historyManager = PromptHistoryManager.shared
     @State private var storeKitManager = StoreKitManager.shared
+    @State private var syncManager = SyncManager.shared
 
     init() {
         // Configure Firebase Analytics and Crashlytics
@@ -26,6 +28,8 @@ struct PromptApp: App {
                 .environment(authManager)
                 .environment(historyManager)
                 .environment(storeKitManager)
+                .environment(syncManager)
+                .modelContainer(SwiftDataManager.shared.modelContainer)
                 .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
                 .task {
                     // Load subscription data when app starts
@@ -107,7 +111,7 @@ struct SplashView: View {
                     .foregroundStyle(textPrimary)
 
                 ProgressView()
-                    .tint(accentColor)
+                    .tint(colorScheme == .light ? Color.brandPurple : Color.brandCyan)
                     .scaleEffect(1.2)
                     .padding(.top, 20)
             }

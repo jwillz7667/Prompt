@@ -2,7 +2,9 @@
 //  SharedKeychainHelper.swift
 //  Prompt
 //
-//  Keychain helper with App Group access for sharing tokens across main app and extensions
+//  Keychain helper with App Group access for sharing tokens across main app and extensions.
+//  Tokens persist across app updates by using kSecAttrAccessibleAfterFirstUnlock (not ThisDeviceOnly)
+//  which survives app updates and device restores.
 //
 
 import Foundation
@@ -11,9 +13,13 @@ import Security
 enum SharedKeychainHelper {
     // MARK: - Constants
 
-    private static let teamId = "487LC4H9U4"
-    private static let accessGroup = "\(teamId).group.com.res.promptomizer"
+    // App Group identifier - must match entitlements
+    private static let appGroupId = "group.com.res.promptomizer"
     private static let serviceName = "com.res.promptomizer"
+
+    // Team ID for keychain access group (matches $(AppIdentifierPrefix) in entitlements)
+    private static let teamId = "487LC4H9U4"
+    private static let accessGroup = "\(teamId).\(appGroupId)"
 
     // MARK: - Keys
 
@@ -30,23 +36,19 @@ enum SharedKeychainHelper {
             return
         }
 
-        // First delete any existing item
-        let deleteQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key.rawValue,
-            kSecAttrService as String: serviceName,
-            kSecAttrAccessGroup as String: accessGroup
-        ]
-        SecItemDelete(deleteQuery as CFDictionary)
+        // First delete any existing item (from all possible locations)
+        deleteAllVariants(key: key)
 
-        // Add the new item
+        // Add the new item with accessibility that survives app updates
+        // Using kSecAttrAccessibleAfterFirstUnlock (NOT ThisDeviceOnly) so tokens
+        // persist across app updates and can be restored from iCloud backup
         let addQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key.rawValue,
             kSecAttrService as String: serviceName,
             kSecAttrAccessGroup as String: accessGroup,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
 
         let status = SecItemAdd(addQuery as CFDictionary, nil)
@@ -62,20 +64,37 @@ enum SharedKeychainHelper {
                 kSecAttrAccessGroup as String: accessGroup
             ]
             let updateAttrs: [String: Any] = [
-                kSecValueData as String: data
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
             ]
             let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttrs as CFDictionary)
-            if updateStatus != errSecSuccess {
+            if updateStatus == errSecSuccess {
+                print("[Keychain] Updated \(key.rawValue) successfully")
+            } else {
                 print("[Keychain] Update failed for \(key.rawValue): \(updateStatus)")
             }
         } else {
-            print("[Keychain] Save error for \(key.rawValue): \(status)")
+            print("[Keychain] Save error for \(key.rawValue): \(status) - \(securityErrorMessage(status))")
         }
     }
 
     // MARK: - Load
 
     nonisolated static func load(key: Key) -> String? {
+        // Try loading from primary location first
+        if let value = loadFromPrimary(key: key) {
+            return value
+        }
+
+        // Try loading from legacy locations and migrate if found
+        if let value = loadAndMigrateLegacy(key: key) {
+            return value
+        }
+
+        return nil
+    }
+
+    private nonisolated static func loadFromPrimary(key: Key) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key.rawValue,
@@ -89,12 +108,38 @@ enum SharedKeychainHelper {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
         if status == errSecSuccess, let data = result as? Data {
-            print("[Keychain] Loaded \(key.rawValue) successfully")
+            print("[Keychain] Loaded \(key.rawValue) from primary location")
             return String(data: data, encoding: .utf8)
-        } else if status == errSecItemNotFound {
-            print("[Keychain] No item found for \(key.rawValue)")
-        } else {
-            print("[Keychain] Load error for \(key.rawValue): \(status)")
+        } else if status != errSecItemNotFound {
+            print("[Keychain] Load error for \(key.rawValue): \(status) - \(securityErrorMessage(status))")
+        }
+
+        return nil
+    }
+
+    /// Attempts to load from legacy locations and migrates to primary if found
+    private nonisolated static func loadAndMigrateLegacy(key: Key) -> String? {
+        let legacyKey = key.rawValue
+
+        // Try multiple legacy formats in order of likelihood
+        let legacyLoaders: [(String, () -> String?)] = [
+            // 1. With access group but no service (older SharedKeychainHelper format)
+            ("accessGroup-noService", { loadLegacyWithAccessGroup(key: legacyKey) }),
+            // 2. With ThisDeviceOnly accessibility (previous version)
+            ("thisDeviceOnly", { loadLegacyThisDeviceOnly(key: key) }),
+            // 3. Basic keychain without access group (oldest KeychainHelper format)
+            ("basic", { loadLegacyBasic(key: legacyKey) }),
+            // 4. With service but no access group
+            ("service-noAccessGroup", { loadLegacyWithService(key: legacyKey) })
+        ]
+
+        for (location, loader) in legacyLoaders {
+            if let value = loader() {
+                print("[Keychain] Found \(key.rawValue) in legacy location: \(location), migrating...")
+                // Save to primary location
+                save(key: key, value: value)
+                return value
+            }
         }
 
         return nil
@@ -103,14 +148,45 @@ enum SharedKeychainHelper {
     // MARK: - Delete
 
     nonisolated static func delete(key: Key) {
-        let query: [String: Any] = [
+        deleteAllVariants(key: key)
+        print("[Keychain] Deleted \(key.rawValue)")
+    }
+
+    /// Deletes from all possible keychain locations to ensure clean state
+    private nonisolated static func deleteAllVariants(key: Key) {
+        let keyName = key.rawValue
+
+        // Primary location
+        let primaryQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key.rawValue,
+            kSecAttrAccount as String: keyName,
             kSecAttrService as String: serviceName,
             kSecAttrAccessGroup as String: accessGroup
         ]
-        let status = SecItemDelete(query as CFDictionary)
-        print("[Keychain] Deleted \(key.rawValue): \(status == errSecSuccess || status == errSecItemNotFound ? "OK" : "Error \(status)")")
+        SecItemDelete(primaryQuery as CFDictionary)
+
+        // With access group, no service
+        let accessGroupQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keyName,
+            kSecAttrAccessGroup as String: accessGroup
+        ]
+        SecItemDelete(accessGroupQuery as CFDictionary)
+
+        // Basic (no access group, no service)
+        let basicQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keyName
+        ]
+        SecItemDelete(basicQuery as CFDictionary)
+
+        // With service, no access group
+        let serviceQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keyName,
+            kSecAttrService as String: serviceName
+        ]
+        SecItemDelete(serviceQuery as CFDictionary)
     }
 
     // MARK: - Delete All
@@ -127,41 +203,20 @@ enum SharedKeychainHelper {
         load(key: .accessToken) != nil
     }
 
-    // MARK: - Migration
+    // MARK: - Migration (called on app launch)
 
     nonisolated static func migrateFromLegacyKeychain() {
         print("[Keychain] Checking for legacy keychain items to migrate")
 
-        // Try to load from legacy keychain (without access group/service)
-        if let accessToken = loadLegacy(key: "accessToken") {
-            print("[Keychain] Migrating legacy accessToken")
-            save(key: .accessToken, value: accessToken)
-            deleteLegacy(key: "accessToken")
-        }
-
-        if let refreshToken = loadLegacy(key: "refreshToken") {
-            print("[Keychain] Migrating legacy refreshToken")
-            save(key: .refreshToken, value: refreshToken)
-            deleteLegacy(key: "refreshToken")
-        }
-
-        // Also try with the old service name pattern
-        if let accessToken = loadLegacyWithService(key: "accessToken") {
-            print("[Keychain] Migrating old service accessToken")
-            save(key: .accessToken, value: accessToken)
-            deleteLegacyWithService(key: "accessToken")
-        }
-
-        if let refreshToken = loadLegacyWithService(key: "refreshToken") {
-            print("[Keychain] Migrating old service refreshToken")
-            save(key: .refreshToken, value: refreshToken)
-            deleteLegacyWithService(key: "refreshToken")
-        }
+        // The load() function now handles migration automatically
+        // Just attempt to load each key to trigger migration if needed
+        _ = load(key: .accessToken)
+        _ = load(key: .refreshToken)
     }
 
-    // MARK: - Legacy Helpers (for migration)
+    // MARK: - Legacy Loaders
 
-    private nonisolated static func loadLegacy(key: String) -> String? {
+    private nonisolated static func loadLegacyBasic(key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -172,23 +227,19 @@ enum SharedKeychainHelper {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
+        if status == errSecSuccess, let data = result as? Data {
+            // Delete from legacy location after successful read
+            let deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: key
+            ]
+            SecItemDelete(deleteQuery as CFDictionary)
+            return String(data: data, encoding: .utf8)
         }
-
-        return String(data: data, encoding: .utf8)
+        return nil
     }
 
-    private nonisolated static func deleteLegacy(key: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
-
-    private nonisolated static func loadLegacyWithService(key: String) -> String? {
-        // Try loading with access group but without service name
+    private nonisolated static func loadLegacyWithAccessGroup(key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
@@ -200,19 +251,90 @@ enum SharedKeychainHelper {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
+        if status == errSecSuccess, let data = result as? Data {
+            // Delete from legacy location
+            let deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: key,
+                kSecAttrAccessGroup as String: accessGroup
+            ]
+            SecItemDelete(deleteQuery as CFDictionary)
+            return String(data: data, encoding: .utf8)
         }
-
-        return String(data: data, encoding: .utf8)
+        return nil
     }
 
-    private nonisolated static func deleteLegacyWithService(key: String) {
+    private nonisolated static func loadLegacyWithService(key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecAttrAccessGroup as String: accessGroup
+            kSecAttrService as String: serviceName,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
         ]
-        SecItemDelete(query as CFDictionary)
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecSuccess, let data = result as? Data {
+            // Delete from legacy location
+            let deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: key,
+                kSecAttrService as String: serviceName
+            ]
+            SecItemDelete(deleteQuery as CFDictionary)
+            return String(data: data, encoding: .utf8)
+        }
+        return nil
+    }
+
+    /// Load from previous version that used ThisDeviceOnly accessibility
+    private nonisolated static func loadLegacyThisDeviceOnly(key: Key) -> String? {
+        // Query without specifying accessibility to find items with any accessibility
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key.rawValue,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecReturnData as String: true,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecSuccess,
+           let dict = result as? [String: Any],
+           let data = dict[kSecValueData as String] as? Data,
+           let accessible = dict[kSecAttrAccessible as String] as? String {
+            // Check if this item uses the old ThisDeviceOnly accessibility
+            let thisDeviceOnlyValues = [
+                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String,
+                kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String
+            ]
+            if thisDeviceOnlyValues.contains(accessible) {
+                print("[Keychain] Found \(key.rawValue) with ThisDeviceOnly accessibility, will migrate")
+                // Don't delete here - save() will handle deletion and re-creation with new accessibility
+                return String(data: data, encoding: .utf8)
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Error Helpers
+
+    private nonisolated static func securityErrorMessage(_ status: OSStatus) -> String {
+        switch status {
+        case errSecSuccess: return "Success"
+        case errSecItemNotFound: return "Item not found"
+        case errSecDuplicateItem: return "Duplicate item"
+        case errSecAuthFailed: return "Authentication failed"
+        case errSecInteractionNotAllowed: return "Interaction not allowed (device locked?)"
+        case errSecMissingEntitlement: return "Missing entitlement"
+        case errSecParam: return "Invalid parameter"
+        default: return "Unknown error"
+        }
     }
 }

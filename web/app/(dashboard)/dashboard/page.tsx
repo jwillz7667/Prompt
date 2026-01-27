@@ -22,8 +22,10 @@ import {
   Crown,
   AlertCircle,
   Flame,
+  ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 const toneOptions: SelectOption[] = [
   { value: 'professional', label: 'Professional', description: 'Clear and business-appropriate' },
@@ -316,26 +318,72 @@ export default function DashboardPage() {
 
                     {/* Actions */}
                     {hasOutput && !isEnhancing && (
-                      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[var(--border)]">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleCopy}
-                          leftIcon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        >
-                          {copied ? 'Copied' : 'Copy'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleReset}
-                          leftIcon={<RefreshCw className="h-4 w-4" />}
-                        >
-                          New Prompt
-                        </Button>
+                      <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-[var(--border)]">
+                        {/* Primary actions row */}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="cyan"
+                            size="md"
+                            onClick={handleCopy}
+                            leftIcon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            className="min-w-[120px]"
+                          >
+                            {copied ? 'Copied!' : 'Copy Prompt'}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="md"
+                            onClick={handleReset}
+                            leftIcon={<RefreshCw className="h-4 w-4" />}
+                          >
+                            Clear
+                          </Button>
+                        </div>
 
+                        {/* Try it out row */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-[var(--text-tertiary)] mr-1">Try it in:</span>
+                          <button
+                            onClick={() => {
+                              const text = result?.enhancedPrompt || streamedContent
+                              if (text) {
+                                window.open(`https://claude.ai/new?q=${encodeURIComponent(text)}`, '_blank')
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D97706]/30 hover:bg-[#D97706]/10 transition-colors"
+                          >
+                            <Image
+                              src="/logos/claude-logo.png"
+                              alt="Claude"
+                              width={20}
+                              height={20}
+                              className="object-contain"
+                            />
+                            <ExternalLink className="h-3 w-3 text-[#D97706]" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              const text = result?.enhancedPrompt || streamedContent
+                              if (text) {
+                                window.open(`https://chatgpt.com/?q=${encodeURIComponent(text)}`, '_blank')
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#10A37F]/30 hover:bg-[#10A37F]/10 transition-colors"
+                          >
+                            <Image
+                              src="/logos/chatgpt-logo.png"
+                              alt="ChatGPT"
+                              width={20}
+                              height={20}
+                              className="object-contain"
+                            />
+                            <ExternalLink className="h-3 w-3 text-[#10A37F]" />
+                          </button>
+                        </div>
+
+                        {/* Stats row */}
                         {result && (
-                          <div className="flex-1 flex items-center justify-end gap-4 text-xs text-[var(--text-tertiary)]">
+                          <div className="flex items-center gap-4 text-xs text-[var(--text-tertiary)]">
                             {result.inputTokens && (
                               <span>{result.inputTokens} input tokens</span>
                             )}

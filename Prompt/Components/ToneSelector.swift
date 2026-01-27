@@ -184,22 +184,20 @@ struct CompactToneSelector: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Image(systemName: selectedTone.icon)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(selectedTone == .unchained ? .purple : textPrimary)
-                Text(selectedTone.displayName)
-                    .font(.system(.caption, weight: .semibold))
                 if selectedTone == .unchained {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 8))
                         .foregroundStyle(.yellow)
                 }
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(textSecondary)
             }
-            .foregroundStyle(textPrimary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
                 selectedTone == .unchained

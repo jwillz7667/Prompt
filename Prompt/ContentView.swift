@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var showPaywall = false
     @State private var showTemplates = false
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    @State private var syncManager = SyncManager.shared
 
     // Animation states
     @State private var headerScale: CGFloat = 1.0
@@ -41,6 +42,9 @@ struct ContentView: View {
     // Pulsing animation states
     @State private var pulsingScale: CGFloat = 1.0
     @State private var pulsingOpacity: Double = 0.7
+
+    // Deep Think info popup
+    @State private var showDeepThinkInfo = false
 
     enum TransformationPhase {
         case idle
@@ -85,16 +89,6 @@ struct ContentView: View {
                                 removal: .opacity.combined(with: .move(edge: .trailing))
                             ))
 
-                        // Deep Think toggle (only show when not viewing enhanced)
-                        if !showEnhancedView {
-                            deepThinkToggle
-                        }
-
-                        // Enhancement controls (only show when not viewing enhanced)
-                        if !showEnhancedView {
-                            enhancementControls
-                        }
-
                         // Enhance/Edit button
                         actionButton
 
@@ -116,6 +110,15 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
+                        // Sync status indicator
+                        if syncManager.pendingCount > 0 || syncManager.isSyncing {
+                            SyncStatusIndicator(
+                                pendingCount: syncManager.pendingCount,
+                                isSyncing: syncManager.isSyncing,
+                                isOnline: networkMonitor.isConnected
+                            )
+                        }
+
                         // Usage indicator
                         if let usage = storeKit.usageInfo {
                             Button {
@@ -145,24 +148,7 @@ struct ContentView: View {
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 12) {
-                        profileButton
-
-                        if showEnhancedView {
-                            // Copy and Share buttons when viewing enhanced
-                            toolbarButton(icon: "doc.on.doc.fill") {
-                                triggerHaptic(.light)
-                                viewModel.copyToClipboard()
-                            }
-
-                            ShareLink(item: viewModel.enhancedPrompt) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 17, weight: .medium))
-                                    .foregroundStyle(textPrimary)
-                            }
-                            .buttonStyle(BounceButtonStyle())
-                        }
-                    }
+                    profileButton
                 }
             }
             .sheet(isPresented: $showSettings) {
@@ -218,10 +204,84 @@ struct ContentView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .overlay(alignment: .top) {
+                if showDeepThinkInfo {
+                    deepThinkInfoPopup
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .padding(.top, 60)
+                }
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showDeepThinkInfo)
         }
         .onAppear {
             headerScale = 0.9
         }
+    }
+
+    // MARK: - Deep Think Info Popup
+
+    private var deepThinkInfoPopup: some View {
+        HStack(spacing: 12) {
+            // Brain icon with glow
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.2))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: "brain.head.profile.fill")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(accentColor)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Deep Think Enabled")
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text("Responses take longer but are more advanced")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textSecondary)
+            }
+
+            Spacer()
+
+            // Dismiss button
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    showDeepThinkInfo = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(textTertiary)
+                    .padding(6)
+                    .background(Circle().fill(bgTertiary.opacity(0.8)))
+            }
+            .buttonStyle(BounceButtonStyle())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [accentColor.opacity(0.4), accentColor.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .shadow(color: accentColor.opacity(0.2), radius: 20, y: 8)
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 10, y: 4)
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Toolbar Button
@@ -405,28 +465,37 @@ struct ContentView: View {
 
     private var inputView: some View {
         ZStack {
-            // Text editor layer
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $viewModel.userPrompt)
-                    .font(.system(.body, design: .default))
-                    .foregroundStyle(textPrimary)
-                    .frame(minHeight: 180, maxHeight: 300)
-                    .padding(16)
-                    .scrollContentBackground(.hidden)
-                    .liquidGlassInput(cornerRadius: 16, isFocused: isTextEditorFocused)
-                    .focused($isTextEditorFocused)
-                    .opacity(isTransforming ? 0.3 : 1.0)
-                    .blur(radius: isTransforming ? 3 : 0)
+            // Main input container with embedded toolbar
+            VStack(spacing: 0) {
+                // Text editor area
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $viewModel.userPrompt)
+                        .font(.system(.body, design: .default))
+                        .foregroundStyle(textPrimary)
+                        .frame(minHeight: 140, maxHeight: 260)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
+                        .scrollContentBackground(.hidden)
+                        .focused($isTextEditorFocused)
+                        .opacity(isTransforming ? 0.3 : 1.0)
+                        .blur(radius: isTransforming ? 3 : 0)
 
-                if viewModel.userPrompt.isEmpty && !isTransforming {
-                    Text("Describe what you want to achieve...")
-                        .font(.body)
-                        .foregroundStyle(textTertiary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 24)
-                        .allowsHitTesting(false)
+                    if viewModel.userPrompt.isEmpty && !isTransforming {
+                        Text("Describe what you want to achieve...")
+                            .font(.body)
+                            .foregroundStyle(textTertiary)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 24)
+                            .allowsHitTesting(false)
+                    }
                 }
+
+                // Embedded toolbar with controls
+                inputToolbar
+                    .opacity(isTransforming ? 0.3 : 1.0)
             }
+            .liquidGlassInput(cornerRadius: 16, isFocused: isTextEditorFocused)
 
             // Pulsing logo overlay during transformation
             if isTransforming {
@@ -465,42 +534,277 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.3), value: isTransforming)
     }
 
-    private var enhancedPromptView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
-                Text(viewModel.enhancedPrompt)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(textPrimary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(minHeight: 180, maxHeight: 350)
-        }
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05))
+    // MARK: - Input Toolbar (Embedded Controls)
+
+    private var isPremium: Bool {
+        storeKit.currentTier == .premium || storeKit.currentTier == .pro
+    }
+
+    private var inputToolbar: some View {
+        HStack(spacing: 8) {
+            // Tone selector (compact)
+            CompactToneSelector(
+                selectedTone: Binding(
+                    get: { settings.selectedTone },
+                    set: { newValue in
+                        settings.selectedTone = newValue
+                        settings.savePreferences()
+                    }
+                ),
+                onPremiumTap: {
+                    showPaywall = true
                 }
+            )
+
+            // Length selector (compact)
+            CompactLengthSelector(selectedLength: Binding(
+                get: { settings.outputLength },
+                set: { newValue in
+                    settings.outputLength = newValue
+                    settings.savePreferences()
+                }
+            ))
+
+            Spacer()
+
+            // Deep Think toggle (compact inline)
+            deepThinkInlineToggle
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            accentColor.opacity(0.5),
-                            accentColor.opacity(0.2),
-                            accentColor.opacity(0.3)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background {
+            Rectangle()
+                .fill(bgSecondary.opacity(0.5))
         }
-        .shadow(color: accentColor.opacity(0.2), radius: 20, y: 8)
+    }
+
+    // MARK: - Compact Deep Think Toggle (Inline)
+
+    private var deepThinkInlineToggle: some View {
+        Button {
+            if !isPremium && !settings.deepThinkEnabled {
+                showPaywall = true
+            } else {
+                withAnimation(.spring(response: 0.3)) {
+                    settings.deepThinkEnabled.toggle()
+                    settings.savePreferences()
+                }
+                triggerHaptic(.light)
+
+                // Show info popup when enabling Deep Think
+                if settings.deepThinkEnabled {
+                    showDeepThinkInfo = true
+                    // Auto-hide after 3 seconds
+                    Task {
+                        try? await Task.sleep(for: .seconds(3))
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showDeepThinkInfo = false
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: settings.deepThinkEnabled ? "brain.head.profile.fill" : "brain.head.profile")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(settings.deepThinkEnabled ? accentColor : textSecondary)
+
+                if !isPremium {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(textSecondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background {
+                Capsule()
+                    .fill(settings.deepThinkEnabled ? accentColor.opacity(0.15) : bgTertiary.opacity(0.8))
+            }
+            .overlay {
+                if settings.deepThinkEnabled {
+                    Capsule()
+                        .stroke(accentColor.opacity(0.4), lineWidth: 1)
+                }
+            }
+        }
+        .buttonStyle(BounceButtonStyle())
+    }
+
+    private var enhancedPromptView: some View {
+        VStack(spacing: 16) {
+            // Enhanced prompt text
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollView {
+                    Text(viewModel.enhancedPrompt)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(minHeight: 180, maxHeight: 300)
+            }
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05))
+                    }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                accentColor.opacity(0.5),
+                                accentColor.opacity(0.2),
+                                accentColor.opacity(0.3)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            }
+            .shadow(color: accentColor.opacity(0.2), radius: 20, y: 8)
+
+            // Action buttons row
+            VStack(spacing: 12) {
+                // Primary action - Copy button (prominent)
+                Button {
+                    triggerHaptic(.light)
+                    viewModel.copyToClipboard()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "doc.on.doc.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Copy Prompt")
+                            .font(.system(.body, design: .rounded, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .foregroundStyle(.white)
+                    .background(accentColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(ElasticButtonStyle())
+
+                // Secondary actions row - AI services
+                HStack(spacing: 10) {
+                    // Try in Claude - #D97757 background
+                    Button {
+                        triggerHaptic(.light)
+                        openInClaude()
+                    } label: {
+                        Image("claude-logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 32)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(red: 0.85, green: 0.47, blue: 0.34)) // #D97757
+                            }
+                    }
+                    .buttonStyle(BounceButtonStyle())
+
+                    // Try in ChatGPT - #D8D8D8 background
+                    Button {
+                        triggerHaptic(.light)
+                        openInChatGPT()
+                    } label: {
+                        Image("chatgpt-logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 32)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(red: 0.85, green: 0.85, blue: 0.85)) // #D8D8D8
+                            }
+                    }
+                    .buttonStyle(BounceButtonStyle())
+                }
+
+                // Tertiary row - Favorite, Share and Clear
+                HStack(spacing: 10) {
+                    // Favorite button
+                    Button {
+                        triggerHaptic(.light)
+                        toggleCurrentPromptFavorite()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: viewModel.isCurrentPromptFavorite ? "star.fill" : "star")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(viewModel.isCurrentPromptFavorite ? .yellow : textSecondary)
+                            Text(viewModel.isCurrentPromptFavorite ? "Saved" : "Save")
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundStyle(viewModel.isCurrentPromptFavorite ? .yellow : textSecondary)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    if viewModel.isCurrentPromptFavorite {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color.yellow.opacity(0.15))
+                                    }
+                                }
+                        }
+                        .overlay {
+                            if viewModel.isCurrentPromptFavorite {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+                            }
+                        }
+                    }
+                    .buttonStyle(BounceButtonStyle())
+
+                    ShareLink(item: viewModel.enhancedPrompt) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Share")
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundStyle(textSecondary)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        }
+                    }
+                    .buttonStyle(BounceButtonStyle())
+
+                    Button {
+                        triggerHaptic(.light)
+                        clearAndReset()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Clear")
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundStyle(textSecondary)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        }
+                    }
+                    .buttonStyle(BounceButtonStyle())
+                }
+            }
+        }
     }
 
     private var transformationPhaseText: String {
@@ -510,120 +814,6 @@ struct ContentView: View {
         case .transforming: return "Enhancing..."
         case .complete: return "Done!"
         }
-    }
-
-    // MARK: - Deep Think Toggle
-
-    private var isPremium: Bool {
-        storeKit.currentTier == .premium || storeKit.currentTier == .pro
-    }
-
-    private var deepThinkToggle: some View {
-        HStack(spacing: 12) {
-            Image(systemName: settings.deepThinkEnabled ? "brain.head.profile.fill" : "brain.head.profile")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(settings.deepThinkEnabled ? accentColor : textSecondary)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Deep Think")
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(textPrimary)
-
-                    if !isPremium {
-                        Text("PRO")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Color.adaptiveTextOnAccent)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(accentColor)
-                            .clipShape(Capsule())
-                    }
-                }
-
-                Text(settings.deepThinkEnabled ? "Slower but higher quality" : "Enable for better results")
-                    .font(.system(.caption))
-                    .foregroundStyle(textSecondary)
-            }
-
-            Spacer()
-
-            Toggle("", isOn: Binding(
-                get: { settings.deepThinkEnabled },
-                set: { newValue in
-                    if newValue && !isPremium {
-                        showPaywall = true
-                    } else {
-                        withAnimation(.spring(response: 0.3)) {
-                            settings.deepThinkEnabled = newValue
-                            settings.savePreferences()
-                        }
-                        triggerHaptic(.light)
-                    }
-                }
-            ))
-            .labelsHidden()
-            .tint(accentColor)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .liquidGlass(
-            cornerRadius: 14,
-            shadowIntensity: settings.deepThinkEnabled ? 1.2 : 0.8
-        )
-        .overlay {
-            if settings.deepThinkEnabled {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(accentColor.opacity(0.4), lineWidth: 1.5)
-            }
-        }
-    }
-
-    // MARK: - Enhancement Controls
-
-    private var enhancementControls: some View {
-        HStack(spacing: 12) {
-            // Tone Selector (Dropdown)
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Tone", systemImage: "mic.fill")
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(textSecondary)
-
-                CompactToneSelector(
-                    selectedTone: Binding(
-                        get: { settings.selectedTone },
-                        set: { newValue in
-                            settings.selectedTone = newValue
-                            settings.savePreferences()
-                        }
-                    ),
-                    onPremiumTap: {
-                        showPaywall = true
-                    }
-                )
-            }
-
-            // Length Selector (Dropdown)
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Length", systemImage: "ruler")
-                    .font(.system(.caption, weight: .semibold))
-                    .foregroundStyle(textSecondary)
-
-                CompactLengthSelector(selectedLength: Binding(
-                    get: { settings.outputLength },
-                    set: { newValue in
-                        settings.outputLength = newValue
-                        settings.savePreferences()
-                    }
-                ))
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.8)
     }
 
     // MARK: - Action Button (Enhance / Edit Original)
@@ -749,7 +939,7 @@ struct ContentView: View {
                 }
 
                 let processingMs = Int(Date().timeIntervalSince(startTime) * 1000)
-                _ = await historyManager.savePrompt(
+                if let savedPrompt = await historyManager.savePrompt(
                     original: viewModel.userPrompt,
                     enhanced: viewModel.enhancedPrompt,
                     model: settings.selectedModel.rawValue,
@@ -759,7 +949,10 @@ struct ContentView: View {
                     outputTokens: 0,
                     totalTokens: viewModel.tokensUsed,
                     processingMs: processingMs
-                )
+                ) {
+                    // Store the prompt ID for favorite toggle
+                    viewModel.setCurrentPromptId(savedPrompt.id)
+                }
 
                 // Refresh subscription usage after successful enhancement
                 await storeKit.syncWithBackend()
@@ -806,6 +999,47 @@ struct ContentView: View {
         generator.impactOccurred()
     }
 
+    // MARK: - AI Service Links
+
+    private func openInClaude() {
+        guard !viewModel.enhancedPrompt.isEmpty,
+              let encodedPrompt = viewModel.enhancedPrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://claude.ai/new?q=\(encodedPrompt)") else {
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    private func openInChatGPT() {
+        guard !viewModel.enhancedPrompt.isEmpty,
+              let encodedPrompt = viewModel.enhancedPrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    private func clearAndReset() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            showEnhancedView = false
+            viewModel.clearAll()
+        }
+    }
+
+    private func toggleCurrentPromptFavorite() {
+        guard let promptId = viewModel.currentPromptId else { return }
+
+        // Optimistic UI update
+        viewModel.isCurrentPromptFavorite.toggle()
+
+        // Find the prompt in history and toggle its favorite status
+        if let prompt = historyManager.prompts.first(where: { $0.id == promptId }) {
+            Task {
+                await historyManager.toggleFavorite(prompt)
+            }
+        }
+    }
+
     // MARK: - Error Action Handling
 
     private func handleErrorAction(_ action: ErrorAction) {
@@ -842,4 +1076,57 @@ struct ContentView: View {
         .environment(AuthManager.shared)
         .environment(PromptHistoryManager.shared)
         .environment(StoreKitManager.shared)
+}
+
+// MARK: - Sync Status Indicator
+
+struct SyncStatusIndicator: View {
+    let pendingCount: Int
+    let isSyncing: Bool
+    let isOnline: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if isSyncing {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(0.7)
+                    .tint(Color.brandCyan)
+            } else if !isOnline {
+                Image(systemName: "cloud.slash.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.orange)
+            } else {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.brandCyan)
+            }
+
+            if pendingCount > 0 {
+                Text("\(pendingCount)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 16, minHeight: 16)
+                    .background(isOnline ? Color.brandCyan : .orange)
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule()
+                        .stroke(
+                            isOnline ? Color.brandCyan.opacity(0.3) : Color.orange.opacity(0.3),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .animation(.spring(response: 0.3), value: pendingCount)
+        .animation(.spring(response: 0.3), value: isSyncing)
+    }
 }

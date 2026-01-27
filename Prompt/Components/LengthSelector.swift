@@ -150,16 +150,15 @@ struct CompactLengthSelector: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Image(systemName: selectedLength.icon)
                     .font(.system(size: 14, weight: .medium))
-                Text(selectedLength.displayName)
-                    .font(.system(.caption, weight: .semibold))
+                    .foregroundStyle(textPrimary)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(textSecondary)
             }
-            .foregroundStyle(textPrimary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(bgSecondary)
             .clipShape(Capsule())

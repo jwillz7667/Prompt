@@ -8,8 +8,10 @@
 import Foundation
 import SwiftUI
 import WidgetKit
+import UIKit
 
 @Observable
+@MainActor
 final class PromptViewModel {
     // MARK: - State
 
@@ -22,9 +24,14 @@ final class PromptViewModel {
     var tokensUsed: Int = 0
     var showCopiedToast: Bool = false
 
+    // Favorite tracking for current prompt
+    var currentPromptId: String?
+    var isCurrentPromptFavorite: Bool = false
+
     // MARK: - Private
 
     private let service = DeepseekService()
+    private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
 
     // MARK: - Computed Properties
 
@@ -56,6 +63,9 @@ final class PromptViewModel {
         isStreaming = true
         errorMessage = nil
         enhancedPrompt = ""
+
+        // Begin background task to ensure enhancement completes even if app is backgrounded
+        beginBackgroundTask()
 
         // Start Live Activity
         await EnhancementActivityManager.shared.startActivity(originalPrompt: userPrompt)
@@ -118,6 +128,30 @@ final class PromptViewModel {
 
         isLoading = false
         isStreaming = false
+
+        // End background task when complete
+        endBackgroundTask()
+    }
+
+    // MARK: - Background Task Management
+
+    private func beginBackgroundTask() {
+        // End any existing task first
+        endBackgroundTask()
+
+        backgroundTaskId = UIApplication.shared.beginBackgroundTask(withName: "PromptEnhancement") { [weak self] in
+            // System is about to terminate the task
+            // The task will continue on the server side, but we can't receive the response
+            Task { @MainActor in
+                self?.endBackgroundTask()
+            }
+        }
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTaskId != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskId)
+        backgroundTaskId = .invalid
     }
 
     func copyToClipboard() {
@@ -135,5 +169,13 @@ final class PromptViewModel {
         enhancedPrompt = ""
         tokensUsed = 0
         errorMessage = nil
+        currentPromptId = nil
+        isCurrentPromptFavorite = false
+    }
+
+    /// Update the current prompt ID after saving
+    func setCurrentPromptId(_ id: String) {
+        currentPromptId = id
+        isCurrentPromptFavorite = false
     }
 }

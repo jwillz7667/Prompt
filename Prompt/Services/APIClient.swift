@@ -21,6 +21,23 @@ actor APIClient {
     private var isRefreshing = false
     private var pendingRequests: [CheckedContinuation<Void, Error>] = []
 
+    // URLSession configured for long-running requests that should survive app backgrounding
+    private let urlSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        // Allow requests to wait for connectivity instead of failing immediately
+        config.waitsForConnectivity = true
+        // Extend timeouts for background scenarios
+        config.timeoutIntervalForRequest = 120
+        config.timeoutIntervalForResource = 300
+        // Allow cellular access
+        config.allowsCellularAccess = true
+        // Allow expensive network access (5G, etc.)
+        config.allowsExpensiveNetworkAccess = true
+        // Allow constrained network access (Low Data Mode)
+        config.allowsConstrainedNetworkAccess = true
+        return URLSession(configuration: config)
+    }()
+
     // MARK: - Token Management
 
     func setTokens(access: String, refresh: String) {
@@ -110,7 +127,7 @@ actor APIClient {
                         request.httpBody = try JSONEncoder().encode(body)
                     }
 
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    let (bytes, response) = try await urlSession.bytes(for: request)
 
                     guard let httpResponse = response as? HTTPURLResponse else {
                         continuation.finish(throwing: APIError.invalidResponse)
@@ -188,7 +205,7 @@ actor APIClient {
             request.httpBody = try JSONEncoder().encode(body)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -255,7 +272,7 @@ actor APIClient {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(body)
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 isRefreshing = false

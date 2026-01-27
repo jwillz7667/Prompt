@@ -2,7 +2,7 @@
 //  PromptHistoryManager.swift
 //  Prompt
 //
-//  Manages prompt history synchronization with backend
+//  Manages prompt history with offline-first cache support
 //
 
 import Foundation
@@ -27,20 +27,59 @@ final class PromptHistoryManager {
     var showFavoritesOnly = false
     var searchQuery = ""
 
+    // MARK: - Dependencies
+
+    private let dataManager = SwiftDataManager.shared
+    private let syncManager = SyncManager.shared
+    private let networkMonitor = NetworkMonitor.shared
+
     // MARK: - Singleton
 
     static let shared = PromptHistoryManager()
-    private init() {}
+    private init() {
+        // Load from cache immediately on init
+        loadFromCache()
+    }
 
-    // MARK: - Fetch Prompts
+    // MARK: - Cache-First Loading
+
+    /// Load prompts from local cache immediately
+    private func loadFromCache() {
+        let cached = dataManager.fetchPrompts(
+            favoritesOnly: showFavoritesOnly,
+            searchQuery: searchQuery
+        )
+        // Deduplicate by ID (keep first occurrence)
+        var seenIds = Set<String>()
+        prompts = cached.compactMap { record -> PromptRecord? in
+            let promptRecord = record.toPromptRecord()
+            guard !seenIds.contains(promptRecord.id) else { return nil }
+            seenIds.insert(promptRecord.id)
+            return promptRecord
+        }
+    }
+
+    // MARK: - Fetch Prompts (Cache-First)
 
     func fetchPrompts(refresh: Bool = false) async {
+        // On refresh or first load, show cache immediately
+        if refresh || currentPage == 1 {
+            loadFromCache()
+        }
+
+        // If offline, we're done - show cached data
+        guard networkMonitor.isConnected else {
+            isLoading = false
+            return
+        }
+
         guard await APIClient.shared.isAuthenticated else { return }
 
         if refresh {
             currentPage = 1
         }
 
+        // Only show loading if cache is empty
         isLoading = prompts.isEmpty
         error = nil
 
@@ -57,16 +96,28 @@ final class PromptHistoryManager {
 
             let response: PromptsListResponse = try await APIClient.shared.request(endpoint)
 
+            // Convert to PromptRecords
+            let newRecords = response.prompts.map { PromptRecord(from: $0) }
+
             if refresh || currentPage == 1 {
-                prompts = response.prompts.map { PromptRecord(from: $0) }
+                prompts = newRecords
             } else {
-                let newPrompts = response.prompts.map { PromptRecord(from: $0) }
-                prompts.append(contentsOf: newPrompts)
+                // Append only records not already in the list (deduplicate by ID)
+                let existingIds = Set(prompts.map { $0.id })
+                let uniqueNewRecords = newRecords.filter { !existingIds.contains($0.id) }
+                prompts.append(contentsOf: uniqueNewRecords)
             }
 
             totalPages = response.pagination.totalPages
+
+            // Update local cache with server data
+            dataManager.upsertPrompts(newRecords)
+
         } catch {
-            self.error = error.localizedDescription
+            // On error, keep showing cached data
+            if prompts.isEmpty {
+                self.error = error.localizedDescription
+            }
         }
 
         isLoading = false
@@ -78,7 +129,7 @@ final class PromptHistoryManager {
         await fetchPrompts()
     }
 
-    // MARK: - Save Prompt
+    // MARK: - Save Prompt (with offline support)
 
     func savePrompt(
         original: String,
@@ -91,10 +142,34 @@ final class PromptHistoryManager {
         totalTokens: Int,
         processingMs: Int
     ) async -> PromptRecord? {
-        guard await APIClient.shared.isAuthenticated else { return nil }
-
         isSyncing = true
         defer { isSyncing = false }
+
+        // Create local record first (optimistic)
+        let localRecord = LocalPromptRecord(
+            originalPrompt: original,
+            enhancedPrompt: enhanced,
+            model: model,
+            totalTokens: totalTokens,
+            isSynced: false,
+            pendingAction: .create
+        )
+        dataManager.insertPrompt(localRecord)
+
+        // Update UI immediately (avoid duplicates)
+        let record = localRecord.toPromptRecord()
+        if !prompts.contains(where: { $0.id == record.id }) {
+            prompts.insert(record, at: 0)
+        }
+
+        // If offline, return the local record
+        guard networkMonitor.isConnected else {
+            syncManager.updatePendingCount()
+            return record
+        }
+
+        // Try to sync to server
+        guard await APIClient.shared.isAuthenticated else { return record }
 
         do {
             let request = CreatePromptRequest(
@@ -115,52 +190,59 @@ final class PromptHistoryManager {
                 body: request
             )
 
-            let record = PromptRecord(from: response.prompt)
+            // Update local record with server ID
+            let serverRecord = PromptRecord(from: response.prompt)
+            dataManager.markAsSynced(id: localRecord.id, serverId: serverRecord.id)
 
-            // Insert at beginning of list
-            prompts.insert(record, at: 0)
+            // Update UI with server record
+            if let index = prompts.firstIndex(where: { $0.id == localRecord.id }) {
+                prompts[index] = serverRecord
+            }
 
-            return record
+            return serverRecord
+
         } catch {
+            // Keep local record - will sync later
             self.error = error.localizedDescription
-            return nil
+            return record
         }
     }
 
-    // MARK: - Toggle Favorite
+    // MARK: - Toggle Favorite (Optimistic with offline support)
 
     func toggleFavorite(_ prompt: PromptRecord) async {
         guard let index = prompts.firstIndex(where: { $0.id == prompt.id }) else { return }
 
         let newValue = !prompt.isFavorite
+
+        // Optimistic update
         prompts[index].isFavorite = newValue
 
-        do {
-            try await APIClient.shared.requestVoid(
-                "/prompts/\(prompt.id)",
-                method: .patch,
-                body: ["isFavorite": newValue]
-            )
-        } catch {
-            // Revert on failure
-            prompts[index].isFavorite = !newValue
-            self.error = error.localizedDescription
-        }
+        // Queue for sync (handles offline case)
+        syncManager.queueFavoriteToggle(promptId: prompt.id, newValue: newValue)
     }
 
-    // MARK: - Delete Prompt
+    // MARK: - Delete Prompt (Optimistic with offline support)
 
     func deletePrompt(_ prompt: PromptRecord) async {
         guard let index = prompts.firstIndex(where: { $0.id == prompt.id }) else { return }
 
+        // Optimistic update
         let removedPrompt = prompts.remove(at: index)
 
-        do {
-            try await APIClient.shared.requestVoid("/prompts/\(prompt.id)", method: .delete)
-        } catch {
-            // Revert on failure
-            prompts.insert(removedPrompt, at: index)
-            self.error = error.localizedDescription
+        // Queue for sync (handles offline case)
+        syncManager.queueDelete(promptId: prompt.id)
+
+        // If we're online, wait for sync to complete
+        if networkMonitor.isConnected {
+            do {
+                try await APIClient.shared.requestVoid("/prompts/\(prompt.id)", method: .delete)
+                dataManager.deletePrompt(id: prompt.id)
+            } catch {
+                // Revert on failure
+                prompts.insert(removedPrompt, at: index)
+                self.error = error.localizedDescription
+            }
         }
     }
 
@@ -170,6 +252,15 @@ final class PromptHistoryManager {
         prompts = []
         currentPage = 1
         totalPages = 1
+        syncManager.clearAllData()
+    }
+
+    // MARK: - Refresh Filters
+
+    func applyFilters() async {
+        currentPage = 1
+        loadFromCache() // Instant filter on cache
+        await fetchPrompts(refresh: true) // Then sync with server
     }
 }
 
