@@ -29,7 +29,7 @@ struct TemplatesView: View {
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
-    private var accentColor: Color { Color.brandCyan }
+    private var accentColor: Color { colorScheme == .light ? Color.brandPurple : Color.brandCyan }
 
     var body: some View {
         NavigationStack {
@@ -271,7 +271,7 @@ struct TemplateCardView: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
-    private var accentColor: Color { Color.brandCyan }
+    private var accentColor: Color { colorScheme == .light ? Color.brandPurple : Color.brandCyan }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -377,7 +377,7 @@ struct CategoryChipView: View {
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var accentColor: Color { Color.brandCyan }
+    private var accentColor: Color { colorScheme == .light ? Color.brandPurple : Color.brandCyan }
 
     var body: some View {
         Button(action: action) {
@@ -420,7 +420,7 @@ struct TemplateDetailView: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
-    private var accentColor: Color { Color.brandCyan }
+    private var accentColor: Color { colorScheme == .light ? Color.brandPurple : Color.brandCyan }
 
     var body: some View {
         NavigationStack {
@@ -610,7 +610,7 @@ struct CreateTemplateSheet: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
-    private var accentColor: Color { Color.brandCyan }
+    private var accentColor: Color { colorScheme == .light ? Color.brandPurple : Color.brandCyan }
 
     private var canCreate: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty &&
