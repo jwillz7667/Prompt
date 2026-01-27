@@ -75,6 +75,8 @@ async function sendEmail(options: EmailOptions): Promise<boolean> {
 // EMAIL TEMPLATES - BASE LAYOUT
 // ============================================================================
 
+const LOGO_URL = process.env['LOGO_URL'] || `${APP_URL}/app-icon.png`;
+
 function baseTemplate(content: string, preheader: string = ''): string {
   return `
 <!DOCTYPE html>
@@ -87,7 +89,7 @@ function baseTemplate(content: string, preheader: string = ''): string {
     body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f7; }
     .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
     .header { background: linear-gradient(135deg, #512AD4 0%, #7B5CD6 100%); padding: 32px; text-align: center; }
-    .header img { width: 60px; height: 60px; }
+    .header-logo { width: 64px; height: 64px; border-radius: 14px; }
     .header h1 { color: #ffffff; font-size: 24px; font-weight: 600; margin: 16px 0 0 0; }
     .content { padding: 32px; color: #1d1d1f; line-height: 1.6; }
     .content h2 { color: #1d1d1f; font-size: 20px; font-weight: 600; margin: 0 0 16px 0; }
@@ -114,6 +116,7 @@ function baseTemplate(content: string, preheader: string = ''): string {
   <div class="preheader">${preheader}</div>
   <div class="container">
     <div class="header">
+      <img src="${LOGO_URL}" alt="${APP_NAME}" class="header-logo" />
       <h1>${APP_NAME}</h1>
     </div>
     <div class="content">
