@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var showTemplates = false
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var syncManager = SyncManager.shared
+    @State private var deeplinkManager = DeeplinkManager.shared
 
     // Animation states
     @State private var headerScale: CGFloat = 1.0
@@ -218,6 +219,35 @@ struct ContentView: View {
         }
         .onAppear {
             headerScale = 0.9
+        }
+        // Handle deeplinks from widgets
+        .onChange(of: deeplinkManager.shouldOpenEnhance) { _, shouldOpen in
+            if shouldOpen {
+                // Already on enhance screen, just clear and focus
+                withAnimation(.spring(response: 0.4)) {
+                    showEnhancedView = false
+                }
+                isTextEditorFocused = true
+                deeplinkManager.clearEnhanceTrigger()
+            }
+        }
+        .onChange(of: deeplinkManager.shouldOpenHistory) { _, shouldOpen in
+            if shouldOpen {
+                showHistory = true
+                deeplinkManager.clearHistoryTrigger()
+            }
+        }
+        .onChange(of: deeplinkManager.shouldOpenSettings) { _, shouldOpen in
+            if shouldOpen {
+                showSettings = true
+                deeplinkManager.clearSettingsTrigger()
+            }
+        }
+        .onChange(of: deeplinkManager.shouldOpenPaywall) { _, shouldOpen in
+            if shouldOpen {
+                showPaywall = true
+                deeplinkManager.clearPaywallTrigger()
+            }
         }
     }
 

@@ -15,6 +15,7 @@ struct PromptApp: App {
     @State private var historyManager = PromptHistoryManager.shared
     @State private var storeKitManager = StoreKitManager.shared
     @State private var syncManager = SyncManager.shared
+    @State private var deeplinkManager = DeeplinkManager.shared
 
     init() {
         // Configure Firebase Analytics and Crashlytics
@@ -24,6 +25,10 @@ struct PromptApp: App {
     var body: some Scene {
         WindowGroup {
             contentView
+                .onOpenURL { url in
+                    // Handle deeplinks from widgets, notifications, etc.
+                    deeplinkManager.handleURL(url)
+                }
         }
     }
 

@@ -249,6 +249,9 @@ final class StoreKitManager {
         if let sub = subscriptionInfo {
             shared.updateSubscription(tier: sub.tier.rawValue)
         }
+
+        // Reload widgets to reflect updated data
+        shared.reloadWidgets()
     }
 
     // MARK: - Start Free Trial

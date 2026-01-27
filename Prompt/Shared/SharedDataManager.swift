@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import WidgetKit
 
 final class SharedDataManager: @unchecked Sendable {
     static let shared = SharedDataManager()
@@ -189,5 +190,26 @@ final class SharedDataManager: @unchecked Sendable {
         for key in keys {
             defaults?.removeObject(forKey: key)
         }
+        reloadWidgets()
     }
+
+    // MARK: - Widget Reload
+
+    /// Reload all widgets to reflect updated data
+    func reloadWidgets() {
+        #if !WIDGET_EXTENSION
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
+    }
+
+    /// Reload specific widget kinds
+    func reloadWidget(kind: String) {
+        #if !WIDGET_EXTENSION
+        WidgetCenter.shared.reloadTimelines(ofKind: kind)
+        #endif
+    }
+
+    // Widget kind identifiers
+    static let quotaWidgetKind = "QuotaWidget"
+    static let quickEnhanceWidgetKind = "QuickEnhanceWidget"
 }
