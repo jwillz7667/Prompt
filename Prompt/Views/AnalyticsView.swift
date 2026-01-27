@@ -141,11 +141,11 @@ struct AnalyticsView: View {
     // MARK: - Prompts Chart Section
 
     private func promptsChartSection(_ analytics: AnalyticsData) -> some View {
-        // Convert string dates to Date objects for proper chart spacing
-        let chartData = analytics.charts.promptsByDay.compactMap { item -> (date: Date, count: Int)? in
+        // Convert string dates to Date objects with proper local timezone handling
+        let chartData = analytics.charts.promptsByDay.compactMap { item -> ChartDataPoint? in
             guard let date = parseDate(item.date) else { return nil }
-            return (date: date, count: item.count)
-        }
+            return ChartDataPoint(date: date, count: item.count)
+        }.sorted { $0.date < $1.date }
 
         return VStack(alignment: .leading, spacing: 12) {
             Text("Prompts Over Time")
@@ -159,17 +159,19 @@ struct AnalyticsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 60)
             } else {
-                Chart(chartData, id: \.date) { item in
+                Chart(chartData) { item in
                     BarMark(
                         x: .value("Date", item.date, unit: .day),
-                        y: .value("Count", item.count)
+                        y: .value("Count", item.count),
+                        width: barWidth
                     )
                     .foregroundStyle(buttonPrimary.gradient)
-                    .cornerRadius(4)
+                    .cornerRadius(3)
                 }
                 .frame(height: 200)
+                .chartXScale(domain: chartXDomain(for: chartData))
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: xAxisLabelCount)) { value in
+                    AxisMarks(values: .stride(by: xAxisStride, count: xAxisStrideCount)) { value in
                         AxisGridLine()
                         AxisValueLabel(centered: true) {
                             if let date = value.as(Date.self) {
@@ -200,17 +202,59 @@ struct AnalyticsView: View {
         .padding(.horizontal)
     }
 
-    /// Determine the number of X-axis labels based on selected period
-    private var xAxisLabelCount: Int {
+    /// Calculate chart X domain to ensure proper bar alignment
+    private func chartXDomain(for data: [ChartDataPoint]) -> ClosedRange<Date> {
+        guard let firstDate = data.first?.date,
+              let lastDate = data.last?.date else {
+            let now = Date()
+            return now...now
+        }
+        // Add half-day padding on each side for bar centering
+        let calendar = Calendar.current
+        let startDate = calendar.date(byAdding: .hour, value: -12, to: calendar.startOfDay(for: firstDate))!
+        let endDate = calendar.date(byAdding: .hour, value: 36, to: calendar.startOfDay(for: lastDate))!
+        return startDate...endDate
+    }
+
+    /// X-axis stride unit based on selected period
+    private var xAxisStride: Calendar.Component {
         switch selectedPeriod {
         case 7:
-            return 7
+            return .day
         case 30:
-            return 6
+            return .day
         case 90:
-            return 6
+            return .day
         default:
-            return 7
+            return .day
+        }
+    }
+
+    /// X-axis stride count
+    private var xAxisStrideCount: Int {
+        switch selectedPeriod {
+        case 7:
+            return 1  // Every day
+        case 30:
+            return 5  // Every 5 days
+        case 90:
+            return 15 // Every 15 days
+        default:
+            return 5
+        }
+    }
+
+    /// Bar width based on selected period
+    private var barWidth: MarkDimension {
+        switch selectedPeriod {
+        case 7:
+            return .ratio(0.6)
+        case 30:
+            return .ratio(0.7)
+        case 90:
+            return .ratio(0.8)
+        default:
+            return .ratio(0.6)
         }
     }
 
@@ -299,11 +343,17 @@ struct AnalyticsView: View {
         return "\(number)"
     }
 
-    /// Parse ISO8601 date string to Date object
+    /// Parse ISO8601 date string to Date object in local timezone
     private func parseDate(_ dateStr: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate]
-        return formatter.date(from: dateStr)
+        // Handle both "2024-01-15" and "2024-01-15T00:00:00.000Z" formats
+        let dateOnly = dateStr.prefix(10)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone.current  // Parse as local time, not UTC
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        return formatter.date(from: String(dateOnly))
     }
 
     /// Format axis date based on selected period
@@ -441,6 +491,14 @@ final class AnalyticsViewModel {
             #endif
         }
     }
+}
+
+// MARK: - Chart Data Point
+
+struct ChartDataPoint: Identifiable {
+    let id = UUID()
+    let date: Date
+    let count: Int
 }
 
 // MARK: - Data Models
