@@ -169,8 +169,9 @@ struct AnalyticsView: View {
                 }
                 .frame(height: 200)
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: xAxisStride)) { value in
-                        AxisValueLabel {
+                    AxisMarks(values: .automatic(desiredCount: xAxisLabelCount)) { value in
+                        AxisGridLine()
+                        AxisValueLabel(centered: true) {
                             if let date = value.as(Date.self) {
                                 Text(formatAxisDate(date))
                                     .font(.caption2)
@@ -199,17 +200,17 @@ struct AnalyticsView: View {
         .padding(.horizontal)
     }
 
-    /// Determine the X-axis stride based on selected period to avoid label overlap
-    private var xAxisStride: Calendar.Component {
+    /// Determine the number of X-axis labels based on selected period
+    private var xAxisLabelCount: Int {
         switch selectedPeriod {
         case 7:
-            return .day
+            return 7
         case 30:
-            return .weekOfYear
+            return 6
         case 90:
-            return .weekOfYear
+            return 6
         default:
-            return .day
+            return 7
         }
     }
 
