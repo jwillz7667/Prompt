@@ -342,7 +342,7 @@ struct TicketRow: View {
 
                 Spacer()
 
-                Text(ticket.createdAt, style: .relative)
+                Text(ticket.createdAt, format: .dateTime.month(.abbreviated).day().hour().minute())
                     .font(.caption)
                     .foregroundStyle(textSecondary)
             }
@@ -400,7 +400,7 @@ struct TicketDetailView: View {
                                     .font(.headline)
                                     .foregroundStyle(textPrimary)
 
-                                Text("Created \(ticket.createdAt, style: .relative)")
+                                Text("Created \(ticket.createdAt, format: .dateTime.month(.abbreviated).day().year().hour().minute())")
                                     .font(.caption)
                                     .foregroundStyle(textSecondary)
                             }
