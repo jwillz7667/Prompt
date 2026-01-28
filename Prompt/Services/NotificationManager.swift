@@ -159,6 +159,9 @@ final class NotificationManager: NSObject, ObservableObject {
 
         switch type {
         case .supportMessage:
+            // Increment unread count
+            UnreadMessageManager.shared.incrementUnread()
+
             if let ticketId = userInfo["ticketId"] as? String {
                 onSupportMessageReceived?(ticketId)
             }
@@ -170,6 +173,11 @@ final class NotificationManager: NSObject, ObservableObject {
         }
 
         completion()
+    }
+
+    /// Called when a support message is received via socket (app in foreground)
+    func handleIncomingSupportMessage() {
+        UnreadMessageManager.shared.incrementUnread()
     }
 
     // MARK: - Badge Management

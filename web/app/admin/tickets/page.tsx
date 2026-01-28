@@ -4,6 +4,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getTickets, type Ticket } from '@/lib/api/admin';
 
+// Helper to check if ticket has unread messages (last message is from user)
+const hasUnreadMessages = (ticket: Ticket): boolean => {
+  if (!ticket.messages || ticket.messages.length === 0) return false;
+  const lastMessage = ticket.messages[ticket.messages.length - 1];
+  // Ticket is "unread" if last message is from user and ticket is not closed/resolved
+  return lastMessage.role === 'user' && !['CLOSED', 'RESOLVED'].includes(ticket.status);
+};
+
 const statusColors: Record<string, string> = {
   OPEN: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   IN_PROGRESS: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -59,7 +67,15 @@ export default function TicketsPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Support Tickets</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-white">Support Tickets</h1>
+            {/* Unread count badge */}
+            {tickets.filter(hasUnreadMessages).length > 0 && (
+              <span className="px-2.5 py-1 text-sm font-semibold bg-cyan-500 text-white rounded-full">
+                {tickets.filter(hasUnreadMessages).length} awaiting reply
+              </span>
+            )}
+          </div>
           <p className="text-gray-400 mt-1">Manage customer support requests</p>
         </div>
 
@@ -122,14 +138,29 @@ export default function TicketsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {tickets.map((ticket) => (
-                <tr key={ticket.id} className="hover:bg-gray-750 transition">
+              {tickets.map((ticket) => {
+                const isUnread = hasUnreadMessages(ticket);
+                return (
+                <tr key={ticket.id} className={`hover:bg-gray-750 transition ${isUnread ? 'bg-cyan-500/5' : ''}`}>
                   <td className="px-6 py-4">
-                    <div>
-                      <p className="text-white font-medium">{ticket.subject}</p>
-                      <p className="text-gray-500 text-sm mt-0.5">
-                        #{ticket.id.slice(0, 8).toUpperCase()} · {ticket.category}
-                      </p>
+                    <div className="flex items-start gap-2">
+                      {/* Unread indicator dot */}
+                      {isUnread && (
+                        <span className="mt-1.5 flex-shrink-0 w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
+                      )}
+                      <div>
+                        <p className={`font-medium ${isUnread ? 'text-white' : 'text-white'}`}>
+                          {ticket.subject}
+                          {isUnread && (
+                            <span className="ml-2 inline-flex px-1.5 py-0.5 text-[10px] font-semibold bg-cyan-500 text-white rounded">
+                              NEW
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-gray-500 text-sm mt-0.5">
+                          #{ticket.id.slice(0, 8).toUpperCase()} · {ticket.category}
+                        </p>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -156,16 +187,21 @@ export default function TicketsPage() {
                   <td className="px-6 py-4 text-right">
                     <Link
                       href={`/admin/tickets/${ticket.id}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition"
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition ${
+                        isUnread
+                          ? 'bg-cyan-500 hover:bg-cyan-400'
+                          : 'bg-cyan-600 hover:bg-cyan-500'
+                      }`}
                     >
-                      View
+                      {isUnread ? 'Reply' : 'View'}
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </Link>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>

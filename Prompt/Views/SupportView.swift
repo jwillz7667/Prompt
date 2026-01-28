@@ -174,6 +174,8 @@ struct SupportView: View {
                     messages.append(welcomeMessage)
                 }
                 setupSocketCallbacks()
+                // Mark all support messages as read when view opens
+                UnreadMessageManager.shared.markAllAsRead()
             }
             .onDisappear {
                 socketManager.disconnect()

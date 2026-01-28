@@ -178,6 +178,11 @@ final class SupportSocketManager: ObservableObject {
                     createdAt: self.parseDate(messageDict["createdAt"] as? String)
                 )
 
+                // Increment unread count for agent messages
+                if role == "agent" {
+                    NotificationManager.shared.handleIncomingSupportMessage()
+                }
+
                 self.onMessageReceived?(message)
             }
         }

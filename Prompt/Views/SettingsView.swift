@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SettingsManager.self) private var settings
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var unreadManager = UnreadMessageManager.shared
 
     @State private var showSupport = false
 
@@ -153,14 +154,44 @@ struct SettingsView: View {
                 Section {
                     Button {
                         showSupport = true
+                        // Mark messages as read when opening support
+                        unreadManager.markAllAsRead()
                     } label: {
                         HStack {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .foregroundStyle(accentColor)
-                                .frame(width: 28)
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    .foregroundStyle(accentColor)
+                                    .frame(width: 28)
+
+                                // Red notification badge
+                                if unreadManager.hasUnreadMessages {
+                                    Circle()
+                                        .fill(.red)
+                                        .frame(width: 12, height: 12)
+                                        .overlay(
+                                            Text(unreadManager.unreadCount > 9 ? "9+" : "\(unreadManager.unreadCount)")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                        .offset(x: 6, y: -4)
+                                }
+                            }
                             Text("Contact Support")
                                 .foregroundStyle(textPrimary)
                             Spacer()
+
+                            // Show "New" label if there are unread messages
+                            if unreadManager.hasUnreadMessages {
+                                Text("New")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.red)
+                                    .clipShape(Capsule())
+                            }
+
                             Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .foregroundStyle(textSecondary)
