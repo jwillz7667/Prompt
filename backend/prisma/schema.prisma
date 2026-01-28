@@ -451,25 +451,28 @@ enum TicketCategory {
 }
 
 model SupportTicket {
-  id          String         @id @default(cuid())
-  userId      String
+  id                String         @id @default(cuid())
+  userId            String
 
   // Ticket details
-  subject     String
-  category    TicketCategory @default(OTHER)
-  priority    TicketPriority @default(MEDIUM)
-  status      TicketStatus   @default(OPEN)
+  subject           String
+  category          TicketCategory @default(OTHER)
+  priority          TicketPriority @default(MEDIUM)
+  status            TicketStatus   @default(OPEN)
+
+  // Assigned support agent name (for display purposes)
+  assignedAgentName String?
 
   // AI-generated summary from chat
-  summary     String?        @db.Text
+  summary           String?        @db.Text
 
   // Timestamps
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  resolvedAt  DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  resolvedAt        DateTime?
 
   // Relations
-  messages    SupportMessage[]
+  messages          SupportMessage[]
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([status])

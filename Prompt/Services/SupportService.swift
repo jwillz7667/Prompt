@@ -134,6 +134,7 @@ struct SupportTicket: Codable, Identifiable, Sendable {
     let priority: TicketPriority
     let status: TicketStatus
     let summary: String?
+    let assignedAgentName: String?
     let createdAt: Date
     let updatedAt: Date
     let resolvedAt: Date?
@@ -148,6 +149,7 @@ struct SupportTicket: Codable, Identifiable, Sendable {
         priority = try container.decode(TicketPriority.self, forKey: .priority)
         status = try container.decode(TicketStatus.self, forKey: .status)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        assignedAgentName = try container.decodeIfPresent(String.self, forKey: .assignedAgentName)
         messages = try container.decodeIfPresent([SupportMessage].self, forKey: .messages)
 
         let formatter = ISO8601DateFormatter()
@@ -167,7 +169,7 @@ struct SupportTicket: Codable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, userId, subject, category, priority, status, summary, createdAt, updatedAt, resolvedAt, messages
+        case id, userId, subject, category, priority, status, summary, assignedAgentName, createdAt, updatedAt, resolvedAt, messages
     }
 }
 

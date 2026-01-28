@@ -11,6 +11,7 @@ import SwiftUI
 struct SupportView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthManager.self) private var authManager
     @StateObject private var supportService = SupportService.shared
 
     @State private var messageText = ""
@@ -26,6 +27,10 @@ struct SupportView: View {
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private var userEmail: String {
+        authManager.currentUser?.email ?? "You"
+    }
 
     private var welcomeMessage: SupportMessage {
         SupportMessage(
@@ -49,7 +54,8 @@ struct SupportView: View {
                                 MessageBubble(
                                     message: message,
                                     textPrimary: textPrimary,
-                                    textSecondary: textSecondary
+                                    textSecondary: textSecondary,
+                                    userEmail: userEmail
                                 )
                                 .id(message.id)
                             }
@@ -207,8 +213,44 @@ struct MessageBubble: View {
     let message: SupportMessage
     let textPrimary: Color
     let textSecondary: Color
+    var userEmail: String? = nil
+    var assignedAgentName: String? = nil
 
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private var senderName: String {
+        if message.isUser {
+            return userEmail ?? "You"
+        } else if message.role == "agent" {
+            return assignedAgentName ?? "Support Agent"
+        } else {
+            return "Prompt Bot"
+        }
+    }
+
+    private var senderIcon: String {
+        if message.isUser {
+            return "person.circle.fill"
+        } else if message.role == "agent" {
+            return "headphones.circle.fill"
+        } else {
+            return "cpu.fill"
+        }
+    }
+
+    private var isAgent: Bool {
+        message.role == "agent"
+    }
+
+    private var bubbleColor: Color {
+        if message.isUser {
+            return accentColor
+        } else if isAgent {
+            return Color.green.opacity(colorScheme == .dark ? 0.3 : 0.15)
+        } else {
+            return Color.adaptiveBackgroundSecondary
+        }
+    }
 
     var body: some View {
         HStack {
@@ -216,14 +258,35 @@ struct MessageBubble: View {
                 Spacer(minLength: 60)
             }
 
-            VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: message.isUser ? .trailing : .leading, spacing: 6) {
+                // Sender info
+                HStack(spacing: 4) {
+                    if !message.isUser {
+                        Image(systemName: senderIcon)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(isAgent ? .green : accentColor)
+                    }
+
+                    Text(senderName)
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .foregroundStyle(message.isUser ? textSecondary : (isAgent ? .green : accentColor))
+
+                    if message.isUser {
+                        Image(systemName: senderIcon)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(textSecondary)
+                    }
+                }
+
+                // Message content
                 Text(message.content)
                     .foregroundStyle(message.isUser ? (colorScheme == .dark ? .black : .white) : textPrimary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(message.isUser ? accentColor : Color.adaptiveBackgroundSecondary)
+                    .background(bubbleColor)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
 
+                // Timestamp
                 if let createdAt = message.createdAt {
                     Text(createdAt, style: .time)
                         .font(.caption2)
@@ -376,6 +439,7 @@ struct TicketDetailView: View {
     let ticketId: String
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AuthManager.self) private var authManager
     @StateObject private var supportService = SupportService.shared
     @State private var messageText = ""
     @State private var isTyping = false
@@ -385,6 +449,10 @@ struct TicketDetailView: View {
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private var userEmail: String {
+        authManager.currentUser?.email ?? "You"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -425,7 +493,9 @@ struct TicketDetailView: View {
                                     MessageBubble(
                                         message: message,
                                         textPrimary: textPrimary,
-                                        textSecondary: textSecondary
+                                        textSecondary: textSecondary,
+                                        userEmail: userEmail,
+                                        assignedAgentName: ticket.assignedAgentName
                                     )
                                     .id(message.id)
                                 }

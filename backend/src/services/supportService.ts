@@ -34,6 +34,7 @@ export interface Ticket {
   priority: TicketPriority;
   status: TicketStatus;
   summary: string | null;
+  assignedAgentName: string | null;
   createdAt: Date;
   updatedAt: Date;
   resolvedAt: Date | null;
@@ -57,6 +58,29 @@ const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const SUPPORT_MODEL = 'deepseek-chat';
 const MAX_TOKENS = 1024;
 const TEMPERATURE = 0.3; // Lower temperature for more consistent support responses
+
+// Support agent names - one will be randomly assigned per ticket for consistency
+const SUPPORT_AGENT_NAMES = [
+  'Priya',
+  'Carlos',
+  'Yuki',
+  'Amara',
+  'Liam',
+  'Fatima',
+  'Kofi',
+  'Sofia',
+  'Jin',
+  'Anya',
+  'Omar',
+  'Elena',
+  'Kenji',
+  'Zara',
+  'Diego',
+];
+
+function getRandomAgentName(): string {
+  return SUPPORT_AGENT_NAMES[Math.floor(Math.random() * SUPPORT_AGENT_NAMES.length)] as string;
+}
 
 // ============================================================================
 // CONSTRAINED SYSTEM PROMPT
@@ -269,7 +293,7 @@ export async function createTicket(params: CreateTicketParams): Promise<Ticket> 
 
   // Create ticket with messages in a transaction
   const ticket = await prisma.$transaction(async (tx) => {
-    // Create the ticket
+    // Create the ticket with an assigned agent name
     const newTicket = await tx.supportTicket.create({
       data: {
         userId,
@@ -278,6 +302,7 @@ export async function createTicket(params: CreateTicketParams): Promise<Ticket> 
         priority,
         status: 'OPEN',
         summary: aiSummary,
+        assignedAgentName: getRandomAgentName(),
       },
     });
 
