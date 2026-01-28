@@ -23,7 +23,12 @@ import {
   LogOut,
 } from 'lucide-react'
 
-const navigation = [
+const navigation: {
+  name: string
+  href: string
+  icon: typeof Sparkles
+  premium?: boolean
+}[] = [
   { name: 'Enhance', href: '/dashboard', icon: Sparkles },
   { name: 'History', href: '/history', icon: History },
   { name: 'Templates', href: '/templates', icon: FileText },
