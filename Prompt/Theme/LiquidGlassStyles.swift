@@ -197,7 +197,7 @@ struct LiquidGlassButtonModifier: ViewModifier {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .saturation(1.3)
+                            .saturation(1.0)
                     } else {
                         // Neutral glass base for buttons without tint
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -390,7 +390,7 @@ struct LiquidGlassChipModifier: ViewModifier {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .saturation(1.3)
+                    .saturation(1.0)
 
                 // Minimal blur (25% opacity)
                 Capsule()
@@ -834,7 +834,7 @@ private struct GlassCapsuleBackground: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .saturation(1.3)
+                    .saturation(1.0)
             } else {
                 // Neutral glass base
                 Capsule()
