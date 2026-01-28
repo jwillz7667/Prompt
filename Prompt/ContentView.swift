@@ -769,7 +769,7 @@ struct ContentView: View {
             HStack(spacing: 4) {
                 Image(systemName: settings.unchainedEnabled ? "bolt.shield.fill" : "bolt.shield")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(settings.unchainedEnabled ? .purple : textSecondary)
+                    .foregroundStyle(settings.unchainedEnabled ? .white : textSecondary)
 
                 if !isPremium {
                     Image(systemName: "lock.fill")
@@ -815,7 +815,7 @@ struct ContentView: View {
             HStack(spacing: 4) {
                 Image(systemName: settings.deepThinkEnabled ? "brain.head.profile.fill" : "brain.head.profile")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(settings.deepThinkEnabled ? accentColor : textSecondary)
+                    .foregroundStyle(settings.deepThinkEnabled ? .white : textSecondary)
 
                 if !isPremium {
                     Image(systemName: "lock.fill")
