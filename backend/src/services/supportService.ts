@@ -654,10 +654,16 @@ export async function continueTicketChat(
   }
 
   // Build conversation history from ticket messages
-  const conversationHistory: SupportMessage[] = ticket.messages.map((msg) => ({
-    role: msg.role as 'user' | 'assistant',
-    content: msg.content,
-  }));
+  // Filter out or convert agent messages since DeepSeek only accepts user/assistant roles
+  const conversationHistory: SupportMessage[] = ticket.messages
+    .filter((msg) => msg.role === 'user' || msg.role === 'assistant' || msg.role === 'agent')
+    .map((msg) => ({
+      // Treat agent messages as assistant messages for the AI context
+      role: msg.role === 'agent' ? 'assistant' as const : msg.role as 'user' | 'assistant',
+      content: msg.role === 'agent'
+        ? `[Support Agent Response]: ${msg.content}`
+        : msg.content,
+    }));
 
   // Get AI response
   const response = await chatWithSupport({
