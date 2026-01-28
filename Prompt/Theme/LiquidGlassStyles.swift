@@ -169,12 +169,12 @@ struct LiquidGlassButtonModifier: ViewModifier {
         )
     }
 
-    // Top highlight for shiny 3D glass effect - subtle in light mode to preserve color
+    // Top highlight for shiny 3D glass effect - prominent specular highlight
     private var topHighlight: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.35), Color.white.opacity(0.1), Color.clear]
-                : [Color.white.opacity(0.45), Color.white.opacity(0.15), Color.clear],
+                ? [Color.white.opacity(0.7), Color.white.opacity(0.25), Color.clear]
+                : [Color.white.opacity(0.7), Color.white.opacity(0.3), Color.clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -184,19 +184,20 @@ struct LiquidGlassButtonModifier: ViewModifier {
         content
             .background {
                 ZStack {
-                    // Base color layer - vibrant tint color as primary background
+                    // Base color layer - high saturation tint color as primary background
                     if let tint = tintColor {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        tint.opacity(colorScheme == .dark ? 0.7 : 0.85),
-                                        tint.opacity(colorScheme == .dark ? 0.5 : 0.7)
+                                        tint.opacity(colorScheme == .dark ? 0.95 : 0.95),
+                                        tint.opacity(colorScheme == .dark ? 0.8 : 0.85)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
+                            .saturation(1.3)
                     } else {
                         // Neutral glass base for buttons without tint
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -207,15 +208,15 @@ struct LiquidGlassButtonModifier: ViewModifier {
                             )
                     }
 
-                    // Subtle blur material - much lighter than before for clarity
+                    // Minimal blur material (25% opacity)
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
-                        .opacity(tintColor != nil ? (colorScheme == .dark ? 0.3 : 0.15) : 0.5)
+                        .opacity(tintColor != nil ? 0.25 : 0.5)
 
-                    // Top specular highlight for shiny glass look
+                    // Prominent specular highlight for shiny glass look
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(topHighlight)
-                        .opacity(intensity == .subtle ? 0.5 : 0.7)
+                        .opacity(intensity == .subtle ? 0.6 : 0.85)
 
                     // Inner glow for depth - subtle in light mode
                     if tintColor != nil {
@@ -342,9 +343,7 @@ struct LiquidGlassChipModifier: ViewModifier {
 
     private var highlightGradient: LinearGradient {
         LinearGradient(
-            colors: colorScheme == .dark
-                ? [Color.white.opacity(0.25), Color.white.opacity(0.05), Color.clear]
-                : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
+            colors: [Color.white.opacity(0.7), Color.white.opacity(0.25), Color.clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -377,26 +376,32 @@ struct LiquidGlassChipModifier: ViewModifier {
     private var chipBackground: some View {
         if let accent = accentColor, isSelected {
             ZStack {
-                // Vibrant color base - strong saturation
+                // High saturation color base
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                accent.opacity(colorScheme == .dark ? 0.85 : 0.9),
-                                accent.opacity(colorScheme == .dark ? 0.65 : 0.75)
+                                accent.opacity(0.95),
+                                accent.opacity(0.8)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
+                    .saturation(1.3)
 
-                // Shiny top highlight - lighter in light mode to not wash out color
+                // Minimal blur (25% opacity)
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.25)
+
+                // Prominent specular highlight
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.35 : 0.3),
-                                Color.white.opacity(colorScheme == .dark ? 0.1 : 0.05),
+                                Color.white.opacity(0.7),
+                                Color.white.opacity(0.25),
                                 Color.clear
                             ],
                             startPoint: .top,
@@ -414,10 +419,10 @@ struct LiquidGlassChipModifier: ViewModifier {
                             : Color.white.opacity(0.8)
                     )
 
-                // Light material
+                // Light material (25% opacity)
                 Capsule()
                     .fill(.ultraThinMaterial)
-                    .opacity(0.4)
+                    .opacity(0.25)
 
                 // Shiny highlight
                 Capsule()
@@ -816,19 +821,20 @@ private struct GlassCapsuleBackground: View {
 
     var body: some View {
         ZStack {
-            // Base color layer - vibrant tint as primary
+            // Base color layer - high saturation tint as primary
             if let tint = tintColor {
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                tint.opacity(colorScheme == .dark ? 0.65 : 0.85),
-                                tint.opacity(colorScheme == .dark ? 0.45 : 0.7)
+                                tint.opacity(0.95),
+                                tint.opacity(0.8)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
+                    .saturation(1.3)
             } else {
                 // Neutral glass base
                 Capsule()
@@ -839,18 +845,16 @@ private struct GlassCapsuleBackground: View {
                     )
             }
 
-            // Light glass material - minimal in light mode to preserve color
+            // Minimal blur material (25% opacity)
             Capsule()
                 .fill(.ultraThinMaterial)
-                .opacity(tintColor != nil ? (colorScheme == .dark ? 0.25 : 0.1) : 0.45)
+                .opacity(tintColor != nil ? 0.25 : 0.45)
 
-            // Shiny top highlight - subtle in light mode to not wash out
+            // Prominent specular highlight
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: colorScheme == .dark
-                            ? [Color.white.opacity(0.35), Color.white.opacity(0.08), Color.clear]
-                            : [Color.white.opacity(0.4), Color.white.opacity(0.1), Color.clear],
+                        colors: [Color.white.opacity(0.7), Color.white.opacity(0.25), Color.clear],
                         startPoint: .top,
                         endPoint: .center
                     )
