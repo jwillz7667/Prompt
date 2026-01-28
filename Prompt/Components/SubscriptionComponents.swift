@@ -29,34 +29,32 @@ struct UsageIndicator: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Progress ring
+        HStack(spacing: 4) {
+            // Compact progress ring
             ZStack {
                 Circle()
-                    .stroke(Color.adaptiveBackgroundTertiary, lineWidth: 3)
-                    .frame(width: 24, height: 24)
+                    .stroke(Color.adaptiveBackgroundTertiary, lineWidth: 2.5)
+                    .frame(width: 20, height: 20)
 
                 if !isUnlimited {
                     Circle()
                         .trim(from: 0, to: progress)
-                        .stroke(statusColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .frame(width: 24, height: 24)
+                        .stroke(statusColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .frame(width: 20, height: 20)
                         .rotationEffect(.degrees(-90))
                 } else {
                     Image(systemName: "infinity")
-                        .font(.caption2.bold())
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.green)
                 }
             }
 
-            // Text
+            // Compact text
             if isUnlimited {
-                Text("Pro")
-                    .font(.caption)
-                    .foregroundStyle(Color.adaptiveTextSecondary)
+                // Show nothing for unlimited - the infinity symbol is enough
             } else {
-                Text("\(remaining) left")
-                    .font(.caption)
+                Text("\(remaining)")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(statusColor)
             }
         }

@@ -97,20 +97,37 @@ struct PaywallView: View {
 
     private var headerSection: some View {
         VStack(spacing: 16) {
-            // Crown icon
+            // Crown icon with glass effect
             ZStack {
+                // Glass background
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 88, height: 88)
+
                 Circle()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.yellow.opacity(0.3),
-                                Color.orange.opacity(0.3)
+                                Color.yellow.opacity(0.2),
+                                Color.orange.opacity(0.15)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 80, height: 80)
+                    .frame(width: 88, height: 88)
+
+                // Highlight
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(colorScheme == .dark ? 0.15 : 0.6), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 88, height: 88)
+                    .opacity(0.5)
 
                 Image(systemName: "crown.fill")
                     .font(.system(size: 36))
@@ -122,6 +139,20 @@ struct PaywallView: View {
                         )
                     )
             }
+            .overlay {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.yellow.opacity(0.5), Color.orange.opacity(0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+                    .frame(width: 88, height: 88)
+            }
+            .shadow(color: Color.yellow.opacity(0.3), radius: 12, y: 0)
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15), radius: 10, y: 5)
             .padding(.top, 20)
 
             Text("Unlock Premium Prompts")
@@ -164,20 +195,14 @@ struct PaywallView: View {
             } label: {
                 Text("Start")
                     .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(colorScheme == .dark ? .black : .white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(brandPurple)
-                    .clipShape(Capsule())
             }
+            .buttonStyle(GlassCapsuleButtonStyle(tintColor: brandPurple, intensity: .prominent))
         }
         .padding()
-        .background(brandPurple.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(brandPurple.opacity(0.3), lineWidth: 1)
-        )
+        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.8, borderGlow: false)
     }
 
     // MARK: - Tier Comparison
@@ -204,21 +229,16 @@ struct PaywallView: View {
                 }
                 .padding(.vertical, 12)
                 .padding(.horizontal, 16)
-                .background(Color.adaptiveBackgroundTertiary)
+                .background(Color.adaptiveBackgroundTertiary.opacity(0.8))
 
-                Divider()
+                LiquidGlassDivider()
 
                 // Feature rows
                 featureRow("Daily Prompts", free: "10", pro: "100", premium: "Unlimited")
                 featureRow("Prompt Quality", free: "Basic", pro: "Standard", premium: "Advanced")
                 featureRow("Export Prompts", free: false, pro: true, premium: true)
             }
-            .background(Color.adaptiveBackgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.adaptiveBorder, lineWidth: 1)
-            )
+            .liquidGlass(cornerRadius: 12, shadowIntensity: 0.6, borderGlow: false)
         }
     }
 
@@ -339,6 +359,7 @@ struct PaywallView: View {
         let isSelected = selectedProduct?.id == product.id
         let productId = ProductID(rawValue: product.id)
         let isAnnual = productId?.isAnnual ?? false
+        let selectionColor = tier == .premium ? brandPurple : accentColor
 
         return Button {
             selectedProduct = product
@@ -380,29 +401,48 @@ struct PaywallView: View {
                         .foregroundStyle(Color.adaptiveTextSecondary)
                 }
 
-                // Selection indicator
+                // Selection indicator with glass effect
                 ZStack {
                     Circle()
-                        .stroke(isSelected ? (tier == .premium ? brandPurple : Color.adaptiveAccent) : Color.adaptiveBorder, lineWidth: 2)
-                        .frame(width: 24, height: 24)
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 28, height: 28)
+
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: isSelected
+                                    ? [selectionColor.opacity(0.8), selectionColor.opacity(0.4)]
+                                    : [Color.adaptiveBorder.opacity(0.8), Color.adaptiveBorder.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2
+                        )
+                        .frame(width: 28, height: 28)
 
                     if isSelected {
                         Circle()
-                            .fill(tier == .premium ? brandPurple : Color.adaptiveAccent)
+                            .fill(
+                                RadialGradient(
+                                    colors: [selectionColor, selectionColor.opacity(0.8)],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 10
+                                )
+                            )
                             .frame(width: 16, height: 16)
+                            .shadow(color: selectionColor.opacity(0.5), radius: 4)
                     }
                 }
                 .padding(.leading, 8)
             }
             .padding()
-            .background(Color.adaptiveBackgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? (tier == .premium ? brandPurple : Color.adaptiveAccent) : Color.adaptiveBorder, lineWidth: isSelected ? 2 : 1)
-            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(LiquidGlassButtonStyle(
+            cornerRadius: 12,
+            tintColor: isSelected ? selectionColor : nil,
+            intensity: isSelected ? .standard : .subtle
+        ))
     }
 
     // MARK: - Purchase Button
@@ -416,7 +456,7 @@ struct PaywallView: View {
             HStack {
                 if isProcessing {
                     ProgressView()
-                        .tint(.white)
+                        .tint(colorScheme == .dark ? .black : .white)
                 } else {
                     Text(selectedProduct != nil ? "Subscribe Now" : "Select a Plan")
                         .font(.headline)
@@ -424,10 +464,15 @@ struct PaywallView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(selectedProduct != nil ? Color.adaptiveButtonPrimary : Color.adaptiveBackgroundTertiary)
-            .foregroundStyle(selectedProduct != nil ? .white : Color.adaptiveTextTertiary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .foregroundStyle(selectedProduct != nil
+                ? (colorScheme == .dark ? .black : .white)
+                : Color.adaptiveTextTertiary)
         }
+        .buttonStyle(LiquidGlassButtonStyle(
+            cornerRadius: 14,
+            tintColor: selectedProduct != nil ? Color.adaptiveButtonPrimary : nil,
+            intensity: selectedProduct != nil ? .prominent : .subtle
+        ))
         .disabled(selectedProduct == nil || isProcessing)
     }
 
@@ -442,7 +487,10 @@ struct PaywallView: View {
             Text("Restore Purchases")
                 .font(.subheadline)
                 .foregroundStyle(Color.adaptiveTextSecondary)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
         }
+        .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 20))
         .disabled(isProcessing)
     }
 

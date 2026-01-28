@@ -110,7 +110,7 @@ struct ContentView: View {
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 8) {
                         // Sync status indicator
                         if syncManager.pendingCount > 0 || syncManager.isSyncing {
                             SyncStatusIndicator(
@@ -136,7 +136,7 @@ struct ContentView: View {
                             showTemplates = true
                         }
 
-                        toolbarButton(icon: "clock.arrow.trianglehead.counterclockwise.rotate.90") {
+                        toolbarButton(icon: "clock.arrow.circlepath") {
                             triggerHaptic(.light)
                             showHistory = true
                         }
@@ -278,7 +278,7 @@ struct ContentView: View {
 
             Spacer()
 
-            // Dismiss button
+            // Dismiss button - glass circle
             Button {
                 withAnimation(.easeOut(duration: 0.2)) {
                     showDeepThinkInfo = false
@@ -287,10 +287,9 @@ struct ContentView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(textTertiary)
-                    .padding(6)
-                    .background(Circle().fill(bgTertiary.opacity(0.8)))
+                    .frame(width: 28, height: 28)
             }
-            .buttonStyle(BounceButtonStyle())
+            .buttonStyle(GlassIconButtonStyle(size: 28))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -319,11 +318,12 @@ struct ContentView: View {
     private func toolbarButton(icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(textPrimary)
                 .contentTransition(.symbolEffect(.replace))
+                .frame(width: 32, height: 32)
         }
-        .buttonStyle(BounceButtonStyle())
+        .buttonStyle(GlassIconButtonStyle(size: 32))
     }
 
     private var profileButton: some View {
@@ -338,27 +338,73 @@ struct ContentView: View {
                         .resizable()
                         .scaledToFill()
                 } placeholder: {
-                    profilePlaceholder
+                    profilePlaceholderContent
                 }
                 .frame(width: 32, height: 32)
                 .clipShape(Circle())
-                .overlay(Circle().stroke(borderColor, lineWidth: 1))
+                .overlay {
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: colorScheme == .dark
+                                    ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
+                                    : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                }
+                .shadow(color: colorScheme == .dark ? Color.black.opacity(0.4) : Color.brandPurple.opacity(0.15), radius: 6, y: 3)
             } else {
                 profilePlaceholder
             }
         }
-        .buttonStyle(BounceButtonStyle())
+        .buttonStyle(.plain)
+    }
+
+    private var profilePlaceholderContent: some View {
+        Image(systemName: "person.fill")
+            .font(.caption)
+            .foregroundStyle(textSecondary)
     }
 
     private var profilePlaceholder: some View {
-        Circle()
-            .fill(bgTertiary)
-            .frame(width: 32, height: 32)
-            .overlay {
-                Image(systemName: "person.fill")
-                    .font(.caption)
-                    .foregroundStyle(textSecondary)
-            }
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: 36, height: 36)
+
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: colorScheme == .dark
+                            ? [Color.white.opacity(0.1), Color.clear]
+                            : [Color.white.opacity(0.8), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 36, height: 36)
+
+            Image(systemName: "person.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(textSecondary)
+        }
+        .overlay {
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: colorScheme == .dark
+                            ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
+                            : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.2)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+        .shadow(color: colorScheme == .dark ? Color.black.opacity(0.4) : Color.brandPurple.opacity(0.15), radius: 6, y: 3)
     }
 
     // MARK: - Background
@@ -370,35 +416,38 @@ struct ContentView: View {
     // MARK: - Header Card
 
     private var headerCard: some View {
-        VStack(spacing: 16) {
+        HStack(spacing: 16) {
             // Use app logo if available
             Group {
                 if UIImage(named: "AppLogo") != nil {
                     Image("AppLogo")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 60, height: 60)
+                        .frame(width: 48, height: 48)
                 } else {
                     Image(systemName: "wand.and.stars.inverse")
-                        .font(.system(size: 44, weight: .light))
+                        .font(.system(size: 32, weight: .light))
                         .foregroundStyle(textPrimary)
                         .symbolEffect(.pulse, options: .repeating)
                 }
             }
 
-            Text("Transform Your Prompts")
-                .font(.system(.title3, design: .rounded, weight: .semibold))
-                .foregroundStyle(textPrimary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Transform Your Prompts")
+                    .font(.system(.headline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
 
-            Text("Enter any prompt and get an optimized version using advanced AI techniques")
-                .font(.subheadline)
-                .foregroundStyle(textSecondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(3)
+                Text("Get optimized prompts using advanced AI")
+                    .font(.subheadline)
+                    .foregroundStyle(textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
         }
         .frame(maxWidth: .infinity)
-        .padding(24)
-        .liquidGlass(cornerRadius: 24, shadowIntensity: 1.2, borderGlow: true)
+        .padding(16)
+        .liquidGlass(cornerRadius: 20, shadowIntensity: 1.0, borderGlow: true)
     }
 
     // MARK: - Unified Prompt Section (In-Place Transformation)
@@ -483,8 +532,10 @@ struct ContentView: View {
                             Label("Clear", systemImage: "xmark.circle.fill")
                                 .font(.system(.caption, weight: .medium))
                                 .foregroundStyle(textSecondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
                         }
-                        .buttonStyle(BounceButtonStyle())
+                        .buttonStyle(GlassCapsuleButtonStyle())
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -647,18 +698,11 @@ struct ContentView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background {
-                Capsule()
-                    .fill(settings.deepThinkEnabled ? accentColor.opacity(0.15) : bgTertiary.opacity(0.8))
-            }
-            .overlay {
-                if settings.deepThinkEnabled {
-                    Capsule()
-                        .stroke(accentColor.opacity(0.4), lineWidth: 1)
-                }
-            }
         }
-        .buttonStyle(BounceButtonStyle())
+        .buttonStyle(GlassCapsuleButtonStyle(
+            tintColor: settings.deepThinkEnabled ? accentColor : nil,
+            intensity: settings.deepThinkEnabled ? .standard : .subtle
+        ))
     }
 
     private var enhancedPromptView: some View {
@@ -702,7 +746,7 @@ struct ContentView: View {
 
             // Action buttons row
             VStack(spacing: 12) {
-                // Primary action - Copy button (prominent)
+                // Primary action - Copy button (prominent glass)
                 Button {
                     triggerHaptic(.light)
                     viewModel.copyToClipboard()
@@ -715,15 +759,13 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .foregroundStyle(.white)
-                    .background(accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(colorScheme == .dark ? .black : .white)
                 }
-                .buttonStyle(ElasticButtonStyle())
+                .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 12, tintColor: accentColor, intensity: .prominent))
 
-                // Secondary actions row - AI services
-                HStack(spacing: 10) {
-                    // Try in Claude - #D97757 background
+                // Secondary actions row - AI services (glass style)
+                HStack(spacing: 8) {
+                    // Try in Claude - glass with terracotta tint
                     Button {
                         triggerHaptic(.light)
                         openInClaude()
@@ -731,17 +773,17 @@ struct ContentView: View {
                         Image("claude-logo")
                             .resizable()
                             .scaledToFit()
-                            .frame(height: 32)
+                            .frame(height: 28)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color(red: 0.85, green: 0.47, blue: 0.34)) // #D97757
-                            }
                     }
-                    .buttonStyle(BounceButtonStyle())
+                    .buttonStyle(LiquidGlassButtonStyle(
+                        cornerRadius: 12,
+                        tintColor: Color(red: 0.85, green: 0.47, blue: 0.34), // #D97757
+                        intensity: .standard
+                    ))
 
-                    // Try in ChatGPT - #D8D8D8 background
+                    // Try in ChatGPT - glass with pure white background
                     Button {
                         triggerHaptic(.light)
                         openInChatGPT()
@@ -749,20 +791,38 @@ struct ContentView: View {
                         Image("chatgpt-logo")
                             .resizable()
                             .scaledToFit()
-                            .frame(height: 32)
+                            .frame(height: 28)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color(red: 0.85, green: 0.85, blue: 0.85)) // #D8D8D8
-                            }
                     }
-                    .buttonStyle(BounceButtonStyle())
+                    .buttonStyle(LiquidGlassButtonStyle(
+                        cornerRadius: 12,
+                        tintColor: .white,
+                        intensity: .standard
+                    ))
+
+                    // Try in Gemini - glass with pure white background
+                    Button {
+                        triggerHaptic(.light)
+                        openInGemini()
+                    } label: {
+                        Image("gemini-logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 28)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(LiquidGlassButtonStyle(
+                        cornerRadius: 12,
+                        tintColor: .white,
+                        intensity: .standard
+                    ))
                 }
 
-                // Tertiary row - Favorite, Share and Clear
+                // Tertiary row - Favorite, Share and Clear (glass style)
                 HStack(spacing: 10) {
-                    // Favorite button
+                    // Favorite button - glass with yellow tint when active
                     Button {
                         triggerHaptic(.light)
                         toggleCurrentPromptFavorite()
@@ -777,24 +837,12 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .foregroundStyle(viewModel.isCurrentPromptFavorite ? .yellow : textSecondary)
-                        .background {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    if viewModel.isCurrentPromptFavorite {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(Color.yellow.opacity(0.15))
-                                    }
-                                }
-                        }
-                        .overlay {
-                            if viewModel.isCurrentPromptFavorite {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
-                            }
-                        }
                     }
-                    .buttonStyle(BounceButtonStyle())
+                    .buttonStyle(LiquidGlassButtonStyle(
+                        cornerRadius: 10,
+                        tintColor: viewModel.isCurrentPromptFavorite ? .yellow : nil,
+                        intensity: viewModel.isCurrentPromptFavorite ? .standard : .subtle
+                    ))
 
                     ShareLink(item: viewModel.enhancedPrompt) {
                         HStack(spacing: 6) {
@@ -806,12 +854,8 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .foregroundStyle(textSecondary)
-                        .background {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        }
                     }
-                    .buttonStyle(BounceButtonStyle())
+                    .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
 
                     Button {
                         triggerHaptic(.light)
@@ -826,12 +870,8 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .foregroundStyle(textSecondary)
-                        .background {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        }
                     }
-                    .buttonStyle(BounceButtonStyle())
+                    .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
                 }
             }
         }
@@ -1011,9 +1051,45 @@ struct ContentView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(.ultraThinMaterial)
+        .background {
+            ZStack {
+                Capsule()
+                    .fill(colorScheme == .dark
+                        ? Color(red: 38/255, green: 38/255, blue: 40/255)
+                        : Color.white)
+
+                Capsule()
+                    .fill(.ultraThinMaterial)
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: colorScheme == .dark
+                                ? [Color.white.opacity(0.1), Color.clear]
+                                : [Color.white.opacity(0.8), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .opacity(0.5)
+            }
+        }
         .clipShape(Capsule())
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15), radius: 20, y: 8)
+        .overlay {
+            Capsule()
+                .stroke(
+                    LinearGradient(
+                        colors: colorScheme == .dark
+                            ? [accentColor.opacity(0.4), accentColor.opacity(0.1)]
+                            : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.2)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+        .shadow(color: accentColor.opacity(0.2), radius: 12, y: 0)
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.5 : 0.15), radius: 20, y: 8)
         .padding(.bottom, 30)
     }
 
@@ -1044,6 +1120,15 @@ struct ContentView: View {
         guard !viewModel.enhancedPrompt.isEmpty,
               let encodedPrompt = viewModel.enhancedPrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    private func openInGemini() {
+        guard !viewModel.enhancedPrompt.isEmpty,
+              let encodedPrompt = viewModel.enhancedPrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://gemini.google.com/app?q=\(encodedPrompt)") else {
             return
         }
         UIApplication.shared.open(url)

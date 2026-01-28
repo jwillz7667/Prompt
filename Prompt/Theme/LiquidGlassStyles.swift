@@ -127,26 +127,53 @@ struct LiquidGlassButtonModifier: ViewModifier {
 
     let cornerRadius: CGFloat
     let isPressed: Bool
+    let tintColor: Color?
+    let intensity: GlassIntensity
+
+    enum GlassIntensity {
+        case subtle    // Light glass, minimal effect
+        case standard  // Default glass appearance
+        case prominent // Strong glass with more blur and highlights
+    }
+
+    init(cornerRadius: CGFloat = 12, isPressed: Bool = false, tintColor: Color? = nil, intensity: GlassIntensity = .standard) {
+        self.cornerRadius = cornerRadius
+        self.isPressed = isPressed
+        self.tintColor = tintColor
+        self.intensity = intensity
+    }
 
     private var pressedScale: CGFloat {
         isPressed ? 0.97 : 1.0
     }
 
-    private var buttonBorderGradient: LinearGradient {
-        LinearGradient(
+    // Border gradient - bright edge highlight
+    private var borderGradient: LinearGradient {
+        if let tint = tintColor {
+            return LinearGradient(
+                colors: [
+                    tint.opacity(colorScheme == .dark ? 0.6 : 0.5),
+                    tint.opacity(colorScheme == .dark ? 0.3 : 0.2)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        return LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.1), Color.white.opacity(0.05)]
-                : [Color.brandPurple.opacity(0.25), Color.brandPurple.opacity(0.15)],
+                ? [Color.white.opacity(0.25), Color.white.opacity(0.08)]
+                : [Color.white.opacity(0.9), Color.white.opacity(0.4)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    private var buttonHighlightGradient: LinearGradient {
+    // Top highlight for 3D effect
+    private var topHighlight: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.08), Color.white.opacity(0.02)]
-                : [Color.white.opacity(0.9), Color.brandPurple.opacity(0.1)],
+                ? [Color.white.opacity(0.2), Color.white.opacity(0.05), Color.clear]
+                : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -156,34 +183,36 @@ struct LiquidGlassButtonModifier: ViewModifier {
         content
             .background {
                 ZStack {
-                    // Solid base - iOS elevated surface
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(
-                            colorScheme == .dark
-                                ? Color(red: 44/255, green: 44/255, blue: 46/255) // #2C2C2E - iOS tertiary
-                                : Color.white
-                        )
-
+                    // Primary glass material - this is the key layer
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
 
+                    // Tint color overlay (if provided)
+                    if let tint = tintColor {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(tint.opacity(colorScheme == .dark ? 0.25 : 0.15))
+                    }
+
+                    // Top highlight shine
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(buttonHighlightGradient)
+                        .fill(topHighlight)
+                        .opacity(intensity == .subtle ? 0.4 : 0.6)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
+                // Glass edge border
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(buttonBorderGradient, lineWidth: 1)
+                    .stroke(borderGradient, lineWidth: intensity == .prominent ? 1.5 : 1)
             }
+            // Subtle shadow
             .shadow(
-                color: colorScheme == .dark
-                    ? Color.black.opacity(0.5)
-                    : Color.brandPurple.opacity(0.2),
-                radius: isPressed ? 4 : 10,
-                y: isPressed ? 2 : 5
+                color: tintColor?.opacity(0.3) ?? Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15),
+                radius: isPressed ? 4 : 8,
+                y: isPressed ? 2 : 4
             )
             .scaleEffect(pressedScale)
+            .opacity(isPressed ? 0.9 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
     }
 }
@@ -441,11 +470,15 @@ extension View {
     /// Apply Liquid Glass button styling
     func liquidGlassButton(
         cornerRadius: CGFloat = 12,
-        isPressed: Bool = false
+        isPressed: Bool = false,
+        tintColor: Color? = nil,
+        intensity: LiquidGlassButtonModifier.GlassIntensity = .standard
     ) -> some View {
         modifier(LiquidGlassButtonModifier(
             cornerRadius: cornerRadius,
-            isPressed: isPressed
+            isPressed: isPressed,
+            tintColor: tintColor,
+            intensity: intensity
         ))
     }
 
@@ -478,17 +511,252 @@ struct LiquidGlassButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
 
     let cornerRadius: CGFloat
+    let tintColor: Color?
+    let intensity: LiquidGlassButtonModifier.GlassIntensity
 
-    init(cornerRadius: CGFloat = 14) {
+    init(
+        cornerRadius: CGFloat = 14,
+        tintColor: Color? = nil,
+        intensity: LiquidGlassButtonModifier.GlassIntensity = .standard
+    ) {
         self.cornerRadius = cornerRadius
+        self.tintColor = tintColor
+        self.intensity = intensity
     }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .liquidGlassButton(
                 cornerRadius: cornerRadius,
-                isPressed: configuration.isPressed
+                isPressed: configuration.isPressed,
+                tintColor: tintColor,
+                intensity: intensity
             )
+    }
+}
+
+// MARK: - Glass Primary Button Style (Accent-colored glass)
+
+/// A prominent glass button with accent color tint - use for primary actions
+struct GlassPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let cornerRadius: CGFloat
+
+    init(cornerRadius: CGFloat = 14) {
+        self.cornerRadius = cornerRadius
+    }
+
+    private var accentColor: Color {
+        colorScheme == .dark ? Color.brandCyan : Color.brandPurple
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .liquidGlassButton(
+                cornerRadius: cornerRadius,
+                isPressed: configuration.isPressed,
+                tintColor: accentColor,
+                intensity: .prominent
+            )
+    }
+}
+
+// MARK: - Glass Secondary Button Style (Subtle glass)
+
+/// A subtle glass button - use for secondary actions
+struct GlassSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let cornerRadius: CGFloat
+
+    init(cornerRadius: CGFloat = 12) {
+        self.cornerRadius = cornerRadius
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.ultraThinMaterial)
+
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: colorScheme == .dark
+                                ? [Color.white.opacity(0.1), Color.clear]
+                                : [Color.white.opacity(0.7), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .opacity(0.4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: colorScheme == .dark
+                                ? [Color.white.opacity(0.15), Color.white.opacity(0.05)]
+                                : [Color.white.opacity(0.7), Color.white.opacity(0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.08),
+                radius: configuration.isPressed ? 2 : 4,
+                y: configuration.isPressed ? 1 : 2
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Glass Icon Button Style (For toolbar/icon buttons)
+
+/// A glass button optimized for icon-only buttons
+struct GlassIconButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let size: CGFloat
+
+    init(size: CGFloat = 40) {
+        self.size = size
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: size, height: size)
+            .background {
+                Circle()
+                    .fill(.ultraThinMaterial)
+
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: colorScheme == .dark
+                                ? [Color.white.opacity(0.15), Color.clear]
+                                : [Color.white.opacity(0.8), Color.clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .opacity(0.5)
+            }
+            .clipShape(Circle())
+            .overlay {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: colorScheme == .dark
+                                ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
+                                : [Color.white.opacity(0.8), Color.white.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1),
+                radius: configuration.isPressed ? 2 : 4,
+                y: configuration.isPressed ? 1 : 2
+            )
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Glass Capsule Button Style
+
+/// A capsule-shaped glass button
+struct GlassCapsuleButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let tintColor: Color?
+    let intensity: LiquidGlassButtonModifier.GlassIntensity
+
+    init(tintColor: Color? = nil, intensity: LiquidGlassButtonModifier.GlassIntensity = .standard) {
+        self.tintColor = tintColor
+        self.intensity = intensity
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                GlassCapsuleBackground(
+                    isPressed: configuration.isPressed,
+                    tintColor: tintColor,
+                    intensity: intensity
+                )
+            }
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Glass Capsule Background
+
+private struct GlassCapsuleBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let isPressed: Bool
+    let tintColor: Color?
+    let intensity: LiquidGlassButtonModifier.GlassIntensity
+
+    var body: some View {
+        ZStack {
+            // Glass material
+            Capsule()
+                .fill(.ultraThinMaterial)
+
+            // Tint color
+            if let tint = tintColor {
+                Capsule()
+                    .fill(tint.opacity(colorScheme == .dark ? 0.25 : 0.15))
+            }
+
+            // Top highlight
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: colorScheme == .dark
+                            ? [Color.white.opacity(0.15), Color.clear]
+                            : [Color.white.opacity(0.8), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .opacity(0.5)
+        }
+        .clipShape(Capsule())
+        .overlay {
+            Capsule()
+                .stroke(
+                    LinearGradient(
+                        colors: tintColor != nil
+                            ? [tintColor!.opacity(0.5), tintColor!.opacity(0.2)]
+                            : (colorScheme == .dark
+                                ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
+                                : [Color.white.opacity(0.8), Color.white.opacity(0.3)]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+        .shadow(
+            color: tintColor?.opacity(0.25) ?? Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1),
+            radius: isPressed ? 3 : 6,
+            y: isPressed ? 1 : 3
+        )
     }
 }
 
@@ -652,5 +920,87 @@ struct LiquidGlassBackground: View {
             .padding(.horizontal, 20)
     }
     .padding()
+    .background(LiquidGlassBackground())
+}
+
+#Preview("Glass Button Styles") {
+    VStack(spacing: 16) {
+        // Standard glass button
+        Button {} label: {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                Text("Standard Glass")
+            }
+            .font(.headline)
+            .foregroundStyle(Color.adaptiveTextPrimary)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(LiquidGlassButtonStyle())
+
+        // Primary glass button (with accent tint)
+        Button {} label: {
+            HStack(spacing: 8) {
+                Image(systemName: "star.fill")
+                Text("Primary Glass")
+            }
+            .font(.headline)
+            .foregroundStyle(Color.adaptiveTextPrimary)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(GlassPrimaryButtonStyle())
+
+        // Secondary glass button (subtle)
+        Button {} label: {
+            HStack(spacing: 8) {
+                Image(systemName: "gear")
+                Text("Secondary Glass")
+            }
+            .font(.subheadline)
+            .foregroundStyle(Color.adaptiveTextSecondary)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(GlassSecondaryButtonStyle())
+
+        // Capsule glass button
+        Button {} label: {
+            HStack(spacing: 6) {
+                Image(systemName: "doc.on.doc")
+                Text("Copy")
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(Color.adaptiveTextPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(GlassCapsuleButtonStyle(tintColor: Color.brandCyan))
+
+        // Icon buttons row
+        HStack(spacing: 16) {
+            Button {} label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.adaptiveTextPrimary)
+            }
+            .buttonStyle(GlassIconButtonStyle())
+
+            Button {} label: {
+                Image(systemName: "clock.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.adaptiveTextPrimary)
+            }
+            .buttonStyle(GlassIconButtonStyle())
+
+            Button {} label: {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.adaptiveTextPrimary)
+            }
+            .buttonStyle(GlassIconButtonStyle())
+        }
+    }
+    .padding(24)
     .background(LiquidGlassBackground())
 }

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct HistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -277,7 +278,10 @@ struct PromptDetailView: View {
                                     .font(.caption)
                                     .fontWeight(.medium)
                                     .foregroundStyle(textSecondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
                             }
+                            .buttonStyle(GlassCapsuleButtonStyle())
                         }
 
                         Text(prompt.enhancedPrompt)
@@ -290,7 +294,61 @@ struct PromptDetailView: View {
                             .textSelection(.enabled)
                     }
 
-                    // Action buttons
+                    // AI Service buttons (glass style)
+                    HStack(spacing: 8) {
+                        // Try in Claude
+                        Button {
+                            openInClaude(prompt: prompt.enhancedPrompt)
+                        } label: {
+                            Image("claude-logo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 24)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(LiquidGlassButtonStyle(
+                            cornerRadius: 10,
+                            tintColor: Color(red: 0.85, green: 0.47, blue: 0.34),
+                            intensity: .standard
+                        ))
+
+                        // Try in ChatGPT - pure white background
+                        Button {
+                            openInChatGPT(prompt: prompt.enhancedPrompt)
+                        } label: {
+                            Image("chatgpt-logo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 24)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(LiquidGlassButtonStyle(
+                            cornerRadius: 10,
+                            tintColor: .white,
+                            intensity: .standard
+                        ))
+
+                        // Try in Gemini
+                        Button {
+                            openInGemini(prompt: prompt.enhancedPrompt)
+                        } label: {
+                            Image("gemini-logo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 24)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(LiquidGlassButtonStyle(
+                            cornerRadius: 10,
+                            tintColor: .white,
+                            intensity: .standard
+                        ))
+                    }
+
+                    // Action buttons (glass style)
                     HStack(spacing: 12) {
                         Button {
                             ShareService.shared.presentShareSheet(items: [prompt.enhancedPrompt])
@@ -300,10 +358,9 @@ struct PromptDetailView: View {
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(bgSecondary)
                                 .foregroundStyle(textPrimary)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
+                        .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
 
                         Button {
                             showExportSheet = true
@@ -313,10 +370,9 @@ struct PromptDetailView: View {
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(bgSecondary)
                                 .foregroundStyle(textPrimary)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
+                        .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
                     }
 
                     // Metadata
@@ -387,10 +443,48 @@ struct PromptDetailView: View {
                         Text("Copied!")
                             .foregroundStyle(textPrimary)
                     }
-                    .padding()
-                    .background(.ultraThinMaterial)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .background {
+                        ZStack {
+                            Capsule()
+                                .fill(colorScheme == .dark
+                                    ? Color(red: 38/255, green: 38/255, blue: 40/255)
+                                    : Color.white)
+
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: colorScheme == .dark
+                                            ? [Color.white.opacity(0.1), Color.clear]
+                                            : [Color.white.opacity(0.8), Color.clear],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .opacity(0.5)
+                        }
+                    }
                     .clipShape(Capsule())
-                    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15), radius: 10, y: 5)
+                    .overlay {
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: colorScheme == .dark
+                                        ? [Color.green.opacity(0.4), Color.green.opacity(0.1)]
+                                        : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+                    .shadow(color: Color.green.opacity(0.2), radius: 10, y: 0)
+                    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.5 : 0.15), radius: 12, y: 5)
+                    .padding(.bottom, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .onAppear {
                         Task {
@@ -402,6 +496,35 @@ struct PromptDetailView: View {
             }
             .animation(.spring(), value: showCopiedToast)
         }
+    }
+
+    // MARK: - AI Service Links
+
+    private func openInClaude(prompt: String) {
+        guard !prompt.isEmpty,
+              let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://claude.ai/new?q=\(encodedPrompt)") else {
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    private func openInChatGPT(prompt: String) {
+        guard !prompt.isEmpty,
+              let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
+    private func openInGemini(prompt: String) {
+        guard !prompt.isEmpty,
+              let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://gemini.google.com/app?q=\(encodedPrompt)") else {
+            return
+        }
+        UIApplication.shared.open(url)
     }
 }
 
