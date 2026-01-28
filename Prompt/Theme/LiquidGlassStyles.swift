@@ -185,9 +185,28 @@ struct LiquidGlassButtonModifier: ViewModifier {
             .background {
                 ZStack {
                     if let tint = tintColor {
-                        // Tinted buttons: solid color, no overlays
+                        // Tinted buttons: base color
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(tint)
+
+                        // Glass overlay
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .opacity(0.3)
+
+                        // Specular highlight
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.4),
+                                        Color.white.opacity(0.1),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
                     } else {
                         // Neutral glass base for buttons without tint
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -343,9 +362,28 @@ struct LiquidGlassChipModifier: ViewModifier {
     @ViewBuilder
     private var chipBackground: some View {
         if let accent = accentColor, isSelected {
-            // Selected chip: solid accent color
-            Capsule()
-                .fill(accent)
+            // Selected chip: accent color with glass overlay
+            ZStack {
+                Capsule()
+                    .fill(accent)
+
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.3)
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.4),
+                                Color.white.opacity(0.1),
+                                Color.clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
+            }
         } else {
             // Unselected chip: glass effect
             ZStack {
@@ -753,9 +791,28 @@ private struct GlassCapsuleBackground: View {
     var body: some View {
         ZStack {
             if let tint = tintColor {
-                // Tinted buttons: solid color, no overlays
+                // Tinted buttons: base color
                 Capsule()
                     .fill(tint)
+
+                // Glass overlay
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.3)
+
+                // Specular highlight
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.4),
+                                Color.white.opacity(0.1),
+                                Color.clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
             } else {
                 // Neutral glass base
                 Capsule()
