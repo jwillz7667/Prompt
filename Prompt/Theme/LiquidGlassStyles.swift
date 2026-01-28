@@ -169,12 +169,12 @@ struct LiquidGlassButtonModifier: ViewModifier {
         )
     }
 
-    // Top highlight for shiny 3D glass effect - subtle specular highlight
+    // Top highlight for shiny 3D glass effect - very subtle to not wash out icons
     private var topHighlight: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.25), Color.white.opacity(0.08), Color.clear]
-                : [Color.white.opacity(0.35), Color.white.opacity(0.12), Color.clear],
+                ? [Color.white.opacity(0.15), Color.white.opacity(0.05), Color.clear]
+                : [Color.white.opacity(0.1), Color.white.opacity(0.03), Color.clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -208,15 +208,15 @@ struct LiquidGlassButtonModifier: ViewModifier {
                             )
                     }
 
-                    // Minimal blur material (25% opacity)
+                    // Very light blur material to preserve icon visibility
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
-                        .opacity(tintColor != nil ? 0.25 : 0.5)
+                        .opacity(tintColor != nil ? 0.1 : 0.3)
 
-                    // Subtle specular highlight for shiny glass look
+                    // Very subtle specular highlight - minimal to not wash out icons
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(topHighlight)
-                        .opacity(intensity == .subtle ? 0.4 : 0.6)
+                        .opacity(intensity == .subtle ? 0.2 : 0.3)
 
                     // Inner glow for depth - subtle in light mode
                     if tintColor != nil {
@@ -344,8 +344,8 @@ struct LiquidGlassChipModifier: ViewModifier {
     private var highlightGradient: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.2), Color.white.opacity(0.05), Color.clear]
-                : [Color.white.opacity(0.3), Color.white.opacity(0.1), Color.clear],
+                ? [Color.white.opacity(0.12), Color.white.opacity(0.03), Color.clear]
+                : [Color.white.opacity(0.08), Color.white.opacity(0.02), Color.clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -392,18 +392,18 @@ struct LiquidGlassChipModifier: ViewModifier {
                     )
                     .saturation(1.0)
 
-                // Minimal blur (25% opacity)
+                // Very light blur
                 Capsule()
                     .fill(.ultraThinMaterial)
-                    .opacity(0.25)
+                    .opacity(0.1)
 
-                // Subtle specular highlight
+                // Very subtle specular highlight
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: colorScheme == .dark
-                                ? [Color.white.opacity(0.25), Color.white.opacity(0.08), Color.clear]
-                                : [Color.white.opacity(0.35), Color.white.opacity(0.12), Color.clear],
+                                ? [Color.white.opacity(0.15), Color.white.opacity(0.05), Color.clear]
+                                : [Color.white.opacity(0.1), Color.white.opacity(0.03), Color.clear],
                             startPoint: .top,
                             endPoint: .center
                         )
@@ -419,12 +419,12 @@ struct LiquidGlassChipModifier: ViewModifier {
                             : Color.white.opacity(0.8)
                     )
 
-                // Light material (25% opacity)
+                // Very light material
                 Capsule()
                     .fill(.ultraThinMaterial)
-                    .opacity(0.25)
+                    .opacity(0.15)
 
-                // Shiny highlight
+                // Subtle highlight
                 Capsule()
                     .fill(highlightGradient)
             }
@@ -845,18 +845,18 @@ private struct GlassCapsuleBackground: View {
                     )
             }
 
-            // Minimal blur material (25% opacity)
+            // Very light blur material
             Capsule()
                 .fill(.ultraThinMaterial)
-                .opacity(tintColor != nil ? 0.25 : 0.45)
+                .opacity(tintColor != nil ? 0.1 : 0.3)
 
-            // Subtle specular highlight
+            // Very subtle specular highlight
             Capsule()
                 .fill(
                     LinearGradient(
                         colors: colorScheme == .dark
-                            ? [Color.white.opacity(0.25), Color.white.opacity(0.08), Color.clear]
-                            : [Color.white.opacity(0.35), Color.white.opacity(0.12), Color.clear],
+                            ? [Color.white.opacity(0.15), Color.white.opacity(0.05), Color.clear]
+                            : [Color.white.opacity(0.1), Color.white.opacity(0.03), Color.clear],
                         startPoint: .top,
                         endPoint: .center
                     )
