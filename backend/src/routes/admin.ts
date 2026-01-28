@@ -7,6 +7,8 @@ import {
   updateTicketStatus,
 } from '../services/supportService.js';
 import { logger } from '../utils/logger.js';
+import { prisma } from '../utils/prisma.js';
+import { sendSupportMessageNotification } from '../services/notificationService.js';
 
 export const adminRouter = Router();
 
@@ -154,4 +156,144 @@ adminRouter.patch('/tickets/:ticketId/status', async (req: Request, res: Respons
     logger.error({ error }, 'Admin update ticket status error');
     res.status(500).json({ error: 'Failed to update status' });
   }
+});
+
+// ============================================================================
+// DEBUG: GET DEVICE TOKENS FOR A USER
+// ============================================================================
+
+adminRouter.get('/debug/device-tokens/:userId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.params['userId'] as string;
+    if (!userId) {
+      res.status(400).json({ error: 'User ID required' });
+      return;
+    }
+
+    const tokens = await prisma.deviceToken.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        deviceToken: true,
+        deviceId: true,
+        deviceType: true,
+        environment: true,
+        isActive: true,
+        lastUsedAt: true,
+        createdAt: true,
+      },
+    });
+
+    // Mask the device tokens for security
+    const maskedTokens = tokens.map((t) => ({
+      ...t,
+      deviceToken: t.deviceToken.slice(0, 8) + '...' + t.deviceToken.slice(-8),
+    }));
+
+    res.json({
+      userId,
+      tokenCount: tokens.length,
+      activeCount: tokens.filter((t) => t.isActive).length,
+      tokens: maskedTokens,
+    });
+  } catch (error) {
+    logger.error({ error }, 'Admin get device tokens error');
+    res.status(500).json({ error: 'Failed to get device tokens' });
+  }
+});
+
+// ============================================================================
+// DEBUG: LIST ALL DEVICE TOKENS
+// ============================================================================
+
+adminRouter.get('/debug/device-tokens', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const tokens = await prisma.deviceToken.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const summary = {
+      total: tokens.length,
+      active: tokens.filter((t) => t.isActive).length,
+      production: tokens.filter((t) => t.environment === 'production').length,
+      sandbox: tokens.filter((t) => t.environment === 'sandbox').length,
+    };
+
+    // Mask tokens and return
+    const maskedTokens = tokens.map((t) => ({
+      id: t.id,
+      userId: t.userId,
+      deviceToken: t.deviceToken.slice(0, 8) + '...' + t.deviceToken.slice(-8),
+      environment: t.environment,
+      isActive: t.isActive,
+      lastUsedAt: t.lastUsedAt,
+      createdAt: t.createdAt,
+    }));
+
+    res.json({ summary, tokens: maskedTokens });
+  } catch (error) {
+    logger.error({ error }, 'Admin list device tokens error');
+    res.status(500).json({ error: 'Failed to list device tokens' });
+  }
+});
+
+// ============================================================================
+// DEBUG: TEST PUSH NOTIFICATION
+// ============================================================================
+
+adminRouter.post('/debug/test-notification/:userId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.params['userId'] as string;
+    if (!userId) {
+      res.status(400).json({ error: 'User ID required' });
+      return;
+    }
+
+    const { message } = req.body;
+    const testMessage = message || 'This is a test notification from Promptomize support.';
+
+    // Check if user has any device tokens
+    const tokenCount = await prisma.deviceToken.count({
+      where: { userId, isActive: true },
+    });
+
+    if (tokenCount === 0) {
+      res.status(400).json({
+        error: 'No active device tokens found for this user',
+        suggestion: 'Make sure the user has opened the app and allowed notifications',
+      });
+      return;
+    }
+
+    // Send test notification
+    await sendSupportMessageNotification(userId, 'test-ticket', 'Support Team', testMessage);
+
+    res.json({
+      success: true,
+      message: `Test notification sent to ${tokenCount} device(s)`,
+      userId,
+    });
+  } catch (error) {
+    logger.error({ error }, 'Admin test notification error');
+    res.status(500).json({ error: 'Failed to send test notification', details: String(error) });
+  }
+});
+
+// ============================================================================
+// DEBUG: CHECK APNS CONFIG
+// ============================================================================
+
+adminRouter.get('/debug/apns-config', async (_req: Request, res: Response): Promise<void> => {
+  const config = {
+    keyIdConfigured: !!process.env['APPLE_KEY_ID'],
+    teamIdConfigured: !!process.env['APPLE_TEAM_ID'],
+    privateKeyConfigured: !!process.env['APPLE_PRIVATE_KEY'],
+    bundleId: process.env['APPLE_BUNDLE_ID'] || 'com.res.promptomizer',
+    keyIdPreview: process.env['APPLE_KEY_ID']?.slice(0, 4) + '...',
+    teamIdPreview: process.env['APPLE_TEAM_ID']?.slice(0, 4) + '...',
+    privateKeyLength: process.env['APPLE_PRIVATE_KEY']?.length || 0,
+  };
+
+  res.json(config);
 });
