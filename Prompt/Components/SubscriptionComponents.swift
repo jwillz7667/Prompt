@@ -29,35 +29,36 @@ struct UsageIndicator: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
-            // Compact progress ring
+        HStack(spacing: 6) {
+            // Progress ring or infinity
             ZStack {
                 Circle()
                     .stroke(Color.adaptiveBackgroundTertiary, lineWidth: 2.5)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 26, height: 26)
 
                 if !isUnlimited {
                     Circle()
                         .trim(from: 0, to: progress)
                         .stroke(statusColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .frame(width: 20, height: 20)
+                        .frame(width: 26, height: 26)
                         .rotationEffect(.degrees(-90))
                 } else {
                     Image(systemName: "infinity")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.green)
                 }
             }
 
-            // Compact text
+            // Text label
             if isUnlimited {
                 // Show nothing for unlimited - the infinity symbol is enough
             } else {
                 Text("\(remaining)")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(statusColor)
             }
         }
+        .padding(.horizontal, 4)
     }
 }
 
