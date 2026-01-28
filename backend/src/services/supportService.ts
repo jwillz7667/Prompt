@@ -24,6 +24,7 @@ export interface ChatResponse {
   ticketCreated: boolean;
   ticketId?: string;
   category?: TicketCategory;
+  agentHandling?: boolean; // True when a human agent has taken over
 }
 
 export interface Ticket {
@@ -653,16 +654,34 @@ export async function continueTicketChat(
     throw new Error('This ticket has been closed');
   }
 
+  // Check if a human agent has replied to this ticket
+  const hasAgentReplied = ticket.messages.some((msg) => msg.role === 'agent');
+
+  if (hasAgentReplied) {
+    // Human agent has taken over - just save the user message, no AI response
+    await addMessageToTicket(ticketId, userId, message, 'user', false);
+
+    // Update ticket status to indicate user replied
+    await prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: { status: 'OPEN', updatedAt: new Date() },
+    });
+
+    return {
+      reply: '', // No AI reply when agent is handling
+      ticketCreated: false,
+      ticketId,
+      agentHandling: true, // Flag to indicate agent is handling
+    };
+  }
+
+  // No agent has replied yet - continue with AI bot
   // Build conversation history from ticket messages
-  // Filter out or convert agent messages since DeepSeek only accepts user/assistant roles
   const conversationHistory: SupportMessage[] = ticket.messages
-    .filter((msg) => msg.role === 'user' || msg.role === 'assistant' || msg.role === 'agent')
+    .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
     .map((msg) => ({
-      // Treat agent messages as assistant messages for the AI context
-      role: msg.role === 'agent' ? 'assistant' as const : msg.role as 'user' | 'assistant',
-      content: msg.role === 'agent'
-        ? `[Support Agent Response]: ${msg.content}`
-        : msg.content,
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
     }));
 
   // Get AI response
