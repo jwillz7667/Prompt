@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { io, Socket } from 'socket.io-client';
 import { getTicketById, replyToTicket, updateTicketStatus, type Ticket } from '@/lib/api/admin';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app';
 
 const statusColors: Record<string, string> = {
   OPEN: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -20,11 +23,20 @@ const priorityColors: Record<string, string> = {
   LOW: 'text-green-400 bg-green-500/10',
 };
 
+interface TicketMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'agent';
+  content: string;
+  createdAt: string;
+  isFromAI: boolean;
+}
+
 export default function TicketDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const ticketId = params.id as string;
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,8 +44,10 @@ export default function TicketDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [userIsTyping, setUserIsTyping] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
-  const fetchTicket = async () => {
+  const fetchTicket = useCallback(async () => {
     const apiKey = sessionStorage.getItem('adminApiKey');
     if (!apiKey) return;
 
@@ -48,15 +62,112 @@ export default function TicketDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [ticketId]);
 
+  // Initialize WebSocket connection
   useEffect(() => {
-    fetchTicket();
+    const apiKey = sessionStorage.getItem('adminApiKey');
+    if (!apiKey || !ticketId) return;
+
+    // Connect to Socket.IO server
+    const socket = io(API_URL, {
+      transports: ['websocket', 'polling'],
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setIsConnected(true);
+      // Join the ticket room
+      socket.emit('join:ticket', {
+        ticketId,
+        role: 'agent',
+        apiKey,
+      });
+    });
+
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+    });
+
+    // Listen for new messages
+    socket.on('ticket:message', (data: { ticketId: string; message: TicketMessage }) => {
+      if (data.ticketId === ticketId) {
+        setTicket((prev) => {
+          if (!prev) return prev;
+          // Check if message already exists
+          const messageExists = prev.messages?.some((m) => m.id === data.message.id);
+          if (messageExists) return prev;
+
+          return {
+            ...prev,
+            messages: [...(prev.messages || []), data.message],
+          };
+        });
+      }
+    });
+
+    // Listen for typing indicators
+    socket.on('typing:update', (data: { ticketId: string; isTyping: boolean; role: string }) => {
+      if (data.ticketId === ticketId && data.role === 'user') {
+        setUserIsTyping(data.isTyping);
+      }
+    });
+
+    // Listen for participant events
+    socket.on('participant:joined', (data: { role: string }) => {
+      if (data.role === 'user') {
+        // User joined the chat
+      }
+    });
+
+    socket.on('participant:left', (data: { role: string }) => {
+      if (data.role === 'user') {
+        setUserIsTyping(false);
+      }
+    });
+
+    return () => {
+      socket.emit('leave:ticket', { ticketId });
+      socket.disconnect();
+      socketRef.current = null;
+    };
   }, [ticketId]);
 
   useEffect(() => {
+    fetchTicket();
+  }, [fetchTicket]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [ticket?.messages]);
+  }, [ticket?.messages, userIsTyping]);
+
+  // Send typing indicator
+  const sendTypingIndicator = useCallback((isTyping: boolean) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit(isTyping ? 'typing:start' : 'typing:stop', {
+        ticketId,
+        role: 'agent',
+      });
+    }
+  }, [ticketId]);
+
+  const handleReplyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setReplyText(e.target.value);
+
+    // Send typing indicator
+    sendTypingIndicator(true);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Stop typing indicator after 2 seconds of no input
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingIndicator(false);
+    }, 2000);
+  };
 
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,15 +176,23 @@ export default function TicketDetailPage() {
     const apiKey = sessionStorage.getItem('adminApiKey');
     if (!apiKey) return;
 
+    // Stop typing indicator
+    sendTypingIndicator(false);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
     setSending(true);
     setError('');
 
     try {
       await replyToTicket(apiKey, ticketId, replyText.trim());
       setReplyText('');
-      await fetchTicket(); // Refresh to get new message
+      // Don't need to fetch - WebSocket will update the message
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send reply');
+      // Refresh on error to ensure consistency
+      await fetchTicket();
     } finally {
       setSending(false);
     }
@@ -158,6 +277,11 @@ export default function TicketDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Connection status */}
+          <div className={`flex items-center gap-1.5 text-xs ${isConnected ? 'text-green-400' : 'text-gray-500'}`}>
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
+            {isConnected ? 'Live' : 'Offline'}
+          </div>
           <span className={`px-3 py-1.5 text-sm font-medium rounded-lg ${priorityColors[ticket.priority] || 'text-gray-400 bg-gray-500/10'}`}>
             {ticket.priority}
           </span>
@@ -244,6 +368,26 @@ export default function TicketDetailPage() {
               </div>
             </div>
           ))}
+
+          {/* User typing indicator */}
+          {userIsTyping && (
+            <div className="flex justify-end">
+              <div className="bg-cyan-600/20 border border-cyan-500/30 rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-cyan-300 text-xs font-medium">
+                    {ticket.user?.name || ticket.user?.email || 'User'}
+                  </span>
+                  <span className="text-gray-400 text-xs">is typing</span>
+                </div>
+                <div className="flex gap-1 mt-1">
+                  <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -253,7 +397,7 @@ export default function TicketDetailPage() {
             <div className="flex gap-3">
               <textarea
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={handleReplyChange}
                 placeholder="Type your reply..."
                 rows={3}
                 className="flex-1 px-4 py-3 bg-gray-900 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition resize-none"
@@ -274,7 +418,7 @@ export default function TicketDetailPage() {
               </button>
             </div>
             <p className="text-gray-500 text-xs mt-2">
-              Your reply will be sent to the user via email and appear in their app.
+              Your reply will be sent to the user via email and appear in their app in real-time.
             </p>
           </form>
         )}

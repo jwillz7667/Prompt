@@ -2,6 +2,7 @@ import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import type { TicketCategory, TicketPriority, TicketStatus } from '@prisma/client';
 import { sendTicketCreated, sendTicketNotificationToSupport, sendTicketResponse } from './emailService.js';
+import { emitNewMessage } from '../utils/socket.js';
 
 // ============================================================================
 // TYPES
@@ -441,20 +442,22 @@ export async function addMessageToTicket(
   role: 'user' | 'assistant' | 'agent',
   isFromAI: boolean = false
 ): Promise<void> {
-  // Verify ticket belongs to user
-  const ticket = await prisma.supportTicket.findFirst({
-    where: { id: ticketId, userId },
-  });
+  // Verify ticket belongs to user (skip for agent messages)
+  if (role !== 'agent') {
+    const ticket = await prisma.supportTicket.findFirst({
+      where: { id: ticketId, userId },
+    });
 
-  if (!ticket) {
-    throw new Error('Ticket not found');
+    if (!ticket) {
+      throw new Error('Ticket not found');
+    }
+
+    if (ticket.status === 'CLOSED' || ticket.status === 'RESOLVED') {
+      throw new Error('Cannot add messages to closed tickets');
+    }
   }
 
-  if (ticket.status === 'CLOSED' || ticket.status === 'RESOLVED') {
-    throw new Error('Cannot add messages to closed tickets');
-  }
-
-  await prisma.$transaction([
+  const [newMessage] = await prisma.$transaction([
     prisma.supportMessage.create({
       data: {
         ticketId,
@@ -466,11 +469,23 @@ export async function addMessageToTicket(
     prisma.supportTicket.update({
       where: { id: ticketId },
       data: {
-        status: role === 'user' ? 'OPEN' : ticket.status,
+        status: role === 'user' ? 'OPEN' : undefined,
         updatedAt: new Date(),
       },
     }),
   ]);
+
+  // Emit real-time update via WebSocket
+  emitNewMessage({
+    ticketId,
+    message: {
+      id: newMessage.id,
+      role: newMessage.role as 'user' | 'assistant' | 'agent',
+      content: newMessage.content,
+      createdAt: newMessage.createdAt.toISOString(),
+      isFromAI: newMessage.isFromAI,
+    },
+  });
 }
 
 // Agent reply to a ticket - sends email notification to user
@@ -507,7 +522,7 @@ export async function addAgentReplyToTicket(
   }
 
   // Add agent message to ticket
-  await prisma.$transaction([
+  const [newMessage] = await prisma.$transaction([
     prisma.supportMessage.create({
       data: {
         ticketId,
@@ -524,6 +539,18 @@ export async function addAgentReplyToTicket(
       },
     }),
   ]);
+
+  // Emit real-time update via WebSocket
+  emitNewMessage({
+    ticketId,
+    message: {
+      id: newMessage.id,
+      role: 'agent',
+      content: newMessage.content,
+      createdAt: newMessage.createdAt.toISOString(),
+      isFromAI: false,
+    },
+  });
 
   // Get updated ticket with all messages for email
   const updatedTicket = await prisma.supportTicket.findUnique({

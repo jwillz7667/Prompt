@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -23,6 +24,7 @@ import { prisma } from './utils/prisma.js';
 import { startIdempotencyCleanupScheduler } from './middleware/idempotency.js';
 import { initRedis, closeRedis } from './utils/redis.js';
 import { initQueues, closeQueues } from './utils/queue.js';
+import { initializeSocket } from './utils/socket.js';
 
 config();
 
@@ -144,13 +146,17 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
+// Create HTTP server and initialize Socket.IO
+const httpServer = createServer(app);
+initializeSocket(httpServer, allowedOrigins);
+
 // Start server immediately without blocking on database
-app.listen(port, '0.0.0.0', () => {
+httpServer.listen(port, '0.0.0.0', () => {
   logger.info({
     port,
     env: process.env['NODE_ENV'] || 'development',
     database: process.env['DATABASE_URL'] ? 'configured' : 'NOT SET',
-  }, 'Server started');
+  }, 'Server started with Socket.IO');
 });
 
 export default app;
