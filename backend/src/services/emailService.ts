@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
 
 const resend = new Resend(process.env['RESEND_API_KEY']);
 
-const FROM_EMAIL = process.env['FROM_EMAIL'] || 'Promptomize <hello@promptomize.app>';
+const FROM_EMAIL = process.env['FROM_EMAIL'] || 'Promptomize <noreply@promptomize.app>';
 const SUPPORT_EMAIL = process.env['SUPPORT_EMAIL'] || 'support@promptomize.app';
 const APP_NAME = 'Promptomize';
 const APP_URL = process.env['APP_URL'] || 'https://promptomize.app';

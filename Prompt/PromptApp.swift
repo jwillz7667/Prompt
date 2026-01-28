@@ -120,7 +120,7 @@ struct SplashView: View {
 
                 ProgressView()
                     .tint(colorScheme == .light ? Color.brandPurple : Color.brandCyan)
-                    .scaleEffect(1.2)
+                    .scaleEffect(1.8)
                     .padding(.top, 20)
             }
         }

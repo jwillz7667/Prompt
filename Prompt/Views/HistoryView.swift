@@ -24,6 +24,7 @@ struct HistoryView: View {
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         NavigationStack {
@@ -50,7 +51,7 @@ struct HistoryView: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(accentColor)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -58,7 +59,7 @@ struct HistoryView: View {
                         Toggle("Favorites Only", isOn: Bindable(historyManager).showFavoritesOnly)
                     } label: {
                         Image(systemName: historyManager.showFavoritesOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                            .foregroundStyle(textPrimary)
+                            .foregroundStyle(historyManager.showFavoritesOnly ? accentColor : textPrimary)
                     }
                 }
             }
@@ -98,29 +99,43 @@ struct HistoryView: View {
     // MARK: - Loading View
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             ProgressView()
-                .tint(textPrimary)
+                .tint(accentColor)
+                .scaleEffect(1.2)
             Text("Loading history...")
-                .font(.subheadline)
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
                 .foregroundStyle(textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(bgPrimary)
     }
 
     // MARK: - Empty State
 
     private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label("No Prompts Yet", systemImage: "doc.text")
-                .foregroundStyle(textPrimary)
-        } description: {
-            Text("Your enhanced prompts will appear here")
-                .foregroundStyle(textSecondary)
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.15))
+                    .frame(width: 100, height: 100)
+
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(accentColor)
+            }
+
+            VStack(spacing: 8) {
+                Text("No Prompts Yet")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text("Your enhanced prompts will appear here")
+                    .font(.subheadline)
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(bgPrimary)
     }
 
     // MARK: - Prompts List
@@ -242,12 +257,18 @@ struct PromptDetailView: View {
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            ZStack {
+                // Liquid glass background
+                LiquidGlassBackground()
+
+                ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     // Original prompt
                     VStack(alignment: .leading, spacing: 8) {
@@ -282,11 +303,11 @@ struct PromptDetailView: View {
                                 Label("Copy", systemImage: "doc.on.doc")
                                     .font(.caption)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(textSecondary)
+                                    .foregroundStyle(accentColor)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
                             }
-                            .buttonStyle(GlassCapsuleButtonStyle())
+                            .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor))
                         }
 
                         Text(prompt.enhancedPrompt)
@@ -412,16 +433,17 @@ struct PromptDetailView: View {
                 }
                 .padding()
             }
-            .background(bgPrimary.ignoresSafeArea())
+            }
             .navigationTitle("Prompt Details")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(accentColor)
                 }
             }
             .sheet(isPresented: $showExportSheet) {

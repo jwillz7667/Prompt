@@ -20,6 +20,7 @@ struct SettingsView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     // App version from bundle
     private var appVersion: String {
@@ -50,7 +51,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "paintbrush.fill")
-                                .foregroundStyle(textPrimary)
+                                .foregroundStyle(accentColor)
                                 .frame(width: 28)
                             Text("Appearance")
                                 .foregroundStyle(textPrimary)
@@ -69,7 +70,7 @@ struct SettingsView: View {
                 Section {
                     HStack {
                         Image(systemName: "thermometer.medium")
-                            .foregroundStyle(textPrimary)
+                            .foregroundStyle(accentColor)
                             .frame(width: 28)
                         VStack(alignment: .leading) {
                             Text("Temperature")
@@ -81,12 +82,12 @@ struct SettingsView: View {
                         Spacer()
                         Slider(value: $bindableSettings.temperature, in: 0...1.5, step: 0.1)
                             .frame(width: 150)
-                            .tint(textPrimary)
+                            .tint(accentColor)
                     }
 
                     HStack {
                         Image(systemName: "number.square.fill")
-                            .foregroundStyle(textPrimary)
+                            .foregroundStyle(accentColor)
                             .frame(width: 28)
                         Stepper("Max Tokens: \(settings.maxTokens)", value: $bindableSettings.maxTokens, in: 1024...65536, step: 1024)
                             .foregroundStyle(textPrimary)
@@ -104,7 +105,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "text.bubble.fill")
-                                .foregroundStyle(textPrimary)
+                                .foregroundStyle(accentColor)
                                 .frame(width: 28)
                             Text("Custom Instructions")
                                 .foregroundStyle(textPrimary)
@@ -133,7 +134,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "chart.bar.fill")
-                                .foregroundStyle(textPrimary)
+                                .foregroundStyle(accentColor)
                                 .frame(width: 28)
                             Text("Analytics")
                                 .foregroundStyle(textPrimary)
@@ -155,7 +156,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .foregroundStyle(textPrimary)
+                                .foregroundStyle(accentColor)
                                 .frame(width: 28)
                             Text("Contact Support")
                                 .foregroundStyle(textPrimary)
@@ -177,7 +178,7 @@ struct SettingsView: View {
                 Section {
                     HStack {
                         Image(systemName: "info.circle.fill")
-                            .foregroundStyle(textPrimary)
+                            .foregroundStyle(accentColor)
                             .frame(width: 28)
                         Text("Version")
                             .foregroundStyle(textPrimary)
@@ -188,7 +189,7 @@ struct SettingsView: View {
 
                     HStack {
                         Image(systemName: "sparkles")
-                            .foregroundStyle(textPrimary)
+                            .foregroundStyle(accentColor)
                             .frame(width: 28)
                         Text("Powered by")
                             .foregroundStyle(textPrimary)
@@ -213,7 +214,7 @@ struct SettingsView: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(accentColor)
                 }
             }
             .onChange(of: settings.appearanceMode) { _, _ in

@@ -18,6 +18,7 @@ struct AnalyticsView: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         ZStack {
@@ -72,11 +73,12 @@ struct AnalyticsView: View {
     // MARK: - Loading View
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             ProgressView()
-                .tint(textPrimary)
+                .tint(accentColor)
+                .scaleEffect(1.2)
             Text("Loading analytics...")
-                .font(.subheadline)
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
                 .foregroundStyle(textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -86,20 +88,45 @@ struct AnalyticsView: View {
     // MARK: - Error View
 
     private func errorView(_ message: String) -> some View {
-        ContentUnavailableView {
-            Label("Unable to Load", systemImage: "exclamationmark.triangle")
-                .foregroundStyle(textPrimary)
-        } description: {
-            Text(message)
-                .foregroundStyle(textSecondary)
-        } actions: {
-            Button("Try Again") {
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.15))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 36, weight: .light))
+                    .foregroundStyle(accentColor)
+            }
+
+            VStack(spacing: 8) {
+                Text("Unable to Load")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
                 Task {
                     await viewModel.fetchAnalytics(days: selectedPeriod)
                 }
+            } label: {
+                Text("Try Again")
+                    .font(.system(.body, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(accentColor)
+                    .clipShape(Capsule())
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(BounceButtonStyle())
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 
     // MARK: - Summary Section
@@ -142,7 +169,7 @@ struct AnalyticsView: View {
     private func modelUsageSection(_ analytics: AnalyticsData) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Model Usage")
-                .font(.headline)
+                .font(.system(.headline, design: .rounded, weight: .semibold))
                 .foregroundStyle(textPrimary)
 
             if analytics.charts.modelUsage.isEmpty {
@@ -165,9 +192,8 @@ struct AnalyticsView: View {
                 .chartLegend(position: .bottom, spacing: 20)
             }
         }
-        .padding()
-        .background(bgSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(16)
+        .liquidGlass(cornerRadius: 16)
         .padding(.horizontal)
     }
 
@@ -176,7 +202,7 @@ struct AnalyticsView: View {
     private var streakSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Activity Streak")
-                .font(.headline)
+                .font(.system(.headline, design: .rounded, weight: .semibold))
                 .foregroundStyle(textPrimary)
 
             HStack(spacing: 20) {
@@ -201,13 +227,12 @@ struct AnalyticsView: View {
                     value: "\(viewModel.streak?.totalActiveDays ?? 0)",
                     unit: "total",
                     icon: "calendar.badge.checkmark",
-                    color: .green
+                    color: accentColor
                 )
             }
         }
-        .padding()
-        .background(bgSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(16)
+        .liquidGlass(cornerRadius: 16)
         .padding(.horizontal)
     }
 
@@ -243,13 +268,12 @@ struct StatCard: View {
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(color)
                 Spacer()
             }
@@ -259,12 +283,11 @@ struct StatCard: View {
                 .foregroundStyle(textPrimary)
 
             Text(title)
-                .font(.caption)
+                .font(.system(.caption, design: .rounded, weight: .medium))
                 .foregroundStyle(textSecondary)
         }
-        .padding()
-        .background(bgSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(16)
+        .liquidGlass(cornerRadius: 12)
     }
 }
 

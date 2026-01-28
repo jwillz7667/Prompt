@@ -25,6 +25,7 @@ struct SupportView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     private var welcomeMessage: SupportMessage {
         SupportMessage(
@@ -110,7 +111,7 @@ struct SupportView: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundStyle(messageText.isEmpty || supportService.isLoading ? textSecondary : .blue)
+                            .foregroundStyle(messageText.isEmpty || supportService.isLoading ? textSecondary : accentColor)
                     }
                     .disabled(messageText.isEmpty || supportService.isLoading)
                 }
@@ -202,9 +203,12 @@ struct SupportView: View {
 // MARK: - Message Bubble
 
 struct MessageBubble: View {
+    @Environment(\.colorScheme) private var colorScheme
     let message: SupportMessage
     let textPrimary: Color
     let textSecondary: Color
+
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         HStack {
@@ -214,10 +218,10 @@ struct MessageBubble: View {
 
             VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
                 Text(message.content)
-                    .foregroundStyle(message.isUser ? .white : textPrimary)
+                    .foregroundStyle(message.isUser ? (colorScheme == .dark ? .black : .white) : textPrimary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(message.isUser ? Color.blue : Color.adaptiveBackgroundSecondary)
+                    .background(message.isUser ? accentColor : Color.adaptiveBackgroundSecondary)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
 
                 if let createdAt = message.createdAt {
@@ -380,6 +384,7 @@ struct TicketDetailView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -454,7 +459,7 @@ struct TicketDetailView: View {
                         } label: {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 32))
-                                .foregroundStyle(messageText.isEmpty || supportService.isLoading ? textSecondary : .blue)
+                                .foregroundStyle(messageText.isEmpty || supportService.isLoading ? textSecondary : accentColor)
                         }
                         .disabled(messageText.isEmpty || supportService.isLoading)
                     }

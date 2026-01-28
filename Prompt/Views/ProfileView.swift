@@ -27,6 +27,7 @@ struct ProfileView: View {
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     // App version from bundle
     private var appVersion: String {
@@ -44,6 +45,7 @@ struct ProfileView: View {
                 LiquidGlassBackground()
 
                 List {
+                    // Note: Content follows using listRowBackground for consistency
                 // User info section
                 if let user = authManager.currentUser {
                     Section {
@@ -215,7 +217,7 @@ struct ProfileView: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(accentColor)
                 }
             }
             .task {

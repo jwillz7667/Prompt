@@ -22,28 +22,34 @@ struct CollectionsView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.collections.isEmpty {
-                    loadingView
-                } else if viewModel.collections.isEmpty {
-                    emptyStateView
-                } else {
-                    collectionsGrid
+            ZStack {
+                // Liquid glass background
+                LiquidGlassBackground()
+
+                Group {
+                    if viewModel.isLoading && viewModel.collections.isEmpty {
+                        loadingView
+                    } else if viewModel.collections.isEmpty {
+                        emptyStateView
+                    } else {
+                        collectionsGrid
+                    }
                 }
             }
-            .background(bgPrimary.ignoresSafeArea())
             .navigationTitle("Collections")
             .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(accentColor)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -51,7 +57,8 @@ struct CollectionsView: View {
                         showCreateSheet = true
                     } label: {
                         Image(systemName: "folder.badge.plus")
-                            .foregroundStyle(textPrimary)
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(accentColor)
                     }
                 }
             }
@@ -82,34 +89,61 @@ struct CollectionsView: View {
     // MARK: - Loading View
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             ProgressView()
-                .tint(textPrimary)
+                .tint(accentColor)
+                .scaleEffect(1.2)
             Text("Loading collections...")
-                .font(.subheadline)
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
                 .foregroundStyle(textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(bgPrimary)
     }
 
     // MARK: - Empty State
 
     private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label("No Collections", systemImage: "folder")
-                .foregroundStyle(textPrimary)
-        } description: {
-            Text("Create collections to organize your prompts")
-                .foregroundStyle(textSecondary)
-        } actions: {
-            Button("Create Collection") {
-                showCreateSheet = true
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.15))
+                    .frame(width: 100, height: 100)
+
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(accentColor)
             }
-            .buttonStyle(.borderedProminent)
+
+            VStack(spacing: 8) {
+                Text("No Collections")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text("Create collections to organize your prompts")
+                    .font(.subheadline)
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                showCreateSheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Create Collection")
+                        .font(.system(.body, design: .rounded, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+                .background(accentColor)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(BounceButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(bgPrimary)
+        .padding()
     }
 
     // MARK: - Collections Grid
@@ -118,7 +152,7 @@ struct CollectionsView: View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 16) {
                 ForEach(viewModel.collections) { collection in
-                    CollectionCard(collection: collection)
+                    CollectionCard(collection: collection, accentColor: accentColor)
                         .onTapGesture {
                             selectedCollection = collection
                         }
@@ -140,7 +174,6 @@ struct CollectionsView: View {
             }
             .padding()
         }
-        .background(bgPrimary)
         .refreshable {
             await viewModel.fetchCollections()
         }
@@ -152,10 +185,11 @@ struct CollectionsView: View {
 struct CollectionCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let collection: Collection
+    let accentColor: Color
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var textTertiary: Color { Color.adaptiveTextTertiary }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -173,18 +207,17 @@ struct CollectionCard: View {
                 Spacer()
 
                 Text("\(collection.promptCount)")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(textSecondary)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(accentColor)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color(hex: collection.color).opacity(0.1))
+                    .background(accentColor.opacity(0.15))
                     .clipShape(Capsule())
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(collection.name)
-                    .font(.headline)
+                    .font(.system(.headline, design: .rounded, weight: .semibold))
                     .foregroundStyle(textPrimary)
                     .lineLimit(1)
 
@@ -196,10 +229,8 @@ struct CollectionCard: View {
                 }
             }
         }
-        .padding()
-        .background(bgSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.08), radius: 8, y: 2)
+        .padding(16)
+        .liquidGlass(cornerRadius: 16)
     }
 }
 
@@ -216,45 +247,70 @@ struct CollectionDetailView: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
+    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    VStack {
-                        ProgressView()
-                        Text("Loading...")
-                            .font(.caption)
-                            .foregroundStyle(textSecondary)
+            ZStack {
+                // Liquid glass background
+                LiquidGlassBackground()
+
+                Group {
+                    if isLoading {
+                        VStack(spacing: 20) {
+                            ProgressView()
+                                .tint(accentColor)
+                                .scaleEffect(1.2)
+                            Text("Loading...")
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                                .foregroundStyle(textSecondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if prompts.isEmpty {
+                        VStack(spacing: 24) {
+                            ZStack {
+                                Circle()
+                                    .fill(accentColor.opacity(0.15))
+                                    .frame(width: 80, height: 80)
+
+                                Image(systemName: "folder")
+                                    .font(.system(size: 36, weight: .light))
+                                    .foregroundStyle(accentColor)
+                            }
+
+                            VStack(spacing: 8) {
+                                Text("Empty Collection")
+                                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                                    .foregroundStyle(textPrimary)
+
+                                Text("Add prompts to this collection from history")
+                                    .font(.subheadline)
+                                    .foregroundStyle(textSecondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(prompts) { prompt in
+                            PromptRowView(prompt: prompt)
+                                .listRowBackground(bgSecondary.opacity(0.5))
+                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if prompts.isEmpty {
-                    ContentUnavailableView {
-                        Label("Empty Collection", systemImage: "folder")
-                            .foregroundStyle(textPrimary)
-                    } description: {
-                        Text("Add prompts to this collection from history")
-                            .foregroundStyle(textSecondary)
-                    }
-                } else {
-                    List(prompts) { prompt in
-                        PromptRowView(prompt: prompt)
-                            .listRowBackground(bgPrimary)
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
                 }
             }
-            .background(bgPrimary.ignoresSafeArea())
             .navigationTitle(collection.name)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(accentColor)
                 }
             }
             .task {
@@ -291,6 +347,7 @@ struct CreateCollectionSheet: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     private var canCreate: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
@@ -298,7 +355,11 @@ struct CreateCollectionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ZStack {
+                // Liquid glass background
+                LiquidGlassBackground()
+
+                Form {
                 Section {
                     TextField("Collection Name", text: $name)
                         .foregroundStyle(textPrimary)
@@ -354,9 +415,10 @@ struct CreateCollectionSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(bgPrimary.ignoresSafeArea())
+            }
             .navigationTitle("New Collection")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -380,7 +442,7 @@ struct CreateCollectionSheet: View {
                         }
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(textPrimary)
+                    .foregroundStyle(canCreate && !isCreating ? accentColor : textSecondary)
                     .disabled(!canCreate || isCreating)
                 }
             }

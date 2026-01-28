@@ -147,13 +147,14 @@ struct LiquidGlassButtonModifier: ViewModifier {
         isPressed ? 0.97 : 1.0
     }
 
-    // Border gradient - bright edge highlight
+    // Border gradient - bright edge highlight for shiny glass effect
     private var borderGradient: LinearGradient {
         if let tint = tintColor {
             return LinearGradient(
                 colors: [
+                    Color.white.opacity(colorScheme == .dark ? 0.5 : 0.8),
                     tint.opacity(colorScheme == .dark ? 0.6 : 0.5),
-                    tint.opacity(colorScheme == .dark ? 0.3 : 0.2)
+                    Color.white.opacity(colorScheme == .dark ? 0.2 : 0.4)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -161,21 +162,21 @@ struct LiquidGlassButtonModifier: ViewModifier {
         }
         return LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.25), Color.white.opacity(0.08)]
-                : [Color.white.opacity(0.9), Color.white.opacity(0.4)],
+                ? [Color.white.opacity(0.4), Color.white.opacity(0.15)]
+                : [Color.white.opacity(0.95), Color.white.opacity(0.5)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    // Top highlight for 3D effect
+    // Top highlight for shiny 3D glass effect
     private var topHighlight: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.2), Color.white.opacity(0.05), Color.clear]
-                : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
+                ? [Color.white.opacity(0.35), Color.white.opacity(0.1), Color.clear]
+                : [Color.white.opacity(0.95), Color.white.opacity(0.4), Color.clear],
             startPoint: .top,
-            endPoint: .bottom
+            endPoint: .center
         )
     }
 
@@ -183,33 +184,68 @@ struct LiquidGlassButtonModifier: ViewModifier {
         content
             .background {
                 ZStack {
-                    // Primary glass material - this is the key layer
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    // Tint color overlay (if provided)
+                    // Base color layer - vibrant tint color as primary background
                     if let tint = tintColor {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(tint.opacity(colorScheme == .dark ? 0.25 : 0.15))
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        tint.opacity(colorScheme == .dark ? 0.7 : 0.5),
+                                        tint.opacity(colorScheme == .dark ? 0.5 : 0.35)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    } else {
+                        // Neutral glass base for buttons without tint
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.08)
+                                    : Color.white.opacity(0.7)
+                            )
                     }
 
-                    // Top highlight shine
+                    // Subtle blur material - much lighter than before for clarity
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .opacity(tintColor != nil ? 0.3 : 0.5)
+
+                    // Top specular highlight for shiny glass look
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(topHighlight)
-                        .opacity(intensity == .subtle ? 0.4 : 0.6)
+                        .opacity(intensity == .subtle ? 0.5 : 0.7)
+
+                    // Inner glow for depth
+                    if tintColor != nil {
+                        RoundedRectangle(cornerRadius: cornerRadius - 1, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(colorScheme == .dark ? 0.3 : 0.6),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                ),
+                                lineWidth: 1.5
+                            )
+                            .padding(1)
+                    }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
-                // Glass edge border
+                // Glass edge border - shiny edge highlight
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(borderGradient, lineWidth: intensity == .prominent ? 1.5 : 1)
             }
-            // Subtle shadow
+            // Shadow with color tint for glow effect
             .shadow(
-                color: tintColor?.opacity(0.3) ?? Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15),
-                radius: isPressed ? 4 : 8,
-                y: isPressed ? 2 : 4
+                color: tintColor?.opacity(colorScheme == .dark ? 0.4 : 0.3) ?? Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15),
+                radius: isPressed ? 4 : 10,
+                y: isPressed ? 2 : 5
             )
             .scaleEffect(pressedScale)
             .opacity(isPressed ? 0.9 : 1.0)
@@ -307,86 +343,129 @@ struct LiquidGlassChipModifier: ViewModifier {
     private var highlightGradient: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.06), Color.white.opacity(0.02)]
-                : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.1)],
+                ? [Color.white.opacity(0.25), Color.white.opacity(0.05), Color.clear]
+                : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
             startPoint: .top,
-            endPoint: .bottom
+            endPoint: .center
         )
     }
 
     private var borderColor: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.1)
-            : Color.brandPurple.opacity(0.2)
+            ? Color.white.opacity(0.25)
+            : Color.white.opacity(0.8)
     }
 
     private var shadowColor: Color {
         if isSelected, let accent = accentColor {
-            return accent.opacity(0.4)
+            return accent.opacity(colorScheme == .dark ? 0.5 : 0.4)
         }
         return colorScheme == .dark
             ? Color.black.opacity(0.4)
-            : Color.brandPurple.opacity(0.1)
+            : Color.brandPurple.opacity(0.15)
     }
 
     private var shadowRadius: CGFloat {
-        isSelected ? 8 : 4
+        isSelected ? 10 : 5
     }
 
     private var shadowY: CGFloat {
-        isSelected ? 4 : 2
+        isSelected ? 5 : 2
     }
 
     @ViewBuilder
     private var chipBackground: some View {
         if let accent = accentColor, isSelected {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [accent, accent.opacity(0.85)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            ZStack {
+                // Vibrant color base
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                accent.opacity(colorScheme == .dark ? 0.85 : 0.75),
+                                accent.opacity(colorScheme == .dark ? 0.65 : 0.55)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
+
+                // Shiny top highlight
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(colorScheme == .dark ? 0.35 : 0.5),
+                                Color.white.opacity(0.1),
+                                Color.clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
+            }
         } else {
             ZStack {
-                // Solid base - iOS elevated surface
+                // Clear glass base
                 Capsule()
                     .fill(
                         colorScheme == .dark
-                            ? Color(red: 44/255, green: 44/255, blue: 46/255) // #2C2C2E - iOS tertiary
-                            : Color.white
+                            ? Color.white.opacity(0.1)
+                            : Color.white.opacity(0.8)
                     )
+
+                // Light material
                 Capsule()
                     .fill(.ultraThinMaterial)
+                    .opacity(0.4)
+
+                // Shiny highlight
+                Capsule()
+                    .fill(highlightGradient)
             }
         }
     }
 
     @ViewBuilder
     private var chipOverlay: some View {
-        if !isSelected || accentColor == nil {
-            Capsule()
-                .fill(highlightGradient)
-        }
+        EmptyView()
     }
 
     @ViewBuilder
     private var chipBorder: some View {
-        if isSelected && accentColor != nil {
-            Capsule().stroke(Color.clear, lineWidth: 1)
+        if isSelected, let accent = accentColor {
+            Capsule()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(colorScheme == .dark ? 0.4 : 0.6),
+                            accent.opacity(colorScheme == .dark ? 0.5 : 0.4),
+                            Color.white.opacity(colorScheme == .dark ? 0.15 : 0.3)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         } else {
-            Capsule().stroke(borderColor, lineWidth: 1)
+            Capsule()
+                .stroke(
+                    LinearGradient(
+                        colors: colorScheme == .dark
+                            ? [Color.white.opacity(0.35), Color.white.opacity(0.1)]
+                            : [Color.white.opacity(0.95), Color.white.opacity(0.4)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         }
     }
 
     func body(content: Content) -> some View {
         content
             .background {
-                ZStack {
-                    chipBackground
-                    chipOverlay
-                }
+                chipBackground
             }
             .clipShape(Capsule())
             .overlay { chipBorder }
@@ -577,20 +656,32 @@ struct GlassSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial)
-
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: colorScheme == .dark
-                                ? [Color.white.opacity(0.1), Color.clear]
-                                : [Color.white.opacity(0.7), Color.clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                ZStack {
+                    // Clear glass base
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.12)
+                                : Color.white.opacity(0.8)
                         )
-                    )
-                    .opacity(0.4)
+
+                    // Light material for subtle blur
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.4)
+
+                    // Shiny top highlight
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: colorScheme == .dark
+                                    ? [Color.white.opacity(0.25), Color.white.opacity(0.05), Color.clear]
+                                    : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
@@ -598,18 +689,18 @@ struct GlassSecondaryButtonStyle: ButtonStyle {
                     .stroke(
                         LinearGradient(
                             colors: colorScheme == .dark
-                                ? [Color.white.opacity(0.15), Color.white.opacity(0.05)]
-                                : [Color.white.opacity(0.7), Color.white.opacity(0.2)],
+                                ? [Color.white.opacity(0.35), Color.white.opacity(0.1)]
+                                : [Color.white.opacity(0.95), Color.white.opacity(0.4)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: 0.5
+                        lineWidth: 1
                     )
             }
             .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.08),
-                radius: configuration.isPressed ? 2 : 4,
-                y: configuration.isPressed ? 1 : 2
+                color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1),
+                radius: configuration.isPressed ? 2 : 6,
+                y: configuration.isPressed ? 1 : 3
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
@@ -633,20 +724,32 @@ struct GlassIconButtonStyle: ButtonStyle {
         configuration.label
             .frame(width: size, height: size)
             .background {
-                Circle()
-                    .fill(.ultraThinMaterial)
-
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: colorScheme == .dark
-                                ? [Color.white.opacity(0.15), Color.clear]
-                                : [Color.white.opacity(0.8), Color.clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                ZStack {
+                    // Clear glass base
+                    Circle()
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.12)
+                                : Color.white.opacity(0.85)
                         )
-                    )
-                    .opacity(0.5)
+
+                    // Light material
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .opacity(0.35)
+
+                    // Shiny highlight
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: colorScheme == .dark
+                                    ? [Color.white.opacity(0.3), Color.white.opacity(0.05), Color.clear]
+                                    : [Color.white.opacity(0.95), Color.white.opacity(0.3), Color.clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                }
             }
             .clipShape(Circle())
             .overlay {
@@ -654,8 +757,8 @@ struct GlassIconButtonStyle: ButtonStyle {
                     .stroke(
                         LinearGradient(
                             colors: colorScheme == .dark
-                                ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
-                                : [Color.white.opacity(0.8), Color.white.opacity(0.3)],
+                                ? [Color.white.opacity(0.4), Color.white.opacity(0.1)]
+                                : [Color.white.opacity(0.95), Color.white.opacity(0.5)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -663,9 +766,9 @@ struct GlassIconButtonStyle: ButtonStyle {
                     )
             }
             .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1),
-                radius: configuration.isPressed ? 2 : 4,
-                y: configuration.isPressed ? 1 : 2
+                color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.12),
+                radius: configuration.isPressed ? 2 : 6,
+                y: configuration.isPressed ? 1 : 3
             )
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
@@ -713,28 +816,62 @@ private struct GlassCapsuleBackground: View {
 
     var body: some View {
         ZStack {
-            // Glass material
-            Capsule()
-                .fill(.ultraThinMaterial)
-
-            // Tint color
+            // Base color layer - vibrant tint as primary
             if let tint = tintColor {
                 Capsule()
-                    .fill(tint.opacity(colorScheme == .dark ? 0.25 : 0.15))
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                tint.opacity(colorScheme == .dark ? 0.65 : 0.45),
+                                tint.opacity(colorScheme == .dark ? 0.45 : 0.3)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            } else {
+                // Neutral glass base
+                Capsule()
+                    .fill(
+                        colorScheme == .dark
+                            ? Color.white.opacity(0.1)
+                            : Color.white.opacity(0.75)
+                    )
             }
 
-            // Top highlight
+            // Light glass material - subtle for clarity
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .opacity(tintColor != nil ? 0.25 : 0.45)
+
+            // Shiny top highlight
             Capsule()
                 .fill(
                     LinearGradient(
                         colors: colorScheme == .dark
-                            ? [Color.white.opacity(0.15), Color.clear]
-                            : [Color.white.opacity(0.8), Color.clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                            ? [Color.white.opacity(0.35), Color.white.opacity(0.08), Color.clear]
+                            : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
+                        startPoint: .top,
+                        endPoint: .center
                     )
                 )
-                .opacity(0.5)
+
+            // Inner glow for depth on tinted buttons
+            if tintColor != nil {
+                Capsule()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(colorScheme == .dark ? 0.25 : 0.5),
+                                Color.clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .center
+                        ),
+                        lineWidth: 1.5
+                    )
+                    .padding(1)
+            }
         }
         .clipShape(Capsule())
         .overlay {
@@ -742,10 +879,14 @@ private struct GlassCapsuleBackground: View {
                 .stroke(
                     LinearGradient(
                         colors: tintColor != nil
-                            ? [tintColor!.opacity(0.5), tintColor!.opacity(0.2)]
+                            ? [
+                                Color.white.opacity(colorScheme == .dark ? 0.4 : 0.7),
+                                tintColor!.opacity(colorScheme == .dark ? 0.5 : 0.4),
+                                Color.white.opacity(colorScheme == .dark ? 0.15 : 0.3)
+                              ]
                             : (colorScheme == .dark
-                                ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
-                                : [Color.white.opacity(0.8), Color.white.opacity(0.3)]),
+                                ? [Color.white.opacity(0.35), Color.white.opacity(0.1)]
+                                : [Color.white.opacity(0.95), Color.white.opacity(0.4)]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -753,9 +894,9 @@ private struct GlassCapsuleBackground: View {
                 )
         }
         .shadow(
-            color: tintColor?.opacity(0.25) ?? Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1),
-            radius: isPressed ? 3 : 6,
-            y: isPressed ? 1 : 3
+            color: tintColor?.opacity(colorScheme == .dark ? 0.35 : 0.25) ?? Color.black.opacity(colorScheme == .dark ? 0.35 : 0.12),
+            radius: isPressed ? 3 : 8,
+            y: isPressed ? 1 : 4
         )
     }
 }
