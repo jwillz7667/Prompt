@@ -69,10 +69,11 @@ model User {
   lastLoginAt   DateTime?
 
   // Relations
-  sessions      Session[]
-  prompts       Prompt[]
-  apiKeys       ApiKey[]
-  subscription  Subscription?
+  sessions       Session[]
+  prompts        Prompt[]
+  apiKeys        ApiKey[]
+  subscription   Subscription?
+  supportTickets SupportTicket[]
 
   // Indexes for performance at scale
   @@index([email])
@@ -472,6 +473,7 @@ model SupportTicket {
   resolvedAt        DateTime?
 
   // Relations
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages          SupportMessage[]
 
   @@index([userId, createdAt(sort: Desc)])

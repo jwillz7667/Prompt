@@ -114,9 +114,9 @@ export default function TicketsPage() {
             <thead>
               <tr className="border-b border-gray-700">
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Ticket</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">User</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Status</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Priority</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Agent</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Created</th>
                 <th className="text-right px-6 py-4 text-sm font-medium text-gray-400">Action</th>
               </tr>
@@ -133,6 +133,14 @@ export default function TicketsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
+                    <div>
+                      <p className="text-white text-sm">{ticket.user?.email || 'Unknown'}</p>
+                      {ticket.user?.name && (
+                        <p className="text-gray-500 text-xs mt-0.5">{ticket.user.name}</p>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
                     <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full border ${statusColors[ticket.status] || statusColors.OPEN}`}>
                       {ticket.status.replace(/_/g, ' ')}
                     </span>
@@ -140,11 +148,6 @@ export default function TicketsPage() {
                   <td className="px-6 py-4">
                     <span className={`text-sm font-medium ${priorityColors[ticket.priority] || 'text-gray-400'}`}>
                       {ticket.priority}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-gray-300 text-sm">
-                      {ticket.assignedAgentName || '—'}
                     </span>
                   </td>
                   <td className="px-6 py-4">

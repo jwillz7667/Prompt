@@ -15,6 +15,12 @@ interface TicketMessage {
   createdAt: string;
 }
 
+export interface TicketUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
 export interface Ticket {
   id: string;
   userId: string;
@@ -28,6 +34,7 @@ export interface Ticket {
   updatedAt: string;
   resolvedAt: string | null;
   messages?: TicketMessage[];
+  user?: TicketUser;
 }
 
 interface TicketsResponse {

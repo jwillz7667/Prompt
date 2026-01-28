@@ -559,33 +559,66 @@ export async function addAgentReplyToTicket(
   logger.info({ ticketId, messageLength: agentMessage.length }, 'Agent reply added to ticket');
 }
 
+// Ticket with user info for admin
+export interface TicketWithUser extends Ticket {
+  user?: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+}
+
+export interface TicketWithMessagesAndUser extends TicketWithMessages {
+  user?: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+}
+
 // Get all tickets (for admin)
-export async function getAllTickets(status?: string): Promise<Ticket[]> {
+export async function getAllTickets(status?: string): Promise<TicketWithUser[]> {
   const whereClause = status ? { status: status as any } : {};
 
   const tickets = await prisma.supportTicket.findMany({
     where: whereClause,
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
+    },
     orderBy: [
       { priority: 'desc' },
       { createdAt: 'desc' },
     ],
   });
 
-  return tickets;
+  return tickets as TicketWithUser[];
 }
 
 // Get ticket by ID (for admin - no user restriction)
-export async function getTicketById(ticketId: string): Promise<TicketWithMessages | null> {
+export async function getTicketById(ticketId: string): Promise<TicketWithMessagesAndUser | null> {
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: ticketId },
     include: {
       messages: {
         orderBy: { createdAt: 'asc' },
       },
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
     },
   });
 
-  return ticket;
+  return ticket as TicketWithMessagesAndUser | null;
 }
 
 // Update ticket status

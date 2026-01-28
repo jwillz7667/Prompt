@@ -183,14 +183,17 @@ export default function TicketDetailPage() {
       )}
 
       {/* Info Cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 col-span-2">
+          <p className="text-gray-400 text-sm mb-1">User</p>
+          <p className="text-white font-medium">{ticket.user?.email || 'Unknown'}</p>
+          {ticket.user?.name && (
+            <p className="text-gray-400 text-sm mt-0.5">{ticket.user.name}</p>
+          )}
+        </div>
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
           <p className="text-gray-400 text-sm mb-1">Assigned Agent</p>
           <p className="text-white font-medium">{ticket.assignedAgentName || 'Unassigned'}</p>
-        </div>
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-          <p className="text-gray-400 text-sm mb-1">User ID</p>
-          <p className="text-white font-medium font-mono text-sm">{ticket.userId.slice(0, 12)}...</p>
         </div>
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
           <p className="text-gray-400 text-sm mb-1">Last Updated</p>
@@ -228,7 +231,7 @@ export default function TicketDetailPage() {
                       : 'text-gray-400'
                   }`}>
                     {message.role === 'user'
-                      ? 'User'
+                      ? (ticket.user?.name || ticket.user?.email || 'User')
                       : message.role === 'agent'
                       ? ticket.assignedAgentName || 'Agent'
                       : 'Prompt Bot'}
