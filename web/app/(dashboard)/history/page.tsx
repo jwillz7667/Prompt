@@ -50,7 +50,10 @@ export default function HistoryPage() {
   const toggleFavorite = useToggleFavorite()
   const deletePrompt = useDeletePrompt()
 
-  const prompts = data?.prompts || []
+  // Deduplicate prompts by ID to prevent duplicate entries
+  const prompts = (data?.prompts || []).filter(
+    (prompt, index, self) => index === self.findIndex((p) => p.id === prompt.id)
+  )
   const pagination = data?.pagination
 
   const handleCopy = useCallback(async (text: string) => {
@@ -274,13 +277,13 @@ export default function HistoryPage() {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-[var(--text-secondary)]">Original</label>
-              <div className="mt-1 p-3 rounded-lg bg-[var(--bg-tertiary)] text-sm whitespace-pre-wrap">
+              <div className="mt-1 p-3 rounded-lg bg-[var(--bg-tertiary)] text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
                 {selectedPrompt.originalPrompt}
               </div>
             </div>
             <div>
               <label className="text-sm font-medium text-[var(--text-secondary)]">Enhanced</label>
-              <div className="mt-1 p-3 rounded-lg bg-brand-indigo/5 dark:bg-brand-cyan/5 border border-brand-indigo/20 dark:border-brand-cyan/20 text-sm whitespace-pre-wrap">
+              <div className="mt-1 p-3 rounded-lg bg-brand-indigo/5 dark:bg-brand-cyan/5 border border-brand-indigo/20 dark:border-brand-cyan/20 text-sm whitespace-pre-wrap max-h-64 overflow-y-auto">
                 {selectedPrompt.enhancedPrompt}
               </div>
             </div>
