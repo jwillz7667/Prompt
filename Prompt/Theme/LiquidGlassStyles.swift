@@ -184,55 +184,21 @@ struct LiquidGlassButtonModifier: ViewModifier {
         content
             .background {
                 ZStack {
-                    // Base color layer - high saturation tint color as primary background
                     if let tint = tintColor {
+                        // Tinted buttons: solid color, no overlays
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        tint.opacity(colorScheme == .dark ? 0.95 : 0.95),
-                                        tint.opacity(colorScheme == .dark ? 0.8 : 0.85)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .saturation(1.0)
+                            .fill(tint)
                     } else {
                         // Neutral glass base for buttons without tint
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(.ultraThinMaterial)
+
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(
                                 colorScheme == .dark
                                     ? Color.white.opacity(0.08)
-                                    : Color.white.opacity(0.7)
+                                    : Color.white.opacity(0.5)
                             )
-                    }
-
-                    // Very light blur material to preserve icon visibility
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .opacity(tintColor != nil ? 0.1 : 0.3)
-
-                    // Very subtle specular highlight - minimal to not wash out icons
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(topHighlight)
-                        .opacity(intensity == .subtle ? 0.2 : 0.3)
-
-                    // Inner glow for depth - subtle in light mode
-                    if tintColor != nil {
-                        RoundedRectangle(cornerRadius: cornerRadius - 1, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(colorScheme == .dark ? 0.3 : 0.35),
-                                        Color.clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                ),
-                                lineWidth: 1.5
-                            )
-                            .padding(1)
                     }
                 }
             }
@@ -377,56 +343,21 @@ struct LiquidGlassChipModifier: ViewModifier {
     @ViewBuilder
     private var chipBackground: some View {
         if let accent = accentColor, isSelected {
+            // Selected chip: solid accent color
+            Capsule()
+                .fill(accent)
+        } else {
+            // Unselected chip: glass effect
             ZStack {
-                // High saturation color base
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                accent.opacity(0.95),
-                                accent.opacity(0.8)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .saturation(1.0)
-
-                // Very light blur
                 Capsule()
                     .fill(.ultraThinMaterial)
-                    .opacity(0.1)
 
-                // Very subtle specular highlight
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: colorScheme == .dark
-                                ? [Color.white.opacity(0.15), Color.white.opacity(0.05), Color.clear]
-                                : [Color.white.opacity(0.1), Color.white.opacity(0.03), Color.clear],
-                            startPoint: .top,
-                            endPoint: .center
-                        )
-                    )
-            }
-        } else {
-            ZStack {
-                // Clear glass base
                 Capsule()
                     .fill(
                         colorScheme == .dark
                             ? Color.white.opacity(0.1)
-                            : Color.white.opacity(0.8)
+                            : Color.white.opacity(0.5)
                     )
-
-                // Very light material
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.15)
-
-                // Subtle highlight
-                Capsule()
-                    .fill(highlightGradient)
             }
         }
     }
@@ -821,91 +752,26 @@ private struct GlassCapsuleBackground: View {
 
     var body: some View {
         ZStack {
-            // Base color layer - high saturation tint as primary
             if let tint = tintColor {
+                // Tinted buttons: solid color, no overlays
                 Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                tint.opacity(0.95),
-                                tint.opacity(0.8)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .saturation(1.0)
+                    .fill(tint)
             } else {
                 // Neutral glass base
+                Capsule()
+                    .fill(.ultraThinMaterial)
+
                 Capsule()
                     .fill(
                         colorScheme == .dark
                             ? Color.white.opacity(0.1)
-                            : Color.white.opacity(0.75)
+                            : Color.white.opacity(0.5)
                     )
             }
-
-            // Very light blur material
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .opacity(tintColor != nil ? 0.1 : 0.3)
-
-            // Very subtle specular highlight
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: colorScheme == .dark
-                            ? [Color.white.opacity(0.15), Color.white.opacity(0.05), Color.clear]
-                            : [Color.white.opacity(0.1), Color.white.opacity(0.03), Color.clear],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-
-            // Inner glow for depth on tinted buttons - subtle in light mode
-            if tintColor != nil {
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.25 : 0.3),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .center
-                        ),
-                        lineWidth: 1.5
-                    )
-                    .padding(1)
-            }
         }
-        .clipShape(Capsule())
-        .overlay {
-            Capsule()
-                .stroke(
-                    LinearGradient(
-                        colors: tintColor != nil
-                            ? [
-                                Color.white.opacity(colorScheme == .dark ? 0.4 : 0.7),
-                                tintColor!.opacity(colorScheme == .dark ? 0.5 : 0.4),
-                                Color.white.opacity(colorScheme == .dark ? 0.15 : 0.3)
-                              ]
-                            : (colorScheme == .dark
-                                ? [Color.white.opacity(0.35), Color.white.opacity(0.1)]
-                                : [Color.white.opacity(0.95), Color.white.opacity(0.4)]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        }
-        .shadow(
-            color: tintColor?.opacity(colorScheme == .dark ? 0.35 : 0.25) ?? Color.black.opacity(colorScheme == .dark ? 0.35 : 0.12),
-            radius: isPressed ? 3 : 8,
-            y: isPressed ? 1 : 4
-        )
     }
 }
+
 
 // MARK: - Animated Gradient Background
 
