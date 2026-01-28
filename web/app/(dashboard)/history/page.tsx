@@ -28,7 +28,9 @@ import {
   History,
   FileText,
   File,
+  ExternalLink,
 } from 'lucide-react'
+import Image from 'next/image'
 
 export default function HistoryPage() {
   const [page, setPage] = useState(1)
@@ -301,6 +303,55 @@ export default function HistoryPage() {
               {selectedPrompt.model && (
                 <Badge variant="outline">{selectedPrompt.model}</Badge>
               )}
+            </div>
+            {/* Try it in AI services */}
+            <div className="flex items-center gap-2 pt-2">
+              <span className="text-xs text-[var(--text-tertiary)] mr-1">Try it in:</span>
+              <button
+                onClick={() => {
+                  window.open(`https://claude.ai/new?q=${encodeURIComponent(selectedPrompt.enhancedPrompt)}`, '_blank')
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D97706]/30 hover:bg-[#D97706]/10 transition-colors"
+              >
+                <Image
+                  src="/logos/claude-logo.png"
+                  alt="Claude"
+                  width={20}
+                  height={20}
+                  className="object-contain"
+                />
+                <ExternalLink className="h-3 w-3 text-[#D97706]" />
+              </button>
+              <button
+                onClick={() => {
+                  window.open(`https://chatgpt.com/?q=${encodeURIComponent(selectedPrompt.enhancedPrompt)}`, '_blank')
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#10A37F]/30 hover:bg-[#10A37F]/10 transition-colors"
+              >
+                <Image
+                  src="/logos/chatgpt-logo.png"
+                  alt="ChatGPT"
+                  width={20}
+                  height={20}
+                  className="object-contain"
+                />
+                <ExternalLink className="h-3 w-3 text-[#10A37F]" />
+              </button>
+              <button
+                onClick={() => {
+                  window.open(`https://gemini.google.com/app?q=${encodeURIComponent(selectedPrompt.enhancedPrompt)}`, '_blank')
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#4285F4]/30 hover:bg-[#4285F4]/10 transition-colors"
+              >
+                <Image
+                  src="/logos/gemini-logo.svg"
+                  alt="Gemini"
+                  width={20}
+                  height={20}
+                  className="object-contain"
+                />
+                <ExternalLink className="h-3 w-3 text-[#4285F4]" />
+              </button>
             </div>
             <ModalFooter>
               <Button variant="secondary" onClick={() => setSelectedPrompt(null)}>

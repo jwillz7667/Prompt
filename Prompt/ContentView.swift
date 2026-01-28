@@ -44,8 +44,9 @@ struct ContentView: View {
     @State private var pulsingScale: CGFloat = 1.0
     @State private var pulsingOpacity: Double = 0.7
 
-    // Deep Think info popup
+    // Info popups
     @State private var showDeepThinkInfo = false
+    @State private var showUnchainedInfo = false
 
     enum TransformationPhase {
         case idle
@@ -215,7 +216,18 @@ struct ContentView: View {
                         .padding(.top, 60)
                 }
             }
+            .overlay(alignment: .top) {
+                if showUnchainedInfo {
+                    unchainedInfoPopup
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .padding(.top, 60)
+                }
+            }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showDeepThinkInfo)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showUnchainedInfo)
         }
         .onAppear {
             headerScale = 0.9
@@ -309,6 +321,68 @@ struct ContentView: View {
                 }
         }
         .shadow(color: accentColor.opacity(0.2), radius: 20, y: 8)
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 10, y: 4)
+        .padding(.horizontal, 20)
+    }
+
+    // MARK: - Unchained Info Popup
+
+    private var unchainedInfoPopup: some View {
+        HStack(spacing: 12) {
+            // Shield icon with purple glow
+            ZStack {
+                Circle()
+                    .fill(Color.purple.opacity(0.2))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: "bolt.shield.fill")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.purple)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Unchained Mode")
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text("Maximum prompt engineering with no constraints")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textSecondary)
+            }
+
+            Spacer()
+
+            // Dismiss button - glass circle
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    showUnchainedInfo = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(textTertiary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(GlassIconButtonStyle(size: 28))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color.purple.opacity(0.4), Color.purple.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .shadow(color: Color.purple.opacity(0.2), radius: 20, y: 8)
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 10, y: 4)
         .padding(.horizontal, 20)
     }
@@ -631,10 +705,7 @@ struct ContentView: View {
                         settings.selectedTone = newValue
                         settings.savePreferences()
                     }
-                ),
-                onPremiumTap: {
-                    showPaywall = true
-                }
+                )
             )
 
             // Length selector (compact)
@@ -648,6 +719,9 @@ struct ContentView: View {
 
             Spacer()
 
+            // Unchained toggle (compact inline)
+            unchainedInlineToggle
+
             // Deep Think toggle (compact inline)
             deepThinkInlineToggle
         }
@@ -657,6 +731,52 @@ struct ContentView: View {
             Rectangle()
                 .fill(bgSecondary.opacity(0.5))
         }
+    }
+
+    // MARK: - Compact Unchained Toggle (Inline)
+
+    private var unchainedInlineToggle: some View {
+        Button {
+            if !isPremium && !settings.unchainedEnabled {
+                showPaywall = true
+            } else {
+                withAnimation(.spring(response: 0.3)) {
+                    settings.unchainedEnabled.toggle()
+                    settings.savePreferences()
+                }
+                triggerHaptic(.light)
+
+                // Show info popup when enabling Unchained mode
+                if settings.unchainedEnabled {
+                    showUnchainedInfo = true
+                    // Auto-hide after 3 seconds
+                    Task {
+                        try? await Task.sleep(for: .seconds(3))
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showUnchainedInfo = false
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: settings.unchainedEnabled ? "bolt.shield.fill" : "bolt.shield")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(settings.unchainedEnabled ? .purple : textSecondary)
+
+                if !isPremium {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(textSecondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(GlassCapsuleButtonStyle(
+            tintColor: settings.unchainedEnabled ? .purple : nil,
+            intensity: settings.unchainedEnabled ? .standard : .subtle
+        ))
     }
 
     // MARK: - Compact Deep Think Toggle (Inline)

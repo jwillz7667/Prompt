@@ -76,12 +76,13 @@ final class PromptViewModel {
 
             // Use streaming for real-time response
             // effectiveModel returns reasoner if Deep Think is enabled, chat otherwise
+            // effectiveTone returns unchained if Unchained mode is enabled, selected tone otherwise
             let result = try await service.enhancePromptStream(
                 userPrompt: userPrompt,
                 model: settings.effectiveModel,
                 temperature: settings.temperature,
                 maxTokens: settings.maxTokens,
-                tone: settings.selectedTone,
+                tone: settings.effectiveTone,
                 length: settings.outputLength,
                 customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
             ) { [weak self] token in

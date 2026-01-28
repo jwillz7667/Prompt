@@ -30,8 +30,12 @@ struct PaywallView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
+            ZStack {
+                // Consistent liquid glass background
+                LiquidGlassBackground()
+
+                ScrollView {
+                    VStack(spacing: 24) {
                     // Header
                     headerSection
 
@@ -55,11 +59,12 @@ struct PaywallView: View {
                     // Legal links
                     legalSection
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 40)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                }
             }
-            .background(Color.adaptiveBackgroundPrimary)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") {

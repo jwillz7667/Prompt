@@ -35,7 +35,11 @@ struct SupportView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ZStack {
+                // Consistent liquid glass background
+                LiquidGlassBackground()
+
+                VStack(spacing: 0) {
                 // Chat messages
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -111,11 +115,12 @@ struct SupportView: View {
                     .disabled(messageText.isEmpty || supportService.isLoading)
                 }
                 .padding()
-                .background(bgPrimary)
+                .background(.ultraThinMaterial)
             }
-            .background(bgPrimary)
+            }
             .navigationTitle("Support")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") {

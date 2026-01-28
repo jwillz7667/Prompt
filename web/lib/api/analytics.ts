@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { AnalyticsResponse, UserStatsResponse, SessionsListResponse } from '@/lib/types/api'
+import type { AnalyticsResponse, UserStatsResponse, SessionsListResponse, StreakResponse } from '@/lib/types/api'
 
 export interface AnalyticsQueryParams {
   period?: 7 | 30 | 90
@@ -7,10 +7,14 @@ export interface AnalyticsQueryParams {
 
 export async function getAnalytics(params: AnalyticsQueryParams = {}): Promise<AnalyticsResponse> {
   const searchParams = new URLSearchParams()
-  if (params.period) searchParams.set('period', params.period.toString())
+  if (params.period) searchParams.set('days', params.period.toString())
 
   const query = searchParams.toString()
   return api.get<AnalyticsResponse>(`/analytics${query ? `?${query}` : ''}`)
+}
+
+export async function getStreak(): Promise<StreakResponse> {
+  return api.get<StreakResponse>('/analytics/streak')
 }
 
 export async function getUserStats(): Promise<UserStatsResponse> {

@@ -32,7 +32,11 @@ struct SettingsView: View {
         @Bindable var bindableSettings = settings
 
         NavigationStack {
-            Form {
+            ZStack {
+                // Consistent liquid glass background
+                LiquidGlassBackground()
+
+                Form {
                 // Appearance Section
                 Section {
                     Picker(selection: $bindableSettings.appearanceMode) {
@@ -197,10 +201,11 @@ struct SettingsView: View {
                         .foregroundStyle(textSecondary)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(bgPrimary.ignoresSafeArea())
+                .scrollContentBackground(.hidden)
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {

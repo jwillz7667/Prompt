@@ -27,18 +27,23 @@ struct HistoryView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if historyManager.isLoading && historyManager.prompts.isEmpty {
-                    loadingView
-                } else if historyManager.prompts.isEmpty {
-                    emptyStateView
-                } else {
-                    promptsList
+            ZStack {
+                // Consistent liquid glass background
+                LiquidGlassBackground()
+
+                Group {
+                    if historyManager.isLoading && historyManager.prompts.isEmpty {
+                        loadingView
+                    } else if historyManager.prompts.isEmpty {
+                        emptyStateView
+                    } else {
+                        promptsList
+                    }
                 }
             }
-            .background(bgPrimary.ignoresSafeArea())
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") {

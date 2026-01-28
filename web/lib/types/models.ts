@@ -114,24 +114,67 @@ export interface CollectionWithPrompts extends Collection {
 // Analytics
 export interface AnalyticsSummary {
   totalPrompts: number
-  totalTokensUsed: number
-  averageProcessingTime: number
   favoriteCount: number
-  currentStreak: number
-  longestStreak: number
+  totalTokens: number
+  avgPromptsPerDay: number
+  avgTokensPerPrompt: number
+  collectionCount: number
+  templateCount: number
+  // Legacy fields for backwards compatibility
+  totalTokensUsed?: number
+  averageProcessingTime?: number
+  currentStreak?: number
+  longestStreak?: number
 }
 
 export interface DailyAnalytics {
   date: string
-  promptCount: number
-  tokensUsed: number
+  promptCount?: number
+  count?: number
+  tokensUsed?: number
+}
+
+export interface ModelUsage {
+  model: string
+  count: number
+}
+
+export interface TagUsage {
+  tag: string
+  count: number
+}
+
+export interface AnalyticsCharts {
+  promptsByDay: { date: string; count: number }[]
+  modelUsage: ModelUsage[]
+  topTags: TagUsage[]
+}
+
+export interface UsageHistoryRecord {
+  date: string
+  prompts: number
+  tokens: number
 }
 
 export interface Analytics {
   summary: AnalyticsSummary
-  daily: DailyAnalytics[]
-  topTones: { tone: string; count: number }[]
-  topCategories: { category: string; count: number }[]
+  charts: AnalyticsCharts
+  usageHistory: UsageHistoryRecord[]
+  period: {
+    days: number
+    startDate: string
+    endDate: string
+  }
+  // Legacy fields for backwards compatibility
+  daily?: DailyAnalytics[]
+  topTones?: { tone: string; count: number }[]
+  topCategories?: { category: string; count: number }[]
+}
+
+export interface StreakData {
+  currentStreak: number
+  longestStreak: number
+  totalActiveDays: number
 }
 
 // Settings

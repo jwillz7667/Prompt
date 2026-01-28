@@ -379,6 +379,24 @@ export default function DashboardPage() {
                             />
                             <ExternalLink className="h-3 w-3 text-[#10A37F]" />
                           </button>
+                          <button
+                            onClick={() => {
+                              const text = result?.enhancedPrompt || streamedContent
+                              if (text) {
+                                window.open(`https://gemini.google.com/app?q=${encodeURIComponent(text)}`, '_blank')
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#4285F4]/30 hover:bg-[#4285F4]/10 transition-colors"
+                          >
+                            <Image
+                              src="/logos/gemini-logo.svg"
+                              alt="Gemini"
+                              width={20}
+                              height={20}
+                              className="object-contain"
+                            />
+                            <ExternalLink className="h-3 w-3 text-[#4285F4]" />
+                          </button>
                         </div>
 
                         {/* Stats row */}

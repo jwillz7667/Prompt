@@ -39,7 +39,11 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            ZStack {
+                // Consistent liquid glass background
+                LiquidGlassBackground()
+
+                List {
                 // User info section
                 if let user = authManager.currentUser {
                     Section {
@@ -199,11 +203,12 @@ struct ProfileView: View {
                         .foregroundStyle(textSecondary)
                 }
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(bgPrimary.ignoresSafeArea())
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {

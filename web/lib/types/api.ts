@@ -5,6 +5,7 @@ import type {
   Collection,
   SubscriptionInfo,
   Analytics,
+  StreakData,
   Session,
   PromptUsage,
   ToneType,
@@ -130,6 +131,8 @@ export interface StripePortalResponse {
 
 // Analytics
 export interface AnalyticsResponse extends Analytics {}
+
+export interface StreakResponse extends StreakData {}
 
 // User
 export interface UpdateProfileRequest {

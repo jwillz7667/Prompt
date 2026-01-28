@@ -49,12 +49,21 @@ final class PromptHistoryManager {
             favoritesOnly: showFavoritesOnly,
             searchQuery: searchQuery
         )
-        // Deduplicate by ID (keep first occurrence)
+        // Deduplicate by ID and content hash (keep first occurrence)
         var seenIds = Set<String>()
+        var seenContentHashes = Set<String>()
         prompts = cached.compactMap { record -> PromptRecord? in
             let promptRecord = record.toPromptRecord()
+
+            // Skip if we've seen this ID
             guard !seenIds.contains(promptRecord.id) else { return nil }
+
+            // Create content hash to detect duplicate content with different IDs
+            let contentHash = "\(promptRecord.originalPrompt.prefix(100))|\(promptRecord.enhancedPrompt.prefix(100))"
+            guard !seenContentHashes.contains(contentHash) else { return nil }
+
             seenIds.insert(promptRecord.id)
+            seenContentHashes.insert(contentHash)
             return promptRecord
         }
     }
@@ -96,15 +105,26 @@ final class PromptHistoryManager {
 
             let response: PromptsListResponse = try await APIClient.shared.request(endpoint)
 
-            // Convert to PromptRecords
+            // Convert to PromptRecords and deduplicate
             let newRecords = response.prompts.map { PromptRecord(from: $0) }
 
             if refresh || currentPage == 1 {
-                prompts = newRecords
+                // Deduplicate by content hash
+                var seenHashes = Set<String>()
+                prompts = newRecords.filter { record in
+                    let contentHash = "\(record.originalPrompt.prefix(100))|\(record.enhancedPrompt.prefix(100))"
+                    guard !seenHashes.contains(contentHash) else { return false }
+                    seenHashes.insert(contentHash)
+                    return true
+                }
             } else {
-                // Append only records not already in the list (deduplicate by ID)
+                // Append only records not already in the list (deduplicate by ID and content)
                 let existingIds = Set(prompts.map { $0.id })
-                let uniqueNewRecords = newRecords.filter { !existingIds.contains($0.id) }
+                let existingHashes = Set(prompts.map { "\($0.originalPrompt.prefix(100))|\($0.enhancedPrompt.prefix(100))" })
+                let uniqueNewRecords = newRecords.filter { record in
+                    let contentHash = "\(record.originalPrompt.prefix(100))|\(record.enhancedPrompt.prefix(100))"
+                    return !existingIds.contains(record.id) && !existingHashes.contains(contentHash)
+                }
                 prompts.append(contentsOf: uniqueNewRecords)
             }
 

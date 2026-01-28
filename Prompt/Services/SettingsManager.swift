@@ -136,6 +136,7 @@ enum OutputLength: String, CaseIterable, Identifiable, Codable, Sendable {
 final class SettingsManager {
     var selectedModel: DeepseekModel = .chat
     var deepThinkEnabled: Bool = false
+    var unchainedEnabled: Bool = false
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
     var appearanceMode: AppearanceMode = .system
@@ -144,6 +145,11 @@ final class SettingsManager {
     var selectedTone: ToneType = .professional
     var outputLength: OutputLength = .standard
     var customInstructions: String = ""
+
+    /// Returns the effective tone - unchained if enabled, otherwise selected tone
+    var effectiveTone: ToneType {
+        unchainedEnabled ? .unchained : selectedTone
+    }
 
     // App Group for sharing with keyboard extension AND persistence across updates
     private let appGroupId = "group.com.res.promptomizer"
@@ -154,6 +160,7 @@ final class SettingsManager {
     // Keys for settings
     private enum Keys {
         static let deepThinkEnabled = "deepThinkEnabled"
+        static let unchainedEnabled = "unchainedEnabled"
         static let temperature = "temperature"
         static let maxTokens = "maxTokens"
         static let appearanceMode = "appearanceMode"
@@ -229,6 +236,7 @@ final class SettingsManager {
         }
 
         deepThinkEnabled = defaults.bool(forKey: Keys.deepThinkEnabled)
+        unchainedEnabled = defaults.bool(forKey: Keys.unchainedEnabled)
 
         let savedTemp = defaults.double(forKey: Keys.temperature)
         if savedTemp > 0 { temperature = savedTemp }
@@ -275,6 +283,7 @@ final class SettingsManager {
         }
 
         defaults.set(deepThinkEnabled, forKey: Keys.deepThinkEnabled)
+        defaults.set(unchainedEnabled, forKey: Keys.unchainedEnabled)
         defaults.set(temperature, forKey: Keys.temperature)
         defaults.set(maxTokens, forKey: Keys.maxTokens)
         defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)
