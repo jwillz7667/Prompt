@@ -133,7 +133,7 @@ struct ProfileView: View {
                         .listRowBackground(bgSecondary)
                     } else if let stats = stats {
                         statsRow(label: "Total Prompts", value: "\(stats.totalPrompts)")
-                        statsRow(label: "Favorite Prompts", value: "\(stats.favoritePrompts)")
+                        statsRow(label: "Starred Prompts", value: "\(stats.favoritePrompts)")
                         statsRow(label: "Total Tokens Used", value: formatTokens(stats.totalTokens))
                         statsRow(label: "Member Since", value: stats.memberSince.formatted(.dateTime.month().year()))
                     }

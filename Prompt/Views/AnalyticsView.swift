@@ -141,7 +141,7 @@ struct AnalyticsView: View {
             )
 
             StatCard(
-                title: "Favorites",
+                title: "Starred",
                 value: "\(analytics.summary.favoriteCount)",
                 icon: "star.fill",
                 color: .yellow

@@ -17,6 +17,12 @@ struct HistoryView: View {
     @State private var selectedPrompt: PromptRecord?
     @State private var showDeleteConfirmation = false
     @State private var promptToDelete: PromptRecord?
+    @State private var selectedTab: HistoryTab = .all
+
+    enum HistoryTab: String, CaseIterable {
+        case all = "All"
+        case starred = "Starred"
+    }
 
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -32,13 +38,32 @@ struct HistoryView: View {
                 // Consistent liquid glass background
                 LiquidGlassBackground()
 
-                Group {
-                    if historyManager.isLoading && historyManager.prompts.isEmpty {
-                        loadingView
-                    } else if historyManager.prompts.isEmpty {
-                        emptyStateView
-                    } else {
-                        promptsList
+                VStack(spacing: 0) {
+                    // Tab picker
+                    Picker("Filter", selection: $selectedTab) {
+                        ForEach(HistoryTab.allCases, id: \.self) { tab in
+                            HStack(spacing: 4) {
+                                if tab == .starred {
+                                    Image(systemName: "star.fill")
+                                }
+                                Text(tab.rawValue)
+                            }
+                            .tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+
+                    Group {
+                        if historyManager.isLoading && historyManager.prompts.isEmpty {
+                            loadingView
+                        } else if historyManager.prompts.isEmpty {
+                            emptyStateView
+                        } else {
+                            promptsList
+                        }
                     }
                 }
             }
@@ -53,15 +78,6 @@ struct HistoryView: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(accentColor)
                 }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Toggle("Favorites Only", isOn: Bindable(historyManager).showFavoritesOnly)
-                    } label: {
-                        Image(systemName: historyManager.showFavoritesOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                            .foregroundStyle(historyManager.showFavoritesOnly ? accentColor : textPrimary)
-                    }
-                }
             }
             .searchable(text: $searchText, prompt: "Search prompts...")
             .onChange(of: searchText) { _, newValue in
@@ -70,12 +86,15 @@ struct HistoryView: View {
                     await historyManager.fetchPrompts(refresh: true)
                 }
             }
-            .onChange(of: historyManager.showFavoritesOnly) { _, _ in
+            .onChange(of: selectedTab) { _, newTab in
+                historyManager.showFavoritesOnly = (newTab == .starred)
                 Task {
                     await historyManager.fetchPrompts(refresh: true)
                 }
             }
             .task {
+                // Sync tab state with manager state
+                selectedTab = historyManager.showFavoritesOnly ? .starred : .all
                 await historyManager.fetchPrompts(refresh: true)
             }
             .sheet(item: $selectedPrompt) { prompt in
@@ -116,20 +135,22 @@ struct HistoryView: View {
         VStack(spacing: 24) {
             ZStack {
                 Circle()
-                    .fill(accentColor.opacity(0.15))
+                    .fill(selectedTab == .starred ? Color.yellow.opacity(0.15) : accentColor.opacity(0.15))
                     .frame(width: 100, height: 100)
 
-                Image(systemName: "doc.text.fill")
+                Image(systemName: selectedTab == .starred ? "star.fill" : "doc.text.fill")
                     .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(accentColor)
+                    .foregroundStyle(selectedTab == .starred ? .yellow : accentColor)
             }
 
             VStack(spacing: 8) {
-                Text("No Prompts Yet")
+                Text(selectedTab == .starred ? "No Starred Prompts" : "No Prompts Yet")
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .foregroundStyle(textPrimary)
 
-                Text("Your enhanced prompts will appear here")
+                Text(selectedTab == .starred
+                     ? "Tap the star on any prompt to add it here"
+                     : "Your enhanced prompts will appear here")
                     .font(.subheadline)
                     .foregroundStyle(textSecondary)
                     .multilineTextAlignment(.center)
@@ -163,7 +184,7 @@ struct HistoryView: View {
                             }
                         } label: {
                             Label(
-                                prompt.isFavorite ? "Unfavorite" : "Favorite",
+                                prompt.isFavorite ? "Unstar" : "Star",
                                 systemImage: prompt.isFavorite ? "star.slash" : "star.fill"
                             )
                         }
@@ -202,6 +223,7 @@ struct HistoryView: View {
 
 struct PromptRowView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(PromptHistoryManager.self) private var historyManager
     let prompt: PromptRecord
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -209,37 +231,42 @@ struct PromptRowView: View {
     private var textTertiary: Color { Color.adaptiveTextTertiary }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        HStack(spacing: 12) {
+            // Star button
+            Button {
+                Task {
+                    await historyManager.toggleFavorite(prompt)
+                }
+            } label: {
+                Image(systemName: prompt.isFavorite ? "star.fill" : "star")
+                    .font(.system(size: 20))
+                    .foregroundStyle(prompt.isFavorite ? .yellow : textTertiary)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 8) {
                 Text(prompt.title ?? String(prompt.originalPrompt.prefix(50)) + "...")
                     .font(.headline)
                     .foregroundStyle(textPrimary)
                     .lineLimit(1)
 
-                Spacer()
+                Text(prompt.originalPrompt)
+                    .font(.subheadline)
+                    .foregroundStyle(textSecondary)
+                    .lineLimit(2)
 
-                if prompt.isFavorite {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
+                HStack {
+                    Label("\(prompt.totalTokens) tokens", systemImage: "number")
                         .font(.caption)
+                        .foregroundStyle(textTertiary)
+
+                    Spacer()
+
+                    Text(prompt.createdAt, format: .dateTime.month().day().hour().minute())
+                        .font(.caption)
+                        .foregroundStyle(textTertiary)
                 }
-            }
-
-            Text(prompt.originalPrompt)
-                .font(.subheadline)
-                .foregroundStyle(textSecondary)
-                .lineLimit(2)
-
-            HStack {
-                Label("\(prompt.totalTokens) tokens", systemImage: "number")
-                    .font(.caption)
-                    .foregroundStyle(textTertiary)
-
-                Spacer()
-
-                Text(prompt.createdAt, format: .dateTime.month().day().hour().minute())
-                    .font(.caption)
-                    .foregroundStyle(textTertiary)
             }
         }
         .padding(.vertical, 4)
