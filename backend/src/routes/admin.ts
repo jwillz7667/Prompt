@@ -299,6 +299,173 @@ adminRouter.get('/debug/apns-config', async (_req: Request, res: Response): Prom
 });
 
 // ============================================================================
+// DEBUG: LOOKUP USER BY EMAIL
+// ============================================================================
+
+adminRouter.get('/debug/user-by-email/:email', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const email = req.params['email'] as string;
+    if (!email) {
+      res.status(400).json({ error: 'Email required' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        subscriptionTier: true,
+        isPremium: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId: user.id },
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dailyUsage = await prisma.dailyUsage.findUnique({
+      where: {
+        userId_date: {
+          userId: user.id,
+          date: today,
+        },
+      },
+    });
+
+    res.json({
+      user,
+      subscription,
+      dailyUsage: {
+        date: today.toISOString().split('T')[0],
+        promptCount: dailyUsage?.promptCount || 0,
+      },
+    });
+  } catch (error) {
+    logger.error({ error }, 'Admin get user by email error');
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+// ============================================================================
+// DEBUG: RESET QUOTA BY EMAIL
+// ============================================================================
+
+adminRouter.post('/debug/reset-quota-by-email/:email', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const email = req.params['email'] as string;
+    if (!email) {
+      res.status(400).json({ error: 'Email required' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    await prisma.dailyUsage.deleteMany({
+      where: { userId: user.id },
+    });
+
+    res.json({
+      success: true,
+      message: 'Daily quota reset for user',
+      email,
+      userId: user.id,
+    });
+  } catch (error) {
+    logger.error({ error }, 'Admin reset quota by email error');
+    res.status(500).json({ error: 'Failed to reset quota' });
+  }
+});
+
+// ============================================================================
+// DEBUG: SET TIER BY EMAIL
+// ============================================================================
+
+adminRouter.post('/debug/set-tier-by-email/:email', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const email = req.params['email'] as string;
+    const { tier } = req.body;
+
+    if (!email) {
+      res.status(400).json({ error: 'Email required' });
+      return;
+    }
+
+    if (!['FREE', 'PRO', 'PREMIUM'].includes(tier)) {
+      res.status(400).json({ error: 'Invalid tier. Must be FREE, PRO, or PREMIUM' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Update user's tier
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        subscriptionTier: tier,
+        isPremium: tier !== 'FREE',
+      },
+    });
+
+    // Update or create subscription
+    const expiresAt = new Date();
+    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+    await prisma.subscription.upsert({
+      where: { userId: user.id },
+      update: {
+        tier,
+        status: 'ACTIVE',
+        expiresAt: tier === 'FREE' ? null : expiresAt,
+      },
+      create: {
+        userId: user.id,
+        tier,
+        status: 'ACTIVE',
+        expiresAt: tier === 'FREE' ? null : expiresAt,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `User tier set to ${tier}`,
+      email,
+      userId: user.id,
+      tier,
+    });
+  } catch (error) {
+    logger.error({ error }, 'Admin set tier by email error');
+    res.status(500).json({ error: 'Failed to set tier' });
+  }
+});
+
+// ============================================================================
 // DEBUG: GET USER SUBSCRIPTION & QUOTA INFO
 // ============================================================================
 
