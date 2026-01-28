@@ -169,12 +169,12 @@ struct LiquidGlassButtonModifier: ViewModifier {
         )
     }
 
-    // Top highlight for shiny 3D glass effect - prominent specular highlight
+    // Top highlight for shiny 3D glass effect - subtle specular highlight
     private var topHighlight: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
-                ? [Color.white.opacity(0.7), Color.white.opacity(0.25), Color.clear]
-                : [Color.white.opacity(0.7), Color.white.opacity(0.3), Color.clear],
+                ? [Color.white.opacity(0.25), Color.white.opacity(0.08), Color.clear]
+                : [Color.white.opacity(0.35), Color.white.opacity(0.12), Color.clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -213,10 +213,10 @@ struct LiquidGlassButtonModifier: ViewModifier {
                         .fill(.ultraThinMaterial)
                         .opacity(tintColor != nil ? 0.25 : 0.5)
 
-                    // Prominent specular highlight for shiny glass look
+                    // Subtle specular highlight for shiny glass look
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(topHighlight)
-                        .opacity(intensity == .subtle ? 0.6 : 0.85)
+                        .opacity(intensity == .subtle ? 0.4 : 0.6)
 
                     // Inner glow for depth - subtle in light mode
                     if tintColor != nil {
@@ -343,7 +343,9 @@ struct LiquidGlassChipModifier: ViewModifier {
 
     private var highlightGradient: LinearGradient {
         LinearGradient(
-            colors: [Color.white.opacity(0.7), Color.white.opacity(0.25), Color.clear],
+            colors: colorScheme == .dark
+                ? [Color.white.opacity(0.2), Color.white.opacity(0.05), Color.clear]
+                : [Color.white.opacity(0.3), Color.white.opacity(0.1), Color.clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -395,15 +397,13 @@ struct LiquidGlassChipModifier: ViewModifier {
                     .fill(.ultraThinMaterial)
                     .opacity(0.25)
 
-                // Prominent specular highlight
+                // Subtle specular highlight
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.7),
-                                Color.white.opacity(0.25),
-                                Color.clear
-                            ],
+                            colors: colorScheme == .dark
+                                ? [Color.white.opacity(0.25), Color.white.opacity(0.08), Color.clear]
+                                : [Color.white.opacity(0.35), Color.white.opacity(0.12), Color.clear],
                             startPoint: .top,
                             endPoint: .center
                         )
@@ -850,11 +850,13 @@ private struct GlassCapsuleBackground: View {
                 .fill(.ultraThinMaterial)
                 .opacity(tintColor != nil ? 0.25 : 0.45)
 
-            // Prominent specular highlight
+            // Subtle specular highlight
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.7), Color.white.opacity(0.25), Color.clear],
+                        colors: colorScheme == .dark
+                            ? [Color.white.opacity(0.25), Color.white.opacity(0.08), Color.clear]
+                            : [Color.white.opacity(0.35), Color.white.opacity(0.12), Color.clear],
                         startPoint: .top,
                         endPoint: .center
                     )
