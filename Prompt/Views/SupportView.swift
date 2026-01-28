@@ -13,10 +13,12 @@ struct SupportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthManager.self) private var authManager
     @StateObject private var supportService = SupportService.shared
+    @StateObject private var socketManager = SupportSocketManager.shared
 
     @State private var messageText = ""
     @State private var messages: [SupportMessage] = []
     @State private var isTyping = false
+    @State private var agentIsTyping = false
     @State private var ticketCreated = false
     @State private var currentTicketId: String?
     @State private var showTicketsList = false
@@ -64,6 +66,12 @@ struct SupportView: View {
                                 TypingIndicator()
                                     .id("typing")
                             }
+
+                            // Agent typing indicator
+                            if agentIsTyping {
+                                AgentTypingIndicator()
+                                    .id("agent-typing")
+                            }
                         }
                         .padding()
                     }
@@ -76,6 +84,13 @@ struct SupportView: View {
                         if newValue {
                             withAnimation {
                                 proxy.scrollTo("typing", anchor: .bottom)
+                            }
+                        }
+                    }
+                    .onChange(of: agentIsTyping) { _, newValue in
+                        if newValue {
+                            withAnimation {
+                                proxy.scrollTo("agent-typing", anchor: .bottom)
                             }
                         }
                     }
@@ -109,6 +124,12 @@ struct SupportView: View {
                         .lineLimit(1...5)
                         .foregroundStyle(textPrimary)
                         .disabled(supportService.isLoading)
+                        .onChange(of: messageText) { _, newValue in
+                            // Send typing indicator when connected to socket
+                            if currentTicketId != nil && !newValue.isEmpty {
+                                socketManager.startTyping()
+                            }
+                        }
 
                     Button {
                         Task {
@@ -152,13 +173,38 @@ struct SupportView: View {
                 if messages.isEmpty {
                     messages.append(welcomeMessage)
                 }
+                setupSocketCallbacks()
             }
+            .onDisappear {
+                socketManager.disconnect()
+            }
+            .onChange(of: socketManager.agentIsTyping) { _, newValue in
+                agentIsTyping = newValue
+            }
+        }
+    }
+
+    private func setupSocketCallbacks() {
+        // Handle incoming messages from socket
+        socketManager.onMessageReceived = { [self] message in
+            // Check if message already exists to avoid duplicates
+            if !messages.contains(where: { $0.id == message.id }) {
+                messages.append(message)
+            }
+        }
+
+        // Handle typing updates
+        socketManager.onTypingUpdate = { [self] isTyping in
+            agentIsTyping = isTyping
         }
     }
 
     private func sendMessage() async {
         let trimmedMessage = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedMessage.isEmpty else { return }
+
+        // Stop typing indicator
+        socketManager.stopTyping()
 
         // Add user message
         let userMessage = SupportMessage(role: "user", content: trimmedMessage)
@@ -186,14 +232,18 @@ struct SupportView: View {
 
             isTyping = false
 
-            // Add assistant response
-            let assistantMessage = SupportMessage(role: "assistant", content: response.reply)
-            messages.append(assistantMessage)
+            // Add assistant response (only if AI responded, not when agent is handling)
+            if !response.reply.isEmpty {
+                let assistantMessage = SupportMessage(role: "assistant", content: response.reply)
+                messages.append(assistantMessage)
+            }
 
-            // Handle ticket creation
+            // Handle ticket creation - connect to socket for real-time updates
             if response.ticketCreated, let ticketId = response.ticketId {
                 ticketCreated = true
                 currentTicketId = ticketId
+                // Connect to socket for real-time updates
+                socketManager.connect(ticketId: ticketId)
             }
         } catch {
             isTyping = false
@@ -333,6 +383,53 @@ struct TypingIndicator: View {
     }
 }
 
+// MARK: - Agent Typing Indicator
+
+struct AgentTypingIndicator: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var dotCount = 0
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "headphones.circle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.green)
+                    Text("Support Agent")
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .foregroundStyle(.green)
+                    Text("is typing")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.adaptiveTextSecondary)
+                }
+
+                HStack(spacing: 4) {
+                    ForEach(0..<3) { index in
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                            .opacity(dotCount == index ? 1 : 0.4)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.green.opacity(colorScheme == .dark ? 0.2 : 0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+            }
+
+            Spacer()
+        }
+        .onAppear {
+            Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+                withAnimation {
+                    dotCount = (dotCount + 1) % 3
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Tickets List View
 
 struct TicketsListView: View {
@@ -441,8 +538,11 @@ struct TicketDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthManager.self) private var authManager
     @StateObject private var supportService = SupportService.shared
+    @StateObject private var socketManager = SupportSocketManager.shared
     @State private var messageText = ""
     @State private var isTyping = false
+    @State private var agentIsTyping = false
+    @State private var localMessages: [SupportMessage] = []
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
@@ -452,6 +552,21 @@ struct TicketDetailView: View {
 
     private var userEmail: String {
         authManager.currentUser?.email ?? "You"
+    }
+
+    private var displayMessages: [SupportMessage] {
+        // Combine ticket messages with any locally received socket messages
+        let ticketMessages = supportService.currentTicket?.messages ?? []
+        var combined = ticketMessages
+
+        // Add any socket messages that aren't already in the ticket
+        for msg in localMessages {
+            if !combined.contains(where: { $0.id == msg.id }) {
+                combined.append(msg)
+            }
+        }
+
+        return combined.sorted { ($0.createdAt ?? Date.distantPast) < ($1.createdAt ?? Date.distantPast) }
     }
 
     var body: some View {
@@ -488,22 +603,26 @@ struct TicketDetailView: View {
                             .padding(.horizontal)
 
                             // Messages
-                            if let messages = ticket.messages {
-                                ForEach(messages) { message in
-                                    MessageBubble(
-                                        message: message,
-                                        textPrimary: textPrimary,
-                                        textSecondary: textSecondary,
-                                        userEmail: userEmail,
-                                        assignedAgentName: ticket.assignedAgentName
-                                    )
-                                    .id(message.id)
-                                }
+                            ForEach(displayMessages) { message in
+                                MessageBubble(
+                                    message: message,
+                                    textPrimary: textPrimary,
+                                    textSecondary: textSecondary,
+                                    userEmail: userEmail,
+                                    assignedAgentName: ticket.assignedAgentName
+                                )
+                                .id(message.id)
                             }
 
                             if isTyping {
                                 TypingIndicator()
                                     .id("typing")
+                            }
+
+                            // Agent typing indicator
+                            if agentIsTyping {
+                                AgentTypingIndicator()
+                                    .id("agent-typing")
                             }
                         }
                         .padding()
@@ -521,6 +640,12 @@ struct TicketDetailView: View {
                             .lineLimit(1...5)
                             .foregroundStyle(textPrimary)
                             .disabled(supportService.isLoading)
+                            .onChange(of: messageText) { _, newValue in
+                                // Send typing indicator
+                                if !newValue.isEmpty {
+                                    socketManager.startTyping()
+                                }
+                            }
 
                         Button {
                             Task {
@@ -555,12 +680,41 @@ struct TicketDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             _ = try? await supportService.fetchTicket(id: ticketId)
+            // Connect to socket for real-time updates
+            setupSocketConnection()
+        }
+        .onDisappear {
+            socketManager.disconnect()
+        }
+        .onChange(of: socketManager.agentIsTyping) { _, newValue in
+            agentIsTyping = newValue
+        }
+    }
+
+    private func setupSocketConnection() {
+        // Connect to socket
+        socketManager.connect(ticketId: ticketId)
+
+        // Handle incoming messages
+        socketManager.onMessageReceived = { message in
+            // Add to local messages if not already present
+            if !localMessages.contains(where: { $0.id == message.id }) {
+                localMessages.append(message)
+            }
+        }
+
+        // Handle typing updates
+        socketManager.onTypingUpdate = { isTyping in
+            agentIsTyping = isTyping
         }
     }
 
     private func sendMessage() async {
         let trimmedMessage = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedMessage.isEmpty else { return }
+
+        // Stop typing indicator
+        socketManager.stopTyping()
 
         messageText = ""
         isTyping = true
@@ -570,12 +724,13 @@ struct TicketDetailView: View {
                 ticketId: ticketId,
                 message: trimmedMessage
             )
-            // Refresh ticket to get updated messages
-            _ = try await supportService.fetchTicket(id: ticketId)
+            // Don't need to fetch - socket will update with new messages
         } catch {
             #if DEBUG
             print("[Support] Error sending message: \(error)")
             #endif
+            // On error, refresh to ensure consistency
+            _ = try? await supportService.fetchTicket(id: ticketId)
         }
 
         isTyping = false

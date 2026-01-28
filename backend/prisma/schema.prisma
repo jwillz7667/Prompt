@@ -498,3 +498,66 @@ model SupportMessage {
 
   @@index([ticketId, createdAt])
 }
+
+// ============================================================================
+// DEVICE TOKENS - Push notification device registration
+// ============================================================================
+
+model DeviceToken {
+  id          String   @id @default(cuid())
+  userId      String
+
+  // Device identification
+  deviceToken String   @unique
+  deviceId    String?  // Optional device UUID
+  deviceType  String   @default("ios") // ios, android, web
+
+  // APNs specific
+  bundleId    String?
+  environment String   @default("production") // production, sandbox
+
+  // Status
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime @default(now())
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([deviceToken])
+  @@index([isActive])
+}
+
+// ============================================================================
+// PENDING ENHANCEMENTS - Track background enhancement jobs
+// ============================================================================
+
+model PendingEnhancement {
+  id              String   @id @default(cuid())
+  userId          String
+
+  // Original request
+  originalPrompt  String   @db.Text
+
+  // Status
+  status          String   @default("pending") // pending, processing, completed, failed
+
+  // Result (when completed)
+  enhancedPrompt  String?  @db.Text
+  promptId        String?  // Reference to created Prompt
+
+  // Error info (if failed)
+  errorMessage    String?
+
+  // Notification tracking
+  notificationSent Boolean @default(false)
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+}

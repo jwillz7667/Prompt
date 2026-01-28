@@ -44,7 +44,11 @@ export function initializeSocket(httpServer: HttpServer, allowedOrigins: string[
       },
       credentials: true,
     },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],  // Allow polling first for mobile compatibility
+    pingTimeout: 60000,      // 60 seconds before considering connection dead
+    pingInterval: 25000,     // Send ping every 25 seconds
+    upgradeTimeout: 30000,   // 30 seconds to upgrade from polling to websocket
+    allowUpgrades: true,
   });
 
   io.on('connection', (socket: Socket) => {

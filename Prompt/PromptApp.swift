@@ -7,9 +7,43 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
+
+// MARK: - App Delegate for Push Notifications
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Set notification delegate
+        UNUserNotificationCenter.current().delegate = NotificationManager.shared
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        Task { @MainActor in
+            NotificationManager.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
+        }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        Task { @MainActor in
+            NotificationManager.shared.didFailToRegisterForRemoteNotifications(error: error)
+        }
+    }
+}
 
 @main
 struct PromptApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     @State private var settingsManager = SettingsManager()
     @State private var authManager = AuthManager.shared
     @State private var historyManager = PromptHistoryManager.shared
@@ -68,6 +102,7 @@ struct PromptApp: App {
 
 struct RootView: View {
     @Environment(AuthManager.self) private var authManager
+    @State private var showSupportTicket: String?
 
     var body: some View {
         Group {
@@ -81,6 +116,35 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: authManager.isAuthenticated)
         .animation(.easeInOut(duration: 0.3), value: authManager.isCheckingSession)
+        .task {
+            // Request notification permissions when authenticated
+            if authManager.isAuthenticated {
+                await setupNotifications()
+            }
+        }
+        .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                Task {
+                    await setupNotifications()
+                }
+            }
+        }
+    }
+
+    private func setupNotifications() async {
+        // Request authorization
+        _ = await NotificationManager.shared.requestAuthorization()
+
+        // Set up notification handlers
+        NotificationManager.shared.onSupportMessageReceived = { ticketId in
+            // Handle support message tap - could navigate to ticket
+            showSupportTicket = ticketId
+        }
+
+        NotificationManager.shared.onEnhancementComplete = { promptId in
+            // Handle enhancement complete tap - could navigate to prompt
+            print("[Notifications] Enhancement complete for prompt: \(promptId)")
+        }
     }
 }
 

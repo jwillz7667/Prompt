@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js';
 import type { TicketCategory, TicketPriority, TicketStatus } from '@prisma/client';
 import { sendTicketCreated, sendTicketNotificationToSupport, sendTicketResponse } from './emailService.js';
 import { emitNewMessage } from '../utils/socket.js';
+import { sendSupportMessageNotification } from './notificationService.js';
 
 // ============================================================================
 // TYPES
@@ -581,6 +582,16 @@ export async function addAgentReplyToTicket(
     // Send email notification to user
     sendTicketResponse(user.email, user.name, ticketDetails, agentMessage).catch((err) => {
       logger.warn({ error: err, ticketId }, 'Failed to send agent reply email to user');
+    });
+
+    // Send push notification to user
+    sendSupportMessageNotification(
+      ticket.userId,
+      ticketId,
+      ticket.assignedAgentName || 'Support Agent',
+      agentMessage
+    ).catch((err) => {
+      logger.warn({ error: err, ticketId }, 'Failed to send push notification to user');
     });
   }
 

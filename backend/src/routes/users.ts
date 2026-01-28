@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { prisma } from '../utils/prisma.js';
 import { sendAccountDeleted } from '../services/emailService.js';
+import { registerDeviceToken, unregisterDeviceToken } from '../services/notificationService.js';
 
 export const userRouter = Router();
 
@@ -218,5 +219,64 @@ userRouter.delete('/account', async (req: AuthenticatedRequest, res: Response): 
   } catch (error) {
     console.error('Delete account error:', error);
     res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
+// ============================================================================
+// DEVICE TOKEN REGISTRATION - Push Notifications
+// ============================================================================
+
+const registerDeviceTokenSchema = z.object({
+  deviceToken: z.string().min(1),
+  deviceId: z.string().optional(),
+  environment: z.enum(['production', 'sandbox']).default('production'),
+});
+
+userRouter.post('/device-token', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data = registerDeviceTokenSchema.parse(req.body);
+
+    await registerDeviceToken(
+      req.user.id,
+      data.deviceToken,
+      data.deviceId,
+      data.environment
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Register device token error:', error);
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      return;
+    }
+    res.status(500).json({ error: 'Failed to register device token' });
+  }
+});
+
+userRouter.delete('/device-token', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { deviceToken } = req.body;
+    if (!deviceToken) {
+      res.status(400).json({ error: 'Device token required' });
+      return;
+    }
+
+    await unregisterDeviceToken(deviceToken);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Unregister device token error:', error);
+    res.status(500).json({ error: 'Failed to unregister device token' });
   }
 });
