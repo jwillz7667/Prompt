@@ -71,13 +71,19 @@ export default function TicketDetailPage() {
 
     // Connect to Socket.IO server
     const socket = io(API_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],  // Match backend order
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
+
+    console.log('[Socket] Connecting to:', API_URL);
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
       setIsConnected(true);
+      console.log('[Socket] Connected, joining room:', ticketId);
       // Join the ticket room
       socket.emit('join:ticket', {
         ticketId,
@@ -86,8 +92,17 @@ export default function TicketDetailPage() {
       });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       setIsConnected(false);
+      console.log('[Socket] Disconnected:', reason);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('[Socket] Connection error:', error);
+    });
+
+    socket.on('error', (error) => {
+      console.error('[Socket] Error:', error);
     });
 
     // Listen for new messages
@@ -182,17 +197,44 @@ export default function TicketDetailPage() {
       clearTimeout(typingTimeoutRef.current);
     }
 
+    const messageContent = replyText.trim();
     setSending(true);
     setError('');
+    setReplyText('');
+
+    // Optimistically add the message to the UI immediately
+    const optimisticMessage: TicketMessage = {
+      id: `temp-${Date.now()}`,
+      role: 'agent',
+      content: messageContent,
+      createdAt: new Date().toISOString(),
+      isFromAI: false,
+    };
+
+    setTicket((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        messages: [...(prev.messages || []), optimisticMessage],
+      };
+    });
 
     try {
-      await replyToTicket(apiKey, ticketId, replyText.trim());
-      setReplyText('');
-      // Don't need to fetch - WebSocket will update the message
+      await replyToTicket(apiKey, ticketId, messageContent);
+      // Fetch ticket to get the real message ID and ensure consistency
+      await fetchTicket();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send reply');
-      // Refresh on error to ensure consistency
-      await fetchTicket();
+      // Remove the optimistic message on error
+      setTicket((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: prev.messages?.filter((m) => m.id !== optimisticMessage.id) || [],
+        };
+      });
+      // Restore the message text so user can retry
+      setReplyText(messageContent);
     } finally {
       setSending(false);
     }
@@ -429,6 +471,26 @@ export default function TicketDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Quick Actions */}
+      {ticket.status !== 'CLOSED' && ticket.status !== 'RESOLVED' && (
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={() => handleStatusChange('RESOLVED')}
+            disabled={updatingStatus}
+            className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-lg transition"
+          >
+            {updatingStatus ? 'Updating...' : 'Mark Resolved'}
+          </button>
+          <button
+            onClick={() => handleStatusChange('CLOSED')}
+            disabled={updatingStatus}
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium rounded-lg transition"
+          >
+            {updatingStatus ? 'Updating...' : 'Close Ticket'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
