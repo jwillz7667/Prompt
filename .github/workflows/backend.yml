@@ -84,6 +84,5 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          cd backend
-          railway up --service promptomize-api
+        working-directory: backend
+        run: railway up --service promptomize-api

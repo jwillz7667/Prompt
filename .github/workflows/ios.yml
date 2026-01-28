@@ -109,7 +109,7 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/Prompt.xcarchive \
             -exportPath $RUNNER_TEMP/export \
-            -exportOptionsPlist Prompt/ExporostOptions.plist \
+            -exportOptionsPlist Prompt/ExportOptions.plist \
             | xcpretty
 
       - name: Upload IPA Artifact
