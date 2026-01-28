@@ -169,12 +169,12 @@ struct LiquidGlassButtonModifier: ViewModifier {
         )
     }
 
-    // Top highlight for shiny 3D glass effect
+    // Top highlight for shiny 3D glass effect - subtle in light mode to preserve color
     private var topHighlight: LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
                 ? [Color.white.opacity(0.35), Color.white.opacity(0.1), Color.clear]
-                : [Color.white.opacity(0.95), Color.white.opacity(0.4), Color.clear],
+                : [Color.white.opacity(0.45), Color.white.opacity(0.15), Color.clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -190,8 +190,8 @@ struct LiquidGlassButtonModifier: ViewModifier {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        tint.opacity(colorScheme == .dark ? 0.7 : 0.5),
-                                        tint.opacity(colorScheme == .dark ? 0.5 : 0.35)
+                                        tint.opacity(colorScheme == .dark ? 0.7 : 0.85),
+                                        tint.opacity(colorScheme == .dark ? 0.5 : 0.7)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -210,20 +210,20 @@ struct LiquidGlassButtonModifier: ViewModifier {
                     // Subtle blur material - much lighter than before for clarity
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
-                        .opacity(tintColor != nil ? 0.3 : 0.5)
+                        .opacity(tintColor != nil ? (colorScheme == .dark ? 0.3 : 0.15) : 0.5)
 
                     // Top specular highlight for shiny glass look
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(topHighlight)
                         .opacity(intensity == .subtle ? 0.5 : 0.7)
 
-                    // Inner glow for depth
+                    // Inner glow for depth - subtle in light mode
                     if tintColor != nil {
                         RoundedRectangle(cornerRadius: cornerRadius - 1, style: .continuous)
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(colorScheme == .dark ? 0.3 : 0.6),
+                                        Color.white.opacity(colorScheme == .dark ? 0.3 : 0.35),
                                         Color.clear
                                     ],
                                     startPoint: .top,
@@ -377,26 +377,26 @@ struct LiquidGlassChipModifier: ViewModifier {
     private var chipBackground: some View {
         if let accent = accentColor, isSelected {
             ZStack {
-                // Vibrant color base
+                // Vibrant color base - strong saturation
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                accent.opacity(colorScheme == .dark ? 0.85 : 0.75),
-                                accent.opacity(colorScheme == .dark ? 0.65 : 0.55)
+                                accent.opacity(colorScheme == .dark ? 0.85 : 0.9),
+                                accent.opacity(colorScheme == .dark ? 0.65 : 0.75)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
 
-                // Shiny top highlight
+                // Shiny top highlight - lighter in light mode to not wash out color
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.35 : 0.5),
-                                Color.white.opacity(0.1),
+                                Color.white.opacity(colorScheme == .dark ? 0.35 : 0.3),
+                                Color.white.opacity(colorScheme == .dark ? 0.1 : 0.05),
                                 Color.clear
                             ],
                             startPoint: .top,
@@ -822,8 +822,8 @@ private struct GlassCapsuleBackground: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                tint.opacity(colorScheme == .dark ? 0.65 : 0.45),
-                                tint.opacity(colorScheme == .dark ? 0.45 : 0.3)
+                                tint.opacity(colorScheme == .dark ? 0.65 : 0.85),
+                                tint.opacity(colorScheme == .dark ? 0.45 : 0.7)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -839,30 +839,30 @@ private struct GlassCapsuleBackground: View {
                     )
             }
 
-            // Light glass material - subtle for clarity
+            // Light glass material - minimal in light mode to preserve color
             Capsule()
                 .fill(.ultraThinMaterial)
-                .opacity(tintColor != nil ? 0.25 : 0.45)
+                .opacity(tintColor != nil ? (colorScheme == .dark ? 0.25 : 0.1) : 0.45)
 
-            // Shiny top highlight
+            // Shiny top highlight - subtle in light mode to not wash out
             Capsule()
                 .fill(
                     LinearGradient(
                         colors: colorScheme == .dark
                             ? [Color.white.opacity(0.35), Color.white.opacity(0.08), Color.clear]
-                            : [Color.white.opacity(0.9), Color.white.opacity(0.3), Color.clear],
+                            : [Color.white.opacity(0.4), Color.white.opacity(0.1), Color.clear],
                         startPoint: .top,
                         endPoint: .center
                     )
                 )
 
-            // Inner glow for depth on tinted buttons
+            // Inner glow for depth on tinted buttons - subtle in light mode
             if tintColor != nil {
                 Capsule()
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.25 : 0.5),
+                                Color.white.opacity(colorScheme == .dark ? 0.25 : 0.3),
                                 Color.clear
                             ],
                             startPoint: .top,
