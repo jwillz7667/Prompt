@@ -15,6 +15,7 @@ import { templateRouter } from './routes/templates.js';
 import { collectionRouter } from './routes/collections.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { supportRouter } from './routes/support.js';
+import { adminRouter } from './routes/admin.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { logger } from './utils/logger.js';
@@ -75,7 +76,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-ID'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-ID', 'X-Admin-API-Key'],
 }));
 
 // Rate limiting
@@ -109,6 +110,7 @@ app.use('/api/v1/templates', templateRouter);
 app.use('/api/v1/collections', collectionRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/support', supportRouter);
+app.use('/api/v1/admin', adminRouter);
 
 // Error handling
 app.use(errorHandler);

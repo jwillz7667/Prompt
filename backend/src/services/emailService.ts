@@ -34,6 +34,7 @@ interface TicketDetails {
   id: string;
   subject: string;
   category: string;
+  priority: string;
   status: string;
   createdAt: Date;
   messages: TicketMessage[];
@@ -355,6 +356,77 @@ export async function sendSubscriptionExpired(
 // ============================================================================
 // SUPPORT TICKET EMAILS
 // ============================================================================
+
+// Notify support team when a new ticket is created
+export async function sendTicketNotificationToSupport(
+  userEmail: string,
+  userName: string | null,
+  ticket: TicketDetails
+): Promise<boolean> {
+  const ticketId = ticket.id.slice(0, 8).toUpperCase();
+  const dateStr = ticket.createdAt.toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+  });
+
+  const messagesHtml = ticket.messages.map(msg => {
+    const roleClass = msg.role === 'user' ? 'message-user' : 'message-assistant';
+    const roleLabel = msg.role === 'user' ? userName || userEmail : 'Prompt Bot';
+    return `
+      <div class="message-bubble ${roleClass}">
+        <div>${msg.content.replace(/\n/g, '<br>')}</div>
+        <div class="message-meta">${roleLabel}</div>
+      </div>
+    `;
+  }).join('');
+
+  const priorityColor = ticket.priority === 'URGENT' ? '#dc2626' :
+                        ticket.priority === 'HIGH' ? '#ea580c' :
+                        ticket.priority === 'MEDIUM' ? '#ca8a04' : '#16a34a';
+
+  const content = `
+    <h2>🎫 New Support Ticket</h2>
+    <p>A new support ticket has been created and needs attention.</p>
+    <div class="info-box">
+      <div style="display: table; width: 100%;">
+        <div style="display: table-row;">
+          <div style="display: table-cell; padding: 8px 0; color: #86868b;">Ticket ID</div>
+          <div style="display: table-cell; padding: 8px 0; text-align: right; font-weight: 600;">#${ticketId}</div>
+        </div>
+        <div style="display: table-row;">
+          <div style="display: table-cell; padding: 8px 0; color: #86868b; border-top: 1px solid #e5e5e7;">User</div>
+          <div style="display: table-cell; padding: 8px 0; text-align: right; border-top: 1px solid #e5e5e7;">${userName || 'N/A'} &lt;${userEmail}&gt;</div>
+        </div>
+        <div style="display: table-row;">
+          <div style="display: table-cell; padding: 8px 0; color: #86868b; border-top: 1px solid #e5e5e7;">Category</div>
+          <div style="display: table-cell; padding: 8px 0; text-align: right; border-top: 1px solid #e5e5e7;">${ticket.category}</div>
+        </div>
+        <div style="display: table-row;">
+          <div style="display: table-cell; padding: 8px 0; color: #86868b; border-top: 1px solid #e5e5e7;">Priority</div>
+          <div style="display: table-cell; padding: 8px 0; text-align: right; border-top: 1px solid #e5e5e7; color: ${priorityColor}; font-weight: 600;">${ticket.priority}</div>
+        </div>
+        <div style="display: table-row;">
+          <div style="display: table-cell; padding: 8px 0; color: #86868b; border-top: 1px solid #e5e5e7;">Created</div>
+          <div style="display: table-cell; padding: 8px 0; text-align: right; border-top: 1px solid #e5e5e7;">${dateStr}</div>
+        </div>
+      </div>
+    </div>
+    <h3 style="font-size: 16px; margin: 24px 0 12px 0;">${ticket.subject}</h3>
+    <div style="background: #fafafa; border-radius: 12px; padding: 16px;">
+      ${messagesHtml}
+    </div>
+    <p style="margin-top: 24px;">Reply to this ticket using the admin panel or API.</p>
+    <p style="text-align: center;">
+      <a href="${APP_URL}/admin/tickets/${ticket.id}" class="button">View Ticket</a>
+    </p>
+  `;
+
+  return sendEmail({
+    to: SUPPORT_EMAIL,
+    subject: `[${ticket.priority}] New Ticket #${ticketId}: ${ticket.subject}`,
+    html: baseTemplate(content, `New support ticket from ${userEmail}`),
+    replyTo: userEmail,
+  });
+}
 
 export async function sendTicketCreated(
   to: string,

@@ -1,7 +1,7 @@
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import type { TicketCategory, TicketPriority, TicketStatus } from '@prisma/client';
-import { sendTicketCreated } from './emailService.js';
+import { sendTicketCreated, sendTicketNotificationToSupport, sendTicketResponse } from './emailService.js';
 
 // ============================================================================
 // TYPES
@@ -384,15 +384,24 @@ export async function createTicket(params: CreateTicketParams): Promise<Ticket> 
       });
     }
 
-    sendTicketCreated(user.email, user.name, {
+    const ticketDetails = {
       id: ticket.id,
       subject: ticket.subject,
       category: ticket.category,
+      priority: ticket.priority,
       status: ticket.status,
       createdAt: ticket.createdAt,
       messages,
-    }).catch((err) => {
-      logger.warn({ error: err, ticketId: ticket.id }, 'Failed to send ticket created email');
+    };
+
+    // Send confirmation email to user
+    sendTicketCreated(user.email, user.name, ticketDetails).catch((err) => {
+      logger.warn({ error: err, ticketId: ticket.id }, 'Failed to send ticket created email to user');
+    });
+
+    // Send notification email to support team
+    sendTicketNotificationToSupport(user.email, user.name, ticketDetails).catch((err) => {
+      logger.warn({ error: err, ticketId: ticket.id }, 'Failed to send ticket notification to support');
     });
   }
 
@@ -461,6 +470,139 @@ export async function addMessageToTicket(
       },
     }),
   ]);
+}
+
+// Agent reply to a ticket - sends email notification to user
+export async function addAgentReplyToTicket(
+  ticketId: string,
+  agentMessage: string
+): Promise<void> {
+  // Get ticket with user info
+  const ticket = await prisma.supportTicket.findUnique({
+    where: { id: ticketId },
+    include: {
+      messages: {
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+
+  if (!ticket) {
+    throw new Error('Ticket not found');
+  }
+
+  if (ticket.status === 'CLOSED') {
+    throw new Error('Cannot reply to closed tickets');
+  }
+
+  // Get user info
+  const user = await prisma.user.findUnique({
+    where: { id: ticket.userId },
+    select: { email: true, name: true },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  // Add agent message to ticket
+  await prisma.$transaction([
+    prisma.supportMessage.create({
+      data: {
+        ticketId,
+        role: 'agent',
+        content: agentMessage,
+        isFromAI: false,
+      },
+    }),
+    prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'IN_PROGRESS',
+        updatedAt: new Date(),
+      },
+    }),
+  ]);
+
+  // Get updated ticket with all messages for email
+  const updatedTicket = await prisma.supportTicket.findUnique({
+    where: { id: ticketId },
+    include: {
+      messages: {
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+
+  if (updatedTicket) {
+    const ticketDetails = {
+      id: updatedTicket.id,
+      subject: updatedTicket.subject,
+      category: updatedTicket.category,
+      priority: updatedTicket.priority,
+      status: updatedTicket.status,
+      createdAt: updatedTicket.createdAt,
+      messages: updatedTicket.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        createdAt: msg.createdAt,
+        isFromAI: msg.isFromAI,
+      })),
+    };
+
+    // Send email notification to user
+    sendTicketResponse(user.email, user.name, ticketDetails, agentMessage).catch((err) => {
+      logger.warn({ error: err, ticketId }, 'Failed to send agent reply email to user');
+    });
+  }
+
+  logger.info({ ticketId, messageLength: agentMessage.length }, 'Agent reply added to ticket');
+}
+
+// Get all tickets (for admin)
+export async function getAllTickets(status?: string): Promise<Ticket[]> {
+  const whereClause = status ? { status: status as any } : {};
+
+  const tickets = await prisma.supportTicket.findMany({
+    where: whereClause,
+    orderBy: [
+      { priority: 'desc' },
+      { createdAt: 'desc' },
+    ],
+  });
+
+  return tickets;
+}
+
+// Get ticket by ID (for admin - no user restriction)
+export async function getTicketById(ticketId: string): Promise<TicketWithMessages | null> {
+  const ticket = await prisma.supportTicket.findUnique({
+    where: { id: ticketId },
+    include: {
+      messages: {
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
+
+  return ticket;
+}
+
+// Update ticket status
+export async function updateTicketStatus(
+  ticketId: string,
+  status: 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED'
+): Promise<void> {
+  await prisma.supportTicket.update({
+    where: { id: ticketId },
+    data: {
+      status,
+      updatedAt: new Date(),
+      resolvedAt: status === 'RESOLVED' || status === 'CLOSED' ? new Date() : undefined,
+    },
+  });
+
+  logger.info({ ticketId, status }, 'Ticket status updated');
 }
 
 export async function continueTicketChat(
