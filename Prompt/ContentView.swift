@@ -261,6 +261,13 @@ struct ContentView: View {
                 deeplinkManager.clearPaywallTrigger()
             }
         }
+        // Show paywall when quota exceeded
+        .onChange(of: viewModel.showPaywall) { _, shouldShow in
+            if shouldShow {
+                showPaywall = true
+                viewModel.showPaywall = false // Reset the viewModel state
+            }
+        }
     }
 
     // MARK: - Deep Think Info Popup

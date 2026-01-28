@@ -356,6 +356,10 @@ final class ErrorHandler: ObservableObject {
                 return .serverError(404, "Resource not found")
             case .rateLimited:
                 return .rateLimited(retryAfter: nil)
+            case .quotaExceeded:
+                return .quotaExceeded
+            case .featureLocked:
+                return .featureLocked
             case .serverError(let code):
                 return .serverError(code, nil)
             case .httpError(let code):

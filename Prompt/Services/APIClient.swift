@@ -230,6 +230,16 @@ actor APIClient {
         case 404:
             throw APIError.notFound
 
+        case 403:
+            // Check if it's a quota exceeded error
+            let errorResponse = try? JSONDecoder().decode(QuotaErrorResponse.self, from: data)
+            if errorResponse?.code == "QUOTA_EXCEEDED" {
+                throw APIError.quotaExceeded(remaining: errorResponse?.remainingQuota ?? 0)
+            } else if errorResponse?.code == "FEATURE_LOCKED" {
+                throw APIError.featureLocked
+            }
+            throw APIError.httpError(403)
+
         case 429:
             throw APIError.rateLimited
 
@@ -332,6 +342,8 @@ enum APIError: LocalizedError, Sendable {
     case badRequest(String)
     case notFound
     case rateLimited
+    case quotaExceeded(remaining: Int)
+    case featureLocked
     case serverError(Int)
     case httpError(Int)
     case decodingError
@@ -345,10 +357,17 @@ enum APIError: LocalizedError, Sendable {
         case .badRequest(let message): return message
         case .notFound: return "Resource not found"
         case .rateLimited: return "Too many requests. Please wait a moment"
+        case .quotaExceeded: return "You've reached your daily prompt limit"
+        case .featureLocked: return "This feature requires a subscription upgrade"
         case .serverError(let code): return "Server error (\(code))"
         case .httpError(let code): return "Request failed (\(code))"
         case .decodingError: return "Failed to process response"
         }
+    }
+
+    var isQuotaExceeded: Bool {
+        if case .quotaExceeded = self { return true }
+        return false
     }
 }
 
@@ -379,6 +398,25 @@ struct APIErrorResponse: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case error, code
+    }
+}
+
+struct QuotaErrorResponse: Decodable, Sendable {
+    let error: String
+    let code: String?
+    let message: String?
+    let remainingQuota: Int?
+
+    nonisolated init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        error = try container.decode(String.self, forKey: .error)
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        remainingQuota = try container.decodeIfPresent(Int.self, forKey: .remainingQuota)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case error, code, message, remainingQuota
     }
 }
 

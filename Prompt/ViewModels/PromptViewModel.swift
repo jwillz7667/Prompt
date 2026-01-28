@@ -24,6 +24,10 @@ final class PromptViewModel {
     var tokensUsed: Int = 0
     var showCopiedToast: Bool = false
 
+    // Quota/Paywall state
+    var showPaywall: Bool = false
+    var quotaExceededMessage: String?
+
     // Favorite tracking for current prompt
     var currentPromptId: String?
     var isCurrentPromptFavorite: Bool = false
@@ -112,12 +116,20 @@ final class PromptViewModel {
             WidgetCenter.shared.reloadAllTimelines()
 
         } catch let error as APIError {
-            let appError = ErrorHandler.shared.mapToAppError(error)
-            errorMessage = appError.userMessage
-            showError = true
-            ErrorHandler.shared.handleSilently(error, context: "enhancePrompt")
-            // Fail the Live Activity
-            await EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
+            // Check if it's a quota exceeded error - show paywall instead of error
+            if error.isQuotaExceeded {
+                quotaExceededMessage = "You've reached your daily prompt limit. Upgrade to continue enhancing prompts."
+                showPaywall = true
+                // End Live Activity gracefully
+                await EnhancementActivityManager.shared.failActivity(errorMessage: "Daily limit reached")
+            } else {
+                let appError = ErrorHandler.shared.mapToAppError(error)
+                errorMessage = appError.userMessage
+                showError = true
+                ErrorHandler.shared.handleSilently(error, context: "enhancePrompt")
+                // Fail the Live Activity
+                await EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
+            }
         } catch {
             let appError = ErrorHandler.shared.mapToAppError(error)
             errorMessage = appError.userMessage
