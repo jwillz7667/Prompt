@@ -19,7 +19,14 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 
-const navigation = [
+type NavItem = {
+  name: string
+  href: string
+  icon: typeof Sparkles
+  premium?: boolean
+}
+
+const navigation: NavItem[] = [
   { name: 'Enhance', href: '/dashboard', icon: Sparkles },
   { name: 'History', href: '/history', icon: History },
   { name: 'Templates', href: '/templates', icon: FileText },
@@ -27,7 +34,7 @@ const navigation = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
 ]
 
-const bottomNavigation = [
+const bottomNavigation: NavItem[] = [
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Profile', href: '/profile', icon: User },
 ]
