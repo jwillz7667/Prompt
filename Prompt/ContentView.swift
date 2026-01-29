@@ -899,7 +899,7 @@ struct ContentView: View {
                     .padding(.vertical, 14)
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
                 }
-                .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 12, tintColor: accentColor, intensity: .prominent))
+                .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 12, tintColor: colorScheme == .dark ? accentColor : Color.brandPurple, intensity: .prominent))
 
                 // Secondary actions row - AI services (glass style)
                 HStack(spacing: 8) {
