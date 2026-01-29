@@ -1,7 +1,7 @@
 {
   "name": "Promptomize - AI Prompt Enhancement",
   "short_name": "Promptomize",
-  "description": "Transform your prompts into powerful, optimized instructions for AI. Get better results from ChatGPT, Claude, Gemini, and other AI models.",
+  "description": "Transform your prompts into powerful, optimized instructions for AI. Get better results from ChatGPT, Claude, and other AI models.",
   "start_url": "/dashboard",
   "scope": "/",
   "id": "promptomize-web-app",

@@ -134,7 +134,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
 
     var description: String {
         switch self {
-        case .text: return "ChatGPT, Claude, Gemini"
+        case .text: return "ChatGPT, Claude, and more"
         case .image: return "Midjourney, DALL-E, Flux"
         case .video: return "Sora, Runway, Pika"
         case .audio: return "Suno, Udio, MusicGen"

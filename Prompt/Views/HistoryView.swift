@@ -382,23 +382,6 @@ struct PromptDetailView: View {
                             tintColor: .white,
                             intensity: .standard
                         ))
-
-                        // Try in Gemini
-                        Button {
-                            openInGemini(prompt: prompt.enhancedPrompt)
-                        } label: {
-                            Image("gemini-logo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 24)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                        }
-                        .buttonStyle(LiquidGlassButtonStyle(
-                            cornerRadius: 10,
-                            tintColor: .white,
-                            intensity: .standard
-                        ))
                     }
 
                     // Action buttons (glass style)
@@ -567,15 +550,6 @@ struct PromptDetailView: View {
         guard !prompt.isEmpty,
               let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
-            return
-        }
-        UIApplication.shared.open(url)
-    }
-
-    private func openInGemini(prompt: String) {
-        guard !prompt.isEmpty,
-              let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://gemini.google.com/app?q=\(encodedPrompt)") else {
             return
         }
         UIApplication.shared.open(url)
