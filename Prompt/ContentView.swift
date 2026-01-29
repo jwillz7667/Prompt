@@ -938,24 +938,6 @@ struct ContentView: View {
                         tintColor: .white,
                         intensity: .standard
                     ))
-
-                    // Try in Gemini - glass with pure white background
-                    Button {
-                        triggerHaptic(.light)
-                        openInGemini()
-                    } label: {
-                        Image("gemini-logo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 28)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(LiquidGlassButtonStyle(
-                        cornerRadius: 12,
-                        tintColor: .white,
-                        intensity: .standard
-                    ))
                 }
 
                 // Tertiary row - Favorite, Share and Clear (glass style)
@@ -1258,15 +1240,6 @@ struct ContentView: View {
         guard !viewModel.enhancedPrompt.isEmpty,
               let encodedPrompt = viewModel.enhancedPrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
-            return
-        }
-        UIApplication.shared.open(url)
-    }
-
-    private func openInGemini() {
-        guard !viewModel.enhancedPrompt.isEmpty,
-              let encodedPrompt = viewModel.enhancedPrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://gemini.google.com/app?q=\(encodedPrompt)") else {
             return
         }
         UIApplication.shared.open(url)
