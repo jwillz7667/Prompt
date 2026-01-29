@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Sparkles, Zap, Shield, Crown, Check, ArrowRight, Star, MessageSquare, Layers, Smartphone } from 'lucide-react'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
+import PromptComparison from '@/components/hero/PromptComparison'
 
 const features = [
   {
@@ -235,21 +236,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Logo Preview - Centered */}
-          <div className="mt-20">
-            <figure className="flex justify-center">
-              <Image
-                src="/logo.png"
-                alt="Promptomize Logo - AI-powered prompt enhancement"
-                width={280}
-                height={280}
-                priority
-                itemProp="image"
-              />
-            </figure>
-          </div>
         </div>
       </section>
+
+      {/* Animated Prompt Comparison Section */}
+      <PromptComparison />
 
       {/* Features Section */}
       <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-[var(--bg-secondary)]" aria-labelledby="features-heading">
@@ -287,11 +278,11 @@ export default function Home() {
               Choose the plan that works for you
             </p>
           </header>
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto" role="list">
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto items-stretch" role="list">
             {pricingPlans.map((plan, index) => (
               <article
                 key={index}
-                className={`relative bg-[var(--bg-secondary)] p-8 rounded-3xl border ${
+                className={`relative bg-[var(--bg-secondary)] p-8 rounded-3xl border flex flex-col ${
                   plan.popular ? 'border-[var(--accent-cyan)] glow-cyan' : 'border-[var(--border)]'
                 }`}
                 role="listitem"
@@ -313,7 +304,7 @@ export default function Home() {
                   </div>
                   <p className="text-[var(--text-tertiary)] mt-2" itemProp="description">{plan.description}</p>
                 </div>
-                <ul className="space-y-4 mb-8" aria-label={`${plan.name} plan features`}>
+                <ul className="space-y-4 flex-grow" aria-label={`${plan.name} plan features`}>
                   {plan.features.map((feature, fIndex) => (
                     <li key={fIndex} className="flex items-center gap-3">
                       <Check className="w-5 h-5 text-[var(--accent-cyan)] flex-shrink-0" aria-hidden="true" />
@@ -323,7 +314,7 @@ export default function Home() {
                 </ul>
                 <a
                   href="https://apps.apple.com/app/promptomize/id6738850382"
-                  className={`block w-full py-3 rounded-xl font-semibold text-center transition ${
+                  className={`block w-full py-3 rounded-xl font-semibold text-center transition mt-8 ${
                     plan.popular
                       ? 'btn-cyan'
                       : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]'
