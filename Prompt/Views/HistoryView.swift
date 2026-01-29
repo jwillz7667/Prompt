@@ -353,10 +353,9 @@ struct PromptDetailView: View {
                         Button {
                             openInClaude(prompt: prompt.enhancedPrompt)
                         } label: {
-                            Image("claude-logo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 24)
+                            Label("Claude", systemImage: "bubble.left.and.text.bubble.right")
+                                .font(.caption)
+                                .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                         }
@@ -366,20 +365,19 @@ struct PromptDetailView: View {
                             intensity: .standard
                         ))
 
-                        // Try in ChatGPT - pure white background
+                        // Try in ChatGPT
                         Button {
                             openInChatGPT(prompt: prompt.enhancedPrompt)
                         } label: {
-                            Image("chatgpt-logo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 24)
+                            Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
+                                .font(.caption)
+                                .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
                         }
                         .buttonStyle(LiquidGlassButtonStyle(
                             cornerRadius: 10,
-                            tintColor: .white,
+                            tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
                             intensity: .standard
                         ))
                     }

@@ -908,10 +908,9 @@ struct ContentView: View {
                         triggerHaptic(.light)
                         openInClaude()
                     } label: {
-                        Image("claude-logo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 28)
+                        Label("Claude", systemImage: "bubble.left.and.text.bubble.right")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                     }
@@ -921,21 +920,20 @@ struct ContentView: View {
                         intensity: .standard
                     ))
 
-                    // Try in ChatGPT - glass with pure white background
+                    // Try in ChatGPT - glass with teal tint
                     Button {
                         triggerHaptic(.light)
                         openInChatGPT()
                     } label: {
-                        Image("chatgpt-logo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 28)
+                        Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                     }
                     .buttonStyle(LiquidGlassButtonStyle(
                         cornerRadius: 12,
-                        tintColor: .white,
+                        tintColor: Color(red: 0.0, green: 0.65, blue: 0.65), // Teal
                         intensity: .standard
                     ))
                 }
