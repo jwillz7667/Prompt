@@ -17,6 +17,7 @@ actor DeepseekService {
         let maxTokens: Int?
         let tone: String?
         let length: String?
+        let modality: String?
         let customInstructions: String?
 
         enum CodingKeys: String, CodingKey {
@@ -26,6 +27,7 @@ actor DeepseekService {
             case maxTokens
             case tone
             case length
+            case modality
             case customInstructions
         }
     }
@@ -69,6 +71,7 @@ actor DeepseekService {
         maxTokens: Int,
         tone: ToneType? = nil,
         length: OutputLength? = nil,
+        modality: ModalityType? = nil,
         customInstructions: String? = nil
     ) async throws -> EnhancedPromptResult {
         let request = EnhanceRequest(
@@ -78,6 +81,7 @@ actor DeepseekService {
             maxTokens: maxTokens,
             tone: tone?.rawValue,
             length: length?.rawValue,
+            modality: modality?.rawValue,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
         )
 
@@ -110,6 +114,7 @@ actor DeepseekService {
         maxTokens: Int,
         tone: ToneType? = nil,
         length: OutputLength? = nil,
+        modality: ModalityType? = nil,
         customInstructions: String? = nil,
         onToken: @escaping @Sendable (String) -> Void
     ) async throws -> EnhancedPromptResult {
@@ -120,6 +125,7 @@ actor DeepseekService {
             maxTokens: maxTokens,
             tone: tone?.rawValue,
             length: length?.rawValue,
+            modality: modality?.rawValue,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
         )
 

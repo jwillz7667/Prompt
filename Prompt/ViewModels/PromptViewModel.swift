@@ -88,6 +88,7 @@ final class PromptViewModel {
                 maxTokens: settings.maxTokens,
                 tone: settings.effectiveTone,
                 length: settings.outputLength,
+                modality: settings.selectedModality,
                 customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
             ) { [weak self] token in
                 // Update UI with each token on main thread

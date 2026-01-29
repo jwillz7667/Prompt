@@ -704,6 +704,17 @@ struct ContentView: View {
 
     private var inputToolbar: some View {
         HStack(spacing: 8) {
+            // Modality selector (compact)
+            CompactModalitySelector(
+                selectedModality: Binding(
+                    get: { settings.selectedModality },
+                    set: { newValue in
+                        settings.selectedModality = newValue
+                        settings.savePreferences()
+                    }
+                )
+            )
+
             // Tone selector (compact)
             CompactToneSelector(
                 selectedTone: Binding(

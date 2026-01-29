@@ -98,6 +98,63 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+// MARK: - Modality Type
+
+enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
+    case text = "text"
+    case image = "image"
+    case video = "video"
+    case audio = "audio"
+    case code = "code"
+    case threeD = "3d"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .text: return "Text"
+        case .image: return "Image"
+        case .video: return "Video"
+        case .audio: return "Audio"
+        case .code: return "Code"
+        case .threeD: return "3D"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .text: return "text.bubble.fill"
+        case .image: return "photo.fill"
+        case .video: return "video.fill"
+        case .audio: return "waveform"
+        case .code: return "chevron.left.forwardslash.chevron.right"
+        case .threeD: return "cube.fill"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .text: return "ChatGPT, Claude, Gemini"
+        case .image: return "Midjourney, DALL-E, Flux"
+        case .video: return "Sora, Runway, Pika"
+        case .audio: return "Suno, Udio, MusicGen"
+        case .code: return "Copilot, Cursor, Claude"
+        case .threeD: return "Meshy, Tripo3D"
+        }
+    }
+
+    var accentColor: String {
+        switch self {
+        case .text: return "brandPurple"
+        case .image: return "pink"
+        case .video: return "red"
+        case .audio: return "orange"
+        case .code: return "green"
+        case .threeD: return "blue"
+        }
+    }
+}
+
 // MARK: - Output Length
 
 enum OutputLength: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -144,6 +201,7 @@ final class SettingsManager {
     // Enhancement controls
     var selectedTone: ToneType = .professional
     var outputLength: OutputLength = .standard
+    var selectedModality: ModalityType = .text
     var customInstructions: String = ""
 
     /// Returns the effective tone - unchained if enabled, otherwise selected tone
@@ -166,6 +224,7 @@ final class SettingsManager {
         static let appearanceMode = "appearanceMode"
         static let selectedTone = "selectedTone"
         static let outputLength = "outputLength"
+        static let selectedModality = "selectedModality"
         static let customInstructions = "customInstructions"
         static let settingsMigrated = "settingsMigratedToAppGroup"
     }
@@ -262,6 +321,12 @@ final class SettingsManager {
             outputLength = length
         }
 
+        // Load modality preference
+        if let modalityRaw = defaults.string(forKey: Keys.selectedModality),
+           let modality = ModalityType(rawValue: modalityRaw) {
+            selectedModality = modality
+        }
+
         // Load custom instructions
         if let instructions = defaults.string(forKey: Keys.customInstructions) {
             customInstructions = instructions
@@ -289,6 +354,7 @@ final class SettingsManager {
         defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)
         defaults.set(selectedTone.rawValue, forKey: Keys.selectedTone)
         defaults.set(outputLength.rawValue, forKey: Keys.outputLength)
+        defaults.set(selectedModality.rawValue, forKey: Keys.selectedModality)
         defaults.set(customInstructions, forKey: Keys.customInstructions)
 
         #if DEBUG

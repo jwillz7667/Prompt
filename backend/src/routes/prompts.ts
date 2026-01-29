@@ -54,6 +54,7 @@ const enhancePromptSchema = z.object({
   maxTokens: z.number().int().min(1).max(100000).optional(),
   tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'unchained']).optional(),
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   customInstructions: z.string().max(2000).optional(),
 });
 
@@ -92,6 +93,7 @@ promptRouter.post(
         maxTokens,
         tone: data.tone,
         length: data.length,
+        modality: data.modality,
         customInstructions: data.customInstructions,
       });
 
@@ -104,6 +106,7 @@ promptRouter.post(
           model: result.model,
           temperature: data.temperature || 0.7,
           maxTokens,
+          modality: data.modality,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           totalTokens: result.totalTokens,
@@ -223,6 +226,7 @@ promptRouter.post(
           maxTokens,
           tone: data.tone,
           length: data.length,
+          modality: data.modality,
           customInstructions: data.customInstructions,
         },
         {
@@ -239,6 +243,7 @@ promptRouter.post(
                 model: result.model,
                 temperature: data.temperature || 0.7,
                 maxTokens,
+                modality: data.modality,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,

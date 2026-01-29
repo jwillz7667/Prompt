@@ -127,6 +127,7 @@ model Prompt {
   model           String   @default("deepseek-reasoner")
   temperature     Float    @default(0.7)
   maxTokens       Int      @default(8192)
+  modality        String   @default("text")  // text, image, video, audio, code, 3d
 
   // Usage stats
   inputTokens     Int      @default(0)
