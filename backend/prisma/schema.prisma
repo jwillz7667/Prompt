@@ -26,6 +26,24 @@ enum SubscriptionStatus {
 }
 
 // ============================================================================
+// API SUBSCRIPTION ENUMS - For Enterprise API Access
+// ============================================================================
+
+enum ApiTier {
+  API_FREE        // 100 requests/month, free
+  API_STARTER     // 1,000 requests/month, $29/month
+  API_PRO         // 10,000 requests/month, $99/month
+  API_ENTERPRISE  // Unlimited, custom pricing
+}
+
+enum ApiSubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+}
+
+// ============================================================================
 // USER MANAGEMENT - Scalable for millions of users
 // ============================================================================
 
@@ -69,11 +87,12 @@ model User {
   lastLoginAt   DateTime?
 
   // Relations
-  sessions       Session[]
-  prompts        Prompt[]
-  apiKeys        ApiKey[]
-  subscription   Subscription?
-  supportTickets SupportTicket[]
+  sessions        Session[]
+  prompts         Prompt[]
+  apiKeys         ApiKey[]
+  subscription    Subscription?
+  apiSubscription ApiSubscription?
+  supportTickets  SupportTicket[]
 
   // Indexes for performance at scale
   @@index([email])
@@ -154,28 +173,118 @@ model Prompt {
 }
 
 // ============================================================================
-// API KEYS - For programmatic access
+// API KEYS - For programmatic access (Enterprise API)
 // ============================================================================
 
 model ApiKey {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  name        String
-  keyHash     String    @unique
-  keyPrefix   String    // First 8 chars for identification
+  name            String
+  keyHash         String    @unique
+  keyPrefix       String    // "pk_live_" or "pk_test_" + first 8 chars for identification
 
-  permissions String[]  @default(["read", "write"])
+  // Permissions & Rate Limiting
+  permissions     String[]  @default(["enhance"])
+  rateLimit       Int       @default(60)  // Requests per minute
 
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
+  // Metadata
+  description     String?
+  environment     String    @default("production") // production, test
 
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  // Usage tracking
+  lastUsedAt      DateTime?
+  totalRequests   BigInt    @default(0)
+
+  // Lifecycle
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  revokedAt       DateTime?
+  revokedReason   String?
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  usageRecords    ApiUsage[]
 
   @@index([userId])
   @@index([keyHash])
+  @@index([keyPrefix])
+  @@index([isActive, userId])
+}
+
+// ============================================================================
+// API USAGE - Track individual API requests for billing
+// ============================================================================
+
+model ApiUsage {
+  id            String   @id @default(cuid())
+  apiKeyId      String
+  apiKey        ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  userId        String
+
+  // Request details
+  endpoint      String
+  method        String
+  statusCode    Int
+
+  // Token usage
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  totalTokens   Int      @default(0)
+  latencyMs     Int      @default(0)
+
+  // Enhancement details
+  modality      String?
+
+  // Client info
+  ipAddress     String?
+  userAgent     String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([apiKeyId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// ============================================================================
+// API SUBSCRIPTIONS - Enterprise API billing (separate from app subscriptions)
+// ============================================================================
+
+model ApiSubscription {
+  id                    String                @id @default(cuid())
+  userId                String                @unique
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Tier & Status
+  tier                  ApiTier               @default(API_FREE)
+  status                ApiSubscriptionStatus @default(ACTIVE)
+
+  // Stripe Billing
+  stripeSubscriptionId  String?               @unique
+  stripeCustomerId      String?
+  stripePriceId         String?
+
+  // Quota Configuration
+  includedRequests      Int                   @default(100)   // Requests included in plan
+  overageRateCents      Int                   @default(1)     // Cost per 100 overage requests
+
+  // Current Billing Period
+  currentPeriodStart    DateTime              @default(now())
+  currentPeriodEnd      DateTime
+  currentPeriodUsage    Int                   @default(0)
+
+  // Subscription Management
+  cancelAtPeriodEnd     Boolean               @default(false)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@index([stripeSubscriptionId])
+  @@index([stripeCustomerId])
+  @@index([tier, status])
 }
 
 // ============================================================================
