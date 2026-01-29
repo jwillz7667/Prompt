@@ -207,9 +207,12 @@ export default function BillingPage() {
                         Current Plan
                       </Button>
                     ) : plan.id === 'API_ENTERPRISE' ? (
-                      <Button variant="secondary" className="w-full" asChild>
-                        <a href="mailto:sales@promptomize.app">Contact Sales</a>
-                      </Button>
+                      <a
+                        href="mailto:sales@promptomize.app"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] h-11 px-5 text-base w-full"
+                      >
+                        Contact Sales
+                      </a>
                     ) : isUpgrade ? (
                       <Button
                         className="w-full"
