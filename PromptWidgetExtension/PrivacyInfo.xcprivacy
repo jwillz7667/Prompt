@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Privacy Nutrition Label Data -->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<!-- Widget does not collect additional data beyond main app -->
+	</array>
+
+	<!-- Required Reason APIs -->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!-- UserDefaults (App Group shared data) -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- No tracking domains used -->
+	<key>NSPrivacyTrackingDomains</key>
+	<array>
+	</array>
+
+	<!-- Tracking not used -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+</dict>
+</plist>
