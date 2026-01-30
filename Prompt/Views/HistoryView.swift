@@ -21,7 +21,7 @@ struct HistoryView: View {
 
     enum HistoryTab: String, CaseIterable {
         case all = "All"
-        case starred = "Starred"
+        case starred = "★"
     }
 
     // AAA Compliant Colors
@@ -42,13 +42,8 @@ struct HistoryView: View {
                     // Tab picker
                     Picker("Filter", selection: $selectedTab) {
                         ForEach(HistoryTab.allCases, id: \.self) { tab in
-                            HStack(spacing: 4) {
-                                if tab == .starred {
-                                    Image(systemName: "star.fill")
-                                }
-                                Text(tab.rawValue)
-                            }
-                            .tag(tab)
+                            Text(tab.rawValue)
+                                .tag(tab)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -330,7 +325,7 @@ struct PromptDetailView: View {
                                 Label("Copy", systemImage: "doc.on.doc")
                                     .font(.caption)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(accentColor)
+                                    .foregroundStyle(.white)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
                             }
