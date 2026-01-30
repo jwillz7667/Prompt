@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils/cn'
 const developerNavItems = [
   { href: '/developers', label: 'Overview', icon: '🏠' },
   { href: '/developers/keys', label: 'API Keys', icon: '🔑' },
+  { href: '/developers/security', label: 'Security', icon: '🛡️' },
   { href: '/developers/usage', label: 'Usage', icon: '📊' },
   { href: '/developers/billing', label: 'Billing', icon: '💳' },
   { href: '/developers/playground', label: 'Playground', icon: '🎮' },

@@ -189,13 +189,24 @@ model ApiKey {
   permissions     String[]  @default(["enhance"])
   rateLimit       Int       @default(60)  // Requests per minute
 
+  // Enterprise Security Features
+  allowedIps      String[]  @default([])  // IP whitelist (empty = all allowed)
+  allowedOrigins  String[]  @default([])  // CORS origins whitelist
+  requireSigning  Boolean   @default(false) // Require HMAC request signing
+  signingSecret   String?   // Secret for HMAC signing (hashed)
+
   // Metadata
   description     String?
   environment     String    @default("production") // production, test
 
   // Usage tracking
   lastUsedAt      DateTime?
+  lastUsedIp      String?
   totalRequests   BigInt    @default(0)
+
+  // Security tracking
+  failedAttempts  Int       @default(0)
+  lockedUntil     DateTime?
 
   // Lifecycle
   expiresAt       DateTime?
@@ -209,6 +220,7 @@ model ApiKey {
 
   // Relations
   usageRecords    ApiUsage[]
+  auditLogs       ApiAuditLog[]
 
   @@index([userId])
   @@index([keyHash])
@@ -277,14 +289,55 @@ model ApiSubscription {
   currentPeriodEnd      DateTime
   currentPeriodUsage    Int                   @default(0)
 
+  // Alert Configuration
+  alertThresholds       Int[]                 @default([50, 80, 100]) // % thresholds for alerts
+  alertsSentThisPeriod  Int[]                 @default([])            // Thresholds already alerted
+
   // Subscription Management
   cancelAtPeriodEnd     Boolean               @default(false)
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
 
+  // Relations
+  alerts                UsageAlert[]
+
   @@index([stripeSubscriptionId])
   @@index([stripeCustomerId])
   @@index([tier, status])
+}
+
+// ============================================================================
+// USAGE ALERTS - Quota warning notifications
+// ============================================================================
+
+model UsageAlert {
+  id                String          @id @default(cuid())
+  apiSubscriptionId String
+  apiSubscription   ApiSubscription @relation(fields: [apiSubscriptionId], references: [id], onDelete: Cascade)
+  userId            String
+
+  // Alert details
+  alertType         String          // QUOTA_WARNING, QUOTA_EXCEEDED, RATE_LIMIT_WARNING, SECURITY_ALERT
+  threshold         Int?            // Percentage threshold that triggered alert
+  currentUsage      Int?
+  limit             Int?
+
+  // Notification status
+  emailSent         Boolean         @default(false)
+  emailSentAt       DateTime?
+  webhookSent       Boolean         @default(false)
+  webhookSentAt     DateTime?
+
+  // Alert metadata
+  message           String
+  severity          String          @default("info") // info, warning, critical
+  metadata          Json?
+
+  createdAt         DateTime        @default(now())
+
+  @@index([apiSubscriptionId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([alertType, createdAt(sort: Desc)])
 }
 
 // ============================================================================
@@ -340,6 +393,46 @@ model AuditLog {
   @@index([userId, createdAt(sort: Desc)])
   @@index([action, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+}
+
+// ============================================================================
+// API AUDIT LOGS - Comprehensive API activity tracking for enterprise
+// ============================================================================
+
+model ApiAuditLog {
+  id          String   @id @default(cuid())
+  apiKeyId    String
+  apiKey      ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  userId      String
+
+  // Request details
+  action      String   // CREATE_KEY, ROTATE_KEY, REVOKE_KEY, API_CALL, AUTH_FAILURE, RATE_LIMIT, IP_BLOCKED
+  endpoint    String?
+  method      String?
+  statusCode  Int?
+
+  // Security context
+  ipAddress   String
+  userAgent   String?
+  country     String?
+  city        String?
+
+  // Risk assessment
+  riskLevel   String   @default("low") // low, medium, high, critical
+  riskFactors String[] @default([])
+
+  // Request/Response metadata
+  requestId   String?
+  latencyMs   Int?
+  metadata    Json?
+
+  createdAt   DateTime @default(now())
+
+  @@index([apiKeyId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@index([riskLevel, createdAt(sort: Desc)])
+  @@index([ipAddress, createdAt(sort: Desc)])
 }
 
 // ============================================================================
