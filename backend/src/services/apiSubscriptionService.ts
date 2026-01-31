@@ -147,9 +147,9 @@ interface ApiSubscriptionCache {
 /**
  * Get API subscription info for a user.
  */
-export async function getApiSubscriptionInfo(userId: string): Promise<ApiSubscriptionInfo> {
+export async function getApiSubscriptionInfo(developerId: string): Promise<ApiSubscriptionInfo> {
   // Try cache first
-  const cached = await cache.get<ApiSubscriptionCache>(`api-subscription:${userId}`);
+  const cached = await cache.get<ApiSubscriptionCache>(`api-subscription:${developerId}`);
   if (cached) {
     const config = API_TIER_CONFIG[cached.tier as ApiTier];
     const remainingRequests = config.monthlyRequests === -1
@@ -173,12 +173,12 @@ export async function getApiSubscriptionInfo(userId: string): Promise<ApiSubscri
 
   // Cache miss - query database
   let subscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   // Create default free subscription if none exists
   if (!subscription) {
-    subscription = await ensureApiSubscription(userId);
+    subscription = await ensureApiSubscription(developerId);
   }
 
   const config = API_TIER_CONFIG[subscription.tier];
@@ -187,7 +187,7 @@ export async function getApiSubscriptionInfo(userId: string): Promise<ApiSubscri
     : Math.max(0, config.monthlyRequests - subscription.currentPeriodUsage);
 
   // Cache the result
-  await cache.set(`api-subscription:${userId}`, {
+  await cache.set(`api-subscription:${developerId}`, {
     tier: subscription.tier,
     status: subscription.status,
     monthlyLimit: config.monthlyRequests,
@@ -215,12 +215,12 @@ export async function getApiSubscriptionInfo(userId: string): Promise<ApiSubscri
 /**
  * Check if user can make an API request.
  */
-export async function canMakeRequest(userId: string): Promise<{
+export async function canMakeRequest(developerId: string): Promise<{
   allowed: boolean;
   reason?: string;
   remainingRequests?: number;
 }> {
-  const info = await getApiSubscriptionInfo(userId);
+  const info = await getApiSubscriptionInfo(developerId);
 
   if (info.status !== ApiSubscriptionStatus.ACTIVE) {
     return {
@@ -250,9 +250,9 @@ export async function canMakeRequest(userId: string): Promise<{
 /**
  * Ensure a user has an API subscription (create if needed).
  */
-export async function ensureApiSubscription(userId: string): Promise<ApiSubscription> {
+export async function ensureApiSubscription(developerId: string): Promise<ApiSubscription> {
   const existing = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   if (existing) {
@@ -265,7 +265,7 @@ export async function ensureApiSubscription(userId: string): Promise<ApiSubscrip
 
   return prisma.apiSubscription.create({
     data: {
-      userId,
+      developerId,
       tier: ApiTier.API_FREE,
       status: ApiSubscriptionStatus.ACTIVE,
       includedRequests: API_TIER_CONFIG.API_FREE.monthlyRequests,
@@ -281,7 +281,7 @@ export async function ensureApiSubscription(userId: string): Promise<ApiSubscrip
  * Update subscription tier (used by webhooks).
  */
 export async function updateApiSubscription(
-  userId: string,
+  developerId: string,
   data: {
     tier: ApiTier;
     status: ApiSubscriptionStatus;
@@ -296,7 +296,7 @@ export async function updateApiSubscription(
   const config = API_TIER_CONFIG[data.tier];
 
   const subscription = await prisma.apiSubscription.upsert({
-    where: { userId },
+    where: { developerId },
     update: {
       tier: data.tier,
       status: data.status,
@@ -310,7 +310,7 @@ export async function updateApiSubscription(
       cancelAtPeriodEnd: data.cancelAtPeriodEnd,
     },
     create: {
-      userId,
+      developerId,
       tier: data.tier,
       status: data.status,
       stripeSubscriptionId: data.stripeSubscriptionId,
@@ -324,9 +324,9 @@ export async function updateApiSubscription(
   });
 
   // Invalidate cache
-  await cache.del(`api-subscription:${userId}`);
+  await cache.del(`api-subscription:${developerId}`);
 
-  logger.info({ userId, tier: data.tier, status: data.status }, 'API subscription updated');
+  logger.info({ developerId, tier: data.tier, status: data.status }, 'API subscription updated');
 
   return subscription;
 }
@@ -335,12 +335,12 @@ export async function updateApiSubscription(
  * Reset period usage (called on billing cycle renewal).
  */
 export async function resetPeriodUsage(
-  userId: string,
+  developerId: string,
   periodStart: Date,
   periodEnd: Date
 ): Promise<void> {
   await prisma.apiSubscription.update({
-    where: { userId },
+    where: { developerId },
     data: {
       currentPeriodUsage: 0,
       currentPeriodStart: periodStart,
@@ -348,17 +348,17 @@ export async function resetPeriodUsage(
     },
   });
 
-  await cache.del(`api-subscription:${userId}`);
+  await cache.del(`api-subscription:${developerId}`);
 
-  logger.info({ userId, periodStart, periodEnd }, 'API subscription period reset');
+  logger.info({ developerId, periodStart, periodEnd }, 'API subscription period reset');
 }
 
 /**
  * Cancel subscription at period end.
  */
-export async function cancelApiSubscription(userId: string): Promise<void> {
+export async function cancelApiSubscription(developerId: string): Promise<void> {
   const subscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   if (subscription?.stripeSubscriptionId && stripe) {
@@ -368,15 +368,15 @@ export async function cancelApiSubscription(userId: string): Promise<void> {
   }
 
   await prisma.apiSubscription.update({
-    where: { userId },
+    where: { developerId },
     data: {
       cancelAtPeriodEnd: true,
     },
   });
 
-  await cache.del(`api-subscription:${userId}`);
+  await cache.del(`api-subscription:${developerId}`);
 
-  logger.info({ userId }, 'API subscription scheduled for cancellation');
+  logger.info({ developerId }, 'API subscription scheduled for cancellation');
 }
 
 // ============================================================================
@@ -387,7 +387,7 @@ export async function cancelApiSubscription(userId: string): Promise<void> {
  * Create a Stripe checkout session for API subscription.
  */
 export async function createCheckoutSession(
-  userId: string,
+  developerId: string,
   email: string,
   tier: 'API_STARTER' | 'API_PRO',
   successUrl: string,
@@ -407,7 +407,7 @@ export async function createCheckoutSession(
   let stripeCustomerId: string | undefined;
 
   const existingSubscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   if (existingSubscription?.stripeCustomerId) {
@@ -415,7 +415,7 @@ export async function createCheckoutSession(
   } else {
     const customer = await stripe.customers.create({
       email,
-      metadata: { userId },
+      metadata: { developerId },
     });
     stripeCustomerId = customer.id;
   }
@@ -433,13 +433,13 @@ export async function createCheckoutSession(
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: {
-      userId,
+      developerId,
       tier,
       type: 'api_subscription',
     },
     subscription_data: {
       metadata: {
-        userId,
+        developerId,
         tier,
         type: 'api_subscription',
       },
@@ -450,7 +450,7 @@ export async function createCheckoutSession(
     throw new Error('Failed to create checkout session');
   }
 
-  logger.info({ userId, tier, sessionId: session.id }, 'API checkout session created');
+  logger.info({ developerId, tier, sessionId: session.id }, 'API checkout session created');
 
   return { url: session.url };
 }
@@ -459,7 +459,7 @@ export async function createCheckoutSession(
  * Create a Stripe billing portal session.
  */
 export async function createPortalSession(
-  userId: string,
+  developerId: string,
   returnUrl: string
 ): Promise<{ url: string }> {
   if (!stripe) {
@@ -467,7 +467,7 @@ export async function createPortalSession(
   }
 
   const subscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   if (!subscription?.stripeCustomerId) {
@@ -490,7 +490,7 @@ export async function createPortalSession(
  * Get invoice history from Stripe.
  */
 export async function getInvoices(
-  userId: string,
+  developerId: string,
   limit: number = 10
 ): Promise<{
   invoices: Array<{
@@ -504,7 +504,7 @@ export async function getInvoices(
   }>;
 }> {
   const subscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   if (!subscription?.stripeCustomerId || !stripe) {
@@ -537,7 +537,7 @@ export async function getInvoices(
  * Report usage to Stripe for metered billing.
  */
 export async function reportUsageToStripe(
-  userId: string,
+  developerId: string,
   quantity: number
 ): Promise<void> {
   if (!stripe) {
@@ -545,7 +545,7 @@ export async function reportUsageToStripe(
   }
 
   const subscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   if (!subscription?.stripeSubscriptionId) {
@@ -584,11 +584,11 @@ export async function reportUsageToStripe(
         },
       });
 
-      logger.debug({ userId, quantity }, 'Reported usage to Stripe');
+      logger.debug({ developerId, quantity }, 'Reported usage to Stripe');
     }
   } catch (error) {
     // Metered billing may not be configured - log but don't fail
-    logger.warn({ error, userId, quantity }, 'Failed to report usage to Stripe (metered billing may not be configured)');
+    logger.warn({ error, developerId, quantity }, 'Failed to report usage to Stripe (metered billing may not be configured)');
   }
 }
 

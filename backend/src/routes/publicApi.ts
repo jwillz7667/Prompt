@@ -62,7 +62,7 @@ publicApiRouter.post(
       const data = enhanceSchema.parse(req.body);
 
       // Get API subscription tier to determine quality
-      const subscriptionInfo = await getApiSubscriptionInfo(req.apiKey.userId);
+      const subscriptionInfo = await getApiSubscriptionInfo(req.apiKey.developerId);
       const tierConfig = getTierConfig(subscriptionInfo.tier);
 
       // Map API tier to prompt quality tier
@@ -102,7 +102,7 @@ publicApiRouter.post(
               });
 
               // Get updated quota
-              const quotaInfo = await getQuotaInfo(req.apiKey!.userId);
+              const quotaInfo = await getQuotaInfo(req.apiKey!.developerId);
 
               res.write(
                 `data: ${JSON.stringify({
@@ -147,7 +147,7 @@ publicApiRouter.post(
         });
 
         // Get updated quota
-        const quotaInfo = await getQuotaInfo(req.apiKey.userId);
+        const quotaInfo = await getQuotaInfo(req.apiKey.developerId);
 
         res.json({
           enhancedPrompt: result.enhancedPrompt,
@@ -198,7 +198,7 @@ publicApiRouter.get('/usage', async (req: ApiKeyRequest, res: Response): Promise
       return;
     }
 
-    const quotaInfo = await getQuotaInfo(req.apiKey.userId);
+    const quotaInfo = await getQuotaInfo(req.apiKey.developerId);
 
     res.json(quotaInfo);
   } catch (error) {
@@ -288,9 +288,10 @@ publicApiRouter.get(
       const query = historyQuerySchema.parse(req.query);
       const skip = (query.page - 1) * query.limit;
 
-      // Build where clause
+      // Build where clause - Note: Prompts are user-specific, but API keys belong to developers
+      // For API history, we track by developer ID through ApiUsage table
       const where: Record<string, unknown> = {
-        userId: req.apiKey.userId,
+        developerId: req.apiKey.developerId,
       };
 
       if (query.modality) {
@@ -361,7 +362,7 @@ publicApiRouter.get('/recent', async (req: ApiKeyRequest, res: Response): Promis
       return;
     }
 
-    const recent = await getRecentUsage(req.apiKey.userId, 10);
+    const recent = await getRecentUsage(req.apiKey.developerId, 10);
 
     res.json({
       requests: recent.map((r) => ({

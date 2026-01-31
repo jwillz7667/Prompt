@@ -44,7 +44,7 @@ interface TicketDetails {
 // BASE EMAIL SENDER
 // ============================================================================
 
-async function sendEmail(options: EmailOptions): Promise<boolean> {
+export async function sendEmail(options: EmailOptions): Promise<boolean> {
   if (!process.env['RESEND_API_KEY']) {
     logger.warn('RESEND_API_KEY not configured, skipping email');
     return false;

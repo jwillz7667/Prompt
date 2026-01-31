@@ -86,7 +86,7 @@ export async function registerDeveloper(
       <p>Visit the <a href="https://promptomize.app/developers">Developer Portal</a> to get started.</p>
       <p>You start with 100 free API requests per month.</p>
     `,
-  }).catch((err) => {
+  }).catch((err: unknown) => {
     authLogger.warn({ error: err, email }, 'Failed to send developer welcome email');
   });
 

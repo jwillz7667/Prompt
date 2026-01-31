@@ -16,7 +16,7 @@ import type { ApiUsage, Prisma } from '@prisma/client';
 
 export interface RecordUsageParams {
   apiKeyId: string;
-  userId: string;
+  developerId: string;
   endpoint: string;
   method: string;
   statusCode: number;
@@ -79,7 +79,7 @@ export async function recordUsage(params: RecordUsageParams): Promise<ApiUsage> 
   const usage = await prisma.apiUsage.create({
     data: {
       apiKeyId: params.apiKeyId,
-      userId: params.userId,
+      developerId: params.developerId,
       endpoint: params.endpoint,
       method: params.method,
       statusCode: params.statusCode,
@@ -94,8 +94,8 @@ export async function recordUsage(params: RecordUsageParams): Promise<ApiUsage> 
   });
 
   // Update period usage counter asynchronously
-  incrementPeriodUsage(params.userId).catch((err) => {
-    logger.warn({ err, userId: params.userId }, 'Failed to increment period usage');
+  incrementPeriodUsage(params.developerId).catch((err) => {
+    logger.warn({ err, developerId: params.developerId }, 'Failed to increment period usage');
   });
 
   return usage;
@@ -113,16 +113,16 @@ export function recordUsageAsync(params: RecordUsageParams): void {
 /**
  * Increment the current period usage for billing.
  */
-async function incrementPeriodUsage(userId: string): Promise<void> {
+async function incrementPeriodUsage(developerId: string): Promise<void> {
   await prisma.apiSubscription.updateMany({
-    where: { userId },
+    where: { developerId },
     data: {
       currentPeriodUsage: { increment: 1 },
     },
   });
 
   // Invalidate cache
-  await cache.del(`api-subscription:${userId}`);
+  await cache.del(`api-subscription:${developerId}`);
 }
 
 // ============================================================================
@@ -163,7 +163,7 @@ export async function getKeyUsageStats(
  * Get usage statistics for a user across all their API keys.
  */
 export async function getUserUsageStats(
-  userId: string,
+  developerId: string,
   options: {
     startDate?: Date;
     endDate?: Date;
@@ -172,7 +172,7 @@ export async function getUserUsageStats(
 ): Promise<UsageStats> {
   const { startDate, endDate, limit = 1000 } = options;
 
-  const where: Prisma.ApiUsageWhereInput = { userId };
+  const where: Prisma.ApiUsageWhereInput = { developerId };
 
   if (startDate || endDate) {
     where.createdAt = {};
@@ -269,9 +269,9 @@ function calculateUsageStats(records: ApiUsage[]): UsageStats {
 /**
  * Get current month's usage for billing.
  */
-export async function getMonthlyUsage(userId: string): Promise<MonthlyUsage> {
+export async function getMonthlyUsage(developerId: string): Promise<MonthlyUsage> {
   const subscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   if (!subscription) {
@@ -294,7 +294,7 @@ export async function getMonthlyUsage(userId: string): Promise<MonthlyUsage> {
   // Get actual usage for the period
   const usageRecords = await prisma.apiUsage.findMany({
     where: {
-      userId,
+      developerId,
       createdAt: {
         gte: subscription.currentPeriodStart,
         lte: subscription.currentPeriodEnd,
@@ -325,18 +325,18 @@ export async function getMonthlyUsage(userId: string): Promise<MonthlyUsage> {
  * Calculate billing for a period.
  */
 export async function calculateBilling(
-  userId: string,
+  developerId: string,
   periodStart: Date,
   periodEnd: Date
 ): Promise<BillingCalculation> {
   const subscription = await prisma.apiSubscription.findUnique({
-    where: { userId },
+    where: { developerId },
   });
 
   // Count requests in the period
   const requestCount = await prisma.apiUsage.count({
     where: {
-      userId,
+      developerId,
       createdAt: {
         gte: periodStart,
         lte: periodEnd,
@@ -434,11 +434,11 @@ export async function getUsageHistory(
  * Get recent usage for display purposes.
  */
 export async function getRecentUsage(
-  userId: string,
+  developerId: string,
   limit: number = 10
 ): Promise<ApiUsage[]> {
   return prisma.apiUsage.findMany({
-    where: { userId },
+    where: { developerId },
     orderBy: { createdAt: 'desc' },
     take: limit,
     include: {
@@ -459,13 +459,13 @@ export async function getRecentUsage(
 /**
  * Get hourly request distribution for the last 24 hours.
  */
-export async function getHourlyDistribution(userId: string): Promise<number[]> {
+export async function getHourlyDistribution(developerId: string): Promise<number[]> {
   const twentyFourHoursAgo = new Date();
   twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
   const usage = await prisma.apiUsage.findMany({
     where: {
-      userId,
+      developerId,
       createdAt: { gte: twentyFourHoursAgo },
     },
     select: { createdAt: true },
@@ -490,14 +490,14 @@ export async function getHourlyDistribution(userId: string): Promise<number[]> {
  * Get latency percentiles for the last 24 hours.
  */
 export async function getLatencyPercentiles(
-  userId: string
+  developerId: string
 ): Promise<{ p50: number; p90: number; p95: number; p99: number }> {
   const twentyFourHoursAgo = new Date();
   twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
   const usage = await prisma.apiUsage.findMany({
     where: {
-      userId,
+      developerId,
       createdAt: { gte: twentyFourHoursAgo },
       statusCode: { gte: 200, lt: 300 }, // Only successful requests
     },
@@ -527,7 +527,7 @@ export async function getLatencyPercentiles(
 /**
  * Get error rate for the last 24 hours.
  */
-export async function getErrorRate(userId: string): Promise<{
+export async function getErrorRate(developerId: string): Promise<{
   total: number;
   errors: number;
   rate: number;
@@ -538,7 +538,7 @@ export async function getErrorRate(userId: string): Promise<{
 
   const usage = await prisma.apiUsage.findMany({
     where: {
-      userId,
+      developerId,
       createdAt: { gte: twentyFourHoursAgo },
     },
     select: { statusCode: true },

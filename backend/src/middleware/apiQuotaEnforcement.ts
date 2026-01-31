@@ -49,14 +49,14 @@ export const enforceApiQuota = async (
   req.usageStart = startTime;
 
   try {
-    const userId = req.apiKey.userId;
-    const quotaCheck = await canMakeRequest(userId);
+    const developerId = req.apiKey.developerId;
+    const quotaCheck = await canMakeRequest(developerId);
 
     if (!quotaCheck.allowed) {
-      logger.warn({ userId, keyId: req.apiKey.id, reason: quotaCheck.reason }, 'API quota exceeded');
+      logger.warn({ developerId, keyId: req.apiKey.id, reason: quotaCheck.reason }, 'API quota exceeded');
 
       // Get full info for response
-      const info = await getApiSubscriptionInfo(userId);
+      const info = await getApiSubscriptionInfo(developerId);
 
       res.status(429).json({
         error: 'Quota exceeded',
@@ -78,7 +78,7 @@ export const enforceApiQuota = async (
     }
 
     // Attach quota info to request
-    const info = await getApiSubscriptionInfo(userId);
+    const info = await getApiSubscriptionInfo(developerId);
     req.apiQuota = {
       tier: info.tier,
       monthlyLimit: info.monthlyRequestLimit,
@@ -123,7 +123,7 @@ export const recordApiUsage = (
 
   recordUsageAsync({
     apiKeyId: req.apiKey.id,
-    userId: req.apiKey.userId,
+    developerId: req.apiKey.developerId,
     endpoint: req.path,
     method: req.method,
     statusCode: res.statusCode,
@@ -151,7 +151,7 @@ export const autoRecordUsage = (
       // Record usage for all non-server-error responses
       recordUsageAsync({
         apiKeyId: req.apiKey.id,
-        userId: req.apiKey.userId,
+        developerId: req.apiKey.developerId,
         endpoint: req.path,
         method: req.method,
         statusCode: res.statusCode,
@@ -172,7 +172,7 @@ export const autoRecordUsage = (
 /**
  * Get formatted quota info for API response.
  */
-export async function getQuotaInfo(userId: string): Promise<{
+export async function getQuotaInfo(developerId: string): Promise<{
   tier: string;
   status: string;
   quota: {
@@ -187,7 +187,7 @@ export async function getQuotaInfo(userId: string): Promise<{
   };
   features: string[];
 }> {
-  const info = await getApiSubscriptionInfo(userId);
+  const info = await getApiSubscriptionInfo(developerId);
 
   return {
     tier: info.tier,
