@@ -11,9 +11,11 @@
 
 import SwiftUI
 import UIKit
+import StoreKit
 
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(SettingsManager.self) private var settings
     @Environment(AuthManager.self) private var authManager
     @Environment(PromptHistoryManager.self) private var historyManager
@@ -27,6 +29,14 @@ struct ContentView: View {
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
+
+    // Paywall reminder tracking
+    @AppStorage("hasSeenOnboardingPaywall") private var hasSeenOnboardingPaywall = false
+    @AppStorage("lastPaywallShownDate") private var lastPaywallShownDateString = ""
+
+    // App review prompt tracking
+    @AppStorage("lastReviewPromptDate") private var lastReviewPromptDateString = ""
+    @AppStorage("enhancementCount") private var enhancementCount = 0
 
     // Animation states
     @State private var headerScale: CGFloat = 1.0
@@ -235,6 +245,12 @@ struct ContentView: View {
         }
         .onAppear {
             headerScale = 0.9
+            checkPaywallReminder()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                checkDailyPaywallReminder()
+            }
         }
         // Handle deeplinks from widgets
         .onChange(of: deeplinkManager.shouldOpenEnhance) { _, shouldOpen in
@@ -1148,6 +1164,10 @@ struct ContentView: View {
 
                 // Refresh subscription usage after successful enhancement
                 await storeKit.syncWithBackend()
+
+                // Track enhancement count and potentially request review
+                enhancementCount += 1
+                checkReviewPrompt()
             } else {
                 // Error occurred
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -1295,6 +1315,90 @@ struct ContentView: View {
         case .none:
             break
         }
+    }
+
+    // MARK: - Paywall Reminder Logic
+
+    /// Check if we should show paywall on first app launch after login
+    private func checkPaywallReminder() {
+        // Show onboarding paywall for first-time users (after login)
+        if !hasSeenOnboardingPaywall && authManager.isAuthenticated {
+            // Small delay to let the UI settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                showPaywall = true
+                hasSeenOnboardingPaywall = true
+                updateLastPaywallShownDate()
+            }
+        }
+    }
+
+    /// Check if we should show daily paywall reminder for free users
+    private func checkDailyPaywallReminder() {
+        // Only show for free tier users
+        guard storeKit.currentTier == .free else { return }
+
+        // Check if we've already shown today
+        let today = formattedDate(Date())
+        guard lastPaywallShownDateString != today else { return }
+
+        // Don't show immediately on app launch - wait a bit
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            // Double-check user is still free tier (they might have subscribed)
+            if storeKit.currentTier == .free {
+                showPaywall = true
+                updateLastPaywallShownDate()
+            }
+        }
+    }
+
+    /// Update the last paywall shown date to today
+    private func updateLastPaywallShownDate() {
+        lastPaywallShownDateString = formattedDate(Date())
+    }
+
+    /// Format date as YYYY-MM-DD string for comparison
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    // MARK: - App Review Prompt Logic
+
+    /// Check if we should request an app review
+    private func checkReviewPrompt() {
+        // Only prompt after user has done at least 3 enhancements
+        guard enhancementCount >= 3 else { return }
+
+        // Check if 3 days have passed since last prompt
+        let today = Date()
+        if let lastPromptDate = parseDate(lastReviewPromptDateString) {
+            let daysSinceLastPrompt = Calendar.current.dateComponents([.day], from: lastPromptDate, to: today).day ?? 0
+            guard daysSinceLastPrompt >= 3 else { return }
+        }
+
+        // Request review after a short delay (better UX after successful enhancement)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            requestAppReview()
+            lastReviewPromptDateString = formattedDate(today)
+        }
+    }
+
+    /// Request app store review using StoreKit
+    private func requestAppReview() {
+        if let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) {
+            SKStoreReviewController.requestReview(in: windowScene)
+        }
+    }
+
+    /// Parse date string back to Date
+    private func parseDate(_ dateString: String) -> Date? {
+        guard !dateString.isEmpty else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: dateString)
     }
 }
 
