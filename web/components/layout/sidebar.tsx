@@ -17,6 +17,7 @@ import {
   User,
   Crown,
   ChevronLeft,
+  Code2,
 } from 'lucide-react'
 
 type NavItem = {
@@ -35,6 +36,7 @@ const navigation: NavItem[] = [
 ]
 
 const bottomNavigation: NavItem[] = [
+  { name: 'Developers', href: '/developers', icon: Code2 },
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Profile', href: '/profile', icon: User },
 ]

@@ -21,6 +21,7 @@ import {
   Crown,
   X,
   LogOut,
+  Code2,
 } from 'lucide-react'
 
 const navigation: {
@@ -34,6 +35,7 @@ const navigation: {
   { name: 'Templates', href: '/templates', icon: FileText },
   { name: 'Collections', href: '/collections', icon: FolderOpen },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Developers', href: '/developers', icon: Code2 },
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Profile', href: '/profile', icon: User },
 ]
