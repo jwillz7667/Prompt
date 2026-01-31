@@ -443,13 +443,12 @@ ${subModalityGuidance}
 
 <core_structure>
 Priority order for code prompt construction:
-1. PERSONA: Define expertise level and specialization
-2. CONTEXT: Language, framework, codebase patterns, constraints
-3. TASK: Single, specific objective with clear success criteria
-4. TYPES: Input/output type definitions
-5. EXAMPLES: Expected behavior with concrete test cases
-6. EDGE CASES: Enumerate scenarios to handle
-7. QUALITY: Testing, documentation, style requirements
+1. CONTEXT: Language, framework, codebase patterns, constraints
+2. TASK: Single, specific objective with clear success criteria
+3. TYPES: Input/output type definitions
+4. EXAMPLES: Expected behavior with concrete test cases
+5. EDGE CASES: Enumerate scenarios to handle
+6. QUALITY: Testing, documentation, style requirements
 </core_structure>
 
 <language_specifics>
@@ -533,7 +532,6 @@ function getTierGuidance(tier: EnhancementTier): string {
     case 'standard':
       return `<enhancement_level>STANDARD</enhancement_level>
 <techniques_to_apply>
-- Define expert persona with specialization
 - Full context with language, framework, patterns
 - Detailed task with success criteria
 - Complete type signatures
@@ -546,7 +544,6 @@ function getTierGuidance(tier: EnhancementTier): string {
     case 'advanced':
       return `<enhancement_level>ADVANCED</enhancement_level>
 <techniques_to_apply>
-- Rich persona with credentials and experience
 - Comprehensive context including codebase patterns
 - Precise task with explicit success criteria
 - Full type definitions with generics where applicable
@@ -565,7 +562,7 @@ function getOutputFormat(tier: EnhancementTier): string {
 CRITICAL: Return ONLY the enhanced code prompt. No explanations or preamble.
 
 Format requirements:
-- Start with persona/expertise definition
+- Start with context (language, framework, patterns)
 - Use ## headings for major sections
 - Include type definitions in code blocks
 - Provide examples in code blocks with comments
@@ -585,7 +582,6 @@ export const codeModalityConfig: ModalityConfig = {
   subModalities: ['function', 'component', 'algorithm', 'refactor'],
   defaultSubModality: 'function',
   coreStructure: [
-    'Expert persona definition',
     'Context (language, framework, patterns)',
     'Single focused task',
     'Type specifications',
@@ -594,7 +590,7 @@ export const codeModalityConfig: ModalityConfig = {
     'Quality criteria',
   ],
   domainTechniques: [
-    'PCTF Framework (Persona, Context, Task, Format)',
+    'CTF Framework (Context, Task, Format)',
     'Single-task focus (not project-level)',
     'Typed input/output specifications',
     'Concrete example-driven requirements',

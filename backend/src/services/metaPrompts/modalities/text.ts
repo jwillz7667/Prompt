@@ -301,14 +301,15 @@ const constraints: ModalityConstraints = {
     'Add reasoning triggers for complex tasks ("Let\'s approach this step by step")',
     'Make constraints explicit using NEVER/ALWAYS lists',
     'Include verification steps for factual content',
+    'Provide complete context before the task',
   ],
   never: [
-    'Leave the persona/role undefined',
-    'Use vague length descriptions ("brief", "detailed")',
+    'Use vague length descriptions ("brief", "detailed") - use specific word/paragraph counts',
     'Assume the AI knows the context without providing it',
     'Skip format specification',
     'Ask multiple unrelated questions in one prompt',
     'Use ambiguous pronouns without clear referents',
+    'Leave the task objective undefined or unclear',
   ],
 };
 
@@ -334,13 +335,13 @@ Your enhancement techniques are based on peer-reviewed research:
 ${subModalityGuidance}
 
 <core_principles>
-1. PERSONA FIRST: Define an expert identity with relevant credentials
-2. STRUCTURE OVER PROSE: Use XML tags, headers, or clear sections
-3. SHOW DON'T TELL: Include examples of desired output format
-4. EXPLICIT CONSTRAINTS: Use NEVER/ALWAYS lists for boundaries
-5. REASONING TRIGGERS: Add "Let's think step by step" for analytical tasks
-6. VERIFICATION HOOKS: Include self-checking instructions
-7. CONTEXT FIRST: Put background information before instructions
+1. TASK CLARITY: Define the exact objective with measurable success criteria
+2. CONTEXT FIRST: Provide all relevant background before the task
+3. STRUCTURE OVER PROSE: Use XML tags, headers, or clear sections
+4. SHOW DON'T TELL: Include examples of desired output format
+5. EXPLICIT CONSTRAINTS: Use NEVER/ALWAYS lists for boundaries
+6. REASONING TRIGGERS: Add "Let's think step by step" for analytical tasks
+7. VERIFICATION HOOKS: Include self-checking instructions
 8. SPECIFIC OVER VAGUE: Quantify requirements (e.g., "3 paragraphs" not "brief")
 </core_principles>`;
 
@@ -401,7 +402,7 @@ function getTierGuidance(tier: EnhancementTier): string {
     case 'basic':
       return `<enhancement_level>BASIC</enhancement_level>
 <techniques_to_apply>
-- Add clear role/persona definition
+- Define the task objective clearly and specifically
 - Structure with bullet points or numbered lists
 - Specify expected output format
 - Add one concrete example if helpful
@@ -411,11 +412,11 @@ function getTierGuidance(tier: EnhancementTier): string {
     case 'standard':
       return `<enhancement_level>STANDARD</enhancement_level>
 <techniques_to_apply>
-- Define expert persona with specific expertise
-- Use RISEN framework: Role, Instructions, Steps, End goal, Narrowing constraints
-- Add Chain-of-Thought trigger for analytical tasks
+- Provide complete context and background information
+- Define task objective with success criteria
+- Add Chain-of-Thought trigger for analytical tasks ("Let's approach this step by step")
 - Include 1-2 concrete examples of desired output
-- Specify format with clear structure
+- Specify format with clear structure using XML tags
 - Add basic verification step
 </techniques_to_apply>
 <output_length>Balanced enhancement (200-400 words)</output_length>`;
@@ -423,14 +424,14 @@ function getTierGuidance(tier: EnhancementTier): string {
     case 'advanced':
       return `<enhancement_level>ADVANCED</enhancement_level>
 <techniques_to_apply>
-- Synthesize optimal expert persona with credentials
-- Apply full RISEN+ framework with self-verification
-- Embed Chain-of-Thought reasoning triggers
+- Provide comprehensive context with all relevant background
+- Define precise task objective with measurable success criteria
+- Embed Chain-of-Thought reasoning triggers throughout
 - Include 2-3 diverse few-shot examples
 - Add comprehensive NEVER/ALWAYS constraint lists
-- Include edge case handling
-- Add metacognitive verification hooks
-- Use structured XML or markdown sections
+- Include edge case handling instructions
+- Add verification and self-checking hooks
+- Use structured XML tags for semantic organization
 - Specify quality criteria and success metrics
 </techniques_to_apply>
 <output_length>Comprehensive enhancement (400-800 words)</output_length>`;

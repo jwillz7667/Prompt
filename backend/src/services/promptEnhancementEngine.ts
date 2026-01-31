@@ -21,7 +21,6 @@
 import { promptLogger } from '../utils/logger.js';
 import {
   MetaPromptBuilder,
-  usesV3Features,
   type SubModality,
   type TargetPlatform,
 } from './metaPrompts/index.js';
@@ -69,12 +68,10 @@ function buildEnhancementSystemPrompt(
   modality: PromptModality,
   request?: EnhancementRequest
 ): string {
-  // Use V3 meta-prompt builder when V3 features are present
-  if (request && usesV3Features({
-    subModality: request.subModality,
-    targetPlatform: request.targetPlatform,
-    includeNegativeExamples: request.includeNegativeExamples,
-  })) {
+  // Always use V3 meta-prompt builder for all requests
+  // V3 system has modality-aware, research-backed prompts that work well
+  // with modern reasoning models (no outdated persona-based patterns)
+  if (request) {
     const builder = new MetaPromptBuilder({
       prompt: request.prompt,
       tier,
@@ -88,7 +85,7 @@ function buildEnhancementSystemPrompt(
     return builder.buildSystemPrompt();
   }
 
-  // Legacy V2 path
+  // Fallback for edge case without request (shouldn't happen in practice)
   const baseKnowledge = `<system>
 You are an expert prompt engineer. Your task is to transform user prompts into highly effective versions that maximize AI output quality.
 
@@ -541,23 +538,26 @@ NEVER:
 function buildUserMessage(request: EnhancementRequest): string {
   const { prompt, tier, modality = 'text', tone, length, customInstructions, subModality, targetPlatform, includeNegativeExamples } = request;
 
-  // Use V3 meta-prompt builder when V3 features are present
-  if (usesV3Features({ subModality, targetPlatform, includeNegativeExamples })) {
-    const builder = new MetaPromptBuilder({
-      prompt,
-      tier,
-      modality,
-      subModality,
-      targetPlatform,
-      includeNegativeExamples,
-      tone,
-      length,
-      customInstructions,
-    });
-    return builder.buildUserMessage();
-  }
+  // Always use V3 meta-prompt builder for all requests
+  // V3 system provides better modality-aware examples and constraints
+  const builder = new MetaPromptBuilder({
+    prompt,
+    tier,
+    modality,
+    subModality,
+    targetPlatform,
+    includeNegativeExamples,
+    tone,
+    length,
+    customInstructions,
+  });
+  return builder.buildUserMessage();
+}
 
-  // Legacy V2 path
+// Legacy V2 path - kept for reference, no longer used
+function buildUserMessageLegacy(request: EnhancementRequest): string {
+  const { prompt, tier, modality = 'text', tone, length, customInstructions } = request;
+
   let message = `<enhancement_request>
 <original_prompt>
 ${prompt}
