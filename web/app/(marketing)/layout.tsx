@@ -36,6 +36,12 @@ export default function MarketingLayout({
                 API Docs
               </Link>
               <Link
+                href="/developers"
+                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                Developers
+              </Link>
+              <Link
                 href="/support"
                 className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
