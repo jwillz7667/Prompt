@@ -1,5 +1,12 @@
 import { type TierFeatures } from './subscriptionService.js';
 import { promptLogger } from '../utils/logger.js';
+import {
+  enhancePromptV2,
+  enhancePromptV2Stream,
+  detectModality,
+  type EnhancementRequest,
+  type StreamCallbacks as V2StreamCallbacks,
+} from './promptEnhancementEngine.js';
 
 // ============================================================================
 // TYPES
@@ -728,9 +735,55 @@ function getSystemPrompt(tier: 'basic' | 'standard' | 'advanced', tone?: PromptT
 
 // ============================================================================
 // MAIN SERVICE FUNCTION
+// Uses the new v2 research-backed engine by default
 // ============================================================================
 
 export async function enhancePrompt(request: EnhancePromptRequest): Promise<EnhancePromptResult> {
+  // Use the new v2 engine for standard enhancement
+  // Only fall back to legacy for 'unchained' mode which has special handling
+  if (request.tone !== 'unchained') {
+    return enhancePromptWithV2Engine(request);
+  }
+
+  // Legacy path for unchained mode (specialized handling)
+  return enhancePromptLegacy(request);
+}
+
+/**
+ * New v2 enhancement engine based on 2025-2026 research
+ * - Structured prompting with XML tags (15-20% improvement)
+ * - Few-shot examples over abstract descriptions
+ * - Automatic Chain-of-Thought integration
+ * - Constraint-based prompting (NEVER/ALWAYS)
+ */
+async function enhancePromptWithV2Engine(request: EnhancePromptRequest): Promise<EnhancePromptResult> {
+  const modality = request.modality || detectModality(request.prompt);
+
+  const v2Request: EnhancementRequest = {
+    prompt: request.prompt,
+    tier: request.tier,
+    modality: modality,
+    tone: request.tone as Exclude<PromptTone, 'unchained'> | undefined,
+    length: request.length,
+    customInstructions: request.customInstructions,
+  };
+
+  const result = await enhancePromptV2(v2Request);
+
+  return {
+    enhancedPrompt: result.enhancedPrompt,
+    model: result.model,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    totalTokens: result.totalTokens,
+    processingMs: result.processingMs,
+  };
+}
+
+/**
+ * Legacy enhancement path for backward compatibility and unchained mode
+ */
+async function enhancePromptLegacy(request: EnhancePromptRequest): Promise<EnhancePromptResult> {
   const apiKey = process.env['DEEPSEEK_API_KEY'];
   if (!apiKey) {
     throw new Error('DEEPSEEK_API_KEY environment variable not configured');
@@ -820,6 +873,58 @@ export interface StreamCallbacks {
 }
 
 export async function enhancePromptStream(
+  request: EnhancePromptRequest,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  // Use v2 engine for streaming (except unchained mode)
+  if (request.tone !== 'unchained') {
+    return enhancePromptStreamV2(request, callbacks);
+  }
+
+  // Legacy streaming for unchained mode
+  return enhancePromptStreamLegacy(request, callbacks);
+}
+
+/**
+ * V2 streaming using the new research-backed engine
+ */
+async function enhancePromptStreamV2(
+  request: EnhancePromptRequest,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const modality = request.modality || detectModality(request.prompt);
+
+  const v2Request: EnhancementRequest = {
+    prompt: request.prompt,
+    tier: request.tier,
+    modality: modality,
+    tone: request.tone as Exclude<PromptTone, 'unchained'> | undefined,
+    length: request.length,
+    customInstructions: request.customInstructions,
+  };
+
+  const v2Callbacks: V2StreamCallbacks = {
+    onToken: callbacks.onToken,
+    onComplete: (result) => {
+      callbacks.onComplete({
+        enhancedPrompt: result.enhancedPrompt,
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        totalTokens: result.totalTokens,
+        processingMs: result.processingMs,
+      });
+    },
+    onError: callbacks.onError,
+  };
+
+  return enhancePromptV2Stream(v2Request, v2Callbacks);
+}
+
+/**
+ * Legacy streaming for backward compatibility
+ */
+async function enhancePromptStreamLegacy(
   request: EnhancePromptRequest,
   callbacks: StreamCallbacks
 ): Promise<void> {
