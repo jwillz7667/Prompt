@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,10 +30,12 @@ import {
   FileText,
   File,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react'
 import Image from 'next/image'
 
 export default function HistoryPage() {
+  const router = useRouter()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [favoritesOnly, setFavoritesOnly] = useState(false)
@@ -62,6 +65,11 @@ export default function HistoryPage() {
     await navigator.clipboard.writeText(text)
     toast.success('Copied to clipboard')
   }, [])
+
+  const handleReenhance = useCallback((originalPrompt: string) => {
+    setSelectedPrompt(null)
+    router.push(`/dashboard?prompt=${encodeURIComponent(originalPrompt)}`)
+  }, [router])
 
   const handleDelete = useCallback(async () => {
     if (!deleteConfirm) return
@@ -341,6 +349,13 @@ export default function HistoryPage() {
             <ModalFooter>
               <Button variant="secondary" onClick={() => setSelectedPrompt(null)}>
                 Close
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => handleReenhance(selectedPrompt.originalPrompt)}
+                leftIcon={<RefreshCw className="h-4 w-4" />}
+              >
+                Enhance Again
               </Button>
               <Button
                 onClick={() => handleCopy(selectedPrompt.enhancedPrompt)}

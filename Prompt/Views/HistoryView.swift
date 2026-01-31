@@ -19,6 +19,9 @@ struct HistoryView: View {
     @State private var promptToDelete: PromptRecord?
     @State private var selectedTab: HistoryTab = .all
 
+    /// Callback to re-run a prompt from history
+    var onRerunPrompt: ((String) -> Void)?
+
     enum HistoryTab: String, CaseIterable {
         case all = "All"
         case starred = "★"
@@ -93,7 +96,12 @@ struct HistoryView: View {
                 await historyManager.fetchPrompts(refresh: true)
             }
             .sheet(item: $selectedPrompt) { prompt in
-                PromptDetailView(prompt: prompt)
+                PromptDetailView(prompt: prompt) {
+                    // Re-run this prompt
+                    selectedPrompt = nil
+                    dismiss()
+                    onRerunPrompt?(prompt.originalPrompt)
+                }
             }
             .alert("Delete Prompt", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) {}
@@ -273,6 +281,7 @@ struct PromptRowView: View {
 struct PromptDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     let prompt: PromptRecord
+    var onRerun: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var showCopiedToast = false
     @State private var showExportSheet = false
@@ -373,6 +382,24 @@ struct PromptDetailView: View {
                         .buttonStyle(LiquidGlassButtonStyle(
                             cornerRadius: 10,
                             tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
+                            intensity: .standard
+                        ))
+                    }
+
+                    // Re-enhance button (primary action)
+                    if onRerun != nil {
+                        Button {
+                            onRerun?()
+                        } label: {
+                            Label("Enhance Again", systemImage: "arrow.clockwise.circle.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(LiquidGlassButtonStyle(
+                            cornerRadius: 10,
+                            tintColor: accentColor,
                             intensity: .standard
                         ))
                     }

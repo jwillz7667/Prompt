@@ -160,7 +160,11 @@ struct ContentView: View {
                     .presentationCornerRadius(24)
             }
             .sheet(isPresented: $showHistory) {
-                HistoryView()
+                HistoryView { originalPrompt in
+                    viewModel.userPrompt = originalPrompt
+                    viewModel.enhancedPrompt = ""
+                    showEnhancedView = false
+                }
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)

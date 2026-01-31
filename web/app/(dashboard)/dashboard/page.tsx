@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -66,6 +67,8 @@ const lengthOptions: SelectOption[] = [
 ]
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [copied, setCopied] = useState(false)
   const [unchainedEnabled, setUnchainedEnabled] = useState(false)
@@ -79,6 +82,17 @@ export default function DashboardPage() {
   useEffect(() => {
     setUnchainedUsedToday(getUnchainedUsageToday())
   }, [])
+
+  // Pre-fill prompt from URL params (for re-enhance from history)
+  useEffect(() => {
+    const promptParam = searchParams.get('prompt')
+    if (promptParam) {
+      setPrompt(promptParam)
+      reset() // Clear any previous enhancement
+      // Clean up URL
+      router.replace('/dashboard', { scroll: false })
+    }
+  }, [searchParams, reset, router])
 
   const tier = subscription.tier
   const isTrialing = subscription.isTrialing
