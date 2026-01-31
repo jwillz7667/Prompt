@@ -35,6 +35,10 @@ const enhanceSchema = z.object({
   maxTokens: z.number().int().min(1).max(8192).optional(),
   customInstructions: z.string().max(2000).optional(),
   stream: z.boolean().default(false),
+  // V3 meta-prompt features
+  subModality: z.string().optional(),
+  targetPlatform: z.string().optional(),
+  includeNegativeExamples: z.boolean().optional(),
 });
 
 const historyQuerySchema = z.object({
@@ -88,6 +92,10 @@ publicApiRouter.post(
             length: data.length,
             modality: data.modality,
             customInstructions: data.customInstructions,
+            // V3 meta-prompt features
+            subModality: data.subModality,
+            targetPlatform: data.targetPlatform,
+            includeNegativeExamples: data.includeNegativeExamples,
           },
           {
             onToken: (token) => {
@@ -137,6 +145,10 @@ publicApiRouter.post(
           length: data.length,
           modality: data.modality,
           customInstructions: data.customInstructions,
+          // V3 meta-prompt features
+          subModality: data.subModality,
+          targetPlatform: data.targetPlatform,
+          includeNegativeExamples: data.includeNegativeExamples,
         });
 
         // Record usage

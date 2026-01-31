@@ -56,6 +56,10 @@ const enhancePromptSchema = z.object({
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   customInstructions: z.string().max(2000).optional(),
+  // V3 meta-prompt features
+  subModality: z.string().optional(),
+  targetPlatform: z.string().optional(),
+  includeNegativeExamples: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -95,6 +99,10 @@ promptRouter.post(
         length: data.length,
         modality: data.modality,
         customInstructions: data.customInstructions,
+        // V3 meta-prompt features
+        subModality: data.subModality,
+        targetPlatform: data.targetPlatform,
+        includeNegativeExamples: data.includeNegativeExamples,
       });
 
       // Save the prompt to the database
@@ -228,6 +236,10 @@ promptRouter.post(
           length: data.length,
           modality: data.modality,
           customInstructions: data.customInstructions,
+          // V3 meta-prompt features
+          subModality: data.subModality,
+          targetPlatform: data.targetPlatform,
+          includeNegativeExamples: data.includeNegativeExamples,
         },
         {
           onToken: (token) => {

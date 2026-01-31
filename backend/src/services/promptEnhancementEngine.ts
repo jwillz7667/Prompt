@@ -19,6 +19,12 @@
  */
 
 import { promptLogger } from '../utils/logger.js';
+import {
+  MetaPromptBuilder,
+  usesV3Features,
+  type SubModality,
+  type TargetPlatform,
+} from './metaPrompts/index.js';
 
 // ============================================================================
 // TYPES
@@ -37,6 +43,10 @@ export interface EnhancementRequest {
   length?: OutputLength;
   targetModel?: 'claude' | 'gpt' | 'gemini' | 'llama' | 'general';
   customInstructions?: string;
+  // V3 features
+  subModality?: SubModality;
+  targetPlatform?: TargetPlatform;
+  includeNegativeExamples?: boolean;
 }
 
 export interface EnhancementResult {
@@ -54,7 +64,31 @@ export interface EnhancementResult {
 // Research-backed meta-prompt for prompt transformation
 // ============================================================================
 
-function buildEnhancementSystemPrompt(tier: EnhancementTier, modality: PromptModality): string {
+function buildEnhancementSystemPrompt(
+  tier: EnhancementTier,
+  modality: PromptModality,
+  request?: EnhancementRequest
+): string {
+  // Use V3 meta-prompt builder when V3 features are present
+  if (request && usesV3Features({
+    subModality: request.subModality,
+    targetPlatform: request.targetPlatform,
+    includeNegativeExamples: request.includeNegativeExamples,
+  })) {
+    const builder = new MetaPromptBuilder({
+      prompt: request.prompt,
+      tier,
+      modality,
+      subModality: request.subModality,
+      targetPlatform: request.targetPlatform,
+      tone: request.tone,
+      length: request.length,
+      customInstructions: request.customInstructions,
+    });
+    return builder.buildSystemPrompt();
+  }
+
+  // Legacy V2 path
   const baseKnowledge = `<system>
 You are an expert prompt engineer. Your task is to transform user prompts into highly effective versions that maximize AI output quality.
 
@@ -505,8 +539,25 @@ NEVER:
 // ============================================================================
 
 function buildUserMessage(request: EnhancementRequest): string {
-  const { prompt, tier, modality = 'text', tone, length, customInstructions } = request;
+  const { prompt, tier, modality = 'text', tone, length, customInstructions, subModality, targetPlatform, includeNegativeExamples } = request;
 
+  // Use V3 meta-prompt builder when V3 features are present
+  if (usesV3Features({ subModality, targetPlatform, includeNegativeExamples })) {
+    const builder = new MetaPromptBuilder({
+      prompt,
+      tier,
+      modality,
+      subModality,
+      targetPlatform,
+      includeNegativeExamples,
+      tone,
+      length,
+      customInstructions,
+    });
+    return builder.buildUserMessage();
+  }
+
+  // Legacy V2 path
   let message = `<enhancement_request>
 <original_prompt>
 ${prompt}
@@ -589,7 +640,8 @@ export async function enhancePromptV2(request: EnhancementRequest): Promise<Enha
   const temperature = tier === 'basic' ? 0.5 : tier === 'standard' ? 0.6 : 0.7;
   const maxTokens = tier === 'basic' ? 1024 : tier === 'standard' ? 2048 : 4096;
 
-  const systemPrompt = buildEnhancementSystemPrompt(tier, modality);
+  // Use V3 builder when V3 features are present, otherwise use V2
+  const systemPrompt = buildEnhancementSystemPrompt(tier, modality, request);
   const userMessage = buildUserMessage(request);
 
   const deepseekRequest: DeepSeekRequest = {
@@ -682,7 +734,8 @@ export async function enhancePromptV2Stream(
   const temperature = tier === 'basic' ? 0.5 : tier === 'standard' ? 0.6 : 0.7;
   const maxTokens = tier === 'basic' ? 1024 : tier === 'standard' ? 2048 : 4096;
 
-  const systemPrompt = buildEnhancementSystemPrompt(tier, modality);
+  // Use V3 builder when V3 features are present, otherwise use V2
+  const systemPrompt = buildEnhancementSystemPrompt(tier, modality, request);
   const userMessage = buildUserMessage(request);
 
   const deepseekRequest = {

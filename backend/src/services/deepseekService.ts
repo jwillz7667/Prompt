@@ -31,6 +31,10 @@ export interface EnhancePromptRequest {
   length?: OutputLength;
   modality?: PromptModality;
   customInstructions?: string;
+  // V3 meta-prompt features
+  subModality?: string;
+  targetPlatform?: string;
+  includeNegativeExamples?: boolean;
 }
 
 export interface EnhancePromptResult {
@@ -766,6 +770,10 @@ async function enhancePromptWithV2Engine(request: EnhancePromptRequest): Promise
     tone: request.tone as Exclude<PromptTone, 'unchained'> | undefined,
     length: request.length,
     customInstructions: request.customInstructions,
+    // V3 meta-prompt features (passed through to V2 engine which handles V3 detection)
+    subModality: request.subModality as EnhancementRequest['subModality'],
+    targetPlatform: request.targetPlatform as EnhancementRequest['targetPlatform'],
+    includeNegativeExamples: request.includeNegativeExamples,
   };
 
   const result = await enhancePromptV2(v2Request);
@@ -901,6 +909,10 @@ async function enhancePromptStreamV2(
     tone: request.tone as Exclude<PromptTone, 'unchained'> | undefined,
     length: request.length,
     customInstructions: request.customInstructions,
+    // V3 meta-prompt features (passed through to V2 engine which handles V3 detection)
+    subModality: request.subModality as EnhancementRequest['subModality'],
+    targetPlatform: request.targetPlatform as EnhancementRequest['targetPlatform'],
+    includeNegativeExamples: request.includeNegativeExamples,
   };
 
   const v2Callbacks: V2StreamCallbacks = {
