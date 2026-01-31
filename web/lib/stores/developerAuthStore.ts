@@ -41,7 +41,9 @@ interface DeveloperAuthState {
   fetchProfile: () => Promise<void>;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.promptomize.app';
+// Remove trailing /api/v1 if present since we add it in requests
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.promptomize.app';
+const API_URL = rawApiUrl.replace(/\/api\/v1\/?$/, '');
 
 export const useDeveloperAuthStore = create<DeveloperAuthState>()(
   persist(
