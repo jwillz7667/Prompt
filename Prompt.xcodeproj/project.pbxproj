@@ -15,6 +15,9 @@
 		2FF002702F25E8230039FFE0 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2FF0026F2F25E8230039FFE0 /* FirebaseAnalyticsCore */; };
 		2FF002722F25E8230039FFE0 /* FirebaseAnalyticsIdentitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = 2FF002712F25E8230039FFE0 /* FirebaseAnalyticsIdentitySupport */; };
 		2FF002772F25EC3A0039FFE0 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 2FF002762F25EC3A0039FFE0 /* FirebaseCrashlytics */; };
+		3117569E48D7851BAE137469 /* ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3816F1BCB5CD71643E49CDA /* ScreenshotTests.swift */; };
+		3DFCFCBB3A2515CED9A9610F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1767159F3A8A8318E799A51C /* Foundation.framework */; };
+		F67B4B4AB3DB8E0F8AF8AE6C /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90AE3E57D1D2828E4DF480C9 /* SnapshotHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -24,6 +27,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 2FE318DA2F229B1400F8305A;
 			remoteInfo = PromptWidgetExtensionExtension;
+		};
+		85CC3DCA78E7A703DF6DA954 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2F2D040D2F1CCAB80090D110 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2F2D04142F1CCAB80090D110;
+			remoteInfo = Prompt;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -42,11 +52,16 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		06160774B0B708D3BA10F52E /* PromptUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PromptUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1767159F3A8A8318E799A51C /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		2F2D04152F1CCAB80090D110 /* Prompt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Prompt.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FE318DB2F229B1400F8305A /* PromptWidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PromptWidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FE318DD2F229B1400F8305A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		2FE318DF2F229B1500F8305A /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		2FE319022F229B9700F8305A /* PromptWidgetExtensionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PromptWidgetExtensionExtension.entitlements; sourceTree = "<group>"; };
+		90AE3E57D1D2828E4DF480C9 /* SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PromptUITests/SnapshotHelper.swift; sourceTree = SOURCE_ROOT; };
+		AB979EF86BB183B20F25B776 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = PromptUITests/Info.plist; sourceTree = SOURCE_ROOT; };
+		D3816F1BCB5CD71643E49CDA /* ScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PromptUITests/ScreenshotTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -107,9 +122,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		50C3C1E50CC56CDC2963FD45 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3DFCFCBB3A2515CED9A9610F /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		13A0E1A3D9FBF28DFE71A8F1 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				1767159F3A8A8318E799A51C /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
 		2F2D040C2F1CCAB80090D110 = {
 			isa = PBXGroup;
 			children = (
@@ -118,6 +149,7 @@
 				2FE318E12F229B1500F8305A /* PromptWidgetExtension */,
 				2FE318DC2F229B1400F8305A /* Frameworks */,
 				2F2D04162F1CCAB80090D110 /* Products */,
+				9E6EDF9B0527D52210A7B8F6 /* PromptUITests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -126,6 +158,7 @@
 			children = (
 				2F2D04152F1CCAB80090D110 /* Prompt.app */,
 				2FE318DB2F229B1400F8305A /* PromptWidgetExtensionExtension.appex */,
+				06160774B0B708D3BA10F52E /* PromptUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -135,9 +168,21 @@
 			children = (
 				2FE318DD2F229B1400F8305A /* WidgetKit.framework */,
 				2FE318DF2F229B1500F8305A /* SwiftUI.framework */,
+				13A0E1A3D9FBF28DFE71A8F1 /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
+		};
+		9E6EDF9B0527D52210A7B8F6 /* PromptUITests */ = {
+			isa = PBXGroup;
+			children = (
+				D3816F1BCB5CD71643E49CDA /* ScreenshotTests.swift */,
+				90AE3E57D1D2828E4DF480C9 /* SnapshotHelper.swift */,
+				AB979EF86BB183B20F25B776 /* Info.plist */,
+			);
+			name = PromptUITests;
+			path = PromptUITests;
+			sourceTree = SOURCE_ROOT;
 		};
 /* End PBXGroup section */
 
@@ -188,11 +233,27 @@
 				2FE318E12F229B1500F8305A /* PromptWidgetExtension */,
 			);
 			name = PromptWidgetExtensionExtension;
-			packageProductDependencies = (
-			);
 			productName = PromptWidgetExtensionExtension;
 			productReference = 2FE318DB2F229B1400F8305A /* PromptWidgetExtensionExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
+		};
+		EAB58270EE5267FEE55C2992 /* PromptUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2D1C9EE16BE91099C446725 /* Build configuration list for PBXNativeTarget "PromptUITests" */;
+			buildPhases = (
+				A284C5FD3F93672E5E041AA2 /* Sources */,
+				50C3C1E50CC56CDC2963FD45 /* Frameworks */,
+				C126C6E889B7F62425A3D891 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				448126F1002D4A12BD9914EB /* PBXTargetDependency */,
+			);
+			name = PromptUITests;
+			productName = PromptUITests;
+			productReference = 06160774B0B708D3BA10F52E /* PromptUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -223,7 +284,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				2FF002682F25E8230039FFE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket" */,
+				2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2F2D04162F1CCAB80090D110 /* Products */;
@@ -232,6 +293,7 @@
 			targets = (
 				2F2D04142F1CCAB80090D110 /* Prompt */,
 				2FE318DA2F229B1400F8305A /* PromptWidgetExtensionExtension */,
+				EAB58270EE5267FEE55C2992 /* PromptUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -245,6 +307,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2FE318D92F229B1400F8305A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C126C6E889B7F62425A3D891 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -295,6 +364,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A284C5FD3F93672E5E041AA2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3117569E48D7851BAE137469 /* ScreenshotTests.swift in Sources */,
+				F67B4B4AB3DB8E0F8AF8AE6C /* SnapshotHelper.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -303,9 +381,39 @@
 			target = 2FE318DA2F229B1400F8305A /* PromptWidgetExtensionExtension */;
 			targetProxy = 2FE318EF2F229B1700F8305A /* PBXContainerItemProxy */;
 		};
+		448126F1002D4A12BD9914EB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Prompt;
+			target = 2F2D04142F1CCAB80090D110 /* Prompt */;
+			targetProxy = 85CC3DCA78E7A703DF6DA954 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		1A9B414376B8E96A69247AF9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 487LC4H9U4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PromptUITests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.res.promptomizer.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Prompt;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		2F2D04242F1CCAB90090D110 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -561,6 +669,29 @@
 			};
 			name = Release;
 		};
+		5805DD0945754B9FD3AA098F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 487LC4H9U4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PromptUITests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.res.promptomizer.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Prompt;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -591,10 +722,19 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D2D1C9EE16BE91099C446725 /* Build configuration list for PBXNativeTarget "PromptUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A9B414376B8E96A69247AF9 /* Release */,
+				5805DD0945754B9FD3AA098F /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket" */ = {
+		2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
 			requirement = {
@@ -615,7 +755,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		2F1DD8512F2AB6D2008B1A20 /* SocketIO */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket" */;
+			package = 2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
 			productName = SocketIO;
 		};
 		2FF0026D2F25E8230039FFE0 /* FirebaseAnalytics */ = {

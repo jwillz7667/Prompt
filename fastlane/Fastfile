@@ -1,0 +1,33 @@
+# Fastfile for Promptomize iOS App
+# https://docs.fastlane.tools
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Capture App Store screenshots"
+  lane :screenshots do
+    capture_screenshots(
+      workspace: "Prompt.xcodeproj/project.xcworkspace",
+      scheme: "PromptUITests",
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true,
+      override_status_bar: true,
+      localize_simulator: true
+    )
+  end
+
+  desc "Frame screenshots with device frames"
+  lane :frame_screenshots do
+    frame_screenshots(
+      path: "./fastlane/screenshots",
+      silver: false,
+      force_device_type: "iPhone 15 Pro Max"
+    )
+  end
+
+  desc "Generate and frame all screenshots"
+  lane :marketing_screenshots do
+    screenshots
+    frame_screenshots
+  end
+end

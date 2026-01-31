@@ -1,0 +1,41 @@
+# Snapfile - Snapshot configuration
+# https://docs.fastlane.tools/actions/snapshot/
+
+# Device types for App Store screenshots
+# For quick testing, use just one device. Uncomment others for full App Store screenshots.
+devices([
+  "iPhone 16 Pro Max",      # 6.9" display (required)
+  # "iPhone 17 Pro",          # 6.3" display
+  # "iPhone 15 Pro Max",      # 6.7" display
+  # "iPhone 11 Pro Max",      # 6.5" display
+  # "iPad Pro (12.9-inch) (6th generation)",  # iPad Pro 12.9"
+])
+
+# Languages to capture
+languages([
+  "en-US"
+])
+
+# Scheme to use for UI tests
+scheme("PromptUITests")
+
+# Output directory
+output_directory("./fastlane/screenshots")
+
+# Clear old screenshots
+clear_previous_screenshots(true)
+
+# Override status bar for clean screenshots
+override_status_bar(true)
+
+# Concurrent simulators (faster)
+concurrent_simulators(true)
+
+# Skip cleaning build
+skip_open_summary(false)
+
+# Erase simulator before running (set to false for faster iteration)
+erase_simulator(false)
+
+# Dark mode screenshots (run twice for both modes)
+dark_mode(false)
