@@ -52,7 +52,7 @@ export interface ApiKeyRotateResult {
 
 export interface ValidatedApiKey {
   id: string;
-  userId: string;
+  developerId: string;
   name: string;
   permissions: string[];
   rateLimit: number;
@@ -61,7 +61,7 @@ export interface ValidatedApiKey {
 
 interface ApiKeyCache {
   id: string;
-  userId: string;
+  developerId: string;
   name: string;
   permissions: string[];
   rateLimit: number;
@@ -76,13 +76,13 @@ interface ApiKeyCache {
 // ============================================================================
 
 /**
- * Generate a new API key for a user.
+ * Generate a new API key for a developer.
  *
  * Key format: pk_live_<32 hex chars> or pk_test_<32 hex chars>
  * Example: pk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
  */
 export async function generateApiKey(
-  userId: string,
+  developerId: string,
   name: string,
   options: {
     permissions?: ApiKeyPermission[];
@@ -126,7 +126,7 @@ export async function generateApiKey(
   // Create the API key record
   const apiKey = await prisma.apiKey.create({
     data: {
-      userId,
+      developerId,
       name,
       keyHash,
       keyPrefix,
@@ -140,7 +140,7 @@ export async function generateApiKey(
   });
 
   logger.info(
-    { userId, keyId: apiKey.id, environment, permissions: validPermissions },
+    { developerId, keyId: apiKey.id, environment, permissions: validPermissions },
     'API key generated'
   );
 
@@ -197,7 +197,7 @@ export async function validateApiKey(rawKey: string): Promise<ValidatedApiKey | 
 
     return {
       id: cached.id,
-      userId: cached.userId,
+      developerId: cached.developerId,
       name: cached.name,
       permissions: cached.permissions,
       rateLimit: cached.rateLimit,
@@ -236,7 +236,7 @@ export async function validateApiKey(rawKey: string): Promise<ValidatedApiKey | 
       // Note: At this point we know revokedAt is null (checked above) and expiresAt may be in the future
       const cacheData: ApiKeyCache = {
         id: apiKey.id,
-        userId: apiKey.userId,
+        developerId: apiKey.developerId,
         name: apiKey.name,
         permissions: apiKey.permissions,
         rateLimit: apiKey.rateLimit,
@@ -254,7 +254,7 @@ export async function validateApiKey(rawKey: string): Promise<ValidatedApiKey | 
 
       return {
         id: apiKey.id,
-        userId: apiKey.userId,
+        developerId: apiKey.developerId,
         name: apiKey.name,
         permissions: apiKey.permissions,
         rateLimit: apiKey.rateLimit,
@@ -291,10 +291,10 @@ async function updateLastUsed(keyId: string): Promise<void> {
  * List all API keys for a user.
  * Keys are returned without the hash for security.
  */
-export async function listApiKeys(userId: string): Promise<ApiKey[]> {
+export async function listApiKeys(developerId: string): Promise<ApiKey[]> {
   return prisma.apiKey.findMany({
     where: {
-      userId,
+      developerId,
       revokedAt: null, // Don't show revoked keys
     },
     orderBy: { createdAt: 'desc' },
@@ -304,11 +304,11 @@ export async function listApiKeys(userId: string): Promise<ApiKey[]> {
 /**
  * Get a single API key by ID.
  */
-export async function getApiKey(keyId: string, userId: string): Promise<ApiKey | null> {
+export async function getApiKey(keyId: string, developerId: string): Promise<ApiKey | null> {
   return prisma.apiKey.findFirst({
     where: {
       id: keyId,
-      userId,
+      developerId,
     },
   });
 }
@@ -318,7 +318,7 @@ export async function getApiKey(keyId: string, userId: string): Promise<ApiKey |
  */
 export async function updateApiKey(
   keyId: string,
-  userId: string,
+  developerId: string,
   data: {
     name?: string;
     description?: string;
@@ -341,7 +341,7 @@ export async function updateApiKey(
   const apiKey = await prisma.apiKey.update({
     where: {
       id: keyId,
-      userId,
+      developerId,
     },
     data: {
       name: data.name,
@@ -355,7 +355,7 @@ export async function updateApiKey(
   // Invalidate cache
   await cache.del(`apikey:${apiKey.keyPrefix}`);
 
-  logger.info({ userId, keyId }, 'API key updated');
+  logger.info({ developerId, keyId }, 'API key updated');
 
   return apiKey;
 }
@@ -365,25 +365,25 @@ export async function updateApiKey(
  */
 export async function revokeApiKey(
   keyId: string,
-  userId: string,
+  developerId: string,
   reason?: string
 ): Promise<void> {
   const apiKey = await prisma.apiKey.update({
     where: {
       id: keyId,
-      userId,
+      developerId,
     },
     data: {
       isActive: false,
       revokedAt: new Date(),
-      revokedReason: reason || 'Revoked by user',
+      revokedReason: reason || 'Revoked by developer',
     },
   });
 
   // Invalidate cache
   await cache.del(`apikey:${apiKey.keyPrefix}`);
 
-  logger.info({ userId, keyId, reason }, 'API key revoked');
+  logger.info({ developerId, keyId, reason }, 'API key revoked');
 }
 
 /**
@@ -392,13 +392,13 @@ export async function revokeApiKey(
  */
 export async function rotateApiKey(
   keyId: string,
-  userId: string
+  developerId: string
 ): Promise<ApiKeyRotateResult> {
   // Get the existing key
   const oldKey = await prisma.apiKey.findFirst({
     where: {
       id: keyId,
-      userId,
+      developerId,
       isActive: true,
       revokedAt: null,
     },
@@ -413,7 +413,7 @@ export async function rotateApiKey(
   oldKeyValidUntil.setHours(oldKeyValidUntil.getHours() + ROTATION_GRACE_PERIOD_HOURS);
 
   // Generate new key with same settings
-  const { key: newKey, apiKey: newApiKey } = await generateApiKey(userId, oldKey.name, {
+  const { key: newKey, apiKey: newApiKey } = await generateApiKey(developerId, oldKey.name, {
     permissions: oldKey.permissions as ApiKeyPermission[],
     description: oldKey.description || undefined,
     environment: oldKey.environment as 'production' | 'test',
@@ -433,7 +433,7 @@ export async function rotateApiKey(
   await cache.del(`apikey:${oldKey.keyPrefix}`);
 
   logger.info(
-    { userId, oldKeyId: keyId, newKeyId: newApiKey.id, graceHours: ROTATION_GRACE_PERIOD_HOURS },
+    { developerId, oldKeyId: keyId, newKeyId: newApiKey.id, graceHours: ROTATION_GRACE_PERIOD_HOURS },
     'API key rotated'
   );
 

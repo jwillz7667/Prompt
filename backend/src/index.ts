@@ -23,6 +23,7 @@ import { publicApiRouter } from './routes/publicApi.js';
 import { apiSubscriptionsRouter } from './routes/apiSubscriptions.js';
 import { apiStripeWebhookRouter } from './routes/apiStripeWebhook.js';
 import { docsRouter } from './routes/docs.js';
+import { developerAuthRouter } from './routes/developerAuth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { logger } from './utils/logger.js';
@@ -121,6 +122,7 @@ app.use('/api/v1/support', supportRouter);
 app.use('/api/v1/admin', adminRouter);
 
 // Enterprise API routes
+app.use('/api/v1/developer/auth', developerAuthRouter);
 app.use('/api/v1/api-keys', apiKeysRouter);
 app.use('/api/v1/public', publicApiRouter);
 app.use('/api/v1/api-subscriptions', apiSubscriptionsRouter);

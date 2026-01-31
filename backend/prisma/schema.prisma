@@ -89,9 +89,7 @@ model User {
   // Relations
   sessions        Session[]
   prompts         Prompt[]
-  apiKeys         ApiKey[]
   subscription    Subscription?
-  apiSubscription ApiSubscription?
   supportTickets  SupportTicket[]
 
   // Indexes for performance at scale
@@ -173,13 +171,52 @@ model Prompt {
 }
 
 // ============================================================================
+// DEVELOPERS - Separate accounts for API access (Enterprise)
+// ============================================================================
+
+model Developer {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   DateTime?
+  passwordHash    String
+
+  // Profile
+  name            String?
+  company         String?
+  website         String?
+
+  // Security
+  refreshToken    String?
+  tokenVersion    Int       @default(0)
+
+  // Account status
+  isActive        Boolean   @default(true)
+  isVerified      Boolean   @default(false)
+
+  // Usage tracking
+  totalApiCalls   BigInt    @default(0)
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastLoginAt     DateTime?
+
+  // Relations
+  apiKeys         ApiKey[]
+  apiSubscription ApiSubscription?
+
+  @@index([email])
+  @@index([isActive])
+}
+
+// ============================================================================
 // API KEYS - For programmatic access (Enterprise API)
 // ============================================================================
 
 model ApiKey {
   id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  developerId     String
+  developer       Developer @relation(fields: [developerId], references: [id], onDelete: Cascade)
 
   name            String
   keyHash         String    @unique
@@ -210,10 +247,10 @@ model ApiKey {
   // Relations
   usageRecords    ApiUsage[]
 
-  @@index([userId])
+  @@index([developerId])
   @@index([keyHash])
   @@index([keyPrefix])
-  @@index([isActive, userId])
+  @@index([isActive, developerId])
 }
 
 // ============================================================================
@@ -224,7 +261,7 @@ model ApiUsage {
   id            String   @id @default(cuid())
   apiKeyId      String
   apiKey        ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-  userId        String
+  developerId   String
 
   // Request details
   endpoint      String
@@ -247,7 +284,7 @@ model ApiUsage {
   createdAt     DateTime @default(now())
 
   @@index([apiKeyId, createdAt(sort: Desc)])
-  @@index([userId, createdAt(sort: Desc)])
+  @@index([developerId, createdAt(sort: Desc)])
 }
 
 // ============================================================================
@@ -256,8 +293,8 @@ model ApiUsage {
 
 model ApiSubscription {
   id                    String                @id @default(cuid())
-  userId                String                @unique
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  developerId           String                @unique
+  developer             Developer             @relation(fields: [developerId], references: [id], onDelete: Cascade)
 
   // Tier & Status
   tier                  ApiTier               @default(API_FREE)

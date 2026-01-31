@@ -2,9 +2,10 @@
  * API Keys API Client
  *
  * Functions for managing API keys and API subscriptions.
+ * Uses developer authentication (separate from regular user auth).
  */
 
-import { api } from './client'
+import { developerApi as api } from './developerClient'
 
 // ============================================================================
 // TYPES

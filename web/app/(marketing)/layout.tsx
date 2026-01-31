@@ -30,6 +30,12 @@ export default function MarketingLayout({
                 Pricing
               </Link>
               <Link
+                href="/docs"
+                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                API Docs
+              </Link>
+              <Link
                 href="/support"
                 className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
@@ -99,6 +105,37 @@ export default function MarketingLayout({
                     className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   >
                     Web App
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Developers */}
+            <div>
+              <h4 className="font-semibold text-[var(--text-primary)] mb-4">Developers</h4>
+              <ul className="space-y-2">
+                <li>
+                  <Link
+                    href="/docs"
+                    className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  >
+                    API Documentation
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/developers/signup"
+                    className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  >
+                    Developer Signup
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/developers/login"
+                    className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  >
+                    Developer Login
                   </Link>
                 </li>
               </ul>

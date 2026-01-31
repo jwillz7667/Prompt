@@ -1,12 +1,12 @@
 /**
  * API Keys Management Routes
  *
- * CRUD operations for API keys. All routes require JWT authentication.
+ * CRUD operations for API keys. All routes require developer JWT authentication.
  */
 
 import { Router, Response } from 'express';
 import { z } from 'zod';
-import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
+import { authenticateDeveloper, type DeveloperAuthenticatedRequest } from '../middleware/developerAuth.js';
 import {
   generateApiKey,
   listApiKeys,
@@ -22,8 +22,8 @@ import { logger } from '../utils/logger.js';
 
 export const apiKeysRouter = Router();
 
-// All routes require authentication
-apiKeysRouter.use(authenticate);
+// All routes require developer authentication
+apiKeysRouter.use(authenticateDeveloper);
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -67,16 +67,16 @@ const usageQuerySchema = z.object({
 // CREATE API KEY
 // ============================================================================
 
-apiKeysRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.post('/', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
     const data = createKeySchema.parse(req.body);
 
-    const result = await generateApiKey(req.user.id, data.name, {
+    const result = await generateApiKey(req.developer.id, data.name, {
       permissions: data.permissions as ApiKeyPermission[],
       description: data.description,
       environment: data.environment,
@@ -84,7 +84,7 @@ apiKeysRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promis
       rateLimit: data.rateLimit,
     });
 
-    logger.info({ userId: req.user.id, keyId: result.apiKey.id }, 'API key created');
+    logger.info({ developerId: req.developer.id, keyId: result.apiKey.id }, 'API key created');
 
     // Return the raw key only on creation (it won't be shown again)
     res.status(201).json({
@@ -116,14 +116,14 @@ apiKeysRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promis
 // LIST API KEYS
 // ============================================================================
 
-apiKeysRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.get('/', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const keys = await listApiKeys(req.user.id);
+    const keys = await listApiKeys(req.developer.id);
 
     // Return keys without the hash
     const safeKeys = keys.map((key) => ({
@@ -153,15 +153,15 @@ apiKeysRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise
 // GET SINGLE API KEY
 // ============================================================================
 
-apiKeysRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.get('/:id', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
     const keyId = req.params['id'] as string;
-    const key = await getApiKey(keyId, req.user.id);
+    const key = await getApiKey(keyId, req.developer.id);
 
     if (!key) {
       res.status(404).json({ error: 'API key not found' });
@@ -197,9 +197,9 @@ apiKeysRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Prom
 // UPDATE API KEY
 // ============================================================================
 
-apiKeysRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.patch('/:id', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -207,7 +207,7 @@ apiKeysRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pr
     const keyId = req.params['id'] as string;
     const data = updateKeySchema.parse(req.body);
 
-    const key = await updateApiKey(keyId, req.user.id, {
+    const key = await updateApiKey(keyId, req.developer.id, {
       name: data.name,
       description: data.description,
       permissions: data.permissions as ApiKeyPermission[] | undefined,
@@ -215,7 +215,7 @@ apiKeysRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pr
       expiresAt: data.expiresAt === null ? null : data.expiresAt,
     });
 
-    logger.info({ userId: req.user.id, keyId }, 'API key updated');
+    logger.info({ developerId: req.developer.id, keyId }, 'API key updated');
 
     res.json({
       apiKey: {
@@ -246,9 +246,9 @@ apiKeysRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pr
 // DELETE (REVOKE) API KEY
 // ============================================================================
 
-apiKeysRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.delete('/:id', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -256,9 +256,9 @@ apiKeysRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): P
     const keyId = req.params['id'] as string;
     const data = revokeKeySchema.parse(req.body || {});
 
-    await revokeApiKey(keyId, req.user.id, data.reason);
+    await revokeApiKey(keyId, req.developer.id, data.reason);
 
-    logger.info({ userId: req.user.id, keyId, reason: data.reason }, 'API key revoked');
+    logger.info({ developerId: req.developer.id, keyId, reason: data.reason }, 'API key revoked');
 
     res.json({ success: true, message: 'API key revoked' });
   } catch (error) {
@@ -275,18 +275,18 @@ apiKeysRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): P
 // ROTATE API KEY
 // ============================================================================
 
-apiKeysRouter.post('/:id/rotate', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.post('/:id/rotate', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
     const keyId = req.params['id'] as string;
 
-    const result = await rotateApiKey(keyId, req.user.id);
+    const result = await rotateApiKey(keyId, req.developer.id);
 
-    logger.info({ userId: req.user.id, keyId, newKeyId: result.apiKey.id }, 'API key rotated');
+    logger.info({ developerId: req.developer.id, keyId, newKeyId: result.apiKey.id }, 'API key rotated');
 
     res.json({
       newKey: result.newKey,
@@ -317,9 +317,9 @@ apiKeysRouter.post('/:id/rotate', async (req: AuthenticatedRequest, res: Respons
 // GET API KEY USAGE
 // ============================================================================
 
-apiKeysRouter.get('/:id/usage', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.get('/:id/usage', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -327,8 +327,8 @@ apiKeysRouter.get('/:id/usage', async (req: AuthenticatedRequest, res: Response)
     const keyId = req.params['id'] as string;
     const query = usageQuerySchema.parse(req.query);
 
-    // Verify the key belongs to the user
-    const key = await getApiKey(keyId, req.user.id);
+    // Verify the key belongs to the developer
+    const key = await getApiKey(keyId, req.developer.id);
     if (!key) {
       res.status(404).json({ error: 'API key not found' });
       return;
@@ -354,9 +354,9 @@ apiKeysRouter.get('/:id/usage', async (req: AuthenticatedRequest, res: Response)
 // GET API KEY USAGE HISTORY (PAGINATED)
 // ============================================================================
 
-apiKeysRouter.get('/:id/history', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.get('/:id/history', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -364,8 +364,8 @@ apiKeysRouter.get('/:id/history', async (req: AuthenticatedRequest, res: Respons
     const keyId = req.params['id'] as string;
     const query = usageQuerySchema.parse(req.query);
 
-    // Verify the key belongs to the user
-    const key = await getApiKey(keyId, req.user.id);
+    // Verify the key belongs to the developer
+    const key = await getApiKey(keyId, req.developer.id);
     if (!key) {
       res.status(404).json({ error: 'API key not found' });
       return;
@@ -414,7 +414,7 @@ apiKeysRouter.get('/:id/history', async (req: AuthenticatedRequest, res: Respons
 // GET AVAILABLE PERMISSIONS
 // ============================================================================
 
-apiKeysRouter.get('/meta/permissions', async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiKeysRouter.get('/meta/permissions', async (_req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   res.json({
     permissions: AVAILABLE_PERMISSIONS.map((p) => ({
       id: p,

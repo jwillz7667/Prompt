@@ -7,7 +7,7 @@
 
 import { Router, Response } from 'express';
 import { z } from 'zod';
-import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
+import { authenticateDeveloper, type DeveloperAuthenticatedRequest } from '../middleware/developerAuth.js';
 import {
   getApiSubscriptionInfo,
   createCheckoutSession,
@@ -22,23 +22,23 @@ import { logger } from '../utils/logger.js';
 
 export const apiSubscriptionsRouter = Router();
 
-// All routes require authentication
-apiSubscriptionsRouter.use(authenticate);
+// All routes require developer authentication
+apiSubscriptionsRouter.use(authenticateDeveloper);
 
 // ============================================================================
 // GET /status - Get current API subscription status
 // ============================================================================
 
-apiSubscriptionsRouter.get('/status', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiSubscriptionsRouter.get('/status', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
     const [subscriptionInfo, monthlyUsage] = await Promise.all([
-      getApiSubscriptionInfo(req.user.id),
-      getMonthlyUsage(req.user.id),
+      getApiSubscriptionInfo(req.developer.id),
+      getMonthlyUsage(req.developer.id),
     ]);
 
     res.json({
@@ -77,7 +77,7 @@ apiSubscriptionsRouter.get('/status', async (req: AuthenticatedRequest, res: Res
 // GET /plans - Get available API plans
 // ============================================================================
 
-apiSubscriptionsRouter.get('/plans', async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiSubscriptionsRouter.get('/plans', async (_req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const plans = getAvailablePlans();
 
@@ -110,9 +110,9 @@ const checkoutSchema = z.object({
   cancelUrl: z.string().url(),
 });
 
-apiSubscriptionsRouter.post('/checkout', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiSubscriptionsRouter.post('/checkout', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
@@ -120,14 +120,14 @@ apiSubscriptionsRouter.post('/checkout', async (req: AuthenticatedRequest, res: 
     const data = checkoutSchema.parse(req.body);
 
     const result = await createCheckoutSession(
-      req.user.id,
-      req.user.email,
+      req.developer.id,
+      req.developer.email,
       data.tier,
       data.successUrl,
       data.cancelUrl
     );
 
-    logger.info({ userId: req.user.id, tier: data.tier }, 'API checkout session created');
+    logger.info({ developerId: req.developer.id, tier: data.tier }, 'API checkout session created');
 
     res.json({ url: result.url });
   } catch (error) {
@@ -148,16 +148,16 @@ const portalSchema = z.object({
   returnUrl: z.string().url(),
 });
 
-apiSubscriptionsRouter.post('/portal', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiSubscriptionsRouter.post('/portal', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
     const data = portalSchema.parse(req.body);
 
-    const result = await createPortalSession(req.user.id, data.returnUrl);
+    const result = await createPortalSession(req.developer.id, data.returnUrl);
 
     res.json({ url: result.url });
   } catch (error) {
@@ -181,16 +181,16 @@ apiSubscriptionsRouter.post('/portal', async (req: AuthenticatedRequest, res: Re
 // POST /cancel - Cancel subscription at period end
 // ============================================================================
 
-apiSubscriptionsRouter.post('/cancel', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiSubscriptionsRouter.post('/cancel', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    await cancelApiSubscription(req.user.id);
+    await cancelApiSubscription(req.developer.id);
 
-    logger.info({ userId: req.user.id }, 'API subscription canceled');
+    logger.info({ developerId: req.developer.id }, 'API subscription canceled');
 
     res.json({
       success: true,
@@ -210,15 +210,15 @@ const invoicesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
-apiSubscriptionsRouter.get('/invoices', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiSubscriptionsRouter.get('/invoices', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
     const query = invoicesQuerySchema.parse(req.query);
-    const result = await getInvoices(req.user.id, query.limit);
+    const result = await getInvoices(req.developer.id, query.limit);
 
     res.json({
       invoices: result.invoices.map((invoice) => ({
@@ -244,17 +244,17 @@ apiSubscriptionsRouter.get('/invoices', async (req: AuthenticatedRequest, res: R
 // GET /billing - Get billing summary for current period
 // ============================================================================
 
-apiSubscriptionsRouter.get('/billing', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+apiSubscriptionsRouter.get('/billing', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    if (!req.user) {
+    if (!req.developer) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
 
-    const subscriptionInfo = await getApiSubscriptionInfo(req.user.id);
+    const subscriptionInfo = await getApiSubscriptionInfo(req.developer.id);
 
     const billing = await calculateBilling(
-      req.user.id,
+      req.developer.id,
       subscriptionInfo.currentPeriodStart,
       subscriptionInfo.currentPeriodEnd
     );

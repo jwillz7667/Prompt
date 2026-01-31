@@ -12,6 +12,7 @@ export interface TokenPayload {
   email: string;
   sessionId: string;
   tokenVersion: number;
+  isDeveloper?: boolean;
 }
 
 export interface DecodedToken extends TokenPayload {
