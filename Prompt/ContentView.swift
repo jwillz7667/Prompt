@@ -56,7 +56,7 @@ struct ContentView: View {
 
     // Info popups
     @State private var showDeepThinkInfo = false
-    @State private var showUnchainedInfo = false
+    @State private var showMaxModeInfo = false
 
     enum TransformationPhase {
         case idle
@@ -231,8 +231,8 @@ struct ContentView: View {
                 }
             }
             .overlay(alignment: .top) {
-                if showUnchainedInfo {
-                    unchainedInfoPopup
+                if showMaxModeInfo {
+                    maxModeInfoPopup
                         .transition(.asymmetric(
                             insertion: .move(edge: .top).combined(with: .opacity),
                             removal: .opacity
@@ -241,7 +241,7 @@ struct ContentView: View {
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showDeepThinkInfo)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showUnchainedInfo)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showMaxModeInfo)
         }
         .onAppear {
             headerScale = 0.9
@@ -352,27 +352,27 @@ struct ContentView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - Unchained Info Popup
+    // MARK: - MAX Mode Info Popup
 
-    private var unchainedInfoPopup: some View {
+    private var maxModeInfoPopup: some View {
         HStack(spacing: 12) {
-            // Shield icon with purple glow
+            // Flame icon with orange glow
             ZStack {
                 Circle()
-                    .fill(Color.purple.opacity(0.2))
+                    .fill(Color.orange.opacity(0.2))
                     .frame(width: 36, height: 36)
 
-                Image(systemName: "bolt.shield.fill")
+                Image(systemName: "flame.fill")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(.orange)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Unchained Mode")
+                Text("MAX MODE")
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .foregroundStyle(textPrimary)
 
-                Text("Maximum prompt engineering with no constraints")
+                Text("PhD-level prompt engineering for maximum quality")
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(textSecondary)
             }
@@ -382,7 +382,7 @@ struct ContentView: View {
             // Dismiss button - glass circle
             Button {
                 withAnimation(.easeOut(duration: 0.2)) {
-                    showUnchainedInfo = false
+                    showMaxModeInfo = false
                 }
             } label: {
                 Image(systemName: "xmark")
@@ -401,7 +401,7 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(
                             LinearGradient(
-                                colors: [Color.purple.opacity(0.4), Color.purple.opacity(0.1)],
+                                colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.1)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -409,7 +409,7 @@ struct ContentView: View {
                         )
                 }
         }
-        .shadow(color: Color.purple.opacity(0.2), radius: 20, y: 8)
+        .shadow(color: Color.orange.opacity(0.2), radius: 20, y: 8)
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 10, y: 4)
         .padding(.horizontal, 20)
     }
@@ -722,6 +722,41 @@ struct ContentView: View {
         storeKit.currentTier == .premium || storeKit.currentTier == .pro
     }
 
+    /// MAX MODE access: Premium = unlimited, Pro = 5/day, Free = none
+    private var maxModeLimit: Int {
+        switch storeKit.currentTier {
+        case .premium: return Int.max
+        case .pro: return 5
+        case .free: return 0
+        }
+    }
+
+    private var maxModeUsedToday: Int {
+        let defaults = UserDefaults(suiteName: "group.com.res.promptomizer")
+        let today = formattedDate(Date())
+        guard let stored = defaults?.dictionary(forKey: "maxModeUsage"),
+              let date = stored["date"] as? String,
+              date == today,
+              let count = stored["count"] as? Int else {
+            return 0
+        }
+        return count
+    }
+
+    private var maxModeRemaining: Int {
+        maxModeLimit - maxModeUsedToday
+    }
+
+    private var canUseMaxMode: Bool {
+        storeKit.currentTier == .premium || (storeKit.currentTier == .pro && maxModeRemaining > 0)
+    }
+
+    private func incrementMaxModeUsage() {
+        let defaults = UserDefaults(suiteName: "group.com.res.promptomizer")
+        let today = formattedDate(Date())
+        defaults?.set(["date": today, "count": maxModeUsedToday + 1], forKey: "maxModeUsage")
+    }
+
     private var inputToolbar: some View {
         HStack(spacing: 8) {
             // Modality selector (compact)
@@ -757,8 +792,8 @@ struct ContentView: View {
 
             Spacer()
 
-            // Unchained toggle (compact inline)
-            unchainedInlineToggle
+            // MAX Mode toggle (compact inline)
+            maxModeInlineToggle
 
             // Deep Think toggle (compact inline)
             deepThinkInlineToggle
@@ -771,50 +806,63 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Compact Unchained Toggle (Inline)
+    // MARK: - Compact MAX Mode Toggle (Inline)
 
-    private var unchainedInlineToggle: some View {
+    private var maxModeInlineToggle: some View {
         Button {
-            if !isPremium && !settings.unchainedEnabled {
+            // If trying to enable and can't use it
+            if !settings.maxModeEnabled && !canUseMaxMode {
                 showPaywall = true
-            } else {
-                withAnimation(.spring(response: 0.3)) {
-                    settings.unchainedEnabled.toggle()
-                    settings.savePreferences()
-                }
-                triggerHaptic(.light)
+                return
+            }
 
-                // Show info popup when enabling Unchained mode
-                if settings.unchainedEnabled {
-                    showUnchainedInfo = true
-                    // Auto-hide after 3 seconds
-                    Task {
-                        try? await Task.sleep(for: .seconds(3))
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            showUnchainedInfo = false
-                        }
+            // Toggle MAX Mode
+            withAnimation(.spring(response: 0.3)) {
+                settings.maxModeEnabled.toggle()
+                settings.savePreferences()
+            }
+            triggerHaptic(.light)
+
+            // Show info popup when enabling MAX Mode
+            if settings.maxModeEnabled {
+                showMaxModeInfo = true
+                // Auto-hide after 3 seconds
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        showMaxModeInfo = false
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: settings.unchainedEnabled ? "bolt.shield.fill" : "bolt.shield")
+                Image(systemName: settings.maxModeEnabled ? "flame.fill" : "flame")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(settings.unchainedEnabled ? .white : textSecondary)
+                    .foregroundStyle(settings.maxModeEnabled ? .white : textSecondary)
 
-                if !isPremium {
+                Text("MAX")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(settings.maxModeEnabled ? .white : textSecondary)
+
+                // Show lock for free users, remaining count for Pro
+                if storeKit.currentTier == .free {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(textSecondary)
+                } else if storeKit.currentTier == .pro {
+                    Text("\(maxModeRemaining)")
+                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                        .foregroundStyle(settings.maxModeEnabled ? .white.opacity(0.8) : textTertiary)
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
         .buttonStyle(GlassCapsuleButtonStyle(
-            tintColor: settings.unchainedEnabled ? .purple : nil,
-            intensity: settings.unchainedEnabled ? .standard : .subtle
+            tintColor: settings.maxModeEnabled ? .orange : nil,
+            intensity: settings.maxModeEnabled ? .standard : .subtle
         ))
+        .disabled(storeKit.currentTier == .free)
     }
 
     // MARK: - Compact Deep Think Toggle (Inline)
@@ -1110,6 +1158,15 @@ struct ContentView: View {
 
     private func performEnhancement() {
         Task {
+            // Check MAX MODE quota for Pro users before enhancement
+            if settings.maxModeEnabled && storeKit.currentTier == .pro && maxModeRemaining <= 0 {
+                viewModel.errorMessage = "MAX MODE limit reached. Upgrade to Premium for unlimited MAX prompts."
+                viewModel.showError = true
+                settings.maxModeEnabled = false
+                settings.savePreferences()
+                return
+            }
+
             // Show transformation overlay
             withAnimation(.easeInOut(duration: 0.3)) {
                 isTransforming = true
@@ -1126,6 +1183,11 @@ struct ContentView: View {
 
             if viewModel.hasEnhancedPrompt {
                 withAnimation { transformationPhase = .complete }
+
+                // Track MAX MODE usage for Pro users
+                if settings.maxModeEnabled && storeKit.currentTier == .pro {
+                    incrementMaxModeUsage()
+                }
 
                 // Brief delay before revealing result
                 try? await Task.sleep(nanoseconds: 500_000_000)

@@ -185,7 +185,7 @@ export type ToneType =
   | 'creative'
   | 'technical'
   | 'friendly'
-  | 'unchained'
+  | 'max'
 
 export type OutputLength = 'concise' | 'standard' | 'detailed'
 

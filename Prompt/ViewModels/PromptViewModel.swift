@@ -80,7 +80,7 @@ final class PromptViewModel {
 
             // Use streaming for real-time response
             // effectiveModel returns reasoner if Deep Think is enabled, chat otherwise
-            // effectiveTone returns unchained if Unchained mode is enabled, selected tone otherwise
+            // effectiveTone returns max if MAX MODE is enabled, selected tone otherwise
             let result = try await service.enhancePromptStream(
                 userPrompt: userPrompt,
                 model: settings.effectiveModel,

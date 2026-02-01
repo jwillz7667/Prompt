@@ -37,12 +37,12 @@ const toneOptions: SelectOption[] = [
   { value: 'friendly', label: 'Friendly', description: 'Warm and approachable' },
 ]
 
-// Track unchained usage for free users (stored in localStorage)
-const UNCHAINED_STORAGE_KEY = 'unchained_daily_usage'
+// Track MAX MODE usage for free/pro users (stored in localStorage)
+const MAX_MODE_STORAGE_KEY = 'max_mode_daily_usage'
 
-function getUnchainedUsageToday(): number {
+function getMaxModeUsageToday(): number {
   if (typeof window === 'undefined') return 0
-  const stored = localStorage.getItem(UNCHAINED_STORAGE_KEY)
+  const stored = localStorage.getItem(MAX_MODE_STORAGE_KEY)
   if (!stored) return 0
   try {
     const { date, count } = JSON.parse(stored)
@@ -53,11 +53,11 @@ function getUnchainedUsageToday(): number {
   }
 }
 
-function incrementUnchainedUsage(): void {
+function incrementMaxModeUsage(): void {
   if (typeof window === 'undefined') return
   const today = new Date().toDateString()
-  const current = getUnchainedUsageToday()
-  localStorage.setItem(UNCHAINED_STORAGE_KEY, JSON.stringify({ date: today, count: current + 1 }))
+  const current = getMaxModeUsageToday()
+  localStorage.setItem(MAX_MODE_STORAGE_KEY, JSON.stringify({ date: today, count: current + 1 }))
 }
 
 const lengthOptions: SelectOption[] = [
@@ -71,16 +71,16 @@ export default function DashboardPage() {
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [copied, setCopied] = useState(false)
-  const [unchainedEnabled, setUnchainedEnabled] = useState(false)
-  const [unchainedUsedToday, setUnchainedUsedToday] = useState(0)
+  const [maxModeEnabled, setMaxModeEnabled] = useState(false)
+  const [maxModeUsedToday, setMaxModeUsedToday] = useState(0)
   const { selectedTone, setTone, outputLength, setOutputLength, deepThinkEnabled, setDeepThink } =
     useSettingsStore()
   const { subscription, usage } = useSubscription()
   const { isEnhancing, streamedContent, result, error, progress, enhance, reset } = useEnhance()
 
-  // Load unchained usage on mount
+  // Load MAX MODE usage on mount
   useEffect(() => {
-    setUnchainedUsedToday(getUnchainedUsageToday())
+    setMaxModeUsedToday(getMaxModeUsageToday())
   }, [])
 
   // Pre-fill prompt from URL params (for re-enhance from history)
@@ -99,10 +99,11 @@ export default function DashboardPage() {
   const canDeepThink = tier === 'PRO' || tier === 'PREMIUM'
   const canEnhance = usage.canCreatePrompt
 
-  // Unchained access: Premium/Trial = unlimited, Free = 1/day
-  const hasUnlimitedUnchained = tier === 'PREMIUM' || isTrialing
-  const freeUnchainedRemaining = 1 - unchainedUsedToday
-  const canUseUnchained = hasUnlimitedUnchained || freeUnchainedRemaining > 0
+  // MAX MODE access: Premium = unlimited, Pro = 5/day, Free = none
+  const hasUnlimitedMaxMode = tier === 'PREMIUM' || isTrialing
+  const maxModeLimit = tier === 'PRO' ? 5 : 0 // Pro gets 5/day, Free gets 0
+  const maxModeRemaining = hasUnlimitedMaxMode ? Infinity : maxModeLimit - maxModeUsedToday
+  const canUseMaxMode = hasUnlimitedMaxMode || (tier === 'PRO' && maxModeRemaining > 0)
 
   const handleEnhance = useCallback(async () => {
     if (!prompt.trim()) {
@@ -115,15 +116,19 @@ export default function DashboardPage() {
       return
     }
 
-    // Check unchained quota for free users
-    if (unchainedEnabled && !hasUnlimitedUnchained && freeUnchainedRemaining <= 0) {
-      toast.error('Unchained limit reached', 'Free users get 1 Unchained prompt per day')
+    // Check MAX MODE quota
+    if (maxModeEnabled && !canUseMaxMode) {
+      if (tier === 'FREE') {
+        toast.error('MAX MODE requires Pro', 'Upgrade to Pro for 5 MAX prompts/day or Premium for unlimited')
+      } else {
+        toast.error('MAX MODE limit reached', 'Upgrade to Premium for unlimited MAX prompts')
+      }
       return
     }
 
     try {
-      // Use 'unchained' tone when enabled, otherwise use selected tone
-      const effectiveTone = unchainedEnabled ? 'unchained' : selectedTone
+      // Use 'max' tone when enabled, otherwise use selected tone
+      const effectiveTone = maxModeEnabled ? 'max' : selectedTone
 
       await enhance(prompt, {
         tone: effectiveTone as ToneType,
@@ -131,17 +136,17 @@ export default function DashboardPage() {
         deepThink: canDeepThink && deepThinkEnabled,
       })
 
-      // Track unchained usage for free users
-      if (unchainedEnabled && !hasUnlimitedUnchained) {
-        incrementUnchainedUsage()
-        setUnchainedUsedToday(prev => prev + 1)
+      // Track MAX MODE usage for Pro users
+      if (maxModeEnabled && !hasUnlimitedMaxMode) {
+        incrementMaxModeUsage()
+        setMaxModeUsedToday(prev => prev + 1)
       }
 
       toast.success('Prompt enhanced!')
     } catch (err) {
       // Error already shown in state
     }
-  }, [prompt, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, unchainedEnabled, hasUnlimitedUnchained, freeUnchainedRemaining])
+  }, [prompt, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, maxModeEnabled, hasUnlimitedMaxMode, canUseMaxMode, tier])
 
   const handleCopy = useCallback(async () => {
     const textToCopy = result?.enhancedPrompt || streamedContent
@@ -246,26 +251,35 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Unchained Mode Toggle */}
+              {/* MAX MODE Toggle */}
               <div className="flex items-center gap-2 pb-2.5">
                 <Switch
-                  checked={unchainedEnabled}
+                  checked={maxModeEnabled}
                   onChange={(checked) => {
-                    if (checked && !canUseUnchained) {
-                      toast.info('Unchained limit reached', 'Upgrade for unlimited Unchained prompts')
+                    if (checked && !canUseMaxMode) {
+                      if (tier === 'FREE') {
+                        toast.info('MAX MODE requires Pro', 'Upgrade to Pro or Premium for MAX MODE access')
+                      } else {
+                        toast.info('MAX MODE limit reached', 'Upgrade to Premium for unlimited MAX prompts')
+                      }
                       return
                     }
-                    setUnchainedEnabled(checked)
+                    setMaxModeEnabled(checked)
                   }}
-                  disabled={isEnhancing}
+                  disabled={isEnhancing || tier === 'FREE'}
                 />
                 <div className="flex items-center gap-1.5">
-                  <Flame className={cn('h-4 w-4', unchainedEnabled ? 'text-orange-500' : 'text-[var(--text-tertiary)]')} />
-                  <span className="text-sm text-[var(--text-secondary)]">Unchained</span>
+                  <Flame className={cn('h-4 w-4', maxModeEnabled ? 'text-orange-500' : 'text-[var(--text-tertiary)]')} />
+                  <span className="text-sm text-[var(--text-secondary)]">MAX</span>
                 </div>
-                {!hasUnlimitedUnchained && (
+                {tier === 'FREE' && (
+                  <Badge variant="pro" className="text-[10px]">
+                    PRO
+                  </Badge>
+                )}
+                {tier === 'PRO' && (
                   <Badge variant="outline" className="text-[10px]">
-                    {freeUnchainedRemaining}/1
+                    {maxModeRemaining}/5
                   </Badge>
                 )}
               </div>

@@ -33,7 +33,7 @@ struct ToneSelector: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(ToneType.allCases.filter { $0 != .unchained }) { tone in
+                    ForEach(ToneType.allCases.filter { $0 != .max }) { tone in
                         ToneChip(
                             tone: tone,
                             isSelected: selectedTone == tone,
@@ -106,7 +106,7 @@ struct CompactToneSelector: View {
 
     var body: some View {
         Menu {
-            ForEach(ToneType.allCases.filter { $0 != .unchained }) { tone in
+            ForEach(ToneType.allCases.filter { $0 != .max }) { tone in
                 Button {
                     withAnimation(.spring(response: 0.3)) {
                         selectedTone = tone

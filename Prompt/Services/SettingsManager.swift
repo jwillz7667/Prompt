@@ -52,7 +52,7 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
     case creative = "creative"
     case technical = "technical"
     case friendly = "friendly"
-    case unchained = "unchained"
+    case max = "max"
 
     var id: String { rawValue }
 
@@ -64,7 +64,7 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .creative: return "Creative"
         case .technical: return "Technical"
         case .friendly: return "Friendly"
-        case .unchained: return "Unchained"
+        case .max: return "MAX"
         }
     }
 
@@ -76,7 +76,7 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .creative: return "paintbrush.fill"
         case .technical: return "wrench.and.screwdriver.fill"
         case .friendly: return "heart.fill"
-        case .unchained: return "bolt.shield.fill"
+        case .max: return "flame.fill"
         }
     }
 
@@ -88,13 +88,13 @@ enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .creative: return "Imaginative, expressive"
         case .technical: return "Precise, detail-oriented"
         case .friendly: return "Warm, supportive"
-        case .unchained: return "Maximum prompt engineering"
+        case .max: return "PhD-level prompt engineering"
         }
     }
 
-    /// Whether this tone requires premium subscription
+    /// Whether this tone requires Pro or Premium subscription
     var isPremium: Bool {
-        self == .unchained
+        self == .max
     }
 }
 
@@ -193,7 +193,7 @@ enum OutputLength: String, CaseIterable, Identifiable, Codable, Sendable {
 final class SettingsManager {
     var selectedModel: DeepseekModel = .chat
     var deepThinkEnabled: Bool = false
-    var unchainedEnabled: Bool = false
+    var maxModeEnabled: Bool = false
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
     var appearanceMode: AppearanceMode = .system
@@ -204,9 +204,9 @@ final class SettingsManager {
     var selectedModality: ModalityType = .text
     var customInstructions: String = ""
 
-    /// Returns the effective tone - unchained if enabled, otherwise selected tone
+    /// Returns the effective tone - MAX if enabled, otherwise selected tone
     var effectiveTone: ToneType {
-        unchainedEnabled ? .unchained : selectedTone
+        maxModeEnabled ? .max : selectedTone
     }
 
     // App Group for sharing with keyboard extension AND persistence across updates
@@ -218,7 +218,7 @@ final class SettingsManager {
     // Keys for settings
     private enum Keys {
         static let deepThinkEnabled = "deepThinkEnabled"
-        static let unchainedEnabled = "unchainedEnabled"
+        static let maxModeEnabled = "maxModeEnabled"
         static let temperature = "temperature"
         static let maxTokens = "maxTokens"
         static let appearanceMode = "appearanceMode"
@@ -295,7 +295,7 @@ final class SettingsManager {
         }
 
         deepThinkEnabled = defaults.bool(forKey: Keys.deepThinkEnabled)
-        unchainedEnabled = defaults.bool(forKey: Keys.unchainedEnabled)
+        maxModeEnabled = defaults.bool(forKey: Keys.maxModeEnabled)
 
         let savedTemp = defaults.double(forKey: Keys.temperature)
         if savedTemp > 0 { temperature = savedTemp }
@@ -348,7 +348,7 @@ final class SettingsManager {
         }
 
         defaults.set(deepThinkEnabled, forKey: Keys.deepThinkEnabled)
-        defaults.set(unchainedEnabled, forKey: Keys.unchainedEnabled)
+        defaults.set(maxModeEnabled, forKey: Keys.maxModeEnabled)
         defaults.set(temperature, forKey: Keys.temperature)
         defaults.set(maxTokens, forKey: Keys.maxTokens)
         defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)

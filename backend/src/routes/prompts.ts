@@ -52,7 +52,7 @@ const enhancePromptSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().min(1).max(100000).optional(),
-  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'unchained']).optional(),
+  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'max']).optional(),
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   customInstructions: z.string().max(2000).optional(),
