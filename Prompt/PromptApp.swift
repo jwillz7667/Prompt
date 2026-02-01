@@ -104,9 +104,18 @@ struct RootView: View {
     @Environment(AuthManager.self) private var authManager
     @State private var showSupportTicket: String?
 
+    // Check if running in UI test / screenshot mode
+    private var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ||
+        ProcessInfo.processInfo.arguments.contains("-ui_testing")
+    }
+
     var body: some View {
         Group {
-            if authManager.isCheckingSession {
+            if isUITesting {
+                // Bypass auth for UI testing/screenshots
+                ContentView()
+            } else if authManager.isCheckingSession {
                 SplashView()
             } else if authManager.isAuthenticated {
                 ContentView()
