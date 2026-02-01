@@ -23,17 +23,17 @@ const fewShotExamples: FewShotExample[] = [
   {
     id: 'text-general-1',
     input: 'write about climate change',
-    output: `<context>
-You are a climate scientist with 20 years of research experience, skilled at explaining complex environmental topics to general audiences.
-</context>
-
-<task>
+    output: `<task>
 Write an informative article about climate change that covers:
 1. Current scientific consensus on causes
 2. Observable impacts happening now
 3. Projected consequences for the next 50 years
 4. Actionable steps individuals can take
 </task>
+
+<context>
+This article should be grounded in peer-reviewed climate science. Reference IPCC reports and recent research when making claims.
+</context>
 
 <format>
 - Length: 800-1000 words
@@ -55,22 +55,18 @@ Before finalizing, verify:
   {
     id: 'text-general-2',
     input: 'explain machine learning to a beginner',
-    output: `<persona>
-You are an experienced computer science educator who specializes in making complex technical concepts accessible to complete beginners. You use analogies, simple language, and real-world examples.
-</persona>
-
-<objective>
+    output: `<task>
 Explain machine learning in a way that someone with no programming or math background can understand and find interesting.
-</objective>
+</task>
 
-<methodology>
+<approach>
 Let's approach this step by step:
 1. Start with a relatable analogy
 2. Explain the core concept without jargon
 3. Provide 3 everyday examples of ML in action
 4. Address common misconceptions
 5. End with why this matters for their daily life
-</methodology>
+</approach>
 
 <constraints>
 NEVER use:
@@ -97,13 +93,11 @@ ALWAYS:
   {
     id: 'text-reasoning-1',
     input: 'analyze pros and cons of remote work',
-    output: `<persona>
-You are an organizational psychologist and workplace strategy consultant with expertise in remote work dynamics, having studied hybrid and remote teams across 50+ companies.
-</persona>
+    output: `<task>
+Conduct a systematic analysis of remote work examining multiple perspectives and evidence.
+</task>
 
 <analytical_framework>
-Conduct a systematic analysis of remote work using this multi-dimensional approach:
-
 Let's think through this step by step:
 1. Identify key stakeholder perspectives (employees, employers, society)
 2. Categorize impacts by domain (productivity, wellbeing, economics, environment)
@@ -149,15 +143,16 @@ After completing the analysis:
   {
     id: 'text-creative-1',
     input: 'write a short story about time travel',
-    output: `<creative_identity>
-You are a literary fiction author known for thought-provoking science fiction that prioritizes character development and emotional resonance over technical exposition. Your influences include Ted Chiang, Ursula K. Le Guin, and Jorge Luis Borges.
-</creative_identity>
+    output: `<task>
+Write a literary science fiction short story exploring time travel with emphasis on character development and emotional resonance.
+</task>
 
 <story_parameters>
 Genre: Literary science fiction with time travel elements
 Length: 1500-2000 words (short story)
-POV: Your choice, but justify it for the emotional impact
+POV: Choose based on emotional impact
 Tone: Contemplative, bittersweet, thought-provoking
+Style influences: Ted Chiang, Ursula K. Le Guin, Jorge Luis Borges
 </story_parameters>
 
 <narrative_requirements>
@@ -187,13 +182,9 @@ Avoid:
   {
     id: 'text-technical-1',
     input: 'write API documentation for a user authentication endpoint',
-    output: `<technical_writer_persona>
-You are a senior technical writer with expertise in API documentation, following industry best practices from Stripe, Twilio, and OpenAI's documentation standards.
-</technical_writer_persona>
-
-<documentation_task>
-Create comprehensive API documentation for a user authentication endpoint that developers can immediately use for integration.
-</documentation_task>
+    output: `<task>
+Create comprehensive API documentation for a user authentication endpoint that developers can immediately use for integration. Follow best practices from Stripe, Twilio, and OpenAI documentation standards.
+</task>
 
 <documentation_structure>
 ## Endpoint Overview
@@ -254,6 +245,7 @@ const negativeExamples: NegativeExample[] = [
     badOutput: 'Write something interesting and engaging that captures the reader\'s attention.',
     goodOutput: `<task>
 Write a 500-word article about [specific topic] for [specific audience].
+</task>
 
 <requirements>
 - Hook: Start with a surprising fact or question
@@ -266,11 +258,7 @@ Write a 500-word article about [specific topic] for [specific audience].
   {
     badInput: 'help me write better',
     badOutput: 'You are a writing assistant. Help the user write better content that is clear and engaging.',
-    goodOutput: `<writing_coach_persona>
-You are an experienced writing coach specializing in [genre/type]. Your approach focuses on identifying specific areas for improvement and providing actionable feedback.
-</writing_coach_persona>
-
-<task>
+    goodOutput: `<task>
 Review my writing and provide specific, actionable feedback on:
 1. Clarity and conciseness
 2. Structure and flow
@@ -284,8 +272,12 @@ For each point:
 - Explain the issue
 - Provide a rewritten example
 - Give a general principle to apply
-</feedback_format>`,
-    explanation: 'The bad output is generic and provides no framework for improvement. The good output creates a structured coaching session with specific feedback mechanisms.',
+</feedback_format>
+
+<context>
+Focus on [genre/type] writing. Provide actionable feedback that can be immediately applied.
+</context>`,
+    explanation: 'The bad output is generic and provides no framework for improvement. The good output creates a structured feedback session with specific mechanisms.',
   },
 ];
 
@@ -325,7 +317,7 @@ You are an expert prompt engineer specializing in text-based AI systems. Your ta
 
 <research_foundation>
 Your enhancement techniques are based on peer-reviewed research:
-- RISEN Framework: Role, Instructions, Steps, End goal, Narrowing constraints
+- Task-Centric Framework: Context, Instructions, Steps, End goal, Constraints
 - Chain-of-Thought prompting (Wei et al., 2022) - explicit step-by-step reasoning
 - Structured prompting (arXiv:2511.20836) - XML tags improve performance 15-20%
 - Few-shot learning - concrete examples outperform abstract descriptions
