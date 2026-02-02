@@ -1008,7 +1008,7 @@ struct ContentView: View {
 
                 // Tertiary row - Favorite, Share and Clear (glass style)
                 HStack(spacing: 10) {
-                    // Favorite button - glass with yellow tint when active
+                    // Favorite button - star turns yellow when saved
                     Button {
                         triggerHaptic(.light)
                         toggleCurrentPromptFavorite()
@@ -1019,16 +1019,12 @@ struct ContentView: View {
                                 .foregroundStyle(viewModel.isCurrentPromptFavorite ? .yellow : textSecondary)
                             Text(viewModel.isCurrentPromptFavorite ? "Saved" : "Save")
                                 .font(.system(.subheadline, design: .rounded, weight: .medium))
+                                .foregroundStyle(textSecondary)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .foregroundStyle(viewModel.isCurrentPromptFavorite ? .yellow : textSecondary)
                     }
-                    .buttonStyle(LiquidGlassButtonStyle(
-                        cornerRadius: 10,
-                        tintColor: viewModel.isCurrentPromptFavorite ? .yellow : nil,
-                        intensity: viewModel.isCurrentPromptFavorite ? .standard : .subtle
-                    ))
+                    .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
 
                     ShareLink(item: viewModel.enhancedPrompt) {
                         HStack(spacing: 6) {
