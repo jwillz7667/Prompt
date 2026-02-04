@@ -535,7 +535,7 @@ export default function PromptComparison() {
           className="mt-12 text-center"
         >
           <a
-            href="https://apps.apple.com/app/promptomize/id6738850382"
+            href="https://apps.apple.com/us/app/promptomize/id6758075605"
             className="inline-flex items-center gap-3 btn-cyan px-8 py-4 rounded-2xl font-semibold text-lg group"
             rel="noopener noreferrer"
           >

@@ -113,8 +113,8 @@ export const metadata: Metadata = {
   // App Store link
   appLinks: {
     ios: {
-      url: 'https://apps.apple.com/app/promptomize/id6738850382',
-      app_store_id: '6738850382',
+      url: 'https://apps.apple.com/us/app/promptomize/id6758075605',
+      app_store_id: '6758075605',
       app_name: 'Promptomize',
     },
   },
@@ -196,7 +196,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
               logo: `${siteUrl}/logo.png`,
               description: siteDescription,
               sameAs: [
-                'https://apps.apple.com/app/promptomize/id6738850382',
+                'https://apps.apple.com/us/app/promptomize/id6758075605',
               ],
               contactPoint: {
                 '@type': 'ContactPoint',

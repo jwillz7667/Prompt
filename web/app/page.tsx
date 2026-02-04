@@ -174,7 +174,7 @@ export default function Home() {
                 Sign In
               </Link>
               <a
-                href="https://apps.apple.com/app/promptomize/id6738850382"
+                href="https://apps.apple.com/us/app/promptomize/id6758075605"
                 className="btn-cyan px-4 py-2 rounded-full font-medium flex items-center gap-2"
                 rel="noopener noreferrer"
                 aria-label="Download Promptomize on the App Store"
@@ -216,7 +216,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
-                href="https://apps.apple.com/app/promptomize/id6738850382"
+                href="https://apps.apple.com/us/app/promptomize/id6758075605"
                 className="w-full sm:w-auto btn-cyan px-8 py-4 rounded-2xl font-semibold text-lg flex items-center justify-center gap-3"
                 rel="noopener noreferrer"
                 aria-label="Download Promptomize for iOS from the App Store"
@@ -313,7 +313,7 @@ export default function Home() {
                   ))}
                 </ul>
                 <a
-                  href="https://apps.apple.com/app/promptomize/id6738850382"
+                  href="https://apps.apple.com/us/app/promptomize/id6758075605"
                   className={`block w-full py-3 rounded-xl font-semibold text-center transition mt-8 ${
                     plan.popular
                       ? 'btn-cyan'
@@ -341,7 +341,7 @@ export default function Home() {
             Join thousands of users who are getting better results from AI with Promptomize.
           </p>
           <a
-            href="https://apps.apple.com/app/promptomize/id6738850382"
+            href="https://apps.apple.com/us/app/promptomize/id6758075605"
             className="inline-flex items-center gap-3 btn-cyan px-8 py-4 rounded-2xl font-semibold text-lg"
             rel="noopener noreferrer"
             aria-label="Download Promptomize on the App Store"
@@ -372,7 +372,7 @@ export default function Home() {
               <ul className="space-y-2 text-[var(--text-secondary)]">
                 <li><Link href="#features" className="hover:text-[var(--accent-cyan)] transition">Features</Link></li>
                 <li><Link href="#pricing" className="hover:text-[var(--accent-cyan)] transition">Pricing</Link></li>
-                <li><a href="https://apps.apple.com/app/promptomize/id6738850382" className="hover:text-[var(--accent-cyan)] transition" rel="noopener noreferrer">Download</a></li>
+                <li><a href="https://apps.apple.com/us/app/promptomize/id6758075605" className="hover:text-[var(--accent-cyan)] transition" rel="noopener noreferrer">Download</a></li>
               </ul>
             </nav>
             <nav aria-label="Legal links">

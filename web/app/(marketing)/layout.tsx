@@ -99,7 +99,7 @@ export default function MarketingLayout({
                 </li>
                 <li>
                   <Link
-                    href="https://apps.apple.com/app/promptomize/id6738850382"
+                    href="https://apps.apple.com/us/app/promptomize/id6758075605"
                     className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   >
                     iOS App
