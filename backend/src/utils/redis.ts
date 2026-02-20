@@ -33,17 +33,18 @@ export async function initRedis(): Promise<unknown> {
       socket: {
         connectTimeout: 5000,
         reconnectStrategy: (retries: number) => {
-          if (retries > 10) {
-            logger.error('Redis connection failed after 10 retries');
-            return new Error('Redis connection failed');
+          if (retries > 50) {
+            // Back off to 30s attempts, never give up
+            return 30000;
           }
-          return Math.min(retries * 100, 3000);
+          return Math.min(retries * 200, 10000);
         },
       },
     });
 
     redisClient.on('error', (err: Error) => {
       logger.error({ err }, 'Redis client error');
+      redisAvailable = false;
     });
 
     redisClient.on('connect', () => {
@@ -53,6 +54,12 @@ export async function initRedis(): Promise<unknown> {
 
     redisClient.on('reconnecting', () => {
       logger.warn('Redis reconnecting...');
+      redisAvailable = false;
+    });
+
+    redisClient.on('end', () => {
+      logger.warn('Redis connection closed');
+      redisAvailable = false;
     });
 
     await redisClient.connect();
