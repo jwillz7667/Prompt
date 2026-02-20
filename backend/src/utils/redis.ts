@@ -81,7 +81,13 @@ export function isRedisAvailable(): boolean {
 
 export async function closeRedis(): Promise<void> {
   if (redisClient) {
-    await redisClient.quit();
+    try {
+      if (redisClient.isOpen) {
+        await redisClient.quit();
+      }
+    } catch {
+      // Client already closed, ignore
+    }
     redisClient = null;
     redisAvailable = false;
   }
