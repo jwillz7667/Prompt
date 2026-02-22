@@ -16,7 +16,14 @@ struct ThreadMessageBubble: View {
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var accentColor: Color { Color.brandCyan }
+
+    /// Accent: cyan in dark mode, purple in light mode (matches app brand)
+    private var accentColor: Color { Color.adaptiveButtonPrimary }
+
+    /// Bubble border accent: cyan in dark, purple in light
+    private var borderAccent: Color {
+        colorScheme == .dark ? Color.brandCyan : Color.brandPurple
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -47,7 +54,7 @@ struct ThreadMessageBubble: View {
                     } else {
                         Text(message.content)
                             .font(.system(.body))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(textPrimary)
                             .textSelection(.enabled)
                     }
 
@@ -97,21 +104,26 @@ struct ThreadMessageBubble: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background {
-                    if message.role == .user {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.brandPurple)
-                    } else {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05))
-                            }
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(accentColor.opacity(0.2), lineWidth: 1)
-                            }
-                    }
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(borderAccent.opacity(colorScheme == .dark ? 0.08 : 0.05))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            borderAccent.opacity(message.role == .user ? 0.6 : 0.4),
+                                            borderAccent.opacity(0.15)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: message.role == .user ? 1.5 : 1
+                                )
+                        }
                 }
 
                 // Streaming indicator
