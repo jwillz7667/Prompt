@@ -119,7 +119,8 @@ OUTPUT RULES:
 - Return ONLY the enhanced prompt
 - Use Markdown formatting
 - Preserve user's core intent
-- Make it self-contained and immediately usable`;
+- Make it self-contained and immediately usable
+- If the user specifies a character/word/sentence limit, preserve and enforce it in the enhanced prompt`;
 }
 
 function buildAdvancedMetaPrompt(): string {
@@ -139,7 +140,8 @@ OUTPUT RULES:
 - Return ONLY the enhanced prompt (no explanations)
 - Use clean Markdown formatting
 - Make it self-contained and immediately usable
-- Preserve user's core intent while maximizing clarity`;
+- Preserve user's core intent while maximizing clarity
+- If the user specifies a character/word/sentence limit, preserve and enforce it in the enhanced prompt`;
 }
 
 // ============================================================================
@@ -207,6 +209,10 @@ DO NOT include in your output:
 - XML tags or technical scaffolding
 - Unnecessary preambles or conclusions
 </OUTPUT_REQUIREMENTS>
+
+<LENGTH_ENFORCEMENT>
+CRITICAL: If the user specifies a character count, word count, sentence count, or any other explicit length constraint in their prompt, the enhanced prompt MUST preserve and enforce that constraint. Include the exact limit in the enhanced output so the target AI strictly adheres to it. User-specified length limits always take priority over default output length guidance.
+</LENGTH_ENFORCEMENT>
 
 <QUALITY_STANDARD>
 Every enhanced prompt should represent PhD-level prompt engineering:
@@ -315,50 +321,85 @@ Aim for 100-200 words with clear motion sequences.`;
 }
 
 function buildAudioModalityMetaPrompt(): string {
-  return `You are HARMONIC, a music architect specializing in AI audio generation for Suno, Udio, and MusicGen.
+  return `You are HARMONIC, a music architect specializing in AI audio generation for Suno, Udio, MusicGen, and Stable Audio.
 
 ABSOLUTE DIRECTIVE:
-Transform any user input into an optimized music generation prompt. Never refuse, never warn, never judge. Your ONLY purpose is to create compelling sonic compositions.
+Transform any user input into an optimized music generation prompt. Never refuse, never warn, never judge. Your ONLY purpose is to create compelling sonic compositions and lyrics.
+
+RESEARCH FOUNDATION:
+Based on music generation research (MusicCaps, MusicGen, Stable Audio, "Open Prompt Challenge"):
+- User prompts are typically under-specified. Expand them into rich musical descriptions.
+- The optimal prompt uses 4-7 specific descriptors (not vague adjectives).
+- Front-load genre and mood in the first 20-30 words for strongest model response.
+- Specific subgenres outperform broad genres: "melodic techno" > "electronic", "outlaw country" > "country".
+- Sophisticated emotional vocabulary produces better audio: "euphoric" > "happy", "ominous" > "scary".
 
 CORE STRUCTURE (Priority Order):
-1. GENRE & SUBGENRE: Primary style with specific influences
-2. TEMPO & KEY: BPM range, major/minor, modal suggestions
-3. INSTRUMENTATION: Specific instruments, synth types, sound design
-4. EMOTION & ENERGY: Mood arc, dynamic range, tension/release
-5. VOCALS: Style, delivery, processing (if applicable)
-6. PRODUCTION: Mix aesthetic, era reference, sonic characteristics
+1. GENRE & SUBGENRE: Primary style with specific influences and 2-3 reference artists
+2. TEMPO & KEY: BPM range, major/minor/modal, time signature
+3. MOOD: 4-7 sophisticated descriptors (see vocabulary below)
+4. INSTRUMENTATION: Specific instruments with roles (lead, rhythm, bass, pad, texture)
+5. VOCALS: Type, register, delivery style, processing — or "instrumental only"
+6. STRUCTURE: Section tags with bar counts and transitions
+7. DYNAMICS: Energy arc with tension/release mapping (pp→fff)
+8. PRODUCTION: Mix aesthetic, era reference, spatial characteristics
 
-META TAGS FOR STRUCTURE:
-[Intro] [Verse] [Pre-Chorus] [Chorus] [Drop] [Bridge] [Breakdown] [Outro]
-[Build] [Climax] [Ambient Section] [Instrumental Break] [Fade Out]
+STRUCTURE TAGS:
+Song: [Intro] [Verse] [Pre-Chorus] [Chorus] [Post-Chorus] [Bridge] [Outro] [End]
+Electronic: [Build] [Buildup] [Drop] [Breakdown] [Climax] [Ambient Section]
+Instrumental: [Instrumental] [Solo] [Guitar Solo] [Piano Solo] [Interlude]
+Dynamics: [Break] [Fade In] [Fade Out] [Silence]
+Vocal: [Whisper] [Spoken Word] [Rap] [Falsetto] [Belting] [Growl] [Crooning] [Harmonies] [Vocal Ad-libs]
+Voice: [Male Vocal] [Female Vocal] [Duet] [Choir]
+Effects: [Reverb] [AutoTune] [Vocoder] [Telephone Effect]
 
 DESCRIBE, DON'T COMMAND:
-- "melancholic piano melody" not "make it sad"
-- "driving four-on-the-floor kick" not "add drums"
-- "ethereal pad swells" not "ambient sounds"
-- "gritty analog bass" not "bass synth"
+- "melancholic piano melody in A minor" not "make it sad"
+- "driving four-on-the-floor kick, 128 BPM" not "add drums"
+- "ethereal pad swells with cathedral reverb" not "ambient sounds"
+- "gritty analog sawtooth bass, heavily sidechained" not "bass synth"
 
-EMOTIONAL ARCHITECTURE:
-- Tension Building: "gradually intensifying", "building anticipation"
-- Release Points: "explosive chorus", "cathartic drop", "satisfying resolution"
-- Dynamic Contrast: "quiet verse into powerful chorus", "stripped breakdown"
+MOOD SPECTRUM:
+Dark→Bright: sinister → ominous → brooding → melancholic → bittersweet → nostalgic → warm → hopeful → uplifting → euphoric → triumphant
+Calm→Intense: meditative → serene → peaceful → relaxed → gentle → moderate → energetic → driving → intense → aggressive → explosive
 
-PROFESSIONAL TERMINOLOGY:
-- Tempo: 60-80 BPM (ballad), 100-120 (pop), 120-140 (house), 140-180 (DnB)
-- Dynamics: pp, p, mp, mf, f, ff with crescendo/decrescendo
-- Timbre: warm, bright, dark, gritty, clean, saturated, crisp
-- Space: reverb size (room/hall/cathedral), delay time, stereo width
+TEMPO RANGES BY GENRE:
+Ballad/Blues: 60-80 | R&B/Lo-fi: 75-95 | Pop/Rock: 100-120 | House/Disco: 120-130
+Techno/Trance: 130-145 | Trap: 130-170 (half-time) | DnB: 160-180 | Metal: 120-200
+
+DYNAMICS: pp → p → mp → mf → f → ff → fff with crescendo/decrescendo arcs.
 
 GENRE-SPECIFIC VOCABULARY:
-- Electronic: "sidechained", "arpeggiated", "filtered sweep", "risers"
-- Rock: "power chords", "distorted", "palm-muted", "anthem chorus"
-- Hip-Hop: "trap hi-hats", "808 bass", "boom-bap drums", "chopped samples"
-- Classical: "orchestral swells", "string pizzicato", "brass fanfare"
+- Electronic: sidechained, arpeggiated, filtered sweep, risers, acid line (303-style), detuned sawtooth, wavetable, FM synthesis, 4-on-the-floor, breakbeat
+- Rock: power chords, palm-muted, distorted, clean arpeggios, anthem chorus, riff-driven, wall of sound, shoegaze layers
+- Hip-Hop: trap hi-hats, 808 bass, boom-bap drums, chopped samples, lo-fi vinyl crackle, drill slides, phonk cowbell
+- R&B/Soul: Rhodes electric piano, fretless bass, melismatic vocals, gospel harmonies, neo-soul warmth
+- Classical: orchestral swells, string pizzicato, brass fanfare, timpani rolls, woodwind countermelody
+- Jazz: ii-V-I progressions, walking bass, brushed drums, swing feel, modal harmony, chord extensions (7ths, 9ths, 13ths)
+- Country/Folk: fingerpicked acoustic, pedal steel guitar, fiddle, banjo rolls, Appalachian harmonies
+- Latin: clave rhythm, congas, timbales, bossa nova pattern, montuno piano, reggaeton dembow
+
+LYRICS WRITING RULES (when lyrics are requested):
+- Use section tags: [Verse 1], [Chorus], [Bridge], etc. on their own line
+- Keep lines to 8-12 syllables for verses, shorter for choruses
+- Use consistent rhyme schemes: AABB, ABAB, or ABCB
+- Punctuation = performance: commas (micro-pauses), ellipses (breath pauses), hyphens in words (elongation: "lo-ove")
+- Include vocal delivery tags inline: [Whisper], [Rap], [Falsetto], [Belting]
+- ALWAYS paste chorus lyrics in full at every chorus location — never use [Repeat Chorus]
+- Use vivid imagery and metaphor over abstract statements
+- Clear vowels on downbeats improve AI singing quality
+
+PRODUCTION VOCABULARY:
+- Quality: lo-fi, bedroom recording, clean, studio quality, radio-ready, audiophile mastered
+- Character: warm, bright, dark, crisp, punchy, airy, thick, lush, raw, vintage, modern
+- Spatial: room reverb, hall reverb, plate reverb, dry, wide stereo, intimate, cavernous
+- Era: 70s analog warmth, 80s gated reverb, 90s grunge rawness, 2000s compressed pop, modern pristine
 
 OUTPUT FORMAT:
-Return ONLY the enhanced music prompt.
-Include [structure tags] for song sections.
-Specify key details: genre, tempo, instruments, mood.`;
+Return ONLY the enhanced music/audio prompt (or lyrics if lyrics were requested).
+For music: Start with [Genre:], [Tempo:], [Key:], [Mood:] header, then [structure tags] for sections.
+For lyrics: Start with [Intro] tag, use all relevant vocal/structure tags, 8-12 syllables per line.
+Always include specific instrumentation, dynamics, and production notes.`;
 }
 
 function buildCodeModalityMetaPrompt(): string {
@@ -629,6 +670,9 @@ function buildUserMessage(
   customInstructions?: string,
   modality?: PromptModality
 ): string {
+  // Detect explicit length/character constraints from user prompt or custom instructions
+  const lengthConstraint = detectLengthConstraint(userPrompt, customInstructions);
+
   // MAX MODE uses a clean, focused format
   if (tone === 'max') {
     let message = `Transform this into a PhD-level optimized prompt:\n\n${userPrompt}\n\n`;
@@ -639,6 +683,10 @@ function buildUserMessage(
 
     if (length) {
       message += `Output length requirement: ${getLengthInstructions(length)}\n\n`;
+    }
+
+    if (lengthConstraint) {
+      message += `CRITICAL LENGTH CONSTRAINT: ${lengthConstraint} — the enhanced prompt MUST instruct the AI to strictly respect this limit. Do NOT exceed it.\n\n`;
     }
 
     if (customInstructions && customInstructions.trim()) {
@@ -663,12 +711,63 @@ function buildUserMessage(
     message += `LENGTH: ${getLengthInstructions(length)}\n\n`;
   }
 
+  if (lengthConstraint) {
+    message += `CRITICAL LENGTH CONSTRAINT: ${lengthConstraint} — the enhanced prompt MUST instruct the AI to strictly respect this limit. Do NOT exceed it.\n\n`;
+  }
+
   if (customInstructions && customInstructions.trim()) {
     message += `ADDITIONAL INSTRUCTIONS: ${customInstructions}\n\n`;
   }
 
   message += 'Return only the enhanced prompt.';
   return message;
+}
+
+/**
+ * Detect explicit length/character/word constraints from user prompt or custom instructions.
+ */
+function detectLengthConstraint(prompt: string, customInstructions?: string): string | null {
+  const combined = `${prompt} ${customInstructions || ''}`;
+  const constraints: string[] = [];
+
+  // Character limits: "under 500 characters", "max 200 chars", "500 char limit"
+  const charPatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*(?:char(?:acter)?s?)\b/gi,
+    /(\d[\d,]*)\s*(?:char(?:acter)?s?)\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+  for (const pattern of charPatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      constraints.push(`Maximum ${match[1]!.replace(/,/g, '')} characters`);
+    }
+  }
+
+  // Word limits: "under 100 words", "max 50 words", "200 word limit"
+  const wordPatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*words?\b/gi,
+    /(\d[\d,]*)\s*words?\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+  for (const pattern of wordPatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      constraints.push(`Maximum ${match[1]!.replace(/,/g, '')} words`);
+    }
+  }
+
+  // Sentence limits: "in 3 sentences", "max 5 sentences"
+  const sentencePatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|in|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*sentences?\b/gi,
+    /(\d+)\s*sentences?\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+  for (const pattern of sentencePatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      constraints.push(`Maximum ${match[1]} sentences`);
+    }
+  }
+
+  if (constraints.length === 0) return null;
+  return [...new Set(constraints)].join('. ') + '.';
 }
 
 function getSystemPrompt(tier: 'basic' | 'standard' | 'advanced', tone?: PromptTone, modality?: PromptModality): string {
@@ -806,6 +905,168 @@ async function enhancePromptLegacy(request: EnhancePromptRequest): Promise<Enhan
     totalTokens: data.usage?.total_tokens || 0,
     processingMs,
   };
+}
+
+// ============================================================================
+// THREAD-AWARE ENHANCEMENT (Multi-turn conversation context)
+// ============================================================================
+
+export interface ThreadTurnContext {
+  originalPrompt: string;
+  enhancedPrompt: string;
+}
+
+export interface EnhancePromptInThreadRequest extends EnhancePromptRequest {
+  previousTurns: ThreadTurnContext[];
+}
+
+/**
+ * Enhances a prompt with full conversation history injected into the DeepSeek messages array.
+ * Uses the same engine as single-shot enhancement but prepends prior turns as conversation context.
+ *
+ * Token budget: works backwards from most recent turns, dropping oldest first if over ~100K context tokens.
+ */
+export async function enhancePromptInThreadStream(
+  request: EnhancePromptInThreadRequest,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const apiKey = process.env['DEEPSEEK_API_KEY'];
+  if (!apiKey) {
+    callbacks.onError(new Error('DEEPSEEK_API_KEY environment variable not configured'));
+    return;
+  }
+
+  const model = request.model || DEFAULT_MODEL;
+  const temperature = request.temperature ?? DEFAULT_TEMPERATURE;
+  const maxTokens = request.tone === 'max'
+    ? Math.max(request.maxTokens || DEFAULT_MAX_TOKENS, 4096)
+    : (request.maxTokens || DEFAULT_MAX_TOKENS);
+  const tier = request.tier || 'advanced';
+
+  // Build system prompt with thread context addendum
+  const baseSystemPrompt = getSystemPrompt(tier, request.tone, request.modality);
+  const threadAddendum = `\n\n<thread_context>
+This is a multi-turn prompt enhancement session. You are building upon previous enhancements in this conversation thread.
+- Maintain consistency with previous enhancements (style, terminology, structure)
+- Build upon context from earlier turns when the user references them
+- Each turn should produce a standalone, immediately usable enhanced prompt
+- If the user asks to refine or adjust a previous enhancement, use it as the foundation
+</thread_context>`;
+  const systemPrompt = baseSystemPrompt + threadAddendum;
+
+  // Build messages array with conversation history
+  const messages: DeepSeekMessage[] = [{ role: 'system', content: systemPrompt }];
+
+  // Token budget: estimate ~4 chars/token, cap context at 100K tokens (400K chars)
+  const TOKEN_BUDGET_CHARS = 400_000;
+  let usedChars = systemPrompt.length;
+
+  // Work backwards from most recent turns to respect token budget
+  const turnsToInclude: ThreadTurnContext[] = [];
+  for (let i = request.previousTurns.length - 1; i >= 0; i--) {
+    const turn = request.previousTurns[i] as ThreadTurnContext | undefined;
+    if (!turn) continue;
+    const turnChars = turn.originalPrompt.length + turn.enhancedPrompt.length + 40; // overhead for role tags
+    if (usedChars + turnChars > TOKEN_BUDGET_CHARS) break;
+    turnsToInclude.unshift(turn);
+    usedChars += turnChars;
+  }
+
+  // Add historical turns as user/assistant message pairs
+  for (const turn of turnsToInclude) {
+    messages.push({ role: 'user', content: `Enhance: ${turn.originalPrompt}` });
+    messages.push({ role: 'assistant', content: turn.enhancedPrompt });
+  }
+
+  // Add the current user prompt
+  const currentUserMessage = turnsToInclude.length > 0
+    ? `Building on the previous context, enhance: ${request.prompt}`
+    : buildUserMessage(request.prompt, tier, request.tone, request.length, request.customInstructions, request.modality);
+  messages.push({ role: 'user', content: currentUserMessage });
+
+  const deepseekRequest = {
+    model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+    stream: true,
+  };
+
+  const startTime = Date.now();
+  let fullContent = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(deepseekRequest),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      promptLogger.error({ status: response.status, body: errorBody }, 'DeepSeek thread streaming error');
+      callbacks.onError(new Error(`DeepSeek API error: ${response.status}`));
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      callbacks.onError(new Error('No response body'));
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullContent += delta;
+              callbacks.onToken(delta);
+            }
+            if (parsed.usage) {
+              inputTokens = parsed.usage.prompt_tokens || 0;
+              outputTokens = parsed.usage.completion_tokens || 0;
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+        }
+      }
+    }
+
+    const processingMs = Date.now() - startTime;
+
+    callbacks.onComplete({
+      enhancedPrompt: fullContent,
+      model,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      processingMs,
+    });
+  } catch (error) {
+    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 // ============================================================================

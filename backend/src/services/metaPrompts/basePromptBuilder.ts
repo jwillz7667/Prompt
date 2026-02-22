@@ -124,6 +124,16 @@ ${prompt}
     const constraints = this.getConstraints();
     message += this.formatConstraints(constraints);
 
+    // Detect and enforce character/word count limits from user prompt or custom instructions
+    const lengthConstraint = extractLengthConstraint(prompt, customInstructions);
+    if (lengthConstraint) {
+      message += `\n\n<length_constraint>
+CRITICAL: The user has specified a length limit. The enhanced prompt output MUST strictly adhere to this constraint:
+${lengthConstraint}
+Do NOT exceed this limit. Count carefully. This overrides any default output length guidance.
+</length_constraint>`;
+    }
+
     message += '\n\nTransform the original prompt into an optimized version. Return ONLY the enhanced prompt.';
 
     return message;
@@ -280,4 +290,89 @@ export function tierSupportsFeature(
   if (typeof value === 'number') return value > 0;
   if (typeof value === 'string') return value !== 'none';
   return true;
+}
+
+// ============================================================================
+// LENGTH CONSTRAINT DETECTION
+// ============================================================================
+
+/**
+ * Extract explicit length/character/word constraints from user prompt or custom instructions.
+ * Returns a constraint string if found, null otherwise.
+ */
+function extractLengthConstraint(prompt: string, customInstructions?: string): string | null {
+  const combined = `${prompt} ${customInstructions || ''}`;
+  const constraints: string[] = [];
+
+  // Match character limits: "under 500 characters", "max 200 chars", "limit to 1000 characters", "500 char limit"
+  const charPatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*(?:char(?:acter)?s?)\b/gi,
+    /(\d[\d,]*)\s*(?:char(?:acter)?s?)\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+
+  for (const pattern of charPatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      const num = match[1]!.replace(/,/g, '');
+      constraints.push(`Maximum ${num} characters`);
+    }
+  }
+
+  // Match word limits: "under 100 words", "max 50 words", "200 word limit"
+  const wordPatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*words?\b/gi,
+    /(\d[\d,]*)\s*words?\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+
+  for (const pattern of wordPatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      const num = match[1]!.replace(/,/g, '');
+      constraints.push(`Maximum ${num} words`);
+    }
+  }
+
+  // Match sentence limits: "in 3 sentences", "max 5 sentences"
+  const sentencePatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|in|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*sentences?\b/gi,
+    /(\d+)\s*sentences?\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+
+  for (const pattern of sentencePatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      constraints.push(`Maximum ${match[1]} sentences`);
+    }
+  }
+
+  // Match line limits: "under 10 lines", "max 5 lines"
+  const linePatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*lines?\b/gi,
+    /(\d+)\s*lines?\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+
+  for (const pattern of linePatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      constraints.push(`Maximum ${match[1]} lines`);
+    }
+  }
+
+  // Match paragraph limits: "in 2 paragraphs", "max 3 paragraphs"
+  const paragraphPatterns = [
+    /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|in|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*paragraphs?\b/gi,
+    /(\d+)\s*paragraphs?\s*(?:limit|max(?:imum)?|or\s+(?:less|fewer))\b/gi,
+  ];
+
+  for (const pattern of paragraphPatterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      constraints.push(`Maximum ${match[1]} paragraphs`);
+    }
+  }
+
+  if (constraints.length === 0) return null;
+
+  // Deduplicate
+  return [...new Set(constraints)].join('. ') + '.';
 }

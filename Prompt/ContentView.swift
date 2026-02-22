@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var showProfile = false
     @State private var showPaywall = false
     @State private var showTemplates = false
+    @State private var showThreads = false
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
@@ -147,6 +148,11 @@ struct ContentView: View {
                             showTemplates = true
                         }
 
+                        toolbarButton(icon: "bubble.left.and.bubble.right") {
+                            triggerHaptic(.light)
+                            showThreads = true
+                        }
+
                         toolbarButton(icon: "clock.arrow.circlepath") {
                             triggerHaptic(.light)
                             showHistory = true
@@ -199,6 +205,12 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showThreads) {
+                ThreadListView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {

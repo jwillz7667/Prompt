@@ -36,6 +36,7 @@ export type VideoSubModality =
 
 export type AudioSubModality =
   | 'music'        // Songs, instrumentals, compositions
+  | 'lyrics'       // Lyric writing for AI music generators
   | 'speech'       // Voice synthesis, narration
   | 'soundscape'   // Ambient, environmental sounds
   | 'voiceover';   // Professional VO, podcasts

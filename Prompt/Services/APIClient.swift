@@ -541,6 +541,10 @@ struct StreamEvent: Codable, Sendable {
     let content: String?
     let message: String?
     let promptId: String?
+    // Thread-specific fields
+    let threadId: String?
+    let turnId: String?
+    let turnIndex: Int?
     let usage: StreamUsage?
     let subscription: StreamSubscription?
 

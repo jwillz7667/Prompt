@@ -16,6 +16,7 @@ import { templateRouter } from './routes/templates.js';
 import { collectionRouter } from './routes/collections.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { supportRouter } from './routes/support.js';
+import { threadRouter } from './routes/threads.js';
 import { adminRouter } from './routes/admin.js';
 // Enterprise API routes
 import { apiKeysRouter } from './routes/apiKeys.js';
@@ -119,6 +120,7 @@ app.use('/api/v1/templates', templateRouter);
 app.use('/api/v1/collections', collectionRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/support', supportRouter);
+app.use('/api/v1/threads', threadRouter);
 app.use('/api/v1/admin', adminRouter);
 
 // Enterprise API routes

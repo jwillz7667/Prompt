@@ -199,14 +199,18 @@ function getModalityGuidance(modality: PromptModality): string {
 
     case 'audio':
       return `<modality>AUDIO_GENERATION</modality>
-<target_platforms>Suno, Udio, MusicGen</target_platforms>
+<target_platforms>Suno, Udio, MusicGen, Stable Audio</target_platforms>
 <domain_techniques>
-- Specify genre and subgenre with reference artists
-- Include tempo (BPM range) and key signature
-- List instruments and production style
-- Use structure tags: [Intro] [Verse] [Chorus] [Bridge] [Outro]
-- Describe emotional arc and dynamics
-- Reference production era or aesthetic (80s synth, lo-fi, orchestral)
+- Specify genre and specific subgenre with 2-3 reference artists
+- Include tempo (BPM range), key signature, and time signature
+- List specific instruments with roles (lead, rhythm, bass, pad, texture)
+- Use structure tags: [Intro] [Verse] [Pre-Chorus] [Chorus] [Bridge] [Drop] [Outro]
+- Describe emotional arc with dynamics (pp→fff) and tension/release points
+- Use sophisticated mood vocabulary (euphoric not happy, melancholic not sad)
+- Reference production era or aesthetic (80s gated reverb, lo-fi tape saturation, modern radio-ready)
+- For lyrics: use section tags, vocal delivery tags ([Whisper] [Rap] [Falsetto] [Belting]), 8-12 syllables per line, clear rhyme scheme, paste choruses in full
+- Front-load genre and mood in first 20-30 words for strongest model response
+- Describe sound rather than commanding ("warm Rhodes piano" not "add piano")
 </domain_techniques>`;
 
     case 'code':
@@ -258,6 +262,8 @@ The enhanced prompt should be:
 - Formatted in clean Markdown
 - Structured with clear sections${tier === 'advanced' ? ' using XML tags or headers' : ''}
 - Free of any preamble or explanation
+
+LENGTH ENFORCEMENT: If the user specifies a character count, word count, sentence count, or any other explicit length constraint, the enhanced prompt MUST preserve and enforce that exact constraint. User-specified limits always override default output length guidance.
 </output_rules>`;
 }
 
