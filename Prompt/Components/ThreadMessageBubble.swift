@@ -12,6 +12,7 @@ struct ThreadMessageBubble: View {
     let isStreaming: Bool
 
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showCopied = false
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
@@ -50,15 +51,47 @@ struct ThreadMessageBubble: View {
                             .textSelection(.enabled)
                     }
 
-                    // Token count for assistant messages
-                    if message.role == .assistant, let tokens = message.tokens, tokens > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "sparkle")
-                                .font(.system(size: 9))
-                            Text("\(tokens) tokens")
-                                .font(.system(.caption2, design: .rounded))
+                    // Bottom row: tokens + copy button for assistant messages
+                    if message.role == .assistant {
+                        HStack(spacing: 8) {
+                            if let tokens = message.tokens, tokens > 0 {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkle")
+                                        .font(.system(size: 9))
+                                    Text("\(tokens) tokens")
+                                        .font(.system(.caption2, design: .rounded))
+                                }
+                                .foregroundStyle(textSecondary)
+                            }
+
+                            Spacer()
+
+                            // Copy all button
+                            Button {
+                                UIPasteboard.general.string = message.content
+                                withAnimation(.spring(response: 0.3)) {
+                                    showCopied = true
+                                }
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                                Task {
+                                    try? await Task.sleep(for: .seconds(1.5))
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        showCopied = false
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                                        .font(.system(size: 10, weight: .medium))
+                                    Text(showCopied ? "Copied" : "Copy All")
+                                        .font(.system(.caption2, design: .rounded, weight: .medium))
+                                }
+                                .foregroundStyle(showCopied ? accentColor : textSecondary)
+                                .contentTransition(.symbolEffect(.replace))
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .foregroundStyle(textSecondary)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -80,15 +113,6 @@ struct ThreadMessageBubble: View {
                             }
                     }
                 }
-                .if(message.role == .assistant) { view in
-                    view.contextMenu {
-                        Button {
-                            UIPasteboard.general.string = message.content
-                        } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
-                        }
-                    }
-                }
 
                 // Streaming indicator
                 if isStreaming && message.id == "streaming" {
@@ -105,19 +129,6 @@ struct ThreadMessageBubble: View {
             if message.role == .assistant {
                 Spacer(minLength: 40)
             }
-        }
-    }
-}
-
-// MARK: - Conditional View Modifier
-
-private extension View {
-    @ViewBuilder
-    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
-        if condition {
-            transform(self)
-        } else {
-            self
         }
     }
 }
