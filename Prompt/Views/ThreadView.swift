@@ -23,7 +23,8 @@ struct ThreadView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
-    private var accentColor: Color { Color.brandCyan }
+    /// Adaptive accent: cyan in dark, purple in light (matches app brand)
+    private var accentColor: Color { Color.adaptiveButtonPrimary }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -158,55 +159,7 @@ struct ThreadView: View {
     // MARK: - Input Bar
 
     private var inputBar: some View {
-        VStack(spacing: 8) {
-            // Selector row
-            HStack(spacing: 8) {
-                CompactModalitySelector(
-                    selectedModality: Binding(
-                        get: { settings.selectedModality },
-                        set: { newValue in
-                            settings.selectedModality = newValue
-                            settings.savePreferences()
-                        }
-                    )
-                )
-
-                if settings.selectedModality == .audio {
-                    CompactAudioSubModalitySelector(
-                        selectedSubModality: Binding(
-                            get: { settings.selectedAudioSubModality },
-                            set: { newValue in
-                                settings.selectedAudioSubModality = newValue
-                                settings.savePreferences()
-                            }
-                        )
-                    )
-                    .transition(.scale.combined(with: .opacity))
-                }
-
-                CompactToneSelector(
-                    selectedTone: Binding(
-                        get: { settings.selectedTone },
-                        set: { newValue in
-                            settings.selectedTone = newValue
-                            settings.savePreferences()
-                        }
-                    )
-                )
-
-                CompactLengthSelector(selectedLength: Binding(
-                    get: { settings.outputLength },
-                    set: { newValue in
-                        settings.outputLength = newValue
-                        settings.savePreferences()
-                    }
-                ))
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .animation(.spring(response: 0.3), value: settings.selectedModality)
-
+        VStack(spacing: 10) {
             // Text input + send button
             HStack(alignment: .bottom, spacing: 10) {
                 TextEditor(text: $viewModel.userPrompt)
@@ -215,26 +168,28 @@ struct ThreadView: View {
                     .frame(minHeight: 36, maxHeight: 120)
                     .fixedSize(horizontal: false, vertical: true)
                     .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .stroke(
-                                        isInputFocused ? accentColor.opacity(0.4) : Color.clear,
-                                        lineWidth: 1
-                                    )
-                            }
-                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(colorScheme == .dark
+                                ? Color.white.opacity(0.08)
+                                : Color.black.opacity(0.05))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                isInputFocused ? accentColor.opacity(0.5) : Color.white.opacity(colorScheme == .dark ? 0.12 : 0.0),
+                                lineWidth: isInputFocused ? 1.5 : 1
+                            )
+                    )
                     .focused($isInputFocused)
                     .overlay(alignment: .leading) {
                         if viewModel.userPrompt.isEmpty {
                             Text("Enhance a prompt...")
                                 .font(.body)
                                 .foregroundStyle(textTertiary)
-                                .padding(.leading, 16)
+                                .padding(.leading, 18)
                                 .allowsHitTesting(false)
                         }
                     }
@@ -248,17 +203,64 @@ struct ThreadView: View {
                     }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 34))
                         .foregroundStyle(viewModel.canSend ? accentColor : textTertiary)
                         .symbolEffect(.bounce, value: viewModel.isStreaming)
                 }
                 .disabled(!viewModel.canSend)
                 .animation(.spring(response: 0.3), value: viewModel.canSend)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+
+            // Compact selector row beneath input
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    CompactModalitySelector(
+                        selectedModality: Binding(
+                            get: { settings.selectedModality },
+                            set: { newValue in
+                                settings.selectedModality = newValue
+                                settings.savePreferences()
+                            }
+                        )
+                    )
+
+                    if settings.selectedModality == .audio {
+                        CompactAudioSubModalitySelector(
+                            selectedSubModality: Binding(
+                                get: { settings.selectedAudioSubModality },
+                                set: { newValue in
+                                    settings.selectedAudioSubModality = newValue
+                                    settings.savePreferences()
+                                }
+                            )
+                        )
+                        .transition(.scale.combined(with: .opacity))
+                    }
+
+                    CompactToneSelector(
+                        selectedTone: Binding(
+                            get: { settings.selectedTone },
+                            set: { newValue in
+                                settings.selectedTone = newValue
+                                settings.savePreferences()
+                            }
+                        )
+                    )
+
+                    CompactLengthSelector(selectedLength: Binding(
+                        get: { settings.outputLength },
+                        set: { newValue in
+                            settings.outputLength = newValue
+                            settings.savePreferences()
+                        }
+                    ))
+                }
+            }
+            .animation(.spring(response: 0.3), value: settings.selectedModality)
         }
-        .padding(.top, 8)
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
         .background {
             Rectangle()
                 .fill(.ultraThinMaterial)

@@ -17,21 +17,16 @@ struct ThreadMessageBubble: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
 
-    /// Accent: cyan in dark mode, purple in light mode (matches app brand)
+    /// Accent: cyan in dark mode, purple in light mode
     private var accentColor: Color { Color.adaptiveButtonPrimary }
 
-    /// Bubble border accent: cyan in dark, purple in light
-    private var borderAccent: Color {
-        colorScheme == .dark ? Color.brandCyan : Color.brandPurple
-    }
-
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
+        HStack(alignment: .bottom, spacing: 0) {
             if message.role == .user {
                 Spacer(minLength: 60)
             }
 
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
                 // Role label
                 HStack(spacing: 4) {
                     if message.role == .assistant {
@@ -44,86 +39,11 @@ struct ThreadMessageBubble: View {
                         .foregroundStyle(textSecondary)
                 }
 
-                // Message content
-                VStack(alignment: .leading, spacing: 8) {
-                    if message.role == .assistant {
-                        Text(message.content)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(textPrimary)
-                            .textSelection(.enabled)
-                    } else {
-                        Text(message.content)
-                            .font(.system(.body))
-                            .foregroundStyle(textPrimary)
-                            .textSelection(.enabled)
-                    }
-
-                    // Bottom row: tokens + copy button for assistant messages
-                    if message.role == .assistant {
-                        HStack(spacing: 8) {
-                            if let tokens = message.tokens, tokens > 0 {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "sparkle")
-                                        .font(.system(size: 9))
-                                    Text("\(tokens) tokens")
-                                        .font(.system(.caption2, design: .rounded))
-                                }
-                                .foregroundStyle(textSecondary)
-                            }
-
-                            Spacer()
-
-                            // Copy all button
-                            Button {
-                                UIPasteboard.general.string = message.content
-                                withAnimation(.spring(response: 0.3)) {
-                                    showCopied = true
-                                }
-                                let generator = UIImpactFeedbackGenerator(style: .light)
-                                generator.impactOccurred()
-                                Task {
-                                    try? await Task.sleep(for: .seconds(1.5))
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        showCopied = false
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
-                                        .font(.system(size: 10, weight: .medium))
-                                    Text(showCopied ? "Copied" : "Copy All")
-                                        .font(.system(.caption2, design: .rounded, weight: .medium))
-                                }
-                                .foregroundStyle(showCopied ? accentColor : textSecondary)
-                                .contentTransition(.symbolEffect(.replace))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(borderAccent.opacity(colorScheme == .dark ? 0.08 : 0.05))
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            borderAccent.opacity(message.role == .user ? 0.6 : 0.4),
-                                            borderAccent.opacity(0.15)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: message.role == .user ? 1.5 : 1
-                                )
-                        }
+                // Message bubble
+                if message.role == .user {
+                    userBubble
+                } else {
+                    assistantBubble
                 }
 
                 // Streaming indicator
@@ -141,6 +61,96 @@ struct ThreadMessageBubble: View {
             if message.role == .assistant {
                 Spacer(minLength: 40)
             }
+        }
+    }
+
+    // MARK: - User Bubble (solid accent, iMessage-style)
+
+    private var userBubble: some View {
+        Text(message.content)
+            .font(.system(.body))
+            .foregroundStyle(.white)
+            .textSelection(.enabled)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(accentColor)
+            )
+    }
+
+    // MARK: - Assistant Bubble (glass + accent outline)
+
+    private var assistantBubble: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(message.content)
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(textPrimary)
+                .textSelection(.enabled)
+
+            // Bottom row: tokens + copy button
+            HStack(spacing: 8) {
+                if let tokens = message.tokens, tokens > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 9))
+                        Text("\(tokens) tokens")
+                            .font(.system(.caption2, design: .rounded))
+                    }
+                    .foregroundStyle(textSecondary)
+                }
+
+                Spacer()
+
+                Button {
+                    UIPasteboard.general.string = message.content
+                    withAnimation(.spring(response: 0.3)) {
+                        showCopied = true
+                    }
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showCopied = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 10, weight: .medium))
+                        Text(showCopied ? "Copied" : "Copy All")
+                            .font(.system(.caption2, design: .rounded, weight: .medium))
+                    }
+                    .foregroundStyle(showCopied ? accentColor : textSecondary)
+                    .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    accentColor.opacity(0.4),
+                                    accentColor.opacity(0.15)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
         }
     }
 }
