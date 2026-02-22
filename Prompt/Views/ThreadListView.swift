@@ -21,7 +21,7 @@ struct ThreadListView: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
-    private var accentColor: Color { Color.brandCyan }
+    private var accentColor: Color { Color.adaptiveButtonPrimary }
 
     var body: some View {
         NavigationStack {
@@ -117,7 +117,7 @@ struct ThreadListView: View {
                 .foregroundStyle(.white)
                 .background {
                     Capsule()
-                        .fill(Color.brandPurple)
+                        .fill(Color.adaptiveButtonPrimary)
                 }
             }
         }
@@ -213,7 +213,7 @@ struct ThreadListView: View {
                             LinearGradient(
                                 colors: colorScheme == .dark
                                     ? [Color.white.opacity(0.1), Color.white.opacity(0.03)]
-                                    : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.1)],
+                                    : [Color.white.opacity(0.8), Color.adaptiveButtonPrimary.opacity(0.1)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -250,7 +250,7 @@ struct ThreadListView: View {
         switch modality {
         case "image": return .pink
         case "video": return .red
-        case "audio": return .orange
+        case "audio": return .teal
         case "code": return .green
         case "3d": return .blue
         default: return .purple
