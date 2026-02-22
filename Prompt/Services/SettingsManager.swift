@@ -155,6 +155,48 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
+// MARK: - Audio Sub-Modality
+
+enum AudioSubModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
+    case music = "music"
+    case lyrics = "lyrics"
+    case speech = "speech"
+    case soundscape = "soundscape"
+    case voiceover = "voiceover"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .music: return "Music"
+        case .lyrics: return "Lyrics"
+        case .speech: return "Speech"
+        case .soundscape: return "Soundscape"
+        case .voiceover: return "Voiceover"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .music: return "music.note"
+        case .lyrics: return "text.quote"
+        case .speech: return "waveform.and.person.filled"
+        case .soundscape: return "leaf.fill"
+        case .voiceover: return "mic.fill"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .music: return "Songs, instrumentals, beats"
+        case .lyrics: return "Song lyrics for Suno, Udio"
+        case .speech: return "Voice synthesis, narration"
+        case .soundscape: return "Ambient, environmental"
+        case .voiceover: return "Professional VO, podcasts"
+        }
+    }
+}
+
 // MARK: - Output Length
 
 enum OutputLength: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -202,7 +244,13 @@ final class SettingsManager {
     var selectedTone: ToneType = .professional
     var outputLength: OutputLength = .standard
     var selectedModality: ModalityType = .text
+    var selectedAudioSubModality: AudioSubModalityType = .music
     var customInstructions: String = ""
+
+    /// Returns the effective sub-modality string for the current modality, or nil if not applicable
+    var effectiveSubModality: String? {
+        selectedModality == .audio ? selectedAudioSubModality.rawValue : nil
+    }
 
     /// Returns the effective tone - MAX if enabled, otherwise selected tone
     var effectiveTone: ToneType {
@@ -225,6 +273,7 @@ final class SettingsManager {
         static let selectedTone = "selectedTone"
         static let outputLength = "outputLength"
         static let selectedModality = "selectedModality"
+        static let selectedAudioSubModality = "selectedAudioSubModality"
         static let customInstructions = "customInstructions"
         static let settingsMigrated = "settingsMigratedToAppGroup"
     }
@@ -327,6 +376,12 @@ final class SettingsManager {
             selectedModality = modality
         }
 
+        // Load audio sub-modality preference
+        if let subModalityRaw = defaults.string(forKey: Keys.selectedAudioSubModality),
+           let subModality = AudioSubModalityType(rawValue: subModalityRaw) {
+            selectedAudioSubModality = subModality
+        }
+
         // Load custom instructions
         if let instructions = defaults.string(forKey: Keys.customInstructions) {
             customInstructions = instructions
@@ -355,6 +410,7 @@ final class SettingsManager {
         defaults.set(selectedTone.rawValue, forKey: Keys.selectedTone)
         defaults.set(outputLength.rawValue, forKey: Keys.outputLength)
         defaults.set(selectedModality.rawValue, forKey: Keys.selectedModality)
+        defaults.set(selectedAudioSubModality.rawValue, forKey: Keys.selectedAudioSubModality)
         defaults.set(customInstructions, forKey: Keys.customInstructions)
 
         #if DEBUG

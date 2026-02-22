@@ -72,6 +72,7 @@ struct CreateThreadRequest: Encodable, Sendable {
     let prompt: String
     let title: String?
     let modality: String
+    let subModality: String?
     let tone: String?
     let length: String?
     let customInstructions: String?
@@ -79,6 +80,7 @@ struct CreateThreadRequest: Encodable, Sendable {
 
 struct AddTurnRequest: Encodable, Sendable {
     let prompt: String
+    let subModality: String?
     let tone: String?
     let length: String?
     let customInstructions: String?

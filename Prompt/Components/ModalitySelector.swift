@@ -220,11 +220,71 @@ struct InlineModalityPicker: View {
     }
 }
 
+// MARK: - Compact Audio Sub-Modality Selector
+
+struct CompactAudioSubModalitySelector: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Binding var selectedSubModality: AudioSubModalityType
+    var onChange: (() -> Void)?
+
+    private var textPrimary: Color { Color.adaptiveTextPrimary }
+    private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
+
+    var body: some View {
+        Menu {
+            ForEach(AudioSubModalityType.allCases) { subModality in
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        selectedSubModality = subModality
+                    }
+                    triggerHaptic()
+                    onChange?()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading) {
+                            Text(subModality.displayName)
+                            Text(subModality.description)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: subModality.icon)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: selectedSubModality.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.orange)
+                Text(selectedSubModality.displayName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(textSecondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(bgSecondary)
+            .clipShape(Capsule())
+        }
+    }
+
+    private func triggerHaptic() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+    }
+}
+
 #Preview {
     VStack(spacing: 20) {
         ModalitySelector(selectedModality: .constant(.text))
 
         CompactModalitySelector(selectedModality: .constant(.image))
+
+        CompactAudioSubModalitySelector(selectedSubModality: .constant(.music))
 
         InlineModalityPicker(selectedModality: .constant(.code))
     }

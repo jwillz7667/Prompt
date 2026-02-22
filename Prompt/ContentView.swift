@@ -782,6 +782,20 @@ struct ContentView: View {
                 )
             )
 
+            // Audio sub-modality selector (only shown when audio is selected)
+            if settings.selectedModality == .audio {
+                CompactAudioSubModalitySelector(
+                    selectedSubModality: Binding(
+                        get: { settings.selectedAudioSubModality },
+                        set: { newValue in
+                            settings.selectedAudioSubModality = newValue
+                            settings.savePreferences()
+                        }
+                    )
+                )
+                .transition(.scale.combined(with: .opacity))
+            }
+
             // Tone selector (compact)
             CompactToneSelector(
                 selectedTone: Binding(
@@ -816,6 +830,7 @@ struct ContentView: View {
             Rectangle()
                 .fill(bgSecondary.opacity(0.5))
         }
+        .animation(.spring(response: 0.3), value: settings.selectedModality)
     }
 
     // MARK: - Compact MAX Mode Toggle (Inline)

@@ -170,6 +170,19 @@ struct ThreadView: View {
                     )
                 )
 
+                if settings.selectedModality == .audio {
+                    CompactAudioSubModalitySelector(
+                        selectedSubModality: Binding(
+                            get: { settings.selectedAudioSubModality },
+                            set: { newValue in
+                                settings.selectedAudioSubModality = newValue
+                                settings.savePreferences()
+                            }
+                        )
+                    )
+                    .transition(.scale.combined(with: .opacity))
+                }
+
                 CompactToneSelector(
                     selectedTone: Binding(
                         get: { settings.selectedTone },
@@ -191,6 +204,7 @@ struct ThreadView: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
+            .animation(.spring(response: 0.3), value: settings.selectedModality)
 
             // Text input + send button
             HStack(alignment: .bottom, spacing: 10) {

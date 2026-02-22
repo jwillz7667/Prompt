@@ -26,6 +26,7 @@ const createThreadSchema = z.object({
   prompt: z.string().min(1).max(100000),
   title: z.string().max(200).optional(),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+  subModality: z.string().max(50).optional(),
   tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'max']).optional(),
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
   customInstructions: z.string().max(2000).optional(),
@@ -33,6 +34,7 @@ const createThreadSchema = z.object({
 
 const addTurnSchema = z.object({
   prompt: z.string().min(1).max(100000),
+  subModality: z.string().max(50).optional(),
   tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'max']).optional(),
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
   customInstructions: z.string().max(2000).optional(),
@@ -97,6 +99,7 @@ threadRouter.post(
           tone: data.tone,
           length: data.length,
           modality: data.modality,
+          subModality: data.subModality,
           customInstructions: data.customInstructions,
           previousTurns: [],
         },
@@ -261,6 +264,7 @@ threadRouter.post(
           tone: data.tone,
           length: data.length,
           modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d',
+          subModality: data.subModality,
           customInstructions: data.customInstructions,
           previousTurns,
         },

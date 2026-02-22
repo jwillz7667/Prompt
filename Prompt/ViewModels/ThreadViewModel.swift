@@ -191,6 +191,7 @@ final class ThreadViewModel {
             prompt: userPrompt,
             title: nil,
             modality: settings.selectedModality.rawValue,
+            subModality: settings.effectiveSubModality,
             tone: settings.effectiveTone.rawValue,
             length: settings.outputLength.rawValue,
             customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
@@ -275,6 +276,7 @@ final class ThreadViewModel {
 
         let request = AddTurnRequest(
             prompt: userPrompt,
+            subModality: settings.effectiveSubModality,
             tone: settings.effectiveTone.rawValue,
             length: settings.outputLength.rawValue,
             customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
