@@ -84,7 +84,7 @@ actor DeepseekService {
             maxTokens: maxTokens,
             tone: tone?.rawValue,
             length: length?.rawValue,
-            modality: modality?.rawValue,
+            modality: modality?.apiModality,
             subModality: subModality,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
         )
@@ -130,7 +130,7 @@ actor DeepseekService {
             maxTokens: maxTokens,
             tone: tone?.rawValue,
             length: length?.rawValue,
-            modality: modality?.rawValue,
+            modality: modality?.apiModality,
             subModality: subModality,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
         )

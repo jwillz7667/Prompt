@@ -190,7 +190,7 @@ final class ThreadViewModel {
         let request = CreateThreadRequest(
             prompt: userPrompt,
             title: nil,
-            modality: settings.selectedModality.rawValue,
+            modality: settings.selectedModality.apiModality,
             subModality: settings.effectiveSubModality,
             tone: settings.effectiveTone.rawValue,
             length: settings.outputLength.rawValue,

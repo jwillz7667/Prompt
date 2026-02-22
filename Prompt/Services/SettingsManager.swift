@@ -104,6 +104,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
     case text = "text"
     case image = "image"
     case video = "video"
+    case music = "music"
     case audio = "audio"
     case code = "code"
     case threeD = "3d"
@@ -115,6 +116,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .text: return "Text"
         case .image: return "Image"
         case .video: return "Video"
+        case .music: return "Music"
         case .audio: return "Audio"
         case .code: return "Code"
         case .threeD: return "3D"
@@ -126,6 +128,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .text: return "text.bubble.fill"
         case .image: return "photo.fill"
         case .video: return "video.fill"
+        case .music: return "music.note"
         case .audio: return "waveform"
         case .code: return "chevron.left.forwardslash.chevron.right"
         case .threeD: return "cube.fill"
@@ -137,7 +140,8 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .text: return "ChatGPT, Claude, and more"
         case .image: return "Midjourney, DALL-E, Flux"
         case .video: return "Sora, Runway, Pika"
-        case .audio: return "Suno, Udio, MusicGen"
+        case .music: return "Suno, Udio, MusicGen"
+        case .audio: return "Speech, SFX, Soundscapes"
         case .code: return "Copilot, Cursor, Claude"
         case .threeD: return "Meshy, Tripo3D"
         }
@@ -148,9 +152,18 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .text: return "brandPurple"
         case .image: return "pink"
         case .video: return "red"
-        case .audio: return "orange"
+        case .music: return "orange"
+        case .audio: return "teal"
         case .code: return "green"
         case .threeD: return "blue"
+        }
+    }
+
+    /// The API modality value sent to the backend (music maps to audio)
+    var apiModality: String {
+        switch self {
+        case .music: return "audio"
+        default: return rawValue
         }
     }
 }
@@ -158,41 +171,37 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
 // MARK: - Audio Sub-Modality
 
 enum AudioSubModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
-    case music = "music"
-    case lyrics = "lyrics"
     case speech = "speech"
     case soundscape = "soundscape"
     case voiceover = "voiceover"
+    case lyrics = "lyrics"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .music: return "Music"
-        case .lyrics: return "Lyrics"
         case .speech: return "Speech"
         case .soundscape: return "Soundscape"
         case .voiceover: return "Voiceover"
+        case .lyrics: return "Lyrics"
         }
     }
 
     var icon: String {
         switch self {
-        case .music: return "music.note"
-        case .lyrics: return "text.quote"
         case .speech: return "waveform.and.person.filled"
         case .soundscape: return "leaf.fill"
         case .voiceover: return "mic.fill"
+        case .lyrics: return "text.quote"
         }
     }
 
     var description: String {
         switch self {
-        case .music: return "Songs, instrumentals, beats"
-        case .lyrics: return "Song lyrics for Suno, Udio"
         case .speech: return "Voice synthesis, narration"
         case .soundscape: return "Ambient, environmental"
         case .voiceover: return "Professional VO, podcasts"
+        case .lyrics: return "Song lyrics for Suno, Udio"
         }
     }
 }
@@ -244,12 +253,16 @@ final class SettingsManager {
     var selectedTone: ToneType = .professional
     var outputLength: OutputLength = .standard
     var selectedModality: ModalityType = .text
-    var selectedAudioSubModality: AudioSubModalityType = .music
+    var selectedAudioSubModality: AudioSubModalityType = .speech
     var customInstructions: String = ""
 
     /// Returns the effective sub-modality string for the current modality, or nil if not applicable
     var effectiveSubModality: String? {
-        selectedModality == .audio ? selectedAudioSubModality.rawValue : nil
+        switch selectedModality {
+        case .music: return "music"
+        case .audio: return selectedAudioSubModality.rawValue
+        default: return nil
+        }
     }
 
     /// Returns the effective tone - MAX if enabled, otherwise selected tone

@@ -78,7 +78,8 @@ struct ModalityChip: View {
         case .text: return Color.brandPurple
         case .image: return .pink
         case .video: return .red
-        case .audio: return .orange
+        case .music: return .orange
+        case .audio: return .teal
         case .code: return .green
         case .threeD: return .blue
         }
@@ -121,7 +122,8 @@ struct CompactModalitySelector: View {
         case .text: return Color.brandPurple
         case .image: return .pink
         case .video: return .red
-        case .audio: return .orange
+        case .music: return .orange
+        case .audio: return .teal
         case .code: return .green
         case .threeD: return .blue
         }
@@ -186,7 +188,8 @@ struct InlineModalityPicker: View {
         case .text: return Color.brandPurple
         case .image: return .pink
         case .video: return .red
-        case .audio: return .orange
+        case .music: return .orange
+        case .audio: return .teal
         case .code: return .green
         case .threeD: return .blue
         }
@@ -284,7 +287,7 @@ struct CompactAudioSubModalitySelector: View {
 
         CompactModalitySelector(selectedModality: .constant(.image))
 
-        CompactAudioSubModalitySelector(selectedSubModality: .constant(.music))
+        CompactAudioSubModalitySelector(selectedSubModality: .constant(.speech))
 
         InlineModalityPicker(selectedModality: .constant(.code))
     }
