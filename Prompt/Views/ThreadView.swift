@@ -12,6 +12,7 @@ struct ThreadView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SettingsManager.self) private var settings
     @Environment(StoreKitManager.self) private var storeKit
+    @Environment(PromptHistoryManager.self) private var historyManager
 
     @Bindable var viewModel: ThreadViewModel
     var threadId: String?
@@ -243,7 +244,7 @@ struct ThreadView: View {
                     triggerHaptic(.medium)
                     isInputFocused = false
                     Task {
-                        await viewModel.addTurn(settings: settings)
+                        await viewModel.addTurn(settings: settings, historyManager: historyManager)
                     }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")

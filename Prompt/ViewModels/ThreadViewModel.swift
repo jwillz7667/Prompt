@@ -175,7 +175,7 @@ final class ThreadViewModel {
 
     // MARK: - Create Thread (First Turn)
 
-    func startNewThread(settings: SettingsManager) async {
+    func startNewThread(settings: SettingsManager, historyManager: PromptHistoryManager? = nil) async {
         guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard await APIClient.shared.isAuthenticated else {
             errorMessage = "Please sign in to continue"
@@ -231,6 +231,19 @@ final class ThreadViewModel {
                     turns.append(turnRecord)
                     streamingContent = ""
 
+                    // Save to prompt history
+                    _ = await historyManager?.savePrompt(
+                        original: sentPrompt,
+                        enhanced: turnRecord.enhancedPrompt,
+                        model: turnRecord.model,
+                        temperature: 0,
+                        maxTokens: 0,
+                        inputTokens: 0,
+                        outputTokens: 0,
+                        totalTokens: turnRecord.totalTokens,
+                        processingMs: turnRecord.processingMs
+                    )
+
                     // Load the full thread detail
                     if let completedThreadId = completedThreadId {
                         await loadThread(id: completedThreadId)
@@ -258,9 +271,9 @@ final class ThreadViewModel {
 
     // MARK: - Add Turn to Existing Thread
 
-    func addTurn(settings: SettingsManager) async {
+    func addTurn(settings: SettingsManager, historyManager: PromptHistoryManager? = nil) async {
         guard let threadId = currentThread?.id else {
-            await startNewThread(settings: settings)
+            await startNewThread(settings: settings, historyManager: historyManager)
             return
         }
         guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -322,6 +335,19 @@ final class ThreadViewModel {
                     )
                     turns.append(turnRecord)
                     streamingContent = ""
+
+                    // Save to prompt history
+                    _ = await historyManager?.savePrompt(
+                        original: sentPrompt,
+                        enhanced: turnRecord.enhancedPrompt,
+                        model: turnRecord.model,
+                        temperature: 0,
+                        maxTokens: 0,
+                        inputTokens: 0,
+                        outputTokens: 0,
+                        totalTokens: turnRecord.totalTokens,
+                        processingMs: turnRecord.processingMs
+                    )
                 case .error:
                     errorMessage = event.message ?? "Enhancement failed"
                     showError = true

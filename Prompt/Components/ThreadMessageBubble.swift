@@ -46,7 +46,8 @@ struct ThreadMessageBubble: View {
                     } else {
                         Text(message.content)
                             .font(.system(.body))
-                            .foregroundStyle(message.role == .user ? .white : textPrimary)
+                            .foregroundStyle(.white)
+                            .textSelection(.enabled)
                     }
 
                     // Token count for assistant messages
