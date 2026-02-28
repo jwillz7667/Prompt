@@ -4,7 +4,6 @@ import { logger } from '../utils/logger.js';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import axios from 'axios';
 import pLimit from 'p-limit';
 
 interface PlatformConfig {
@@ -96,7 +95,7 @@ class SandboxService {
           promptId: data.promptId,
           testPrompt: data.testPrompt,
           platforms: data.platforms,
-          parameters: data.parameters as Prisma.JsonValue,
+          parameters: data.parameters as unknown as Prisma.InputJsonValue,
           scheduledFor: data.scheduledFor,
           status: data.scheduledFor ? 'scheduled' : 'pending'
         }
@@ -146,17 +145,17 @@ class SandboxService {
 
       // Store results
       for (let i = 0; i < results.length; i++) {
-        const platform = test.platforms[i];
-        const result = results[i];
-        
+        const platform = test.platforms[i]!;
+        const result = results[i]!;
+
         let testResult: TestResult;
-        
+
         if (result.status === 'fulfilled') {
           testResult = result.value;
         } else {
           testResult = {
             platform,
-            error: result.reason?.message || 'Unknown error',
+            error: (result as PromiseRejectedResult).reason?.message || 'Unknown error',
             latencyMs: 0
           };
         }
@@ -305,9 +304,9 @@ class SandboxService {
       presence_penalty: parameters.presencePenalty || 0
     });
 
-    const response = completion.choices[0].message.content || '';
+    const response = completion.choices[0]?.message.content || '';
     const tokenCount = completion.usage?.total_tokens;
-    
+
     // Estimate cost (GPT-4 Turbo pricing)
     const inputCost = (completion.usage?.prompt_tokens || 0) * 0.01 / 1000;
     const outputCost = (completion.usage?.completion_tokens || 0) * 0.03 / 1000;
@@ -319,7 +318,7 @@ class SandboxService {
       cost,
       metadata: {
         model: completion.model,
-        finishReason: completion.choices[0].finish_reason
+        finishReason: completion.choices[0]?.finish_reason
       }
     };
   }
@@ -342,8 +341,9 @@ class SandboxService {
       messages: [{ role: 'user', content: prompt }]
     });
 
-    const response = message.content[0].type === 'text' 
-      ? message.content[0].text 
+    const firstContent = message.content[0];
+    const response = firstContent && firstContent.type === 'text'
+      ? firstContent.text
       : '';
 
     // Estimate token count and cost
@@ -464,7 +464,7 @@ class SandboxService {
           latencyMs: result.latencyMs,
           tokenCount: result.tokenCount,
           cost: result.cost,
-          metadata: result.metadata as Prisma.JsonValue
+          metadata: result.metadata as unknown as Prisma.InputJsonValue
         },
         update: {
           response: result.response,
@@ -472,7 +472,7 @@ class SandboxService {
           latencyMs: result.latencyMs,
           tokenCount: result.tokenCount,
           cost: result.cost,
-          metadata: result.metadata as Prisma.JsonValue
+          metadata: result.metadata as unknown as Prisma.InputJsonValue
         }
       });
     } catch (error) {

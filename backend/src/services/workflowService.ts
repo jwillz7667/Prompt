@@ -7,7 +7,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
-import { deepseekService } from './deepseekService.js';
+import { enhancePrompt } from './deepseekService.js';
 import { contextService } from './contextService.js';
 import Handlebars from 'handlebars';
 import { z } from 'zod';
@@ -71,7 +71,7 @@ class WorkflowService {
    */
   private registerHelpers() {
     // Conditional helper
-    this.templateEngine.registerHelper('ifEquals', function(arg1: any, arg2: any, options: any) {
+    this.templateEngine.registerHelper('ifEquals', function(this: any, arg1: any, arg2: any, options: any) {
       return arg1 === arg2 ? options.fn(this) : options.inverse(this);
     });
 
@@ -119,7 +119,7 @@ class WorkflowService {
           name: data.name,
           description: data.description,
           status: WorkflowStatus.DRAFT,
-          metadata: data.metadata as Prisma.JsonValue,
+          metadata: data.metadata as unknown as Prisma.InputJsonValue,
           steps: {
             create: data.steps.map((step, index) => ({
               stepOrder: index + 1,
@@ -127,8 +127,8 @@ class WorkflowService {
               promptTemplate: step.promptTemplate,
               contextRequired: step.contextRequired || [],
               outputFormat: step.outputFormat,
-              validationRules: step.validationRules as Prisma.JsonValue,
-              metadata: step.metadata as Prisma.JsonValue
+              validationRules: (step.validationRules ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
+              metadata: step.metadata as unknown as Prisma.InputJsonValue
             }))
           }
         },
@@ -196,8 +196,8 @@ class WorkflowService {
             promptTemplate: step.promptTemplate,
             contextRequired: step.contextRequired || [],
             outputFormat: step.outputFormat,
-            validationRules: step.validationRules as Prisma.JsonValue,
-            metadata: step.metadata as Prisma.JsonValue
+            validationRules: (step.validationRules ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
+            metadata: step.metadata as unknown as Prisma.InputJsonValue
           }))
         });
       }
@@ -319,7 +319,7 @@ class WorkflowService {
           metadata: {
             options,
             startContext: options.initialContext || {}
-          } as unknown as Prisma.JsonValue
+          } as unknown as Prisma.InputJsonValue
         }
       });
 
@@ -389,7 +389,7 @@ class WorkflowService {
         data: {
           status: 'completed',
           completedAt: new Date(),
-          stepResults: stepResults as Prisma.JsonValue
+          stepResults: stepResults as unknown as Prisma.InputJsonValue
         }
       });
 
@@ -401,7 +401,7 @@ class WorkflowService {
         data: {
           status: 'failed',
           error: error.message,
-          stepResults: stepResults as Prisma.JsonValue
+          stepResults: stepResults as unknown as Prisma.InputJsonValue
         }
       });
 
@@ -436,23 +436,22 @@ class WorkflowService {
 
       while (retryCount < maxRetries) {
         try {
-          const enhanceResult = await deepseekService.enhance(
-            renderedPrompt,
-            {
-              model: 'deepseek-chat',
-              temperature: 0.7,
-              maxTokens: 4096,
-              modality: 'text'
-            }
-          );
+          const enhanceResult = await enhancePrompt({
+            prompt: renderedPrompt,
+            tier: 'standard',
+            model: 'deepseek-chat',
+            temperature: 0.7,
+            maxTokens: 4096,
+            modality: 'text'
+          });
 
           output = enhanceResult.enhancedPrompt;
           tokens = enhanceResult.totalTokens;
-          metadata = enhanceResult.metadata;
+          metadata = { model: enhanceResult.model, processingMs: enhanceResult.processingMs };
 
           // Validate output if rules are defined
           if (step.validationRules) {
-            this.validateOutput(output, step.validationRules as ValidationRule[]);
+            this.validateOutput(output, step.validationRules as unknown as ValidationRule[]);
           }
 
           // Format output if specified
@@ -664,7 +663,12 @@ class WorkflowService {
    */
   async cloneWorkflow(workflowId: string, userId: string, newName: string): Promise<Workflow> {
     try {
-      const original = await this.getWorkflow(workflowId, userId);
+      const original = await prisma.workflow.findFirst({
+        where: { id: workflowId, userId },
+        include: {
+          steps: { orderBy: { stepOrder: 'asc' } }
+        }
+      });
       if (!original) {
         throw new Error('Workflow not found');
       }
@@ -698,7 +702,12 @@ class WorkflowService {
    */
   async exportWorkflow(workflowId: string, userId: string): Promise<any> {
     try {
-      const workflow = await this.getWorkflow(workflowId, userId);
+      const workflow = await prisma.workflow.findFirst({
+        where: { id: workflowId, userId },
+        include: {
+          steps: { orderBy: { stepOrder: 'asc' } }
+        }
+      });
       if (!workflow) {
         throw new Error('Workflow not found');
       }

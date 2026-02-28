@@ -326,6 +326,70 @@ const PLATFORM_CONFIGS: Record<PlatformType, PlatformOptimization> = {
       keywordEmphasis: ['emotional', 'energetic', 'melodic'],
     },
   },
+
+  PERPLEXITY: {
+    platform: 'PERPLEXITY',
+    syntaxRules: {
+      format: 'natural',
+      caseConventions: 'mixed',
+    },
+    limitations: {
+      maxTokens: 128000,
+      supportedLanguages: ['all'],
+      supportedModalities: ['text'],
+      costPerToken: 0.001,
+      rateLimit: {
+        requestsPerMinute: 50,
+        tokensPerMinute: 100000,
+      },
+    },
+    optimizations: {
+      preferredStructure: ['question', 'context', 'constraints'],
+      chainOfThought: true,
+      temperature: { min: 0, max: 1, recommended: 0.5 },
+    },
+  },
+
+  GITHUB_COPILOT: {
+    platform: 'GITHUB_COPILOT',
+    syntaxRules: {
+      format: 'structured',
+      parameterSyntax: {
+        comment: '// or #',
+        docstring: '/** */',
+      },
+      caseConventions: 'mixed',
+    },
+    limitations: {
+      maxTokens: 8000,
+      supportedLanguages: ['all'],
+      supportedModalities: ['code'],
+      costPerToken: 0.00001,
+    },
+    optimizations: {
+      preferredStructure: ['comment', 'context', 'function_signature'],
+      chainOfThought: false,
+      fewShotExamples: true,
+    },
+  },
+
+  CUSTOM: {
+    platform: 'CUSTOM',
+    syntaxRules: {
+      format: 'natural',
+      caseConventions: 'mixed',
+    },
+    limitations: {
+      maxTokens: 100000,
+      supportedLanguages: ['all'],
+      supportedModalities: ['text', 'code', 'image', 'video', 'audio'],
+    },
+    optimizations: {
+      preferredStructure: ['instruction', 'context', 'output_format'],
+      chainOfThought: true,
+      fewShotExamples: true,
+    },
+  },
 };
 
 // ============================================================================
@@ -339,23 +403,23 @@ export async function getPlatformPreset(platform: PlatformType) {
   try {
     // First try to get from database
     const dbPreset = await prisma.platformPreset.findFirst({
-      where: { platform, isActive: true },
+      where: { platform, isOfficial: true },
       orderBy: { updatedAt: 'desc' },
     });
 
     if (dbPreset) {
       return {
         ...dbPreset,
-        syntaxRules: dbPreset.syntaxRules as PlatformSyntaxRules,
-        limitations: dbPreset.limitations as PlatformLimitations,
-        optimizations: dbPreset.optimizations as PlatformOptimizationRules,
+        syntaxRules: dbPreset.formatGuidelines as unknown as PlatformSyntaxRules,
+        limitations: dbPreset.tokenLimits as unknown as PlatformLimitations,
+        optimizations: {} as PlatformOptimizationRules,
       };
     }
 
     // Fall back to hardcoded config
     return PLATFORM_CONFIGS[platform];
   } catch (error) {
-    logger.error('Failed to get platform preset', { platform, error });
+    logger.error({ platform, error }, 'Failed to get platform preset');
     return PLATFORM_CONFIGS[platform];
   }
 }
@@ -545,23 +609,25 @@ export function getPlatformCapabilities(platform: PlatformType) {
  */
 export async function saveUserPlatformSettings(
   userId: string,
-  platform: PlatformType,
+  presetId: string,
   settings: {
     customSettings?: any;
-    preferredPresetId?: string;
-    apiKey?: string;
-    isEnabled?: boolean;
+    isDefault?: boolean;
   }
 ) {
   return prisma.userPlatformSettings.upsert({
     where: {
-      userId_platform: { userId, platform },
+      userId_presetId: { userId, presetId },
     },
-    update: settings,
+    update: {
+      ...(settings.customSettings !== undefined && { customSettings: settings.customSettings }),
+      ...(settings.isDefault !== undefined && { isDefault: settings.isDefault }),
+    },
     create: {
       userId,
-      platform,
-      ...settings,
+      presetId,
+      customSettings: settings.customSettings,
+      isDefault: settings.isDefault ?? false,
     },
   });
 }
@@ -573,7 +639,7 @@ export async function getUserPlatformSettings(userId: string) {
   return prisma.userPlatformSettings.findMany({
     where: { userId },
     include: {
-      preferredPreset: true,
+      preset: true,
     },
   });
 }

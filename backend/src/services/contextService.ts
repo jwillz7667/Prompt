@@ -73,7 +73,7 @@ class ContextService {
           userId: data.userId,
           name: data.name,
           description: data.description,
-          contextData: data.contextData as Prisma.JsonValue,
+          contextData: data.contextData as Prisma.InputJsonValue,
           tags: data.tags || [],
           isGlobal: data.isGlobal || false
         }
@@ -397,7 +397,7 @@ class ContextService {
       dimensions: this.embeddingDimensions
     });
 
-    return response.data[0].embedding;
+    return response.data[0]!.embedding;
   }
 
   private async generateAndStoreEmbedding(context: ProjectContext): Promise<void> {
@@ -463,9 +463,9 @@ class ContextService {
     let normB = 0;
 
     for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+      dotProduct += a[i]! * b[i]!;
+      normA += a[i]! * a[i]!;
+      normB += b[i]! * b[i]!;
     }
 
     normA = Math.sqrt(normA);

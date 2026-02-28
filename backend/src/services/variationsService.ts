@@ -1,14 +1,21 @@
 /**
  * Prompt Variations Service
- * 
- * Generates multiple variations of prompts for A/B testing and optimization
+ *
+ * Generates multiple variations of prompts for A/B testing and optimization.
+ *
+ * Maps service-level concepts to the Prisma schema:
+ *   - PromptVariation: stores each variation as a named variant of a prompt.
+ *     Custom data (originalPrompt, config, comparisonData, selectedIndex) stored in `metadata` Json field.
+ *   - VariationResult: stores individual test results per variation.
+ *     Custom data (index, tone, length, enhancedPrompt, tokensUsed, targetPlatform, performanceScore) stored in `metadata` Json field.
  */
 
-import { VariationStatus, PlatformType } from '@prisma/client';
+import { VariationStatus, PlatformType, Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import { enhancePrompt, type PromptTone, type OutputLength } from './deepseekService.js';
 import { optimizePromptForPlatform } from './platformService.js';
+import crypto from 'crypto';
 
 // ============================================================================
 // TYPES
@@ -23,7 +30,7 @@ export interface VariationConfig {
   maxVariations?: number;
 }
 
-export interface VariationResult {
+export interface VariationResultData {
   index: number;
   tone: string;
   length: string;
@@ -35,7 +42,7 @@ export interface VariationResult {
 
 export interface VariationComparison {
   variationId: string;
-  results: VariationResult[];
+  results: VariationResultData[];
   winner?: number;
   metrics: {
     averageTokens: number;
@@ -79,31 +86,41 @@ const DEFAULT_VARIATION_CONFIGS: Record<string, VariationConfig> = {
 // ============================================================================
 
 /**
- * Generate prompt variations based on configuration
+ * Generate prompt variations based on configuration.
+ *
+ * Creates a PromptVariation record per variation. The first record acts as the
+ * "parent" and stores the original prompt + config in metadata.
+ * Each generated variation is stored as a VariationResult linked to the parent.
  */
 export async function generateVariations(
   userId: string,
   originalPrompt: string,
+  promptId: string,
   config: VariationConfig | string = 'quick'
 ): Promise<string> {
   try {
     // Get configuration
-    const variationConfig = typeof config === 'string' 
-      ? DEFAULT_VARIATION_CONFIGS[config] || DEFAULT_VARIATION_CONFIGS.quick
+    const variationConfig: VariationConfig = typeof config === 'string'
+      ? DEFAULT_VARIATION_CONFIGS[config] ?? DEFAULT_VARIATION_CONFIGS.quick!
       : config;
 
-    // Create variation record
+    // Create the parent variation record
     const variation = await prisma.promptVariation.create({
       data: {
-        userId,
-        originalPrompt,
-        status: 'PENDING',
-        variations: {},
+        promptId,
+        variantName: `variation-${Date.now()}`,
+        variantPrompt: originalPrompt,
+        status: VariationStatus.TESTING,
+        metadata: {
+          originalPrompt,
+          config: variationConfig,
+          userId,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
     // Generate variations
-    const results: VariationResult[] = [];
+    const results: VariationResultData[] = [];
     let index = 0;
 
     // Include original if requested
@@ -155,15 +172,19 @@ export async function generateVariations(
           await prisma.variationResult.create({
             data: {
               variationId: variation.id,
-              index: index - 1,
-              tone,
-              length,
-              enhancedPrompt: finalPrompt,
-              tokensUsed: enhanced.totalTokens,
+              sessionId: crypto.randomUUID(),
+              selected: false,
+              metadata: {
+                index: index - 1,
+                tone,
+                length,
+                enhancedPrompt: finalPrompt,
+                tokensUsed: enhanced.totalTokens,
+              } as unknown as Prisma.InputJsonValue,
             },
           });
         } catch (error) {
-          logger.error('Failed to generate variation', { tone, length, error });
+          logger.error({ tone, length, error }, 'Failed to generate variation');
         }
       }
     }
@@ -177,7 +198,7 @@ export async function generateVariations(
 
         try {
           const optimized = optimizePromptForPlatform(originalPrompt, platform);
-          
+
           results.push({
             index: index++,
             tone: 'optimized',
@@ -190,16 +211,20 @@ export async function generateVariations(
           await prisma.variationResult.create({
             data: {
               variationId: variation.id,
-              index: index - 1,
-              tone: 'optimized',
-              length: 'platform',
-              targetPlatform: platform,
-              enhancedPrompt: optimized,
-              tokensUsed: Math.ceil(optimized.length / 4),
+              sessionId: crypto.randomUUID(),
+              selected: false,
+              metadata: {
+                index: index - 1,
+                tone: 'optimized',
+                length: 'platform',
+                targetPlatform: platform,
+                enhancedPrompt: optimized,
+                tokensUsed: Math.ceil(optimized.length / 4),
+              } as unknown as Prisma.InputJsonValue,
             },
           });
         } catch (error) {
-          logger.error('Failed to generate platform variation', { platform, error });
+          logger.error({ platform, error }, 'Failed to generate platform variation');
         }
       }
     }
@@ -207,19 +232,24 @@ export async function generateVariations(
     // Calculate metrics
     const metrics = calculateVariationMetrics(results);
 
-    // Update variation with results and metrics
+    // Update variation with results and metrics in metadata
     await prisma.promptVariation.update({
       where: { id: variation.id },
       data: {
-        status: 'COMPLETED',
-        variations: results,
-        comparisonData: metrics,
+        status: VariationStatus.TESTING,
+        metadata: {
+          originalPrompt,
+          config: variationConfig,
+          userId,
+          results,
+          comparisonData: metrics,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
     return variation.id;
   } catch (error) {
-    logger.error('Failed to generate variations', { error });
+    logger.error({ error }, 'Failed to generate variations');
     throw error;
   }
 }
@@ -227,7 +257,7 @@ export async function generateVariations(
 /**
  * Calculate metrics for variation comparison
  */
-function calculateVariationMetrics(results: VariationResult[]) {
+function calculateVariationMetrics(results: VariationResultData[]) {
   if (results.length === 0) {
     return {
       averageTokens: 0,
@@ -242,7 +272,7 @@ function calculateVariationMetrics(results: VariationResult[]) {
 
   // Calculate diversity score based on unique words
   const allWords = new Set<string>();
-  const wordSets = results.map(r => {
+  const wordSets: Set<string>[] = results.map(r => {
     const words = new Set(r.enhancedPrompt.toLowerCase().split(/\s+/));
     words.forEach(w => allWords.add(w));
     return words;
@@ -253,8 +283,10 @@ function calculateVariationMetrics(results: VariationResult[]) {
     // Calculate Jaccard distance between variations
     for (let i = 0; i < wordSets.length - 1; i++) {
       for (let j = i + 1; j < wordSets.length; j++) {
-        const intersection = new Set([...wordSets[i]].filter(x => wordSets[j].has(x)));
-        const union = new Set([...wordSets[i], ...wordSets[j]]);
+        const setI = wordSets[i]!;
+        const setJ = wordSets[j]!;
+        const intersection = new Set([...setI].filter(x => setJ.has(x)));
+        const union = new Set([...setI, ...setJ]);
         const jaccard = 1 - (intersection.size / union.size);
         diversityScore += jaccard;
       }
@@ -271,6 +303,22 @@ function calculateVariationMetrics(results: VariationResult[]) {
 }
 
 /**
+ * Extract VariationResultData from a VariationResult's metadata JSON field
+ */
+function extractResultData(result: { metadata: any; rating: number | null; selected: boolean }): VariationResultData {
+  const meta = (result.metadata ?? {}) as Record<string, any>;
+  return {
+    index: meta.index ?? 0,
+    tone: meta.tone ?? 'unknown',
+    length: meta.length ?? 'unknown',
+    platform: meta.targetPlatform ?? undefined,
+    enhancedPrompt: meta.enhancedPrompt ?? '',
+    tokensUsed: meta.tokensUsed ?? 0,
+    score: meta.performanceScore ?? (result.rating ? result.rating / 5 : undefined),
+  };
+}
+
+/**
  * Get variation results for comparison
  */
 export async function getVariationComparison(variationId: string): Promise<VariationComparison> {
@@ -278,7 +326,7 @@ export async function getVariationComparison(variationId: string): Promise<Varia
     where: { id: variationId },
     include: {
       results: {
-        orderBy: { index: 'asc' },
+        orderBy: { createdAt: 'asc' },
       },
     },
   });
@@ -287,22 +335,15 @@ export async function getVariationComparison(variationId: string): Promise<Varia
     throw new Error('Variation not found');
   }
 
-  const results: VariationResult[] = variation.results.map(r => ({
-    index: r.index,
-    tone: r.tone,
-    length: r.length,
-    platform: r.targetPlatform || undefined,
-    enhancedPrompt: r.enhancedPrompt,
-    tokensUsed: r.tokensUsed,
-    score: r.performanceScore || undefined,
-  }));
+  const results: VariationResultData[] = variation.results.map(r => extractResultData(r));
 
-  const metrics = variation.comparisonData as any || calculateVariationMetrics(results);
+  const variationMeta = (variation.metadata ?? {}) as Record<string, any>;
+  const metrics = variationMeta.comparisonData ?? calculateVariationMetrics(results);
 
   return {
     variationId,
     results,
-    winner: variation.selectedVariationIndex || undefined,
+    winner: variationMeta.selectedVariationIndex ?? undefined,
     metrics,
   };
 }
@@ -315,30 +356,60 @@ export async function rateVariation(
   index: number,
   rating: number
 ): Promise<void> {
-  await prisma.variationResult.updateMany({
-    where: {
-      variationId,
-      index,
-    },
-    data: {
-      userRating: rating,
-      performanceScore: rating / 5, // Normalize to 0-1
-    },
-  });
-
-  // Update winner if this is the highest rated
+  // Find the result matching the given index via metadata
   const allResults = await prisma.variationResult.findMany({
     where: { variationId },
-    orderBy: { performanceScore: 'desc' },
   });
 
-  if (allResults.length > 0 && allResults[0].performanceScore) {
-    await prisma.promptVariation.update({
-      where: { id: variationId },
+  const targetResult = allResults.find(r => {
+    const meta = (r.metadata ?? {}) as Record<string, any>;
+    return meta.index === index;
+  });
+
+  if (targetResult) {
+    const existingMeta = (targetResult.metadata ?? {}) as Record<string, any>;
+    await prisma.variationResult.update({
+      where: { id: targetResult.id },
       data: {
-        selectedVariationIndex: allResults[0].index,
+        rating,
+        metadata: {
+          ...existingMeta,
+          performanceScore: rating / 5,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
+  }
+
+  // Update winner if this is the highest rated
+  const updatedResults = await prisma.variationResult.findMany({
+    where: { variationId },
+  });
+
+  // Sort by rating descending
+  const sorted = updatedResults
+    .filter(r => r.rating !== null)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+
+  if (sorted.length > 0) {
+    const bestResult = sorted[0]!;
+    const bestMeta = (bestResult.metadata ?? {}) as Record<string, any>;
+    const bestIndex = bestMeta.index ?? 0;
+
+    const variationRecord = await prisma.promptVariation.findUnique({
+      where: { id: variationId },
+    });
+    if (variationRecord) {
+      const variationMeta = (variationRecord.metadata ?? {}) as Record<string, any>;
+      await prisma.promptVariation.update({
+        where: { id: variationId },
+        data: {
+          metadata: {
+            ...variationMeta,
+            selectedVariationIndex: bestIndex,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
   }
 }
 
@@ -349,27 +420,51 @@ export async function selectVariationWinner(
   variationId: string,
   winnerIndex: number
 ): Promise<void> {
-  await prisma.promptVariation.update({
+  // Update metadata with selected winner
+  const variationRecord = await prisma.promptVariation.findUnique({
     where: { id: variationId },
-    data: {
-      selectedVariationIndex: winnerIndex,
-    },
   });
 
-  // Set performance score for winner
-  await prisma.variationResult.updateMany({
-    where: {
-      variationId,
-      index: winnerIndex,
-    },
-    data: {
-      performanceScore: 1.0,
-    },
+  if (variationRecord) {
+    const variationMeta = (variationRecord.metadata ?? {}) as Record<string, any>;
+    await prisma.promptVariation.update({
+      where: { id: variationId },
+      data: {
+        status: VariationStatus.WINNER,
+        metadata: {
+          ...variationMeta,
+          selectedVariationIndex: winnerIndex,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  // Mark the winning result as selected
+  const allResults = await prisma.variationResult.findMany({
+    where: { variationId },
   });
+
+  for (const result of allResults) {
+    const meta = (result.metadata ?? {}) as Record<string, any>;
+    const isWinner = meta.index === winnerIndex;
+
+    await prisma.variationResult.update({
+      where: { id: result.id },
+      data: {
+        selected: isWinner,
+        metadata: {
+          ...meta,
+          ...(isWinner ? { performanceScore: 1.0 } : {}),
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
 }
 
 /**
- * Get user's variation history
+ * Get user's variation history.
+ * Queries via the Prompt -> PromptVariation relationship since PromptVariation
+ * does not have a direct userId field.
  */
 export async function getUserVariations(
   userId: string,
@@ -378,10 +473,12 @@ export async function getUserVariations(
 ) {
   const [variations, total] = await Promise.all([
     prisma.promptVariation.findMany({
-      where: { userId },
+      where: {
+        prompt: { userId },
+      },
       include: {
         results: {
-          orderBy: { performanceScore: 'desc' },
+          orderBy: { rating: 'desc' },
           take: 1,
         },
       },
@@ -389,7 +486,11 @@ export async function getUserVariations(
       take: limit,
       skip: offset,
     }),
-    prisma.promptVariation.count({ where: { userId } }),
+    prisma.promptVariation.count({
+      where: {
+        prompt: { userId },
+      },
+    }),
   ]);
 
   return {
@@ -411,23 +512,24 @@ export async function autoSelectBestVariation(
   }
 ): Promise<number> {
   const comparison = await getVariationComparison(variationId);
-  
+
   let bestIndex = 0;
   let bestScore = -1;
+
+  const lengthRange = comparison.metrics.lengthRange.max - comparison.metrics.lengthRange.min;
+  const tokenRange = comparison.metrics.tokenRange.max - comparison.metrics.tokenRange.min;
 
   for (const result of comparison.results) {
     let score = 0;
 
     // Length preference
-    if (criteria.preferShorter) {
-      score += (comparison.metrics.lengthRange.max - result.enhancedPrompt.length) / 
-               (comparison.metrics.lengthRange.max - comparison.metrics.lengthRange.min);
+    if (criteria.preferShorter && lengthRange > 0) {
+      score += (comparison.metrics.lengthRange.max - result.enhancedPrompt.length) / lengthRange;
     }
 
     // Token efficiency
-    if (criteria.preferLowerTokens) {
-      score += (comparison.metrics.tokenRange.max - result.tokensUsed) /
-               (comparison.metrics.tokenRange.max - comparison.metrics.tokenRange.min);
+    if (criteria.preferLowerTokens && tokenRange > 0) {
+      score += (comparison.metrics.tokenRange.max - result.tokensUsed) / tokenRange;
     }
 
     // Platform match

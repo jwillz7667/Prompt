@@ -57,9 +57,7 @@ const estimateCostSchema = z.object({
 const userSettingsSchema = z.object({
   platform: platformTypeSchema,
   customSettings: z.any().optional(),
-  preferredPresetId: z.string().optional(),
-  apiKey: z.string().optional(),
-  isEnabled: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -150,7 +148,7 @@ platformRouter.post('/validate', async (req: AuthenticatedRequest, res: Response
       res.status(400).json({ error: error.errors });
       return;
     }
-    logger.error('Failed to validate prompt', { error });
+    logger.error({ error }, 'Failed to validate prompt');
     res.status(500).json({ error: 'Validation failed' });
   }
 });
@@ -191,7 +189,7 @@ platformRouter.post('/optimize', async (req: AuthenticatedRequest, res: Response
       res.status(400).json({ error: error.errors });
       return;
     }
-    logger.error('Failed to optimize prompt', { error });
+    logger.error({ error }, 'Failed to optimize prompt');
     res.status(500).json({ error: 'Optimization failed' });
   }
 });
@@ -232,7 +230,7 @@ platformRouter.post('/estimate-cost', async (req: AuthenticatedRequest, res: Res
       res.status(400).json({ error: error.errors });
       return;
     }
-    logger.error('Failed to estimate costs', { error });
+    logger.error({ error }, 'Failed to estimate costs');
     res.status(500).json({ error: 'Cost estimation failed' });
   }
 });
@@ -249,17 +247,10 @@ platformRouter.get('/user-settings', async (req: AuthenticatedRequest, res: Resp
     }
 
     const settings = await getUserPlatformSettings(req.user.id);
-    
-    // Don't send API keys to client
-    const sanitizedSettings = settings.map(s => ({
-      ...s,
-      apiKey: s.apiKey ? '***' : null,
-      apiKeyEncrypted: undefined,
-    }));
 
-    res.json({ settings: sanitizedSettings });
+    res.json({ settings });
   } catch (error) {
-    logger.error('Failed to get user platform settings', { error });
+    logger.error({ error }, 'Failed to get user platform settings');
     res.status(500).json({ error: 'Failed to retrieve settings' });
   }
 });
@@ -276,29 +267,19 @@ platformRouter.put('/user-settings', async (req: AuthenticatedRequest, res: Resp
     }
 
     const data = userSettingsSchema.parse(req.body);
-    
-    // TODO: Encrypt API key before storing
+
     const settings = await saveUserPlatformSettings(req.user.id, data.platform, {
       customSettings: data.customSettings,
-      preferredPresetId: data.preferredPresetId,
-      apiKey: data.apiKey,
-      isEnabled: data.isEnabled,
+      isDefault: data.isDefault,
     });
 
-    // Don't send API key back
-    res.json({
-      settings: {
-        ...settings,
-        apiKey: settings.apiKey ? '***' : null,
-        apiKeyEncrypted: undefined,
-      },
-    });
+    res.json({ settings });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: error.errors });
       return;
     }
-    logger.error('Failed to update user platform settings', { error });
+    logger.error({ error }, 'Failed to update user platform settings');
     res.status(500).json({ error: 'Failed to update settings' });
   }
 });
@@ -346,7 +327,7 @@ platformRouter.post('/batch-optimize', async (req: AuthenticatedRequest, res: Re
       res.status(400).json({ error: error.errors });
       return;
     }
-    logger.error('Failed to batch optimize', { error });
+    logger.error({ error }, 'Failed to batch optimize');
     res.status(500).json({ error: 'Batch optimization failed' });
   }
 });

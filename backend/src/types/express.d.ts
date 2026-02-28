@@ -4,7 +4,7 @@ declare global {
       user?: {
         id: string;
         email: string;
-        sessionId?: string;
+        sessionId: string;
       };
       subscription?: {
         tier: string;

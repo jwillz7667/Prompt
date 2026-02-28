@@ -917,6 +917,10 @@ enum PlatformType {
   DALLE
   STABLE_DIFFUSION
   GITHUB_COPILOT
+  SORA
+  RUNWAY
+  SUNO
+  UDIO
   CUSTOM
 }
 

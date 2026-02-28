@@ -57,7 +57,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
       isGlobal: validatedData.isGlobal
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: context
     });
@@ -69,7 +69,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -81,7 +81,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
     const validatedData = updateContextSchema.parse(req.body);
     
     const context = await contextService.updateContext(
-      req.params.id,
+      req.params.id!,
       req.user!.id,
       validatedData
     );
@@ -93,7 +93,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: context
     });
@@ -105,7 +105,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -115,7 +115,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 router.delete('/:id', authenticate, async (req, res, next) => {
   try {
     const deleted = await contextService.deleteContext(
-      req.params.id,
+      req.params.id!,
       req.user!.id
     );
 
@@ -126,12 +126,12 @@ router.delete('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Context deleted successfully'
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -141,7 +141,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
     const context = await contextService.getContext(
-      req.params.id,
+      req.params.id!,
       req.user!.id
     );
 
@@ -152,12 +152,12 @@ router.get('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: context
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -173,12 +173,12 @@ router.get('/', authenticate, async (req, res, next) => {
       includeGlobal
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: contexts
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -194,7 +194,7 @@ router.post('/search', authenticate, async (req, res, next) => {
       ...validatedData
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: results
     });
@@ -206,7 +206,7 @@ router.post('/search', authenticate, async (req, res, next) => {
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -218,7 +218,7 @@ router.post('/:id/attach', authenticate, async (req, res, next) => {
     const validatedData = attachContextSchema.parse(req.body);
     
     const attached = await contextService.attachContextToPrompt(
-      req.params.id,
+      req.params.id!,
       validatedData.promptId,
       req.user!.id
     );
@@ -230,7 +230,7 @@ router.post('/:id/attach', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Context attached to prompt successfully'
     });
@@ -242,7 +242,7 @@ router.post('/:id/attach', authenticate, async (req, res, next) => {
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -251,14 +251,14 @@ router.post('/:id/attach', authenticate, async (req, res, next) => {
  */
 router.get('/prompt/:promptId', authenticate, async (req, res, next) => {
   try {
-    const contexts = await contextService.getPromptContexts(req.params.promptId);
+    const contexts = await contextService.getPromptContexts(req.params.promptId!);
 
-    res.json({
+    return res.json({
       success: true,
       data: contexts
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -275,7 +275,7 @@ router.post('/merge', authenticate, enforceQuota('enhance_prompt'), async (req, 
       validatedData.newName
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: mergedContext
     });
@@ -287,7 +287,7 @@ router.post('/merge', authenticate, enforceQuota('enhance_prompt'), async (req, 
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 

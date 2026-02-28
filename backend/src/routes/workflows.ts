@@ -55,7 +55,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
       ...validatedData
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: workflow
     });
@@ -67,7 +67,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -79,7 +79,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
     const validatedData = updateWorkflowSchema.parse(req.body);
     
     const workflow = await workflowService.updateWorkflow(
-      req.params.id,
+      req.params.id!,
       req.user!.id,
       validatedData
     );
@@ -91,7 +91,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: workflow
     });
@@ -103,7 +103,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -113,7 +113,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 router.delete('/:id', authenticate, async (req, res, next) => {
   try {
     const deleted = await workflowService.deleteWorkflow(
-      req.params.id,
+      req.params.id!,
       req.user!.id
     );
 
@@ -124,12 +124,12 @@ router.delete('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Workflow deleted successfully'
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -139,7 +139,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
     const workflow = await workflowService.getWorkflow(
-      req.params.id,
+      req.params.id!,
       req.user!.id
     );
 
@@ -150,12 +150,12 @@ router.get('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: workflow
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -171,12 +171,12 @@ router.get('/', authenticate, async (req, res, next) => {
       status
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: workflows
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -188,12 +188,12 @@ router.post('/:id/execute', authenticate, enforceQuota('enhance_prompt'), async 
     const validatedData = executeWorkflowSchema.parse(req.body);
     
     const execution = await workflowService.executeWorkflow(
-      req.params.id,
+      req.params.id!,
       req.user!.id,
       validatedData
     );
 
-    res.status(202).json({
+    return res.status(202).json({
       success: true,
       data: execution,
       message: 'Workflow execution started'
@@ -206,7 +206,7 @@ router.post('/:id/execute', authenticate, enforceQuota('enhance_prompt'), async 
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -216,7 +216,7 @@ router.post('/:id/execute', authenticate, enforceQuota('enhance_prompt'), async 
 router.get('/executions/:executionId', authenticate, async (req, res, next) => {
   try {
     const execution = await workflowService.getExecution(
-      req.params.executionId,
+      req.params.executionId!,
       req.user!.id
     );
 
@@ -227,12 +227,12 @@ router.get('/executions/:executionId', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: execution
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -242,16 +242,16 @@ router.get('/executions/:executionId', authenticate, async (req, res, next) => {
 router.get('/:id/executions', authenticate, async (req, res, next) => {
   try {
     const executions = await workflowService.listExecutions(
-      req.params.id,
+      req.params.id!,
       req.user!.id
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: executions
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -267,12 +267,12 @@ router.post('/:id/clone', authenticate, async (req, res, next) => {
     const validatedData = schema.parse(req.body);
     
     const clonedWorkflow = await workflowService.cloneWorkflow(
-      req.params.id,
+      req.params.id!,
       req.user!.id,
       validatedData.newName
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: clonedWorkflow
     });
@@ -284,7 +284,7 @@ router.post('/:id/clone', authenticate, async (req, res, next) => {
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -294,16 +294,16 @@ router.post('/:id/clone', authenticate, async (req, res, next) => {
 router.get('/:id/export', authenticate, async (req, res, next) => {
   try {
     const workflowData = await workflowService.exportWorkflow(
-      req.params.id,
+      req.params.id!,
       req.user!.id
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: workflowData
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -317,12 +317,12 @@ router.post('/import', authenticate, enforceQuota('enhance_prompt'), async (req,
       req.body
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: importedWorkflow
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -453,12 +453,12 @@ router.get('/templates/available', authenticate, async (req, res, next) => {
       }
     ];
 
-    res.json({
+    return res.json({
       success: true,
       data: templates
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

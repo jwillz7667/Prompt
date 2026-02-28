@@ -40,7 +40,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
       scheduledFor: validatedData.scheduledFor ? new Date(validatedData.scheduledFor) : undefined
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: test
     });
@@ -52,7 +52,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 
@@ -62,8 +62,8 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
 router.post('/:id/execute', authenticate, async (req, res, next) => {
   try {
     // Verify ownership
-    const test = await sandboxService.getTest(req.params.id, req.user!.id);
-    
+    const test = await sandboxService.getTest(req.params.id!, req.user!.id);
+
     if (!test) {
       return res.status(404).json({
         success: false,
@@ -78,14 +78,14 @@ router.post('/:id/execute', authenticate, async (req, res, next) => {
       });
     }
 
-    const result = await sandboxService.executeTest(req.params.id);
+    const result = await sandboxService.executeTest(req.params.id!);
 
-    res.json({
+    return res.json({
       success: true,
       data: result
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -94,8 +94,8 @@ router.post('/:id/execute', authenticate, async (req, res, next) => {
  */
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
-    const test = await sandboxService.getTest(req.params.id, req.user!.id);
-    
+    const test = await sandboxService.getTest(req.params.id!, req.user!.id);
+
     if (!test) {
       return res.status(404).json({
         success: false,
@@ -103,12 +103,12 @@ router.get('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: test
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -121,12 +121,12 @@ router.get('/', authenticate, async (req, res, next) => {
     
     const tests = await sandboxService.listTests(req.user!.id, limit);
 
-    res.json({
+    return res.json({
       success: true,
       data: tests
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -135,7 +135,7 @@ router.get('/', authenticate, async (req, res, next) => {
  */
 router.delete('/:id', authenticate, async (req, res, next) => {
   try {
-    const deleted = await sandboxService.deleteTest(req.params.id, req.user!.id);
+    const deleted = await sandboxService.deleteTest(req.params.id!, req.user!.id);
     
     if (!deleted) {
       return res.status(404).json({
@@ -144,12 +144,12 @@ router.delete('/:id', authenticate, async (req, res, next) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Test deleted successfully'
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -159,8 +159,8 @@ router.delete('/:id', authenticate, async (req, res, next) => {
 router.get('/:id/compare', authenticate, async (req, res, next) => {
   try {
     // Verify ownership
-    const test = await sandboxService.getTest(req.params.id, req.user!.id);
-    
+    const test = await sandboxService.getTest(req.params.id!, req.user!.id);
+
     if (!test) {
       return res.status(404).json({
         success: false,
@@ -168,14 +168,14 @@ router.get('/:id/compare', authenticate, async (req, res, next) => {
       });
     }
 
-    const comparison = await sandboxService.compareResults(req.params.id);
+    const comparison = await sandboxService.compareResults(req.params.id!);
 
-    res.json({
+    return res.json({
       success: true,
       data: comparison
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -247,12 +247,12 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       }
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: availablePlatforms
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
@@ -287,7 +287,7 @@ router.post('/batch', authenticate, enforceQuota('enhance_prompt'), async (req, 
       )
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: tests
     });
@@ -299,7 +299,7 @@ router.post('/batch', authenticate, enforceQuota('enhance_prompt'), async (req, 
         details: error.errors
       });
     }
-    next(error);
+    return next(error);
   }
 });
 

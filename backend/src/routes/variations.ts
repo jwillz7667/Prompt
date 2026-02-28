@@ -15,6 +15,7 @@ import {
   rateVariation,
   selectVariationWinner,
   getUserVariations,
+  type VariationConfig,
 } from '../services/variationsService.js';
 
 const router = Router();
@@ -28,6 +29,7 @@ router.use(authenticate);
 
 const generateVariationsSchema = z.object({
   prompt: z.string().min(1).max(100000),
+  promptId: z.string().min(1),
   strategy: z.enum(['quick', 'comprehensive', 'platform_test', 'creative_exploration']).optional(),
   config: z.object({
     tones: z.array(z.string()).optional(),
@@ -58,31 +60,31 @@ const selectWinnerSchema = z.object({
  */
 router.post('/generate', enforceQuota('enhance_prompt'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { prompt, strategy, config } = generateVariationsSchema.parse(req.body);
+    const { prompt, promptId, strategy, config } = generateVariationsSchema.parse(req.body);
 
     const variationId = await generateVariations(
       req.user!.id,
       prompt,
-      config || strategy || 'quick'
+      promptId,
+      config ? (config as VariationConfig) : (strategy || 'quick')
     );
 
     const comparison = await getVariationComparison(variationId);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: comparison,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         error: 'Invalid request data',
         details: error.errors,
       });
-      return;
     }
     logger.error({ error }, 'Failed to generate variations');
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to generate variations',
     });
@@ -95,22 +97,21 @@ router.post('/generate', enforceQuota('enhance_prompt'), async (req: Authenticat
  */
 router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const comparison = await getVariationComparison(req.params.id);
+    const comparison = await getVariationComparison(req.params.id!);
 
-    res.json({
+    return res.json({
       success: true,
       data: comparison,
     });
   } catch (error) {
     if ((error as Error).message === 'Variation not found') {
-      res.status(404).json({
+      return res.status(404).json({
         success: false,
         error: 'Variation not found',
       });
-      return;
     }
     logger.error({ error }, 'Failed to get variation');
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to retrieve variation',
     });
@@ -125,23 +126,22 @@ router.post('/:id/rate', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { index, rating } = rateVariationSchema.parse(req.body);
 
-    await rateVariation(req.params.id, index, rating);
+    await rateVariation(req.params.id!, index, rating);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Variation rated successfully',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         error: 'Invalid request data',
         details: error.errors,
       });
-      return;
     }
     logger.error({ error }, 'Failed to rate variation');
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to rate variation',
     });
@@ -156,23 +156,22 @@ router.post('/:id/select', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { winnerIndex } = selectWinnerSchema.parse(req.body);
 
-    await selectVariationWinner(req.params.id, winnerIndex);
+    await selectVariationWinner(req.params.id!, winnerIndex);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Winner selected successfully',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         error: 'Invalid request data',
         details: error.errors,
       });
-      return;
     }
     logger.error({ error }, 'Failed to select winner');
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to select winner',
     });
@@ -190,7 +189,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const result = await getUserVariations(req.user!.id, limit, offset);
 
-    res.json({
+    return res.json({
       success: true,
       data: result.variations,
       total: result.total,
@@ -198,7 +197,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     });
   } catch (error) {
     logger.error({ error }, 'Failed to list variations');
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to list variations',
     });
