@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct VariationsView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -17,6 +18,10 @@ struct VariationsView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
 
     var body: some View {
         NavigationStack {
@@ -80,7 +85,8 @@ struct VariationsView: View {
                 HStack(spacing: 8) {
                     ForEach(VariationStrategy.allCases) { strategy in
                         Button {
-                            withAnimation(.spring(response: 0.3)) {
+                            triggerHaptic()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedStrategy = strategy
                             }
                         } label: {
@@ -141,6 +147,7 @@ struct VariationsView: View {
                     )
                 }
             }
+            .transition(.opacity.combined(with: .scale(scale: 0.98)))
         }
     }
 
@@ -229,7 +236,7 @@ struct VariationsView: View {
                     .foregroundStyle(textSecondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(.ultraThinMaterial)
+                    .background(accentColor.opacity(0.08))
                     .clipShape(Capsule())
 
                 // Length badge
@@ -238,7 +245,7 @@ struct VariationsView: View {
                     .foregroundStyle(textSecondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(.ultraThinMaterial)
+                    .background(accentColor.opacity(0.08))
                     .clipShape(Capsule())
 
                 Spacer()
@@ -284,6 +291,7 @@ struct VariationsView: View {
 
                 // Copy
                 Button {
+                    triggerHaptic(.medium)
                     UIPasteboard.general.string = result.enhancedPrompt
                     copiedIndex = result.index
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -293,6 +301,8 @@ struct VariationsView: View {
                     Image(systemName: copiedIndex == result.index ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(copiedIndex == result.index ? .green : textTertiary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
             }
@@ -315,10 +325,13 @@ struct VariationsView: View {
     // MARK: - Star Rating
 
     private func starRating(index: Int, variationId: String) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 6) {
             ForEach(1...5, id: \.self) { star in
                 Button {
-                    ratings[index] = star
+                    triggerHaptic()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        ratings[index] = star
+                    }
                     Task {
                         try? await service.rateVariation(
                             variationId: variationId,
@@ -330,6 +343,8 @@ struct VariationsView: View {
                     Image(systemName: (ratings[index] ?? 0) >= star ? "star.fill" : "star")
                         .font(.system(size: 12))
                         .foregroundStyle((ratings[index] ?? 0) >= star ? .yellow : textTertiary.opacity(0.5))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PlatformOptimizationView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -28,6 +29,10 @@ struct PlatformOptimizationView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
 
     var body: some View {
         NavigationStack {
@@ -87,7 +92,8 @@ struct PlatformOptimizationView: View {
             HStack(spacing: 8) {
                 ForEach(PlatformSection.allCases, id: \.self) { section in
                     Button {
-                        withAnimation(.spring(response: 0.3)) {
+                        triggerHaptic()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             activeSection = section
                         }
                     } label: {
@@ -134,7 +140,8 @@ struct PlatformOptimizationView: View {
 
     private func platformCard(_ platform: PlatformType) -> some View {
         Button {
-            withAnimation(.spring(response: 0.3)) {
+            triggerHaptic()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedPlatform = platform
             }
         } label: {
@@ -194,6 +201,7 @@ struct PlatformOptimizationView: View {
 
                 if let validation = validation {
                     validationResults(validation)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
         }
@@ -293,6 +301,7 @@ struct PlatformOptimizationView: View {
 
                         // Copy button
                         Button {
+                            triggerHaptic(.medium)
                             UIPasteboard.general.string = result.optimizedPrompt
                             showCopied = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -303,6 +312,7 @@ struct PlatformOptimizationView: View {
                         }
                         .buttonStyle(GlassSecondaryButtonStyle())
                     }
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
         }
@@ -345,6 +355,7 @@ struct PlatformOptimizationView: View {
                 ForEach(response.estimates) { estimate in
                     costRow(estimate, isCheapest: estimate.platform == response.cheapest?.platform)
                 }
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
     }
@@ -421,7 +432,10 @@ struct PlatformOptimizationView: View {
         guard let platform = selectedPlatform else { return }
         isValidating = true
         do {
-            validation = try await service.validatePrompt(prompt: promptText, platform: platform)
+            let result = try await service.validatePrompt(prompt: promptText, platform: platform)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                validation = result
+            }
         } catch {
             print("Validation failed: \(error)")
         }
@@ -432,7 +446,10 @@ struct PlatformOptimizationView: View {
         guard let platform = selectedPlatform else { return }
         isOptimizing = true
         do {
-            optimization = try await service.optimizePrompt(prompt: promptText, platform: platform)
+            let result = try await service.optimizePrompt(prompt: promptText, platform: platform)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                optimization = result
+            }
         } catch {
             print("Optimization failed: \(error)")
         }
@@ -442,10 +459,13 @@ struct PlatformOptimizationView: View {
     private func estimateCosts() async {
         isEstimating = true
         do {
-            costEstimate = try await service.estimateCost(
+            let result = try await service.estimateCost(
                 prompt: promptText,
                 platforms: PlatformType.allCases.filter { $0 != .custom }
             )
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                costEstimate = result
+            }
         } catch {
             print("Cost estimation failed: \(error)")
         }

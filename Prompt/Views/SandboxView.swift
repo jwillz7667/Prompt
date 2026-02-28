@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SandboxView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -14,6 +15,10 @@ struct SandboxView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
 
     var body: some View {
         NavigationStack {
@@ -87,6 +92,7 @@ struct SandboxView: View {
 
     private func testCard(_ test: SandboxTest) -> some View {
         Button {
+            triggerHaptic()
             selectedTest = test
         } label: {
             VStack(alignment: .leading, spacing: 10) {
@@ -176,6 +182,7 @@ struct SandboxView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(color.opacity(0.12))
+        .overlay(Capsule().stroke(color.opacity(0.3), lineWidth: 0.5))
         .clipShape(Capsule())
     }
 
@@ -234,6 +241,10 @@ private struct CreateTestSheet: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
 
     var body: some View {
         NavigationStack {
@@ -349,10 +360,13 @@ private struct CreateTestSheet: View {
     private func platformChip(_ platform: PlatformType) -> some View {
         let isSelected = selectedPlatforms.contains(platform)
         return Button {
-            if isSelected {
-                selectedPlatforms.remove(platform)
-            } else {
-                selectedPlatforms.insert(platform)
+            triggerHaptic()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                if isSelected {
+                    selectedPlatforms.remove(platform)
+                } else {
+                    selectedPlatforms.insert(platform)
+                }
             }
         } label: {
             VStack(spacing: 6) {
@@ -411,6 +425,10 @@ private struct TestDetailSheet: View {
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -435,6 +453,7 @@ private struct TestDetailSheet: View {
                         // Comparison stats
                         if let comp = comparison {
                             comparisonStatsView(comp)
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
                         }
 
                         // Results
@@ -576,7 +595,10 @@ private struct TestDetailSheet: View {
     private func loadComparison() async {
         isLoadingComparison = true
         do {
-            comparison = try await service.compareTestResults(testId: test.id)
+            let result = try await service.compareTestResults(testId: test.id)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                comparison = result
+            }
         } catch {
             print("Failed to load comparison: \(error)")
         }

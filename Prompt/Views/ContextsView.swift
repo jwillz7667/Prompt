@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContextsView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -21,6 +22,10 @@ struct ContextsView: View {
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
 
     private var allTags: [String] {
         let tags = service.contexts.flatMap { $0.tags }
@@ -141,11 +146,17 @@ struct ContextsView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             tagChip(name: "All", isSelected: selectedTag == nil) {
-                                selectedTag = nil
+                                triggerHaptic()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedTag = nil
+                                }
                             }
                             ForEach(allTags, id: \.self) { tag in
                                 tagChip(name: tag, isSelected: selectedTag == tag) {
-                                    selectedTag = selectedTag == tag ? nil : tag
+                                    triggerHaptic()
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedTag = selectedTag == tag ? nil : tag
+                                    }
                                 }
                             }
                         }
@@ -178,6 +189,7 @@ struct ContextsView: View {
 
     private func contextCard(_ context: ProjectContext, similarity: Double? = nil) -> some View {
         Button {
+            triggerHaptic()
             selectedContext = context
         } label: {
             VStack(alignment: .leading, spacing: 10) {
@@ -200,6 +212,7 @@ struct ContextsView: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(accentColor.opacity(0.15))
+                            .overlay(Capsule().stroke(accentColor.opacity(0.3), lineWidth: 0.5))
                             .clipShape(Capsule())
                     }
                 }
@@ -218,8 +231,7 @@ struct ContextsView: View {
                             .foregroundStyle(textTertiary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
+                            .liquidGlass(cornerRadius: 8)
                     }
 
                     if context.tags.count > 3 {
@@ -402,6 +414,8 @@ private struct CreateContextSheet: View {
                                 } label: {
                                     Image(systemName: "plus.circle.fill")
                                         .foregroundStyle(accentColor)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Circle())
                                 }
                             }
 
@@ -426,6 +440,8 @@ private struct CreateContextSheet: View {
                                         } label: {
                                             Image(systemName: "minus.circle.fill")
                                                 .foregroundStyle(.red.opacity(0.7))
+                                                .frame(width: 44, height: 44)
+                                                .contentShape(Circle())
                                         }
                                     }
                                 }
@@ -547,6 +563,7 @@ private struct ContextDetailSheet: View {
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 5)
                                             .background(accentColor.opacity(0.12))
+                                            .overlay(Capsule().stroke(accentColor.opacity(0.3), lineWidth: 0.5))
                                             .clipShape(Capsule())
                                     }
                                 }
@@ -575,8 +592,7 @@ private struct ContextDetailSheet: View {
                                 }
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(.ultraThinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .liquidGlass(cornerRadius: 8)
                             }
 
                             if context.contextData.isEmpty {
@@ -649,8 +665,7 @@ private struct ContextDetailSheet: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .liquidGlass(cornerRadius: 8)
     }
 
     private func saveEdits() async {
@@ -685,6 +700,10 @@ private struct MergeContextSheet: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -705,10 +724,13 @@ private struct MergeContextSheet: View {
 
                         ForEach(contexts) { context in
                             Button {
-                                if selection.contains(context.id) {
-                                    selection.remove(context.id)
-                                } else {
-                                    selection.insert(context.id)
+                                triggerHaptic()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    if selection.contains(context.id) {
+                                        selection.remove(context.id)
+                                    } else {
+                                        selection.insert(context.id)
+                                    }
                                 }
                             } label: {
                                 HStack {

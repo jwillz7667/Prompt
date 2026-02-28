@@ -32,6 +32,13 @@ struct ContentView: View {
     @State private var showWorkflows = false
     @State private var showPlatforms = false
     @State private var showVariations = false
+
+    // Inline feature integration
+    @State private var selectedPlatform: PlatformType?
+    @State private var showPlatformPicker = false
+    @State private var attachedContext: ProjectContext?
+    @StateObject private var contextService = ContextService.shared
+    @State private var showContextPicker = false
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
@@ -173,35 +180,59 @@ struct ContentView: View {
                         }
 
                         Menu {
-                            Button {
-                                triggerHaptic(.light)
-                                showContexts = true
-                            } label: {
-                                Label("Contexts", systemImage: "folder.badge.gearshape")
+                            Section("Manage") {
+                                Button {
+                                    triggerHaptic(.light)
+                                    showContexts = true
+                                } label: {
+                                    Label("Contexts", systemImage: "folder.badge.gearshape")
+                                }
                             }
-                            Button {
-                                triggerHaptic(.light)
-                                showSandbox = true
-                            } label: {
-                                Label("Sandbox", systemImage: "flask")
+
+                            Section("Pro Features") {
+                                Button {
+                                    triggerHaptic(.light)
+                                    if storeKit.currentTier == .free {
+                                        showPaywall = true
+                                    } else {
+                                        showPlatforms = true
+                                    }
+                                } label: {
+                                    Label("Platform Studio", systemImage: "cpu")
+                                }
+                                Button {
+                                    triggerHaptic(.light)
+                                    if storeKit.currentTier == .free {
+                                        showPaywall = true
+                                    } else {
+                                        showVariations = true
+                                    }
+                                } label: {
+                                    Label("Variations", systemImage: "rectangle.on.rectangle")
+                                }
                             }
-                            Button {
-                                triggerHaptic(.light)
-                                showWorkflows = true
-                            } label: {
-                                Label("Workflows", systemImage: "arrow.triangle.branch")
-                            }
-                            Button {
-                                triggerHaptic(.light)
-                                showPlatforms = true
-                            } label: {
-                                Label("Platforms", systemImage: "cpu")
-                            }
-                            Button {
-                                triggerHaptic(.light)
-                                showVariations = true
-                            } label: {
-                                Label("Variations", systemImage: "rectangle.on.rectangle")
+
+                            Section("Premium Features") {
+                                Button {
+                                    triggerHaptic(.light)
+                                    if storeKit.currentTier != .premium {
+                                        showPaywall = true
+                                    } else {
+                                        showSandbox = true
+                                    }
+                                } label: {
+                                    Label("Sandbox", systemImage: "flask")
+                                }
+                                Button {
+                                    triggerHaptic(.light)
+                                    if storeKit.currentTier != .premium {
+                                        showPaywall = true
+                                    } else {
+                                        showWorkflows = true
+                                    }
+                                } label: {
+                                    Label("Workflows", systemImage: "arrow.triangle.branch")
+                                }
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
@@ -716,8 +747,11 @@ struct ContentView: View {
             }
             .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showEnhancedView)
 
-            // Clear button (only when editing)
+            // Enhancement options bar (platform + context, only when editing)
             if !showEnhancedView {
+                enhancementOptionsBar
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+
                 HStack {
                     Spacer()
 
@@ -740,7 +774,279 @@ struct ContentView: View {
                 }
                 .animation(.spring(response: 0.3), value: viewModel.userPrompt.isEmpty)
             }
+
+            // Post-enhancement inline actions
+            if showEnhancedView {
+                postEnhancementActions
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
+    }
+
+    // MARK: - Enhancement Options Bar (Platform + Context)
+
+    private var enhancementOptionsBar: some View {
+        VStack(spacing: 8) {
+            // Platform selector
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    // Platform label
+                    Label("Platform", systemImage: "cpu")
+                        .font(.system(.caption2, design: .rounded, weight: .semibold))
+                        .foregroundStyle(textTertiary)
+
+                    // "Any" chip (no platform filter)
+                    platformChip(name: "Any", icon: "globe", isSelected: selectedPlatform == nil) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedPlatform = nil
+                        }
+                        triggerHaptic(.light)
+                    }
+
+                    // Popular platforms (exclude .custom)
+                    ForEach(PlatformType.allCases.filter { $0 != .custom }) { platform in
+                        platformChip(
+                            name: platform.displayName,
+                            icon: platform.icon,
+                            isSelected: selectedPlatform == platform,
+                            platformColor: Color(hex: platform.color)
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedPlatform = selectedPlatform == platform ? nil : platform
+                            }
+                            triggerHaptic(.light)
+                        }
+                    }
+                }
+            }
+
+            // Context attachment row
+            HStack(spacing: 8) {
+                if let context = attachedContext {
+                    // Show attached context
+                    HStack(spacing: 6) {
+                        Image(systemName: context.isGlobal ? "globe" : "folder.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(accentColor)
+
+                        Text(context.name)
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(textPrimary)
+                            .lineLimit(1)
+
+                        Button {
+                            withAnimation(.spring(response: 0.3)) {
+                                attachedContext = nil
+                            }
+                            triggerHaptic(.light)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(textTertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .liquidGlassChip(isSelected: true, accentColor: accentColor)
+                    .transition(.scale.combined(with: .opacity))
+                } else if !contextService.contexts.isEmpty {
+                    // Show attach button
+                    Button {
+                        showContextPicker = true
+                        triggerHaptic(.light)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("Attach Context")
+                                .font(.system(.caption, design: .rounded, weight: .medium))
+                        }
+                        .foregroundStyle(textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(GlassCapsuleButtonStyle())
+                }
+
+                Spacer()
+
+                // Pro badge if platform selected
+                if selectedPlatform != nil && storeKit.currentTier == .free {
+                    HStack(spacing: 3) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 8, weight: .bold))
+                        Text("PRO")
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.orange.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+            }
+            .animation(.spring(response: 0.3), value: attachedContext?.id)
+        }
+        .popover(isPresented: $showContextPicker) {
+            contextPickerPopover
+                .frame(width: 280, height: 300)
+                .presentationCompactAdaptation(.popover)
+        }
+        .task { await contextService.loadContextsIfNeeded() }
+    }
+
+    private func platformChip(
+        name: String,
+        icon: String,
+        isSelected: Bool,
+        platformColor: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isSelected ? .white : (platformColor ?? textSecondary))
+                Text(name)
+                    .font(.system(.caption2, design: .rounded, weight: .semibold))
+                    .foregroundStyle(isSelected ? .white : textSecondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .liquidGlassChip(isSelected: isSelected, accentColor: platformColor ?? accentColor)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var contextPickerPopover: some View {
+        NavigationStack {
+            List(contextService.contexts) { context in
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        attachedContext = context
+                    }
+                    showContextPicker = false
+                    triggerHaptic(.light)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: context.isGlobal ? "globe" : "folder.fill")
+                            .foregroundStyle(accentColor)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(context.name)
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                                .foregroundStyle(textPrimary)
+                            if let desc = context.description, !desc.isEmpty {
+                                Text(desc)
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        if attachedContext?.id == context.id {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(accentColor)
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("Attach Context")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    // MARK: - Post-Enhancement Actions
+
+    private var postEnhancementActions: some View {
+        HStack(spacing: 8) {
+            // Generate Variations (Pro+)
+            Button {
+                if storeKit.currentTier == .free {
+                    triggerHaptic(.warning)
+                    showPaywall = true
+                } else {
+                    triggerHaptic(.light)
+                    showVariations = true
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.on.rectangle")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("Variations")
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                    if storeKit.currentTier == .free {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundStyle(textSecondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
+
+            // Platform Optimize (Pro+, shown if platform selected)
+            if let platform = selectedPlatform {
+                Button {
+                    if storeKit.currentTier == .free {
+                        triggerHaptic(.warning)
+                        showPaywall = true
+                    } else {
+                        triggerHaptic(.light)
+                        showPlatforms = true
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: platform.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color(hex: platform.color))
+                        Text("Optimize")
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
+                        if storeKit.currentTier == .free {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                    }
+                    .foregroundStyle(textSecondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
+                .transition(.scale.combined(with: .opacity))
+            }
+
+            // Sandbox Test (Premium)
+            Button {
+                if storeKit.currentTier != .premium {
+                    triggerHaptic(.warning)
+                    showPaywall = true
+                } else {
+                    triggerHaptic(.light)
+                    showSandbox = true
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "flask")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("Test")
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                    if storeKit.currentTier != .premium {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundStyle(textSecondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
+
+            Spacer()
+        }
+        .animation(.spring(response: 0.3), value: selectedPlatform?.rawValue)
     }
 
     private var inputView: some View {
@@ -1172,6 +1478,16 @@ struct ContentView: View {
         }
     }
 
+    private var enhanceButtonTitle: String {
+        if viewModel.isLoading {
+            return "Enhancing..."
+        } else if let platform = selectedPlatform {
+            return "Enhance for \(platform.displayName)"
+        } else {
+            return "Enhance Prompt"
+        }
+    }
+
     private var transformationPhaseText: String {
         switch transformationPhase {
         case .idle: return "Preparing..."
@@ -1217,6 +1533,12 @@ struct ContentView: View {
                         return
                     }
 
+                    // Platform optimization requires Pro+
+                    if selectedPlatform != nil && storeKit.currentTier == .free {
+                        showPaywall = true
+                        return
+                    }
+
                     performEnhancement()
                 } label: {
                     HStack(spacing: 12) {
@@ -1231,7 +1553,7 @@ struct ContentView: View {
                                 .symbolEffect(.bounce, value: buttonPressed)
                         }
 
-                        Text(viewModel.isLoading ? "Enhancing..." : "Enhance Prompt")
+                        Text(enhanceButtonTitle)
                             .font(.system(.body, design: .rounded, weight: .semibold))
                             .contentTransition(.numericText())
                     }
@@ -1288,7 +1610,34 @@ struct ContentView: View {
             }
 
             let startTime = Date()
-            await viewModel.enhancePrompt(settings: settings)
+
+            // Build platform-aware custom instructions
+            if selectedPlatform != nil || attachedContext != nil {
+                var extraInstructions: [String] = []
+
+                if let platform = selectedPlatform {
+                    extraInstructions.append("Optimize this prompt specifically for \(platform.displayName). Follow \(platform.displayName)'s best practices, formatting conventions, and parameter syntax.")
+                }
+
+                if let context = attachedContext {
+                    let contextDataStr = context.contextData.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+                    if !contextDataStr.isEmpty {
+                        extraInstructions.append("Use the following context data: \(contextDataStr)")
+                    }
+                }
+
+                if !extraInstructions.isEmpty {
+                    let existing = settings.customInstructions
+                    let combined = extraInstructions.joined(separator: ". ")
+                    settings.customInstructions = existing.isEmpty ? combined : "\(existing). \(combined)"
+                    await viewModel.enhancePrompt(settings: settings)
+                    settings.customInstructions = existing // Restore original
+                } else {
+                    await viewModel.enhancePrompt(settings: settings)
+                }
+            } else {
+                await viewModel.enhancePrompt(settings: settings)
+            }
 
             if viewModel.hasEnhancedPrompt {
                 withAnimation { transformationPhase = .complete }

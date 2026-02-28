@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct WorkflowsView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -17,6 +18,10 @@ struct WorkflowsView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
 
     private var filteredWorkflows: [Workflow] {
         guard let filter = statusFilter else { return service.workflows }
@@ -104,11 +109,17 @@ struct WorkflowsView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         filterChip(label: "All", isSelected: statusFilter == nil) {
-                            statusFilter = nil
+                            triggerHaptic()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                statusFilter = nil
+                            }
                         }
                         ForEach(WorkflowStatus.allCases, id: \.self) { status in
                             filterChip(label: status.displayName, isSelected: statusFilter == status) {
-                                statusFilter = statusFilter == status ? nil : status
+                                triggerHaptic()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    statusFilter = statusFilter == status ? nil : status
+                                }
                             }
                         }
                     }
@@ -132,6 +143,7 @@ struct WorkflowsView: View {
 
     private func workflowCard(_ workflow: Workflow) -> some View {
         Button {
+            triggerHaptic()
             selectedWorkflow = workflow
         } label: {
             VStack(alignment: .leading, spacing: 10) {
@@ -150,6 +162,7 @@ struct WorkflowsView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(statusColor(workflow.status).opacity(0.12))
+                        .overlay(Capsule().stroke(statusColor(workflow.status).opacity(0.3), lineWidth: 0.5))
                         .clipShape(Capsule())
                 }
 
@@ -334,6 +347,8 @@ private struct CreateWorkflowSheet: View {
                                 } label: {
                                     Image(systemName: "plus.circle.fill")
                                         .foregroundStyle(accentColor)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Circle())
                                 }
                             }
 
@@ -387,6 +402,8 @@ private struct CreateWorkflowSheet: View {
                     } label: {
                         Image(systemName: "minus.circle.fill")
                             .foregroundStyle(.red.opacity(0.7))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
                     }
                 }
             }
@@ -595,7 +612,7 @@ private struct WorkflowDetailSheet: View {
                         .foregroundStyle(textTertiary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(.ultraThinMaterial)
+                        .background(accentColor.opacity(0.08))
                         .clipShape(Capsule())
                 }
             }
@@ -711,6 +728,8 @@ private struct ExecuteWorkflowSheet: View {
                                 } label: {
                                     Image(systemName: "plus.circle.fill")
                                         .foregroundStyle(accentColor)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Circle())
                                 }
                             }
 
@@ -733,6 +752,8 @@ private struct ExecuteWorkflowSheet: View {
                                         } label: {
                                             Image(systemName: "minus.circle.fill")
                                                 .foregroundStyle(.red.opacity(0.7))
+                                                .frame(width: 44, height: 44)
+                                                .contentShape(Circle())
                                         }
                                     }
                                 }
@@ -1186,6 +1207,7 @@ private struct ExportSheet: View {
                     .liquidGlass(cornerRadius: 12)
 
                     Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         UIPasteboard.general.string = json
                         showCopied = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
