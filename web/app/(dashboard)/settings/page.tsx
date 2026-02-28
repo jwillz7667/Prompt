@@ -5,6 +5,7 @@ import { Select, type SelectOption } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
@@ -77,6 +78,8 @@ export default function SettingsPage() {
     setOutputLength,
     customInstructions,
     setCustomInstructions,
+    targetCharacterLength,
+    setTargetCharacterLength,
     resetToDefaults,
   } = useSettingsStore()
 
@@ -171,6 +174,18 @@ export default function SettingsPage() {
             options={lengthOptions}
             value={outputLength}
             onChange={(value) => setOutputLength(value as OutputLength)}
+          />
+
+          <Input
+            label="Target Character Length"
+            type="number"
+            placeholder="Leave empty for no limit"
+            value={targetCharacterLength ?? ''}
+            onChange={(e) => {
+              const value = e.target.value ? parseInt(e.target.value, 10) : undefined
+              setTargetCharacterLength(value)
+            }}
+            hint="Enforces a specific character count in the enhanced prompt"
           />
 
           <Textarea

@@ -56,6 +56,7 @@ const enhancePromptSchema = z.object({
   length: z.enum(['concise', 'standard', 'detailed']).optional(),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   customInstructions: z.string().max(2000).optional(),
+  targetCharacterLength: z.number().int().min(1).max(100000).optional(),
   // V3 meta-prompt features
   subModality: z.string().optional(),
   targetPlatform: z.string().optional(),
@@ -99,6 +100,7 @@ promptRouter.post(
         length: data.length,
         modality: data.modality,
         customInstructions: data.customInstructions,
+        targetCharacterLength: data.targetCharacterLength,
         // V3 meta-prompt features
         subModality: data.subModality,
         targetPlatform: data.targetPlatform,
@@ -236,6 +238,7 @@ promptRouter.post(
           length: data.length,
           modality: data.modality,
           customInstructions: data.customInstructions,
+          targetCharacterLength: data.targetCharacterLength,
           // V3 meta-prompt features
           subModality: data.subModality,
           targetPlatform: data.targetPlatform,

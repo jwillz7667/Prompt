@@ -15,9 +15,9 @@
 		2FF002702F25E8230039FFE0 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2FF0026F2F25E8230039FFE0 /* FirebaseAnalyticsCore */; };
 		2FF002722F25E8230039FFE0 /* FirebaseAnalyticsIdentitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = 2FF002712F25E8230039FFE0 /* FirebaseAnalyticsIdentitySupport */; };
 		2FF002772F25EC3A0039FFE0 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 2FF002762F25EC3A0039FFE0 /* FirebaseCrashlytics */; };
-		3117569E48D7851BAE137469 /* ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3816F1BCB5CD71643E49CDA /* ScreenshotTests.swift */; };
+		3117569E48D7851BAE137469 /* PromptUITests/ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3816F1BCB5CD71643E49CDA /* PromptUITests/ScreenshotTests.swift */; };
 		3DFCFCBB3A2515CED9A9610F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1767159F3A8A8318E799A51C /* Foundation.framework */; };
-		F67B4B4AB3DB8E0F8AF8AE6C /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90AE3E57D1D2828E4DF480C9 /* SnapshotHelper.swift */; };
+		F67B4B4AB3DB8E0F8AF8AE6C /* PromptUITests/SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90AE3E57D1D2828E4DF480C9 /* PromptUITests/SnapshotHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,9 +59,9 @@
 		2FE318DD2F229B1400F8305A /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		2FE318DF2F229B1500F8305A /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		2FE319022F229B9700F8305A /* PromptWidgetExtensionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PromptWidgetExtensionExtension.entitlements; sourceTree = "<group>"; };
-		90AE3E57D1D2828E4DF480C9 /* SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PromptUITests/SnapshotHelper.swift; sourceTree = SOURCE_ROOT; };
-		AB979EF86BB183B20F25B776 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = PromptUITests/Info.plist; sourceTree = SOURCE_ROOT; };
-		D3816F1BCB5CD71643E49CDA /* ScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PromptUITests/ScreenshotTests.swift; sourceTree = SOURCE_ROOT; };
+		90AE3E57D1D2828E4DF480C9 /* PromptUITests/SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PromptUITests/SnapshotHelper.swift; sourceTree = SOURCE_ROOT; };
+		AB979EF86BB183B20F25B776 /* PromptUITests/Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = PromptUITests/Info.plist; sourceTree = SOURCE_ROOT; };
+		D3816F1BCB5CD71643E49CDA /* PromptUITests/ScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PromptUITests/ScreenshotTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -176,11 +176,10 @@
 		9E6EDF9B0527D52210A7B8F6 /* PromptUITests */ = {
 			isa = PBXGroup;
 			children = (
-				D3816F1BCB5CD71643E49CDA /* ScreenshotTests.swift */,
-				90AE3E57D1D2828E4DF480C9 /* SnapshotHelper.swift */,
-				AB979EF86BB183B20F25B776 /* Info.plist */,
+				D3816F1BCB5CD71643E49CDA /* PromptUITests/ScreenshotTests.swift */,
+				90AE3E57D1D2828E4DF480C9 /* PromptUITests/SnapshotHelper.swift */,
+				AB979EF86BB183B20F25B776 /* PromptUITests/Info.plist */,
 			);
-			name = PromptUITests;
 			path = PromptUITests;
 			sourceTree = SOURCE_ROOT;
 		};
@@ -284,7 +283,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				2FF002682F25E8230039FFE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
+				2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2F2D04162F1CCAB80090D110 /* Products */;
@@ -368,8 +367,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3117569E48D7851BAE137469 /* ScreenshotTests.swift in Sources */,
-				F67B4B4AB3DB8E0F8AF8AE6C /* SnapshotHelper.swift in Sources */,
+				3117569E48D7851BAE137469 /* PromptUITests/ScreenshotTests.swift in Sources */,
+				F67B4B4AB3DB8E0F8AF8AE6C /* PromptUITests/SnapshotHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -734,7 +733,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */ = {
+		2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
 			requirement = {
@@ -755,7 +754,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		2F1DD8512F2AB6D2008B1A20 /* SocketIO */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
+			package = 2F1DD8502F2AB6D2008B1A20 /* XCRemoteSwiftPackageReference "socket" */;
 			productName = SocketIO;
 		};
 		2FF0026D2F25E8230039FFE0 /* FirebaseAnalytics */ = {

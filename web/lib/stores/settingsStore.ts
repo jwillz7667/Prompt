@@ -12,6 +12,7 @@ interface SettingsState extends UserSettings {
   setTone: (tone: ToneType) => void
   setOutputLength: (length: OutputLength) => void
   setCustomInstructions: (instructions: string) => void
+  setTargetCharacterLength: (length: number | undefined) => void
   resetToDefaults: () => void
 }
 
@@ -24,6 +25,7 @@ const defaultSettings: UserSettings = {
   selectedTone: 'professional',
   outputLength: 'standard',
   customInstructions: '',
+  targetCharacterLength: undefined,
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -39,6 +41,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTone: (selectedTone) => set({ selectedTone }),
       setOutputLength: (outputLength) => set({ outputLength }),
       setCustomInstructions: (customInstructions) => set({ customInstructions }),
+      setTargetCharacterLength: (targetCharacterLength) => set({ targetCharacterLength }),
       resetToDefaults: () => set(defaultSettings),
     }),
     {

@@ -27,9 +27,18 @@ struct ContentView: View {
     @State private var showPaywall = false
     @State private var showTemplates = false
     @State private var showThreads = false
+    @State private var showContexts = false
+    @State private var showSandbox = false
+    @State private var showWorkflows = false
+    @State private var showPlatforms = false
+    @State private var showVariations = false
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
+
+    // What's New tracking
+    @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
+    @State private var showWhatsNew = false
 
     // Paywall reminder tracking
     @AppStorage("hasSeenOnboardingPaywall") private var hasSeenOnboardingPaywall = false
@@ -162,6 +171,43 @@ struct ContentView: View {
                             triggerHaptic(.light)
                             showSettings = true
                         }
+
+                        Menu {
+                            Button {
+                                triggerHaptic(.light)
+                                showContexts = true
+                            } label: {
+                                Label("Contexts", systemImage: "folder.badge.gearshape")
+                            }
+                            Button {
+                                triggerHaptic(.light)
+                                showSandbox = true
+                            } label: {
+                                Label("Sandbox", systemImage: "flask")
+                            }
+                            Button {
+                                triggerHaptic(.light)
+                                showWorkflows = true
+                            } label: {
+                                Label("Workflows", systemImage: "arrow.triangle.branch")
+                            }
+                            Button {
+                                triggerHaptic(.light)
+                                showPlatforms = true
+                            } label: {
+                                Label("Platforms", systemImage: "cpu")
+                            }
+                            Button {
+                                triggerHaptic(.light)
+                                showVariations = true
+                            } label: {
+                                Label("Variations", systemImage: "rectangle.on.rectangle")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(textSecondary)
+                        }
                     }
                 }
 
@@ -212,6 +258,45 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)
             }
+            .sheet(isPresented: $showContexts) {
+                ContextsView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showSandbox) {
+                SandboxView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showWorkflows) {
+                WorkflowsView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showPlatforms) {
+                PlatformOptimizationView(promptText: viewModel.enhancedPrompt.isEmpty ? viewModel.userPrompt : viewModel.enhancedPrompt)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showVariations) {
+                VariationsView(promptText: viewModel.enhancedPrompt.isEmpty ? viewModel.userPrompt : viewModel.enhancedPrompt)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showWhatsNew) {
+                WhatsNewView {
+                    lastSeenWhatsNewVersion = currentAppVersion
+                    showWhatsNew = false
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(24)
+            }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {
                     triggerHaptic(.warning)
@@ -258,6 +343,7 @@ struct ContentView: View {
         .onAppear {
             headerScale = 0.9
             checkPaywallReminder()
+            checkWhatsNew()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -1399,6 +1485,24 @@ struct ContentView: View {
             }
         case .none:
             break
+        }
+    }
+
+    // MARK: - What's New Logic
+
+    private var currentAppVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private func checkWhatsNew() {
+        guard lastSeenWhatsNewVersion != currentAppVersion else { return }
+        // Don't show on very first install (no previous version stored)
+        guard !lastSeenWhatsNewVersion.isEmpty else {
+            lastSeenWhatsNewVersion = currentAppVersion
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            showWhatsNew = true
         }
     }
 

@@ -18,6 +18,11 @@ import { analyticsRouter } from './routes/analytics.js';
 import { supportRouter } from './routes/support.js';
 import { threadRouter } from './routes/threads.js';
 import { adminRouter } from './routes/admin.js';
+import { platformRouter } from './routes/platforms.js';
+import contextsRouter from './routes/contexts.js';
+import sandboxRouter from './routes/sandbox.js';
+import workflowsRouter from './routes/workflows.js';
+import variationsRouter from './routes/variations.js';
 // Enterprise API routes
 import { apiKeysRouter } from './routes/apiKeys.js';
 import { publicApiRouter } from './routes/publicApi.js';
@@ -122,6 +127,11 @@ app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/support', supportRouter);
 app.use('/api/v1/threads', threadRouter);
 app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1/platforms', platformRouter);
+app.use('/api/v1/contexts', contextsRouter);
+app.use('/api/v1/sandbox', sandboxRouter);
+app.use('/api/v1/workflows', workflowsRouter);
+app.use('/api/v1/variations', variationsRouter);
 
 // Enterprise API routes
 app.use('/api/v1/developer/auth', developerAuthRouter);

@@ -38,6 +38,7 @@ export interface EnhanceRequest {
   temperature?: number
   customInstructions?: string
   deepThink?: boolean
+  targetCharacterLength?: number
 }
 
 export interface EnhanceResponse {

@@ -60,6 +60,7 @@ export function useEnhance() {
         temperature: settings.temperature,
         customInstructions: options.customInstructions ?? settings.customInstructions,
         deepThink: options.deepThink ?? settings.deepThinkEnabled,
+        targetCharacterLength: settings.targetCharacterLength,
       }
 
       try {

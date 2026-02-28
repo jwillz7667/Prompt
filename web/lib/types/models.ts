@@ -202,6 +202,7 @@ export interface UserSettings {
   selectedTone: ToneType
   outputLength: OutputLength
   customInstructions: string
+  targetCharacterLength?: number
 }
 
 // Stripe

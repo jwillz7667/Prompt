@@ -67,7 +67,7 @@ export class MetaPromptBuilder {
    * Build the complete user message with examples and constraints
    */
   buildUserMessage(): string {
-    const { prompt, tier, modality, tone, length, customInstructions, subModality, targetPlatform } = this.options;
+    const { prompt, tier, modality, tone, length, customInstructions, subModality, targetPlatform, targetCharacterLength } = this.options;
 
     let message = `<enhancement_request>
 <original_prompt>
@@ -132,6 +132,16 @@ CRITICAL: The user has specified a length limit. The enhanced prompt output MUST
 ${lengthConstraint}
 Do NOT exceed this limit. Count carefully. This overrides any default output length guidance.
 </length_constraint>`;
+    }
+    
+    // Add explicit target character length if provided
+    if (targetCharacterLength && targetCharacterLength > 0) {
+      message += `\n\n<character_length_constraint>
+CRITICAL REQUIREMENT: The enhanced prompt MUST be EXACTLY ${targetCharacterLength} characters long (including all text, spaces, and punctuation).
+- Count every character precisely
+- Adjust content to meet this exact length
+- This is a hard constraint that overrides all other length guidance
+</character_length_constraint>`;
     }
 
     message += '\n\nTransform the original prompt into an optimized version. Return ONLY the enhanced prompt.';

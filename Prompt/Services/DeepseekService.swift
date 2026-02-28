@@ -20,6 +20,7 @@ actor DeepseekService {
         let modality: String?
         let subModality: String?
         let customInstructions: String?
+        let targetCharacterLength: Int?
 
         enum CodingKeys: String, CodingKey {
             case prompt
@@ -31,6 +32,7 @@ actor DeepseekService {
             case modality
             case subModality
             case customInstructions
+            case targetCharacterLength
         }
     }
 
@@ -75,7 +77,8 @@ actor DeepseekService {
         length: OutputLength? = nil,
         modality: ModalityType? = nil,
         subModality: String? = nil,
-        customInstructions: String? = nil
+        customInstructions: String? = nil,
+        targetCharacterLength: Int? = nil
     ) async throws -> EnhancedPromptResult {
         let request = EnhanceRequest(
             prompt: userPrompt,
@@ -86,7 +89,8 @@ actor DeepseekService {
             length: length?.rawValue,
             modality: modality?.apiModality,
             subModality: subModality,
-            customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
+            customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil,
+            targetCharacterLength: targetCharacterLength
         )
 
         let response: EnhanceResponse = try await APIClient.shared.request(
@@ -121,6 +125,7 @@ actor DeepseekService {
         modality: ModalityType? = nil,
         subModality: String? = nil,
         customInstructions: String? = nil,
+        targetCharacterLength: Int? = nil,
         onToken: @escaping @Sendable (String) -> Void
     ) async throws -> EnhancedPromptResult {
         let request = EnhanceRequest(
@@ -132,7 +137,8 @@ actor DeepseekService {
             length: length?.rawValue,
             modality: modality?.apiModality,
             subModality: subModality,
-            customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil
+            customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil,
+            targetCharacterLength: targetCharacterLength
         )
 
         let stream = await APIClient.shared.requestStream(

@@ -255,6 +255,7 @@ final class SettingsManager {
     var selectedModality: ModalityType = .text
     var selectedAudioSubModality: AudioSubModalityType = .speech
     var customInstructions: String = ""
+    var targetCharacterLength: Int? = nil  // Optional character length constraint
 
     /// Returns the effective sub-modality string for the current modality, or nil if not applicable
     var effectiveSubModality: String? {
@@ -288,6 +289,7 @@ final class SettingsManager {
         static let selectedModality = "selectedModality"
         static let selectedAudioSubModality = "selectedAudioSubModality"
         static let customInstructions = "customInstructions"
+        static let targetCharacterLength = "targetCharacterLength"
         static let settingsMigrated = "settingsMigratedToAppGroup"
     }
 
@@ -399,6 +401,14 @@ final class SettingsManager {
         if let instructions = defaults.string(forKey: Keys.customInstructions) {
             customInstructions = instructions
         }
+        
+        // Load target character length
+        let savedLength = defaults.integer(forKey: Keys.targetCharacterLength)
+        if savedLength > 0 {
+            targetCharacterLength = savedLength
+        } else {
+            targetCharacterLength = nil
+        }
 
         #if DEBUG
         print("[Settings] Loaded preferences from App Group")
@@ -425,6 +435,13 @@ final class SettingsManager {
         defaults.set(selectedModality.rawValue, forKey: Keys.selectedModality)
         defaults.set(selectedAudioSubModality.rawValue, forKey: Keys.selectedAudioSubModality)
         defaults.set(customInstructions, forKey: Keys.customInstructions)
+        
+        // Save target character length
+        if let length = targetCharacterLength {
+            defaults.set(length, forKey: Keys.targetCharacterLength)
+        } else {
+            defaults.removeObject(forKey: Keys.targetCharacterLength)
+        }
 
         #if DEBUG
         print("[Settings] Saved preferences to App Group")

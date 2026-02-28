@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Promptomize is a full-stack prompt enhancement app with three components:
+Promptomize is a full-stack prompt enhancement app with four components:
 - **backend/** - Node.js/Express REST API (TypeScript, Prisma, PostgreSQL)
 - **web/** - Next.js marketing site + dashboard (React, TailwindCSS, Zustand)
 - **Prompt/** - iOS app (SwiftUI, StoreKit 2)
@@ -26,7 +26,7 @@ npm run db:studio          # Open Prisma Studio GUI
 
 ### Web (in `web/`)
 ```bash
-npm run dev                # Next.js dev server (port 3001)
+npm run dev                # Next.js dev server (port 3001)  
 npm run build              # Production build
 npm run lint               # ESLint
 ```
@@ -79,6 +79,8 @@ web/
 ```
 
 ### API Routes
+
+#### Core API (iOS/Web app)
 ```
 /api/v1/auth          - Apple/Google OAuth, token refresh, logout
 /api/v1/prompts       - CRUD + enhance endpoint (uses DeepSeek)
@@ -87,6 +89,16 @@ web/
 /api/v1/templates     - User and built-in templates
 /api/v1/collections   - Organize prompts into folders
 /api/v1/analytics     - Usage stats
+/api/v1/threads       - Conversation threads with enhancement history
+/api/v1/support       - Support ticket system
+```
+
+#### Developer API (External integrations)
+```
+/api/public/v1/enhance     - Enhance prompts (auth via X-API-Key header)
+/api/public/v1/history     - Enhancement history
+/api/public/v1/usage       - API usage stats
+/api/public/v1/quota       - Current quota info
 ```
 
 ### Authentication Flow
@@ -120,9 +132,16 @@ Required:
 - `APPLE_ISSUER_ID`, `APPLE_BUNDLE_ID` - App Store Server API
 - `DEEPSEEK_API_KEY` - AI prompt enhancement
 
-### Web
+Optional (for scaling):
+- `REDIS_URL` - Caching, rate limiting, job queues
+- `RESEND_API_KEY` - Email notifications
+- `SENTRY_DSN` - Error tracking
+
+### Web (see `web/.env.example`)
 - `NEXT_PUBLIC_API_URL` - Backend URL
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` - Web payments
+- `NEXT_PUBLIC_STRIPE_PRICE_*` - Stripe price IDs for subscriptions
+- `BACKEND_WEBHOOK_SECRET` - Internal webhook verification
 
 ### iOS
 - Backend URL hardcoded in `APIClient.swift` (line 17)
@@ -133,8 +152,6 @@ Required:
 - **Backend**: Railway (Docker) - auto-deploys from main
 - **Web**: Vercel - auto-deploys from main
 - **iOS**: App Store via Xcode Archive + `ExportOptions.plist`
-
-See `PRODUCTION_SETUP.md` for Firebase, GitHub Actions secrets, and verification checklist.
 
 ## Code Patterns
 
@@ -156,3 +173,31 @@ See `PRODUCTION_SETUP.md` for Firebase, GitHub Actions secrets, and verification
 - React Query for server state
 - Zustand for client state
 - `jose` for JWT handling client-side
+
+## Critical Implementation Notes
+
+### Database Migrations
+Always use migrations in production, never `db:push`:
+```bash
+cd backend
+npx prisma migrate dev --name description  # Development
+npm run db:migrate                          # Production deployment
+```
+
+### API Key Authentication (Developer API)
+Developer API uses `X-API-Key` header with Redis-backed rate limiting and quota enforcement. Keys are managed via `/api/developer/*` endpoints.
+
+### Subscription Handling
+- iOS: StoreKit 2 with server-side verification via Apple's App Store Server API
+- Web: Stripe with webhook handling for subscription lifecycle
+- Both platforms sync to unified `Subscription` model in Prisma
+
+### Real-time Features
+- Support chat uses Socket.IO (initialized in `backend/src/utils/socket.ts`)
+- Redis pub/sub for scaling WebSocket connections across multiple servers
+
+### Meta-prompt System
+Enhancement uses modality-specific prompt builders in `backend/src/services/metaPrompts/`:
+- Each modality (text, image, video, audio, code, 3d) has specialized prompting
+- Base prompt builder handles common patterns
+- Supports platform-specific optimizations (e.g., Midjourney for images)

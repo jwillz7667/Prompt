@@ -87,11 +87,17 @@ model User {
   lastLoginAt   DateTime?
 
   // Relations
-  sessions        Session[]
-  prompts         Prompt[]
-  threads         Thread[]
-  subscription    Subscription?
-  supportTickets  SupportTicket[]
+  sessions              Session[]
+  prompts               Prompt[]
+  threads               Thread[]
+  subscription          Subscription?
+  supportTickets        SupportTicket[]
+  workflows             Workflow[]
+  workflowExecutions    WorkflowExecution[]
+  variationResults      VariationResult[]
+  projectContexts       ProjectContext[]
+  platformSettings      UserPlatformSettings[]
+  sandboxTests          SandboxTest[]
 
   // Indexes for performance at scale
   @@index([email])
@@ -162,6 +168,11 @@ model Prompt {
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  // Relations
+  variations      PromptVariation[]
+  contextUsages   ContextUsage[]
+  sandboxTests    SandboxTest[]
 
   // Indexes for fast queries at scale
   @@index([userId, createdAt(sort: Desc)])
@@ -743,4 +754,245 @@ model ThreadTurn {
   createdAt       DateTime @default(now())
 
   @@index([threadId, turnIndex])
+}
+
+// ============================================================================
+// WORKFLOW MANAGEMENT - Multi-step prompt workflows
+// ============================================================================
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+model Workflow {
+  id              String                @id @default(cuid())
+  userId          String
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?               @db.Text
+  status          WorkflowStatus        @default(DRAFT)
+  metadata        Json?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  
+  steps           WorkflowStep[]
+  executions      WorkflowExecution[]
+  
+  @@index([userId, status])
+  @@index([userId, updatedAt(sort: Desc)])
+}
+
+model WorkflowStep {
+  id                String    @id @default(cuid())
+  workflowId        String
+  workflow          Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepOrder         Int
+  name              String
+  promptTemplate    String    @db.Text
+  contextRequired   String[]
+  outputFormat      String?
+  validationRules   Json?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@unique([workflowId, stepOrder])
+  @@index([workflowId])
+}
+
+model WorkflowExecution {
+  id            String    @id @default(cuid())
+  workflowId    String
+  workflow      Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        String
+  currentStep   Int       @default(0)
+  stepResults   Json?
+  error         String?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  metadata      Json?
+  
+  @@index([workflowId, status])
+  @@index([userId, startedAt(sort: Desc)])
+}
+
+// ============================================================================
+// PROMPT VARIATIONS - A/B testing and version management
+// ============================================================================
+
+enum VariationStatus {
+  DRAFT
+  TESTING
+  WINNER
+  ARCHIVED
+}
+
+model PromptVariation {
+  id              String            @id @default(cuid())
+  promptId        String
+  prompt          Prompt            @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  variantName     String
+  variantPrompt   String            @db.Text
+  status          VariationStatus   @default(DRAFT)
+  testPercentage  Int               @default(50)
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  results         VariationResult[]
+  
+  @@index([promptId, status])
+  @@unique([promptId, variantName])
+}
+
+model VariationResult {
+  id            String            @id @default(cuid())
+  variationId   String
+  variation     PromptVariation   @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId     String
+  selected      Boolean           @default(false)
+  rating        Int?
+  feedback      String?           @db.Text
+  metadata      Json?
+  createdAt     DateTime          @default(now())
+  
+  @@index([variationId, createdAt])
+  @@index([sessionId])
+}
+
+// ============================================================================
+// PROJECT CONTEXT - Reusable context for prompts
+// ============================================================================
+
+model ProjectContext {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?         @db.Text
+  contextData   Json
+  tags          String[]
+  isGlobal      Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  usages        ContextUsage[]
+  
+  @@index([userId, name])
+  @@index([userId, isGlobal])
+}
+
+model ContextUsage {
+  id          String          @id @default(cuid())
+  contextId   String
+  context     ProjectContext  @relation(fields: [contextId], references: [id], onDelete: Cascade)
+  promptId    String
+  prompt      Prompt          @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  usedAt      DateTime        @default(now())
+  metadata    Json?
+  
+  @@unique([contextId, promptId])
+  @@index([promptId])
+  @@index([contextId])
+}
+
+// ============================================================================
+// PLATFORM PRESETS - Platform-specific optimization
+// ============================================================================
+
+enum PlatformType {
+  CHATGPT
+  CLAUDE
+  GEMINI
+  PERPLEXITY
+  MIDJOURNEY
+  DALLE
+  STABLE_DIFFUSION
+  GITHUB_COPILOT
+  CUSTOM
+}
+
+model PlatformPreset {
+  id                    String                  @id @default(cuid())
+  platform              PlatformType
+  name                  String
+  description           String?                 @db.Text
+  systemPrompt          String?                 @db.Text
+  formatGuidelines      Json
+  tokenLimits           Json
+  bestPractices         String[]
+  examplePrompts        Json?
+  isOfficial            Boolean                 @default(false)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  
+  userSettings          UserPlatformSettings[]
+  
+  @@unique([platform, name])
+  @@index([platform, isOfficial])
+}
+
+model UserPlatformSettings {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  presetId        String
+  preset          PlatformPreset  @relation(fields: [presetId], references: [id], onDelete: Cascade)
+  customSettings  Json?
+  isDefault       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@unique([userId, presetId])
+  @@index([userId, isDefault])
+}
+
+// ============================================================================
+// SANDBOX TESTING - Test prompts against multiple platforms
+// ============================================================================
+
+model SandboxTest {
+  id                String                @id @default(cuid())
+  userId            String
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promptId          String?
+  prompt            Prompt?               @relation(fields: [promptId], references: [id], onDelete: SetNull)
+  testPrompt        String                @db.Text
+  platforms         PlatformType[]
+  parameters        Json?
+  status            String                @default("pending")
+  scheduledFor      DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime              @default(now())
+  
+  results           PlatformTestResult[]
+  
+  @@index([userId, status])
+  @@index([status, scheduledFor])
+}
+
+model PlatformTestResult {
+  id              String        @id @default(cuid())
+  testId          String
+  test            SandboxTest   @relation(fields: [testId], references: [id], onDelete: Cascade)
+  platform        PlatformType
+  response        String?       @db.Text
+  error           String?       @db.Text
+  latencyMs       Int?
+  tokenCount      Int?
+  cost            Float?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  
+  @@unique([testId, platform])
+  @@index([testId])
 }

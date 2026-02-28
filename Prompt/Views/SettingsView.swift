@@ -93,11 +93,30 @@ struct SettingsView: View {
                         Stepper("Max Tokens: \(settings.maxTokens)", value: $bindableSettings.maxTokens, in: 1024...65536, step: 1024)
                             .foregroundStyle(textPrimary)
                     }
+                    
+                    HStack {
+                        Image(systemName: "character.cursor.ibeam")
+                            .foregroundStyle(accentColor)
+                            .frame(width: 28)
+                        Text("Target Length")
+                            .foregroundStyle(textPrimary)
+                        Spacer()
+                        if let targetLength = settings.targetCharacterLength {
+                            Text("\(targetLength) chars")
+                                .font(.caption)
+                                .foregroundStyle(textSecondary)
+                        }
+                        TextField("Optional", value: $bindableSettings.targetCharacterLength, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.numberPad)
+                    }
                 } header: {
                     Text("Generation Settings")
                         .foregroundStyle(textSecondary)
                 } footer: {
-                    Text("Higher temperature = more creative responses.")
+                    Text("Higher temperature = more creative responses. Target length enforces specific character count in the enhanced prompt.")
                         .foregroundStyle(textSecondary)
                 }
 

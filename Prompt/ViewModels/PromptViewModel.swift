@@ -90,7 +90,8 @@ final class PromptViewModel {
                 length: settings.outputLength,
                 modality: settings.selectedModality,
                 subModality: settings.effectiveSubModality,
-                customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
+                customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions,
+                targetCharacterLength: settings.targetCharacterLength
             ) { [weak self] token in
                 // Update UI with each token on main thread
                 Task { @MainActor in

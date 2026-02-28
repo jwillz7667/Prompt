@@ -235,6 +235,7 @@ export interface MetaPromptBuilderOptions {
   tone?: 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
   length?: 'concise' | 'standard' | 'detailed';
   customInstructions?: string;
+  targetCharacterLength?: number;
 }
 
 // ============================================================================

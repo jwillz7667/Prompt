@@ -42,6 +42,7 @@ export interface EnhancementRequest {
   length?: OutputLength;
   targetModel?: 'claude' | 'gpt' | 'gemini' | 'llama' | 'general';
   customInstructions?: string;
+  targetCharacterLength?: number;
   // V3 features
   subModality?: SubModality;
   targetPlatform?: TargetPlatform;
@@ -81,6 +82,7 @@ function buildEnhancementSystemPrompt(
       tone: request.tone,
       length: request.length,
       customInstructions: request.customInstructions,
+      targetCharacterLength: request.targetCharacterLength,
     });
     return builder.buildSystemPrompt();
   }

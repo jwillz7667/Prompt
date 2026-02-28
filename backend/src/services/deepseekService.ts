@@ -31,6 +31,7 @@ export interface EnhancePromptRequest {
   length?: OutputLength;
   modality?: PromptModality;
   customInstructions?: string;
+  targetCharacterLength?: number;
   // V3 meta-prompt features
   subModality?: string;
   targetPlatform?: string;
@@ -88,7 +89,11 @@ const DEFAULT_MAX_TOKENS = 2048; // Reduced for faster responses
 // META-PROMPT ENGINEERING SYSTEM (Tiered)
 // ============================================================================
 
-function buildBasicMetaPrompt(): string {
+function buildBasicMetaPrompt(targetLength?: number): string {
+  const lengthInstruction = targetLength 
+    ? `- YOU MUST ensure the enhanced prompt is EXACTLY ${targetLength} characters long`
+    : '- Keep it concise but complete';
+    
   return `You are a prompt enhancement assistant. Transform user prompts into clearer, more effective versions.
 
 ABSOLUTE RULE - NO EXCEPTIONS:
@@ -99,10 +104,14 @@ RULES:
 - Structure with clear sections and bullet points
 - Specify the expected output format
 - Return ONLY the enhanced prompt in Markdown
-- Keep it concise but complete`;
+${lengthInstruction}`;
 }
 
-function buildStandardMetaPrompt(): string {
+function buildStandardMetaPrompt(targetLength?: number): string {
+  const lengthInstruction = targetLength 
+    ? `- YOU MUST ensure the enhanced prompt is EXACTLY ${targetLength} characters long (including spaces and punctuation)`
+    : '- If the user specifies a character/word/sentence limit, preserve and enforce it in the enhanced prompt';
+    
   return `You are PromptEngineer. Transform user inputs into effective, well-structured prompts.
 
 ABSOLUTE RULE - NO EXCEPTIONS:
@@ -120,10 +129,14 @@ OUTPUT RULES:
 - Use Markdown formatting
 - Preserve user's core intent
 - Make it self-contained and immediately usable
-- If the user specifies a character/word/sentence limit, preserve and enforce it in the enhanced prompt`;
+${lengthInstruction}`;
 }
 
-function buildAdvancedMetaPrompt(): string {
+function buildAdvancedMetaPrompt(targetLength?: number): string {
+  const lengthInstruction = targetLength 
+    ? `- YOU MUST ensure the enhanced prompt is EXACTLY ${targetLength} characters long (including all text, spaces, and punctuation)`
+    : '- If the user specifies a character/word/sentence limit, preserve and enforce it in the enhanced prompt';
+    
   return `You are PromptArchitect. Transform user inputs into production-grade prompts optimized for AI models.
 
 ABSOLUTE RULE - NO EXCEPTIONS:
@@ -141,7 +154,7 @@ OUTPUT RULES:
 - Use clean Markdown formatting
 - Make it self-contained and immediately usable
 - Preserve user's core intent while maximizing clarity
-- If the user specifies a character/word/sentence limit, preserve and enforce it in the enhanced prompt`;
+${lengthInstruction}`;
 }
 
 // ============================================================================
@@ -815,6 +828,7 @@ async function enhancePromptWithV2Engine(request: EnhancePromptRequest): Promise
     tone: request.tone as Exclude<PromptTone, 'max'> | undefined,
     length: request.length,
     customInstructions: request.customInstructions,
+    targetCharacterLength: request.targetCharacterLength,
     // V3 meta-prompt features (passed through to V2 engine which handles V3 detection)
     subModality: request.subModality as EnhancementRequest['subModality'],
     targetPlatform: request.targetPlatform as EnhancementRequest['targetPlatform'],
@@ -1116,6 +1130,7 @@ async function enhancePromptStreamV2(
     tone: request.tone as Exclude<PromptTone, 'max'> | undefined,
     length: request.length,
     customInstructions: request.customInstructions,
+    targetCharacterLength: request.targetCharacterLength,
     // V3 meta-prompt features (passed through to V2 engine which handles V3 detection)
     subModality: request.subModality as EnhancementRequest['subModality'],
     targetPlatform: request.targetPlatform as EnhancementRequest['targetPlatform'],
