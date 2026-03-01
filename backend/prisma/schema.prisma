@@ -921,6 +921,12 @@ enum PlatformType {
   RUNWAY
   SUNO
   UDIO
+  FLUX
+  PIKA
+  KLING
+  MUSICGEN
+  MESHY
+  TRIPO3D
   CUSTOM
 }
 

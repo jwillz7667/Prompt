@@ -812,7 +812,15 @@ struct ContentView: View {
                             platformColor: Color(hex: platform.color)
                         ) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedPlatform = selectedPlatform == platform ? nil : platform
+                                if selectedPlatform == platform {
+                                    selectedPlatform = nil
+                                } else {
+                                    selectedPlatform = platform
+                                    if let modality = platform.associatedModality {
+                                        settings.selectedModality = modality
+                                        settings.savePreferences()
+                                    }
+                                }
                             }
                             triggerHaptic(.light)
                         }
@@ -870,6 +878,22 @@ struct ContentView: View {
                 }
 
                 Spacer()
+
+                // Platform character limit badge
+                if let limitDesc = selectedPlatform?.promptLimitDescription {
+                    HStack(spacing: 3) {
+                        Image(systemName: "text.word.spacing")
+                            .font(.system(size: 8, weight: .bold))
+                        Text(limitDesc)
+                            .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(accentColor.opacity(0.12))
+                    .clipShape(Capsule())
+                    .transition(.scale.combined(with: .opacity))
+                }
 
                 // Pro badge if platform selected
                 if selectedPlatform != nil && storeKit.currentTier == .free {
@@ -1163,7 +1187,7 @@ struct ContentView: View {
 
     private var inputToolbar: some View {
         HStack(spacing: 8) {
-            // Modality selector (compact)
+            // Modality selector (compact) — dimmed when platform locks modality
             CompactModalitySelector(
                 selectedModality: Binding(
                     get: { settings.selectedModality },
@@ -1173,6 +1197,8 @@ struct ContentView: View {
                     }
                 )
             )
+            .opacity(selectedPlatform?.locksModality == true ? 0.5 : 1.0)
+            .disabled(selectedPlatform?.locksModality == true)
 
             // Audio sub-modality selector (only shown when audio is selected)
             if settings.selectedModality == .audio {
@@ -1611,32 +1637,29 @@ struct ContentView: View {
 
             let startTime = Date()
 
-            // Build platform-aware custom instructions
-            if selectedPlatform != nil || attachedContext != nil {
-                var extraInstructions: [String] = []
-
-                if let platform = selectedPlatform {
-                    extraInstructions.append("Optimize this prompt specifically for \(platform.displayName). Follow \(platform.displayName)'s best practices, formatting conventions, and parameter syntax.")
-                }
-
-                if let context = attachedContext {
-                    let contextDataStr = context.contextData.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
-                    if !contextDataStr.isEmpty {
-                        extraInstructions.append("Use the following context data: \(contextDataStr)")
-                    }
-                }
-
-                if !extraInstructions.isEmpty {
+            // Build context-aware custom instructions (platform is handled via targetPlatform)
+            if let context = attachedContext {
+                let contextDataStr = context.contextData.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+                if !contextDataStr.isEmpty {
                     let existing = settings.customInstructions
-                    let combined = extraInstructions.joined(separator: ". ")
-                    settings.customInstructions = existing.isEmpty ? combined : "\(existing). \(combined)"
-                    await viewModel.enhancePrompt(settings: settings)
+                    let contextInstruction = "Use the following context data: \(contextDataStr)"
+                    settings.customInstructions = existing.isEmpty ? contextInstruction : "\(existing). \(contextInstruction)"
+                    await viewModel.enhancePrompt(
+                        settings: settings,
+                        targetPlatform: selectedPlatform?.backendPlatformKey
+                    )
                     settings.customInstructions = existing // Restore original
                 } else {
-                    await viewModel.enhancePrompt(settings: settings)
+                    await viewModel.enhancePrompt(
+                        settings: settings,
+                        targetPlatform: selectedPlatform?.backendPlatformKey
+                    )
                 }
             } else {
-                await viewModel.enhancePrompt(settings: settings)
+                await viewModel.enhancePrompt(
+                    settings: settings,
+                    targetPlatform: selectedPlatform?.backendPlatformKey
+                )
             }
 
             if viewModel.hasEnhancedPrompt {

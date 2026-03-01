@@ -15,6 +15,12 @@ enum PlatformType: String, Codable, CaseIterable, Identifiable {
     case runway = "RUNWAY"
     case suno = "SUNO"
     case udio = "UDIO"
+    case flux = "FLUX"
+    case pika = "PIKA"
+    case kling = "KLING"
+    case musicgen = "MUSICGEN"
+    case meshy = "MESHY"
+    case tripo3d = "TRIPO3D"
     case custom = "CUSTOM"
 
     var id: String { rawValue }
@@ -33,6 +39,12 @@ enum PlatformType: String, Codable, CaseIterable, Identifiable {
         case .runway: return "Runway"
         case .suno: return "Suno"
         case .udio: return "Udio"
+        case .flux: return "Flux"
+        case .pika: return "Pika"
+        case .kling: return "Kling"
+        case .musicgen: return "MusicGen"
+        case .meshy: return "Meshy"
+        case .tripo3d: return "Tripo3D"
         case .custom: return "Custom"
         }
     }
@@ -51,6 +63,12 @@ enum PlatformType: String, Codable, CaseIterable, Identifiable {
         case .runway: return "video.fill"
         case .suno: return "music.note"
         case .udio: return "waveform"
+        case .flux: return "wand.and.stars"
+        case .pika: return "play.rectangle.fill"
+        case .kling: return "film.fill"
+        case .musicgen: return "music.quarternote.3"
+        case .meshy: return "cube.fill"
+        case .tripo3d: return "rotate.3d"
         case .custom: return "gear"
         }
     }
@@ -69,8 +87,100 @@ enum PlatformType: String, Codable, CaseIterable, Identifiable {
         case .runway: return "#00D4AA"
         case .suno: return "#FF69B4"
         case .udio: return "#8B5CF6"
+        case .flux: return "#FF8C00"
+        case .pika: return "#00BFFF"
+        case .kling: return "#E91E63"
+        case .musicgen: return "#1DB954"
+        case .meshy: return "#FF6F61"
+        case .tripo3d: return "#9C27B0"
         case .custom: return "#6B7280"
         }
+    }
+
+    /// The modality this platform is associated with (nil = text/general)
+    var associatedModality: ModalityType? {
+        switch self {
+        case .chatGPT, .claude, .gemini, .perplexity, .githubCopilot, .custom:
+            return nil
+        case .midjourney, .dalle, .stableDiffusion, .flux:
+            return .image
+        case .sora, .runway, .pika, .kling:
+            return .video
+        case .suno, .udio, .musicgen:
+            return .music
+        case .meshy, .tripo3d:
+            return .threeD
+        }
+    }
+
+    /// The backend targetPlatform key (lowercase, hyphenated)
+    var backendPlatformKey: String {
+        switch self {
+        case .chatGPT: return "gpt"
+        case .claude: return "claude"
+        case .gemini: return "gemini"
+        case .perplexity: return "gpt"
+        case .githubCopilot: return "copilot"
+        case .midjourney: return "midjourney"
+        case .dalle: return "dalle"
+        case .stableDiffusion: return "stable-diffusion"
+        case .flux: return "flux"
+        case .sora: return "sora"
+        case .runway: return "runway"
+        case .pika: return "pika"
+        case .kling: return "kling"
+        case .suno: return "suno"
+        case .udio: return "udio"
+        case .musicgen: return "musicgen"
+        case .meshy: return "meshy"
+        case .tripo3d: return "tripo3d"
+        case .custom: return "general"
+        }
+    }
+
+    /// Human-readable prompt limit description for the badge
+    var promptLimitDescription: String? {
+        switch self {
+        case .midjourney: return "~150 words"
+        case .dalle: return "~200 words"
+        case .stableDiffusion: return "300+ words"
+        case .flux: return "200-300 words"
+        case .sora: return "250-350 words"
+        case .runway: return "150-250 words"
+        case .pika: return "~200 words"
+        case .kling: return "~250 words"
+        case .suno: return "300-500 chars"
+        case .udio: return "~200 words"
+        case .musicgen: return "30-80 words"
+        case .meshy: return "~150 words"
+        case .tripo3d: return "~150 words"
+        default: return nil
+        }
+    }
+
+    /// Recommended character length for prompts on this platform
+    var recommendedCharacterLength: Int? {
+        switch self {
+        case .midjourney: return 750    // ~150 words
+        case .dalle: return 1000        // ~200 words
+        case .stableDiffusion: return 1500 // 300+ words
+        case .flux: return 1250         // 200-300 words
+        case .sora: return 1500         // 250-350 words
+        case .runway: return 1000       // 150-250 words
+        case .pika: return 1000         // ~200 words
+        case .kling: return 1250        // ~250 words
+        case .suno: return 500          // 300-500 chars
+        case .udio: return 1000         // ~200 words
+        case .musicgen: return 400      // 30-80 words
+        case .meshy: return 750         // ~150 words
+        case .tripo3d: return 750       // ~150 words
+        default: return nil
+        }
+    }
+
+    /// Whether selecting this platform should lock the modality selector
+    var locksModality: Bool {
+        return associatedModality != nil
     }
 }
 

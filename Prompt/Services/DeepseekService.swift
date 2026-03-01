@@ -21,6 +21,7 @@ actor DeepseekService {
         let subModality: String?
         let customInstructions: String?
         let targetCharacterLength: Int?
+        let targetPlatform: String?
 
         enum CodingKeys: String, CodingKey {
             case prompt
@@ -33,6 +34,7 @@ actor DeepseekService {
             case subModality
             case customInstructions
             case targetCharacterLength
+            case targetPlatform
         }
     }
 
@@ -78,7 +80,8 @@ actor DeepseekService {
         modality: ModalityType? = nil,
         subModality: String? = nil,
         customInstructions: String? = nil,
-        targetCharacterLength: Int? = nil
+        targetCharacterLength: Int? = nil,
+        targetPlatform: String? = nil
     ) async throws -> EnhancedPromptResult {
         let request = EnhanceRequest(
             prompt: userPrompt,
@@ -90,7 +93,8 @@ actor DeepseekService {
             modality: modality?.apiModality,
             subModality: subModality,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil,
-            targetCharacterLength: targetCharacterLength
+            targetCharacterLength: targetCharacterLength,
+            targetPlatform: targetPlatform
         )
 
         let response: EnhanceResponse = try await APIClient.shared.request(
@@ -126,6 +130,7 @@ actor DeepseekService {
         subModality: String? = nil,
         customInstructions: String? = nil,
         targetCharacterLength: Int? = nil,
+        targetPlatform: String? = nil,
         onToken: @escaping @Sendable (String) -> Void
     ) async throws -> EnhancedPromptResult {
         let request = EnhanceRequest(
@@ -138,7 +143,8 @@ actor DeepseekService {
             modality: modality?.apiModality,
             subModality: subModality,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil,
-            targetCharacterLength: targetCharacterLength
+            targetCharacterLength: targetCharacterLength,
+            targetPlatform: targetPlatform
         )
 
         let stream = await APIClient.shared.requestStream(

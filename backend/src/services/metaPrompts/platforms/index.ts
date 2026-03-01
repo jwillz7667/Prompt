@@ -195,6 +195,108 @@ const udioAdapter: PlatformAdapter = {
 };
 
 // ============================================================================
+// VIDEO PLATFORM ADAPTERS (continued)
+// ============================================================================
+
+const pikaAdapter: PlatformAdapter = {
+  platform: 'pika',
+  modality: 'video',
+  syntaxRules: [
+    'Motion descriptions with specific verbs (float, spin, zoom, pan)',
+    'Camera movement specification (orbit, dolly, tracking shot)',
+    'Style references for visual consistency',
+    'Animation speed and easing hints (slow motion, timelapse)',
+    'Natural language, no special syntax needed',
+  ],
+  formatHints: [
+    'Use concise motion verbs to describe action',
+    'Include visual style descriptors (cinematic, anime, painterly)',
+    'Keep prompts under 200 words',
+    'Specify subject clearly before describing motion',
+  ],
+};
+
+const klingAdapter: PlatformAdapter = {
+  platform: 'kling',
+  modality: 'video',
+  syntaxRules: [
+    'Cinematic camera movements (crane shot, steadicam, handheld)',
+    'Lighting descriptions (golden hour, rim lighting, volumetric fog)',
+    'Physics interactions (gravity, fluid dynamics, particle effects)',
+    'Temporal sequences with scene progression',
+    'Detailed environment and atmosphere descriptions',
+  ],
+  formatHints: [
+    'Write detailed scene compositions with layered depth',
+    'Include specific camera lens references (35mm, anamorphic)',
+    'Keep prompts around 250 words for optimal results',
+    'Describe both foreground action and background atmosphere',
+  ],
+};
+
+// ============================================================================
+// AUDIO PLATFORM ADAPTERS (continued)
+// ============================================================================
+
+const musicgenAdapter: PlatformAdapter = {
+  platform: 'musicgen',
+  modality: 'audio',
+  syntaxRules: [
+    'Genre and mood keywords (upbeat jazz, melancholic ambient)',
+    'Instrument descriptors (acoustic guitar, synthesizer pads)',
+    'No structure tags — plain text descriptions only',
+    'Tempo and energy descriptors (slow, driving, relaxed)',
+    'Comma-separated descriptor style works best',
+  ],
+  formatHints: [
+    'Keep prompts very concise (30-80 words)',
+    'Use comma-separated descriptors rather than sentences',
+    'Focus on sonic characteristics, not lyrics or song structure',
+    'Include tempo, mood, and instrumentation in that order',
+  ],
+};
+
+// ============================================================================
+// 3D PLATFORM ADAPTERS
+// ============================================================================
+
+const meshyAdapter: PlatformAdapter = {
+  platform: 'meshy',
+  modality: '3d',
+  syntaxRules: [
+    'Object-focused descriptions (single subject preferred)',
+    'Material and texture descriptions (metallic, wooden, glass)',
+    'Polygon count hints (low-poly, high-detail, game-ready)',
+    'UV mapping and topology notes when relevant',
+    'Style references (stylized, realistic, cartoon)',
+  ],
+  formatHints: [
+    'Focus on a single, well-defined object or character',
+    'Include material properties and surface finish',
+    'Mention intended use (game asset, 3D print, rendering)',
+    'Keep prompts under 150 words for best results',
+  ],
+};
+
+const tripo3dAdapter: PlatformAdapter = {
+  platform: 'tripo3d',
+  modality: '3d',
+  syntaxRules: [
+    'Mesh quality descriptors (clean topology, quad-dominant)',
+    'Surface detail level (smooth, highly detailed, sculpted)',
+    'Geometry complexity hints (simple, intricate, organic)',
+    'Scale and proportion references',
+    'Single object focus for best generation quality',
+  ],
+  formatHints: [
+    'Describe one object at a time for clean topology',
+    'Emphasize clean, manifold geometry for downstream use',
+    'Include scale references (palm-sized, life-size, miniature)',
+    'Keep prompts under 150 words',
+  ],
+};
+
+// ============================================================================
 // PLATFORM REGISTRY
 // ============================================================================
 
@@ -205,8 +307,13 @@ const platformAdapters: Record<string, PlatformAdapter> = {
   flux: fluxAdapter,
   sora: soraAdapter,
   runway: runwayAdapter,
+  pika: pikaAdapter,
+  kling: klingAdapter,
   suno: sunoAdapter,
   udio: udioAdapter,
+  musicgen: musicgenAdapter,
+  meshy: meshyAdapter,
+  tripo3d: tripo3dAdapter,
 };
 
 // ============================================================================

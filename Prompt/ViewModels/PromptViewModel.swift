@@ -53,7 +53,7 @@ final class PromptViewModel {
 
     // MARK: - Actions
 
-    func enhancePrompt(settings: SettingsManager) async {
+    func enhancePrompt(settings: SettingsManager, targetPlatform: String? = nil) async {
         guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         // Check if user is authenticated
@@ -91,7 +91,8 @@ final class PromptViewModel {
                 modality: settings.selectedModality,
                 subModality: settings.effectiveSubModality,
                 customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions,
-                targetCharacterLength: settings.targetCharacterLength
+                targetCharacterLength: settings.targetCharacterLength,
+                targetPlatform: targetPlatform
             ) { [weak self] token in
                 // Update UI with each token on main thread
                 Task { @MainActor in
