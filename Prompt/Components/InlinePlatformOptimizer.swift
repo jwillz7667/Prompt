@@ -34,7 +34,9 @@ struct InlinePlatformOptimizer: View {
                         chipButton(for: platform)
                     }
                 }
+                .padding(.vertical, 8)
             }
+            .scrollClipDisabled()
 
             // Validate & Optimize button
             if selectedPlatform != nil {

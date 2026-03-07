@@ -63,7 +63,9 @@ struct EnhancementOptionsBar: View {
                         }
                     }
                 }
+                .padding(.vertical, 8)
             }
+            .scrollClipDisabled()
 
             // Context attachment row
             HStack(spacing: 8) {

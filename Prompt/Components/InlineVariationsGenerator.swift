@@ -34,7 +34,9 @@ struct InlineVariationsGenerator: View {
                         strategyChip(strategy)
                     }
                 }
+                .padding(.vertical, 8)
             }
+            .scrollClipDisabled()
 
             // Generate button
             Button {
@@ -135,7 +137,9 @@ struct InlineVariationsGenerator: View {
                         variationCard(variation)
                     }
                 }
+                .padding(.vertical, 8)
             }
+            .scrollClipDisabled()
 
             // Open full view button
             Button {
