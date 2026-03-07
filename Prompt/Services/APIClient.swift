@@ -460,6 +460,7 @@ struct UserDTO: Codable, Sendable {
     let name: String?
     let avatarUrl: String?
     let isPremium: Bool
+    let customInstructions: String?
 
     nonisolated init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -468,6 +469,7 @@ struct UserDTO: Codable, Sendable {
         name = try container.decodeIfPresent(String.self, forKey: .name)
         avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
         isPremium = try container.decode(Bool.self, forKey: .isPremium)
+        customInstructions = try container.decodeIfPresent(String.self, forKey: .customInstructions)
     }
 
     nonisolated func encode(to encoder: any Encoder) throws {
@@ -477,10 +479,41 @@ struct UserDTO: Codable, Sendable {
         try container.encodeIfPresent(name, forKey: .name)
         try container.encodeIfPresent(avatarUrl, forKey: .avatarUrl)
         try container.encode(isPremium, forKey: .isPremium)
+        try container.encodeIfPresent(customInstructions, forKey: .customInstructions)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, email, name, avatarUrl, isPremium
+        case id, email, name, avatarUrl, isPremium, customInstructions
+    }
+}
+
+// MARK: - Profile Update Request
+
+struct ProfileUpdateRequest: Encodable, Sendable {
+    let name: String?
+    let customInstructions: String?
+
+    nonisolated func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(customInstructions, forKey: .customInstructions)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, customInstructions
+    }
+}
+
+struct ProfileUpdateResponse: Decodable, Sendable {
+    let user: UserDTO
+
+    nonisolated init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        user = try container.decode(UserDTO.self, forKey: .user)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case user
     }
 }
 

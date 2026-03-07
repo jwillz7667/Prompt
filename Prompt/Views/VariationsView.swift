@@ -253,7 +253,7 @@ struct VariationsView: View {
                 if isWinner {
                     Image(systemName: "crown.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(accentColor)
                 }
             }
 
@@ -300,7 +300,7 @@ struct VariationsView: View {
                 } label: {
                     Image(systemName: copiedIndex == result.index ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(copiedIndex == result.index ? .green : textTertiary)
+                        .foregroundStyle(copiedIndex == result.index ? (colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)) : textTertiary)
                         .frame(width: 44, height: 44)
                         .contentShape(Circle())
                 }
@@ -342,7 +342,7 @@ struct VariationsView: View {
                 } label: {
                     Image(systemName: (ratings[index] ?? 0) >= star ? "star.fill" : "star")
                         .font(.system(size: 12))
-                        .foregroundStyle((ratings[index] ?? 0) >= star ? .yellow : textTertiary.opacity(0.5))
+                        .foregroundStyle((ratings[index] ?? 0) >= star ? accentColor : textTertiary.opacity(0.5))
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }

@@ -59,7 +59,7 @@ const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
     dailyPrompts: -1, // Unlimited
     promptQuality: 'advanced',
     canExport: true,
-    maxTokensPerPrompt: 8192, // DeepSeek API limit
+    maxTokensPerPrompt: 16384,
   },
 };
 

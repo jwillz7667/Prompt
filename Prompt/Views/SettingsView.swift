@@ -185,12 +185,12 @@ struct SettingsView: View {
                                 // Red notification badge
                                 if unreadManager.hasUnreadMessages {
                                     Circle()
-                                        .fill(.red)
+                                        .fill(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
                                         .frame(width: 12, height: 12)
                                         .overlay(
                                             Text(unreadManager.unreadCount > 9 ? "9+" : "\(unreadManager.unreadCount)")
                                                 .font(.system(size: 8, weight: .bold))
-                                                .foregroundColor(.white)
+                                                .foregroundStyle(Color.white)
                                         )
                                         .offset(x: 6, y: -4)
                                 }
@@ -204,10 +204,10 @@ struct SettingsView: View {
                                 Text("New")
                                     .font(.caption2)
                                     .fontWeight(.semibold)
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(Color.white)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(.red)
+                                    .background(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
                                     .clipShape(Capsule())
                             }
 

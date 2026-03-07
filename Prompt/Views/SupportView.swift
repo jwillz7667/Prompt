@@ -100,7 +100,7 @@ struct SupportView: View {
                 if ticketCreated, let ticketId = currentTicketId {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4))
                         Text("Support ticket created")
                             .font(.subheadline)
                             .foregroundStyle(textPrimary)
@@ -111,7 +111,7 @@ struct SupportView: View {
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 8)
-                    .background(Color.green.opacity(0.1))
+                    .background((colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)).opacity(0.1))
                 }
 
                 // Input area
@@ -294,11 +294,15 @@ struct MessageBubble: View {
         message.role == "agent"
     }
 
+    private var agentColor: Color {
+        colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)
+    }
+
     private var bubbleColor: Color {
         if message.isUser {
             return accentColor
         } else if isAgent {
-            return Color.green.opacity(colorScheme == .dark ? 0.3 : 0.15)
+            return agentColor.opacity(colorScheme == .dark ? 0.3 : 0.15)
         } else {
             return Color.adaptiveBackgroundSecondary
         }
@@ -316,12 +320,12 @@ struct MessageBubble: View {
                     if !message.isUser {
                         Image(systemName: senderIcon)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(isAgent ? .green : accentColor)
+                            .foregroundStyle(isAgent ? agentColor : accentColor)
                     }
 
                     Text(senderName)
                         .font(.system(.caption, design: .rounded, weight: .semibold))
-                        .foregroundStyle(message.isUser ? textSecondary : (isAgent ? .green : accentColor))
+                        .foregroundStyle(message.isUser ? textSecondary : (isAgent ? agentColor : accentColor))
 
                     if message.isUser {
                         Image(systemName: senderIcon)
@@ -332,7 +336,7 @@ struct MessageBubble: View {
 
                 // Message content
                 Text(message.content)
-                    .foregroundStyle(message.isUser ? (colorScheme == .dark ? .black : .white) : textPrimary)
+                    .foregroundStyle(message.isUser ? Color.adaptiveTextOnAccent : textPrimary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(bubbleColor)
@@ -363,7 +367,7 @@ struct TypingIndicator: View {
             HStack(spacing: 4) {
                 ForEach(0..<3) { index in
                     Circle()
-                        .fill(Color.gray)
+                        .fill(Color.adaptiveTextTertiary)
                         .frame(width: 8, height: 8)
                         .opacity(dotCount == index ? 1 : 0.4)
                 }
@@ -391,16 +395,20 @@ struct AgentTypingIndicator: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var dotCount = 0
 
+    private var agentColor: Color {
+        colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 4) {
                     Image(systemName: "headphones.circle.fill")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(agentColor)
                     Text("Support Agent")
                         .font(.system(.caption, design: .rounded, weight: .semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(agentColor)
                     Text("is typing")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.adaptiveTextSecondary)
@@ -409,14 +417,14 @@ struct AgentTypingIndicator: View {
                 HStack(spacing: 4) {
                     ForEach(0..<3) { index in
                         Circle()
-                            .fill(Color.green)
+                            .fill(agentColor)
                             .frame(width: 8, height: 8)
                             .opacity(dotCount == index ? 1 : 0.4)
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color.green.opacity(colorScheme == .dark ? 0.2 : 0.1))
+                .background(agentColor.opacity(colorScheme == .dark ? 0.2 : 0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 18))
             }
 
@@ -521,13 +529,15 @@ struct TicketRow: View {
         .padding(.vertical, 4)
     }
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var statusColor: Color {
         switch ticket.status {
-        case .open: return .orange
-        case .inProgress: return .blue
-        case .waitingOnUser: return .yellow
-        case .resolved: return .green
-        case .closed: return .gray
+        case .open: return colorScheme == .dark ? Color(red: 255/255, green: 159/255, blue: 10/255) : Color(red: 0.9, green: 0.6, blue: 0.1)
+        case .inProgress: return colorScheme == .dark ? Color.brandCyan : Color.brandPurple
+        case .waitingOnUser: return colorScheme == .dark ? Color(red: 255/255, green: 214/255, blue: 10/255) : Color(red: 0.8, green: 0.65, blue: 0.1)
+        case .resolved: return colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)
+        case .closed: return Color.adaptiveTextTertiary
         }
     }
 }
@@ -666,14 +676,14 @@ struct TicketDetailView: View {
                     // Closed ticket banner
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4))
                         Text("This ticket has been \(ticket.status == .resolved ? "resolved" : "closed")")
                             .font(.subheadline)
                             .foregroundStyle(textPrimary)
                         Spacer()
                     }
                     .padding()
-                    .background(Color.green.opacity(0.1))
+                    .background((colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)).opacity(0.1))
                 }
             }
         }

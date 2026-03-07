@@ -86,7 +86,7 @@ struct ToneChip: View {
             .foregroundStyle(isSelected ? .white : textSecondary)
             .liquidGlassChip(
                 isSelected: isSelected,
-                accentColor: isSelected ? Color.brandPurple : nil
+                accentColor: isSelected ? (colorScheme == .dark ? Color.brandCyan : Color.brandPurple) : nil
             )
         }
         .buttonStyle(.plain)

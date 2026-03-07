@@ -88,8 +88,8 @@ final class StoreKitManager {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
 
-                // Sync with backend
-                await syncTransactionWithBackend(transaction)
+                // Sync with backend using JWS from the verification result
+                await syncTransactionWithBackend(jwsRepresentation: verification.jwsRepresentation)
 
                 // Finish the transaction
                 await transaction.finish()
@@ -165,9 +165,7 @@ final class StoreKitManager {
 
             for await result in Transaction.currentEntitlements {
                 if case .verified = result {
-                    if let jwsRepresentation = result.jwsRepresentation {
-                        signedTransactions.append(jwsRepresentation)
-                    }
+                    signedTransactions.append(result.jwsRepresentation)
                 }
             }
 
@@ -308,7 +306,7 @@ final class StoreKitManager {
                     let transaction = try await self?.checkVerified(result)
 
                     if let transaction = transaction {
-                        await self?.syncTransactionWithBackend(transaction)
+                        await self?.syncTransactionWithBackend(jwsRepresentation: result.jwsRepresentation)
                         await transaction.finish()
                         await self?.checkEntitlements()
                     }
@@ -334,17 +332,9 @@ final class StoreKitManager {
 
     // MARK: - Sync Transaction with Backend
 
-    private func syncTransactionWithBackend(_ transaction: Transaction) async {
-        // Get the JWS representation for backend verification
-        guard let signedTransaction = transaction.jwsRepresentation else {
-            #if DEBUG
-            print("No JWS representation available for transaction")
-            #endif
-            return
-        }
-
+    private func syncTransactionWithBackend(jwsRepresentation: String) async {
         do {
-            let request = VerifyPurchaseRequest(signedTransaction: signedTransaction)
+            let request = VerifyPurchaseRequest(signedTransaction: jwsRepresentation)
             let _: VerifyPurchaseResponse = try await APIClient.shared.request(
                 "/subscriptions/verify",
                 method: .post,
@@ -434,26 +424,3 @@ private struct RestorePurchasesRequest: Encodable {
     let signedTransactions: [String]
 }
 
-// MARK: - Transaction Extension
-
-extension Transaction {
-    var jwsRepresentation: String? {
-        // Access the JWS representation for backend verification
-        // Note: In production, you might need to use a different approach
-        // to get the signed transaction data
-        nil // StoreKit 2 doesn't directly expose JWS in all cases
-    }
-}
-
-// MARK: - VerificationResult Extension
-
-extension VerificationResult {
-    var jwsRepresentation: String? {
-        switch self {
-        case .verified:
-            return nil // Would need actual implementation
-        case .unverified:
-            return nil
-        }
-    }
-}

@@ -67,7 +67,7 @@ final class AuthManager: NSObject {
     }
 
     /// Cache user data locally in App Group
-    private func cacheUser(_ user: User) {
+    func cacheUser(_ user: User) {
         if let data = try? JSONEncoder().encode(user) {
             appGroupDefaults?.set(data, forKey: cachedUserKey)
         }
@@ -439,6 +439,7 @@ struct User: Codable, Identifiable, Sendable {
     var name: String?
     var avatarUrl: String?
     var isPremium: Bool
+    var customInstructions: String?
 
     nonisolated init(from dto: UserDTO) {
         self.id = dto.id
@@ -446,6 +447,22 @@ struct User: Codable, Identifiable, Sendable {
         self.name = dto.name
         self.avatarUrl = dto.avatarUrl
         self.isPremium = dto.isPremium
+        self.customInstructions = dto.customInstructions
+    }
+}
+
+// MARK: - Profile Update
+
+extension AuthManager {
+    func updateProfile(name: String?, customInstructions: String?) async throws {
+        let request = ProfileUpdateRequest(name: name, customInstructions: customInstructions)
+        let response: ProfileUpdateResponse = try await APIClient.shared.request(
+            "/users/profile",
+            method: .patch,
+            body: request
+        )
+        currentUser = User(from: response.user)
+        cacheUser(currentUser!)
     }
 }
 

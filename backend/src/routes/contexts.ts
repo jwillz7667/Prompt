@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
-import { enforceQuota } from '../middleware/quotaEnforcement.js';
 import { contextService } from '../services/contextService.js';
 import { logger } from '../utils/logger.js';
 
@@ -44,7 +43,7 @@ const mergeContextsSchema = z.object({
 /**
  * Create a new context
  */
-router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
+router.post('/', authenticate, async (req, res, next) => {
   try {
     const validatedData = createContextSchema.parse(req.body);
     
@@ -265,7 +264,7 @@ router.get('/prompt/:promptId', authenticate, async (req, res, next) => {
 /**
  * Merge multiple contexts into a new one
  */
-router.post('/merge', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
+router.post('/merge', authenticate, async (req, res, next) => {
   try {
     const validatedData = mergeContextsSchema.parse(req.body);
     

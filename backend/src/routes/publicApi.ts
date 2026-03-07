@@ -300,50 +300,47 @@ publicApiRouter.get(
       const query = historyQuerySchema.parse(req.query);
       const skip = (query.page - 1) * query.limit;
 
-      // Build where clause - Note: Prompts are user-specific, but API keys belong to developers
-      // For API history, we track by developer ID through ApiUsage table
+      // Query ApiUsage table which tracks all developer API requests
       const where: Record<string, unknown> = {
         developerId: req.apiKey.developerId,
+        endpoint: '/enhance',
+        statusCode: 200,
       };
 
       if (query.modality) {
         where['modality'] = query.modality;
       }
 
-      const [prompts, total] = await Promise.all([
-        prisma.prompt.findMany({
+      const [usageRecords, total] = await Promise.all([
+        prisma.apiUsage.findMany({
           where,
           orderBy: { createdAt: 'desc' },
           skip,
           take: query.limit,
           select: {
             id: true,
-            originalPrompt: true,
-            enhancedPrompt: true,
             modality: true,
             inputTokens: true,
             outputTokens: true,
             totalTokens: true,
-            processingMs: true,
+            latencyMs: true,
             createdAt: true,
           },
         }),
-        prisma.prompt.count({ where }),
+        prisma.apiUsage.count({ where }),
       ]);
 
       res.json({
-        prompts: prompts.map((p) => ({
-          id: p.id,
-          originalPrompt: p.originalPrompt,
-          enhancedPrompt: p.enhancedPrompt,
-          modality: p.modality,
+        requests: usageRecords.map((r) => ({
+          id: r.id,
+          modality: r.modality,
           usage: {
-            inputTokens: p.inputTokens,
-            outputTokens: p.outputTokens,
-            totalTokens: p.totalTokens,
-            processingMs: p.processingMs,
+            inputTokens: r.inputTokens,
+            outputTokens: r.outputTokens,
+            totalTokens: r.totalTokens,
+            processingMs: r.latencyMs,
           },
-          createdAt: p.createdAt,
+          createdAt: r.createdAt,
         })),
         pagination: {
           page: query.page,

@@ -200,7 +200,7 @@ struct PaywallView: View {
             } label: {
                 Text("Start")
                     .font(.subheadline.bold())
-                    .foregroundStyle(colorScheme == .dark ? .black : .white)
+                    .foregroundStyle(Color.adaptiveTextOnAccent)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
             }
@@ -295,7 +295,7 @@ struct PaywallView: View {
 
     private func checkmark(_ enabled: Bool) -> some View {
         Image(systemName: enabled ? "checkmark.circle.fill" : "xmark.circle")
-            .foregroundStyle(enabled ? .green : Color.adaptiveTextTertiary)
+            .foregroundStyle(enabled ? (colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)) : Color.adaptiveTextTertiary)
             .font(.subheadline)
     }
 
@@ -338,12 +338,12 @@ struct PaywallView: View {
             HStack {
                 Text(tier.displayName)
                     .font(.subheadline.bold())
-                    .foregroundStyle(tier == .premium ? .purple : Color.adaptiveTextPrimary)
+                    .foregroundStyle(tier == .premium ? brandPurple : Color.adaptiveTextPrimary)
 
                 if tier == .premium {
                     Text("BEST VALUE")
                         .font(.caption2.bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.adaptiveTextOnAccent)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(brandPurple)
@@ -379,10 +379,10 @@ struct PaywallView: View {
                         if isAnnual {
                             Text("Save 17%")
                                 .font(.caption.bold())
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Color.adaptiveTextOnAccent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(.green)
+                                .background(colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4))
                                 .clipShape(Capsule())
                         }
                     }
@@ -461,7 +461,7 @@ struct PaywallView: View {
             HStack {
                 if isProcessing {
                     ProgressView()
-                        .tint(colorScheme == .dark ? .black : .white)
+                        .tint(Color.adaptiveTextOnAccent)
                 } else {
                     Text(selectedProduct != nil ? "Subscribe Now" : "Select a Plan")
                         .font(.headline)
@@ -470,7 +470,7 @@ struct PaywallView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .foregroundStyle(selectedProduct != nil
-                ? (colorScheme == .dark ? .black : .white)
+                ? Color.adaptiveTextOnAccent
                 : Color.adaptiveTextTertiary)
         }
         .buttonStyle(LiquidGlassButtonStyle(

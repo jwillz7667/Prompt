@@ -2,7 +2,7 @@
 //  ProfileView.swift
 //  Prompt
 //
-//  User profile with account management and statistics
+//  User profile with account management, editing, and statistics
 //  AAA WCAG Compliant Colors
 //
 
@@ -13,6 +13,7 @@ struct ProfileView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(PromptHistoryManager.self) private var historyManager
     @Environment(StoreKitManager.self) private var storeKit
+    @Environment(SettingsManager.self) private var settings
     @Environment(\.dismiss) private var dismiss
 
     @State private var showSignOutAlert = false
@@ -20,6 +21,13 @@ struct ProfileView: View {
     @State private var showPaywall = false
     @State private var stats: UserStats?
     @State private var isLoadingStats = false
+
+    // Profile editing
+    @State private var isEditingProfile = false
+    @State private var editName: String = ""
+    @State private var editCustomInstructions: String = ""
+    @State private var isSavingProfile = false
+    @State private var profileSaveError: String?
 
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -41,11 +49,9 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Consistent liquid glass background
                 LiquidGlassBackground()
 
                 List {
-                    // Note: Content follows using listRowBackground for consistency
                 // User info section
                 if let user = authManager.currentUser {
                     Section {
@@ -66,9 +72,16 @@ struct ProfileView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(user.name ?? "User")
-                                    .font(.headline)
-                                    .foregroundStyle(textPrimary)
+                                if isEditingProfile {
+                                    TextField("Name", text: $editName)
+                                        .font(.headline)
+                                        .foregroundStyle(textPrimary)
+                                        .textFieldStyle(.plain)
+                                } else {
+                                    Text(user.name ?? "User")
+                                        .font(.headline)
+                                        .foregroundStyle(textPrimary)
+                                }
                                 Text(user.email)
                                     .font(.subheadline)
                                     .foregroundStyle(textSecondary)
@@ -76,7 +89,7 @@ struct ProfileView: View {
                                 if user.isPremium {
                                     Label("Premium", systemImage: "crown.fill")
                                         .font(.caption)
-                                        .foregroundStyle(.yellow)
+                                        .foregroundStyle(accentColor)
                                 }
                             }
                         }
@@ -85,19 +98,60 @@ struct ProfileView: View {
                     }
                 }
 
+                // Custom Instructions section (editable)
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Label("Custom Instructions", systemImage: "text.bubble.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(textPrimary)
+                            Spacer()
+                        }
+
+                        if isEditingProfile {
+                            TextEditor(text: $editCustomInstructions)
+                                .frame(minHeight: 80)
+                                .font(.body)
+                                .foregroundStyle(textPrimary)
+                                .scrollContentBackground(.hidden)
+                                .padding(8)
+                                .liquidGlassInput(cornerRadius: 10, isFocused: true)
+                        } else {
+                            let instructions = settings.customInstructions
+                            Text(instructions.isEmpty ? "No custom instructions set" : instructions)
+                                .font(.subheadline)
+                                .foregroundStyle(instructions.isEmpty ? textTertiary : textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        if let error = profileSaveError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
+                        }
+                    }
+                    .listRowBackground(bgSecondary)
+                } header: {
+                    Text("Personalization")
+                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Instructions included with every prompt enhancement.")
+                        .foregroundStyle(textTertiary)
+                }
+
                 // Subscription section
                 Section {
                     VStack(spacing: 16) {
                         SubscriptionStatusCard()
 
-                        // Show upgrade button for non-premium users
                         if storeKit.currentTier != .premium {
                             Button {
                                 showPaywall = true
                             } label: {
                                 HStack {
                                     Image(systemName: storeKit.currentTier == .free ? "crown.fill" : "arrow.up.circle.fill")
-                                        .foregroundStyle(storeKit.currentTier == .free ? .purple : .blue)
+                                        .foregroundStyle(accentColor)
                                     Text(storeKit.currentTier == .free ? "Upgrade to Premium" : "Upgrade Plan")
                                         .foregroundStyle(textPrimary)
                                     Spacer()
@@ -107,7 +161,6 @@ struct ProfileView: View {
                             }
                         }
 
-                        // Trial banner
                         if storeKit.isTrialing, let remaining = storeKit.subscriptionInfo?.trialDaysRemaining {
                             TrialBanner(daysRemaining: remaining) {
                                 showPaywall = true
@@ -127,7 +180,7 @@ struct ProfileView: View {
                         HStack {
                             Spacer()
                             ProgressView()
-                                .tint(textPrimary)
+                                .tint(accentColor)
                             Spacer()
                         }
                         .listRowBackground(bgSecondary)
@@ -142,7 +195,7 @@ struct ProfileView: View {
                         .foregroundStyle(textSecondary)
                 }
 
-                // Settings section
+                // Account section
                 Section {
                     Button(role: .destructive) {
                         showSignOutAlert = true
@@ -154,8 +207,8 @@ struct ProfileView: View {
                     Button(role: .destructive) {
                         showDeleteAccountAlert = true
                     } label: {
-                        Label("Delete Account", systemImage: "trash")
-                            .foregroundStyle(.red)
+                        Label("Delete Account", systemImage: "trash.fill")
+                            .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
                     }
                     .listRowBackground(bgSecondary)
                 } header: {
@@ -170,7 +223,7 @@ struct ProfileView: View {
 
                     Link(destination: URL(string: "https://promptomize.app/support")!) {
                         HStack {
-                            Label("Help & Support", systemImage: "questionmark.circle")
+                            Label("Help & Support", systemImage: "questionmark.circle.fill")
                                 .foregroundStyle(textPrimary)
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
@@ -181,7 +234,7 @@ struct ProfileView: View {
 
                     Link(destination: URL(string: "https://promptomize.app/privacy")!) {
                         HStack {
-                            Label("Privacy Policy", systemImage: "hand.raised")
+                            Label("Privacy Policy", systemImage: "hand.raised.fill")
                                 .foregroundStyle(textPrimary)
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
@@ -192,7 +245,7 @@ struct ProfileView: View {
 
                     Link(destination: URL(string: "https://promptomize.app/terms")!) {
                         HStack {
-                            Label("Terms of Service", systemImage: "doc.text")
+                            Label("Terms of Service", systemImage: "doc.text.fill")
                                 .foregroundStyle(textPrimary)
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
@@ -212,12 +265,45 @@ struct ProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
+                ToolbarItem(placement: .topBarLeading) {
+                    if isEditingProfile {
+                        Button("Cancel") {
+                            isEditingProfile = false
+                            profileSaveError = nil
+                        }
+                        .foregroundStyle(textSecondary)
                     }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(accentColor)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if isEditingProfile {
+                        Button {
+                            Task { await saveProfile() }
+                        } label: {
+                            if isSavingProfile {
+                                ProgressView()
+                                    .tint(accentColor)
+                            } else {
+                                Text("Save")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(accentColor)
+                            }
+                        }
+                        .disabled(isSavingProfile)
+                    } else {
+                        Menu {
+                            Button {
+                                startEditing()
+                            } label: {
+                                Label("Edit Profile", systemImage: "pencil")
+                            }
+                            Button("Done") {
+                                dismiss()
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle.fill")
+                                .foregroundStyle(accentColor)
+                        }
+                    }
                 }
             }
             .task {
@@ -276,6 +362,43 @@ struct ProfileView: View {
         }
         .listRowBackground(bgSecondary)
     }
+
+    // MARK: - Profile Editing
+
+    private func startEditing() {
+        editName = authManager.currentUser?.name ?? ""
+        editCustomInstructions = settings.customInstructions
+        profileSaveError = nil
+        isEditingProfile = true
+    }
+
+    private func saveProfile() async {
+        isSavingProfile = true
+        profileSaveError = nil
+
+        do {
+            // Save to backend
+            let nameToSave = editName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let instructionsToSave = editCustomInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            try await authManager.updateProfile(
+                name: nameToSave.isEmpty ? nil : nameToSave,
+                customInstructions: instructionsToSave.isEmpty ? nil : instructionsToSave
+            )
+
+            // Sync custom instructions to local settings
+            settings.customInstructions = instructionsToSave
+            settings.savePreferences()
+
+            isEditingProfile = false
+        } catch {
+            profileSaveError = error.localizedDescription
+        }
+
+        isSavingProfile = false
+    }
+
+    // MARK: - Data Loading
 
     private func loadStats() async {
         isLoadingStats = true
@@ -351,4 +474,5 @@ struct StatsResponse: Decodable {
         .environment(AuthManager.shared)
         .environment(PromptHistoryManager.shared)
         .environment(StoreKitManager.shared)
+        .environment(SettingsManager())
 }

@@ -16,6 +16,7 @@ userRouter.use(authenticate);
 const updateProfileSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   avatarUrl: z.string().url().optional().nullable(),
+  customInstructions: z.string().max(2000).optional().nullable(),
 });
 
 userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -36,6 +37,7 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
         name: true,
         avatarUrl: true,
         isPremium: true,
+        customInstructions: true,
       },
     });
 

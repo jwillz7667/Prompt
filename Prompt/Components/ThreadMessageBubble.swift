@@ -69,7 +69,7 @@ struct ThreadMessageBubble: View {
     private var userBubble: some View {
         Text(message.content)
             .font(.system(.body))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.adaptiveTextOnAccent)
             .textSelection(.enabled)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

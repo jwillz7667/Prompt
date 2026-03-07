@@ -186,7 +186,7 @@ struct WhatsNewView: View {
                 .font(.system(.body, design: .rounded, weight: .semibold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.adaptiveTextOnAccent)
                 .background {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color.adaptiveButtonPrimary)

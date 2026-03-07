@@ -1,8 +1,29 @@
 import SwiftUI
 
+// MARK: - Semantic Status Colors
+
+private extension Color {
+    static func semanticSuccess(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)
+    }
+    static func semanticError(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25)
+    }
+    static func semanticWarning(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(red: 255/255, green: 159/255, blue: 10/255) : Color(red: 0.9, green: 0.6, blue: 0.1)
+    }
+    static func tierPro(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.brandCyan : Color.brandPurple
+    }
+    static func tierPremium(_ colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.brandCyan : Color.brandPurpleDark
+    }
+}
+
 // MARK: - Usage Indicator
 
 struct UsageIndicator: View {
+    @Environment(\.colorScheme) private var colorScheme
     let used: Int
     let limit: Int
 
@@ -22,10 +43,10 @@ struct UsageIndicator: View {
     }
 
     private var statusColor: Color {
-        if isUnlimited { return .green }
-        if progress >= 0.9 { return .red }
-        if progress >= 0.7 { return .orange }
-        return .green
+        if isUnlimited { return .semanticSuccess(colorScheme) }
+        if progress >= 0.9 { return .semanticError(colorScheme) }
+        if progress >= 0.7 { return .semanticWarning(colorScheme) }
+        return .semanticSuccess(colorScheme)
     }
 
     var body: some View {
@@ -45,7 +66,7 @@ struct UsageIndicator: View {
                 } else {
                     Image(systemName: "infinity")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(statusColor)
                 }
             }
 
@@ -65,6 +86,7 @@ struct UsageIndicator: View {
 // MARK: - Subscription Badge
 
 struct SubscriptionBadge: View {
+    @Environment(\.colorScheme) private var colorScheme
     let tier: SubscriptionTier
 
     var body: some View {
@@ -92,9 +114,9 @@ struct SubscriptionBadge: View {
         case .free:
             return Color.adaptiveBackgroundTertiary
         case .pro:
-            return Color.blue.opacity(0.15)
+            return Color.tierPro(colorScheme).opacity(0.15)
         case .premium:
-            return Color.purple.opacity(0.15)
+            return Color.tierPremium(colorScheme).opacity(0.15)
         }
     }
 
@@ -103,9 +125,9 @@ struct SubscriptionBadge: View {
         case .free:
             return Color.adaptiveTextSecondary
         case .pro:
-            return .blue
+            return .tierPro(colorScheme)
         case .premium:
-            return .purple
+            return .tierPremium(colorScheme)
         }
     }
 }
@@ -113,8 +135,11 @@ struct SubscriptionBadge: View {
 // MARK: - Upgrade Prompt Card
 
 struct UpgradePromptCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let currentTier: SubscriptionTier
     let onUpgrade: () -> Void
+
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -133,26 +158,20 @@ struct UpgradePromptCard: View {
 
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title)
-                    .foregroundStyle(currentTier == .free ? .purple : .blue)
+                    .foregroundStyle(accentColor)
             }
 
             Button(action: onUpgrade) {
                 Text("Upgrade Now")
                     .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.adaptiveTextOnAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(currentTier == .free ? Color.purple : Color.blue)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
             }
+            .buttonStyle(GlassPrimaryButtonStyle(cornerRadius: 10))
         }
         .padding()
-        .background(Color.adaptiveBackgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.adaptiveBorder, lineWidth: 1)
-        )
+        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.6)
     }
 
     private var upgradeTitle: String {
@@ -181,9 +200,12 @@ struct UpgradePromptCard: View {
 // MARK: - Feature Lock Overlay
 
 struct FeatureLockOverlay: View {
+    @Environment(\.colorScheme) private var colorScheme
     let featureName: String
     let requiredTier: SubscriptionTier
     let onUnlock: () -> Void
+
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -199,12 +221,11 @@ struct FeatureLockOverlay: View {
             Button(action: onUnlock) {
                 Text("Upgrade")
                     .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.adaptiveTextOnAccent)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
-                    .background(requiredTier == .premium ? Color.purple : Color.blue)
-                    .clipShape(Capsule())
             }
+            .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor))
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -215,7 +236,10 @@ struct FeatureLockOverlay: View {
 // MARK: - Subscription Status Card
 
 struct SubscriptionStatusCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(StoreKitManager.self) private var storeKit
+
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -233,10 +257,10 @@ struct SubscriptionStatusCard: View {
                         if storeKit.isTrialing {
                             Text("TRIAL")
                                 .font(.caption2.bold())
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Color.adaptiveTextOnAccent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(.orange)
+                                .background(Color.semanticWarning(colorScheme))
                                 .clipShape(Capsule())
                         }
                     }
@@ -296,31 +320,29 @@ struct SubscriptionStatusCard: View {
             }
         }
         .padding()
-        .background(Color.adaptiveBackgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.adaptiveBorder, lineWidth: 1)
-        )
+        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.6)
     }
 
     private func usageBarColor(_ percentage: Double) -> Color {
-        if percentage >= 0.9 { return .red }
-        if percentage >= 0.7 { return .orange }
-        return .green
+        if percentage >= 0.9 { return .semanticError(colorScheme) }
+        if percentage >= 0.7 { return .semanticWarning(colorScheme) }
+        return .semanticSuccess(colorScheme)
     }
 }
 
 // MARK: - Quota Exceeded Banner
 
 struct QuotaExceededBanner: View {
+    @Environment(\.colorScheme) private var colorScheme
     let onUpgrade: () -> Void
+
+    private var warningColor: Color { .semanticWarning(colorScheme) }
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.title2)
-                .foregroundStyle(.orange)
+                .foregroundStyle(warningColor)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Daily Limit Reached")
@@ -337,19 +359,18 @@ struct QuotaExceededBanner: View {
             Button(action: onUpgrade) {
                 Text("Upgrade")
                     .font(.caption.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.adaptiveTextOnAccent)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(.orange)
-                    .clipShape(Capsule())
             }
+            .buttonStyle(GlassCapsuleButtonStyle(tintColor: warningColor))
         }
         .padding()
-        .background(Color.orange.opacity(0.1))
+        .background(warningColor.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                .stroke(warningColor.opacity(0.3), lineWidth: 1)
         )
     }
 }
@@ -357,14 +378,17 @@ struct QuotaExceededBanner: View {
 // MARK: - Trial Banner
 
 struct TrialBanner: View {
+    @Environment(\.colorScheme) private var colorScheme
     let daysRemaining: Int
     let onManage: () -> Void
+
+    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "gift.fill")
                 .font(.title2)
-                .foregroundStyle(.purple)
+                .foregroundStyle(accentColor)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Premium Trial")
@@ -381,19 +405,19 @@ struct TrialBanner: View {
             Button(action: onManage) {
                 Text("Manage")
                     .font(.caption.bold())
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(accentColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.purple.opacity(0.15))
+                    .background(accentColor.opacity(0.15))
                     .clipShape(Capsule())
             }
         }
         .padding()
-        .background(Color.purple.opacity(0.1))
+        .background(accentColor.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                .stroke(accentColor.opacity(0.3), lineWidth: 1)
         )
     }
 }
@@ -401,6 +425,7 @@ struct TrialBanner: View {
 // MARK: - Prompt Quality Indicator
 
 struct PromptQualityIndicator: View {
+    @Environment(\.colorScheme) private var colorScheme
     let tier: PromptTier
 
     var body: some View {
@@ -427,9 +452,9 @@ struct PromptQualityIndicator: View {
 
     private var tierColor: Color {
         switch tier {
-        case .basic: return .gray
-        case .standard: return .blue
-        case .advanced: return .purple
+        case .basic: return Color.adaptiveTextTertiary
+        case .standard: return .tierPro(colorScheme)
+        case .advanced: return .tierPremium(colorScheme)
         }
     }
 }

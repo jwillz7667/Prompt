@@ -138,12 +138,12 @@ struct HistoryView: View {
         VStack(spacing: 24) {
             ZStack {
                 Circle()
-                    .fill(selectedTab == .starred ? Color.yellow.opacity(0.15) : accentColor.opacity(0.15))
+                    .fill(accentColor.opacity(0.15))
                     .frame(width: 100, height: 100)
 
                 Image(systemName: selectedTab == .starred ? "star.fill" : "doc.text.fill")
                     .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(selectedTab == .starred ? .yellow : accentColor)
+                    .foregroundStyle(accentColor)
             }
 
             VStack(spacing: 8) {
@@ -191,7 +191,7 @@ struct HistoryView: View {
                                 systemImage: prompt.isFavorite ? "star.slash" : "star.fill"
                             )
                         }
-                        .tint(.yellow)
+                        .tint(accentColor)
                     }
                     .listRowBackground(bgSecondary)
             }
@@ -243,7 +243,7 @@ struct PromptRowView: View {
             } label: {
                 Image(systemName: prompt.isFavorite ? "star.fill" : "star")
                     .font(.system(size: 20))
-                    .foregroundStyle(prompt.isFavorite ? .yellow : textTertiary)
+                    .foregroundStyle(prompt.isFavorite ? (colorScheme == .dark ? Color.brandCyan : Color.brandPurple) : textTertiary)
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
@@ -334,7 +334,7 @@ struct PromptDetailView: View {
                                 Label("Copy", systemImage: "doc.on.doc")
                                     .font(.caption)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(Color.adaptiveTextOnAccent)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
                             }
@@ -496,7 +496,7 @@ struct PromptDetailView: View {
                 if showCopiedToast {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4))
                         Text("Copied!")
                             .foregroundStyle(textPrimary)
                     }
@@ -531,7 +531,7 @@ struct PromptDetailView: View {
                             .stroke(
                                 LinearGradient(
                                     colors: colorScheme == .dark
-                                        ? [Color.green.opacity(0.4), Color.green.opacity(0.1)]
+                                        ? [accentColor.opacity(0.4), accentColor.opacity(0.1)]
                                         : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.2)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -539,7 +539,7 @@ struct PromptDetailView: View {
                                 lineWidth: 1
                             )
                     }
-                    .shadow(color: Color.green.opacity(0.2), radius: 10, y: 0)
+                    .shadow(color: accentColor.opacity(0.2), radius: 10, y: 0)
                     .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.5 : 0.15), radius: 12, y: 5)
                     .padding(.bottom, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))

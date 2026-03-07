@@ -87,7 +87,7 @@ struct AuthView: View {
                     if let error = authManager.error {
                         Text(error.localizedDescription)
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }

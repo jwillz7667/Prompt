@@ -274,23 +274,24 @@ collectionRouter.post('/:id/prompts', async (req: AuthenticatedRequest, res: Res
 
     const validPromptIds = userPrompts.map((p) => p.id);
 
-    // Create prompt-collection associations (skip duplicates)
-    await prisma.promptCollection.createMany({
-      data: validPromptIds.map((promptId) => ({
-        promptId,
-        collectionId,
-      })),
-      skipDuplicates: true,
-    });
+    // Create prompt-collection associations and update count atomically
+    await prisma.$transaction(async (tx) => {
+      await tx.promptCollection.createMany({
+        data: validPromptIds.map((promptId) => ({
+          promptId,
+          collectionId,
+        })),
+        skipDuplicates: true,
+      });
 
-    // Update collection prompt count
-    const newCount = await prisma.promptCollection.count({
-      where: { collectionId },
-    });
+      const newCount = await tx.promptCollection.count({
+        where: { collectionId },
+      });
 
-    await prisma.collection.update({
-      where: { id: collectionId },
-      data: { promptCount: newCount },
+      await tx.collection.update({
+        where: { id: collectionId },
+        data: { promptCount: newCount },
+      });
     });
 
     res.json({ success: true, addedCount: validPromptIds.length });
@@ -331,22 +332,23 @@ collectionRouter.delete('/:id/prompts/:promptId', async (req: AuthenticatedReque
       return;
     }
 
-    // Remove the association
-    await prisma.promptCollection.deleteMany({
-      where: {
-        promptId,
-        collectionId,
-      },
-    });
+    // Remove association and update count atomically
+    await prisma.$transaction(async (tx) => {
+      await tx.promptCollection.deleteMany({
+        where: {
+          promptId,
+          collectionId,
+        },
+      });
 
-    // Update collection prompt count
-    const newCount = await prisma.promptCollection.count({
-      where: { collectionId },
-    });
+      const newCount = await tx.promptCollection.count({
+        where: { collectionId },
+      });
 
-    await prisma.collection.update({
-      where: { id: collectionId },
-      data: { promptCount: newCount },
+      await tx.collection.update({
+        where: { id: collectionId },
+        data: { promptCount: newCount },
+      });
     });
 
     res.json({ success: true });
