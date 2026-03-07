@@ -373,6 +373,136 @@ const PLATFORM_CONFIGS: Record<PlatformType, PlatformOptimization> = {
     },
   },
 
+  FLUX: {
+    platform: 'FLUX',
+    syntaxRules: {
+      format: 'natural',
+      forbiddenElements: ['negative:'],
+      caseConventions: 'lower',
+    },
+    limitations: {
+      maxTokens: 500,
+      maxCharacters: 2000,
+      supportedModalities: ['image'],
+      costPerToken: 0.003,
+      rateLimit: {
+        requestsPerMinute: 10,
+        tokensPerMinute: 5000,
+      },
+    },
+    optimizations: {
+      preferredStructure: ['subject', 'style', 'composition', 'lighting', 'detail'],
+      keywordEmphasis: ['photorealistic', 'cinematic', 'detailed'],
+      negativePrompting: false,
+    },
+  },
+
+  PIKA: {
+    platform: 'PIKA',
+    syntaxRules: {
+      format: 'natural',
+      caseConventions: 'mixed',
+    },
+    limitations: {
+      maxTokens: 300,
+      maxCharacters: 2000,
+      supportedModalities: ['video'],
+      costPerToken: 0.02,
+      rateLimit: {
+        requestsPerMinute: 5,
+        tokensPerMinute: 1500,
+      },
+    },
+    optimizations: {
+      preferredStructure: ['subject', 'action', 'scene', 'camera_movement', 'style'],
+      keywordEmphasis: ['cinematic', 'smooth motion', 'dynamic'],
+    },
+  },
+
+  KLING: {
+    platform: 'KLING',
+    syntaxRules: {
+      format: 'natural',
+      caseConventions: 'mixed',
+    },
+    limitations: {
+      maxTokens: 500,
+      maxCharacters: 2500,
+      supportedModalities: ['video'],
+      costPerToken: 0.02,
+      rateLimit: {
+        requestsPerMinute: 5,
+        tokensPerMinute: 2500,
+      },
+    },
+    optimizations: {
+      preferredStructure: ['subject', 'motion', 'environment', 'camera', 'style'],
+      keywordEmphasis: ['realistic', 'fluid motion', 'high quality'],
+    },
+  },
+
+  MUSICGEN: {
+    platform: 'MUSICGEN',
+    syntaxRules: {
+      format: 'natural',
+      caseConventions: 'lower',
+    },
+    limitations: {
+      maxTokens: 200,
+      maxCharacters: 1000,
+      supportedModalities: ['audio', 'music'],
+      costPerToken: 0.005,
+    },
+    optimizations: {
+      preferredStructure: ['genre', 'instruments', 'tempo', 'mood', 'energy'],
+      keywordEmphasis: ['melodic', 'rhythmic', 'ambient', 'upbeat'],
+    },
+  },
+
+  MESHY: {
+    platform: 'MESHY',
+    syntaxRules: {
+      format: 'natural',
+      caseConventions: 'lower',
+    },
+    limitations: {
+      maxTokens: 300,
+      maxCharacters: 1500,
+      supportedModalities: ['3d'],
+      costPerToken: 0.01,
+      rateLimit: {
+        requestsPerMinute: 5,
+        tokensPerMinute: 1500,
+      },
+    },
+    optimizations: {
+      preferredStructure: ['object', 'style', 'material', 'detail_level'],
+      keywordEmphasis: ['high-poly', 'textured', 'game-ready', 'sculpted'],
+    },
+  },
+
+  TRIPO3D: {
+    platform: 'TRIPO3D',
+    syntaxRules: {
+      format: 'natural',
+      caseConventions: 'lower',
+    },
+    limitations: {
+      maxTokens: 300,
+      maxCharacters: 1500,
+      supportedModalities: ['3d'],
+      costPerToken: 0.01,
+      rateLimit: {
+        requestsPerMinute: 5,
+        tokensPerMinute: 1500,
+      },
+    },
+    optimizations: {
+      preferredStructure: ['object', 'geometry', 'surface', 'style'],
+      keywordEmphasis: ['detailed mesh', 'clean topology', 'realistic'],
+    },
+  },
+
   CUSTOM: {
     platform: 'CUSTOM',
     syntaxRules: {
