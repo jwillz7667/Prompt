@@ -1,0 +1,35 @@
+Promptomize transforms your ideas into powerful, optimized prompts for any AI platform. Whether you're using ChatGPT, Claude, Midjourney, DALL-E, Stable Diffusion, or 13 other platforms, Promptomize ensures your prompts deliver the best possible results.
+
+HOW IT WORKS
+Type what you want to achieve, select your target modality (text, image, video, audio, code, 3D), and tap Enhance. Our advanced AI engine rewrites your prompt using proven prompt engineering techniques tailored to your chosen platform.
+
+POWER TOOLS
+After enhancing, access Platform Optimize, Variations, Sandbox, and Workflows from an inline Power Tools grid. Validate prompts against platform-specific requirements, generate alternative versions, test across multiple AI services, and automate multi-step workflows.
+
+PLATFORM OPTIMIZATION
+Optimize prompts specifically for ChatGPT, Claude, Gemini, Midjourney, DALL-E, Stable Diffusion, Flux, Sora, Runway, Pika, Kling, Suno, Udio, MusicGen, GitHub Copilot, Meshy, Tripo3D, and more. Each platform has unique requirements — Promptomize handles them automatically.
+
+CONVERSATION THREADS
+Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
+
+PROJECT CONTEXTS
+Attach reusable project contexts to your prompts for consistent, domain-specific enhancements across sessions.
+
+KEY FEATURES
+- 18+ platform-specific optimizations
+- 6 modalities: Text, Image, Video, Audio, Code, 3D
+- Tone and length controls
+- MAX Mode for PhD-level prompt engineering
+- Deep Think for advanced reasoning
+- Prompt history with favorites
+- Templates for quick starts
+- Copy to clipboard or open directly in Claude/ChatGPT
+- iOS Widget for instant access
+- Offline queue with automatic sync
+
+SUBSCRIPTION TIERS
+- Free: 10 prompts/day
+- Pro: 100 prompts/day + platform optimization + variations
+- Premium: Unlimited prompts + sandbox testing + workflows + MAX Mode
+
+Built with iOS 26 Liquid Glass design. Privacy-first: your prompts are processed securely and never used for training.

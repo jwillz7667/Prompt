@@ -27,22 +27,34 @@ struct WhatsNewView: View {
     // Update these each release
     private let features: [WhatsNewFeature] = [
         WhatsNewFeature(
-            icon: "bubble.left.and.bubble.right.fill",
-            title: "Conversation Threads",
-            description: "Refine prompts with multi-turn conversations for deeper, more nuanced results.",
+            icon: "bolt.fill",
+            title: "Power Tools",
+            description: "Platform Optimize, Variations, Sandbox, and Workflows — all accessible from a unified grid after enhancing.",
             iconColor: .brandPurple
         ),
         WhatsNewFeature(
-            icon: "music.note",
-            title: "Music Mode",
-            description: "Dedicated optimization for music-related prompts — lyrics, production, and more.",
-            iconColor: .pink
+            icon: "cpu",
+            title: "Inline Platform Optimization",
+            description: "Validate and optimize prompts for ChatGPT, Claude, Midjourney, DALL-E, and 14 more platforms without leaving the screen.",
+            iconColor: .brandCyan
         ),
         WhatsNewFeature(
-            icon: "text.cursor",
-            title: "Partial Text Selection",
-            description: "Press & hold to select specific text from enhanced prompts.",
-            iconColor: .brandCyan
+            icon: "rectangle.on.rectangle",
+            title: "Inline Variations",
+            description: "Generate prompt alternatives with Quick, Comprehensive, Creative, or Platform strategies — browse and swap results instantly.",
+            iconColor: .purple
+        ),
+        WhatsNewFeature(
+            icon: "sparkles",
+            title: "Redesigned Prompt Screen",
+            description: "Cleaner layout with progressive disclosure. Features appear when relevant, toolbar simplified to essentials.",
+            iconColor: .orange
+        ),
+        WhatsNewFeature(
+            icon: "doc.on.doc",
+            title: "Quick Access",
+            description: "Start from Template and Continue Thread buttons now right below the input — no more digging through menus.",
+            iconColor: .green
         )
     ]
 
