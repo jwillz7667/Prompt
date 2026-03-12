@@ -24,6 +24,12 @@ export default function MarketingLayout({
 
             <div className="flex items-center gap-4">
               <Link
+                href="/demo"
+                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              >
+                Demo
+              </Link>
+              <Link
                 href="/pricing"
                 className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
@@ -89,6 +95,14 @@ export default function MarketingLayout({
             <div>
               <h4 className="font-semibold text-[var(--text-primary)] mb-4">Product</h4>
               <ul className="space-y-2">
+                <li>
+                  <Link
+                    href="/demo"
+                    className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  >
+                    Demo
+                  </Link>
+                </li>
                 <li>
                   <Link
                     href="/pricing"

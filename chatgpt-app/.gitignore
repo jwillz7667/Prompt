@@ -1,0 +1,5 @@
+node_modules
+dist
+assets/widget
+.env
+.DS_Store

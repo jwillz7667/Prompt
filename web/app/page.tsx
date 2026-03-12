@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { Sparkles, Zap, Shield, Crown, Check, ArrowRight, Star, MessageSquare, Layers, Smartphone } from 'lucide-react'
+import { Sparkles, Zap, Shield, Crown, Check, ArrowRight, Star, MessageSquare, Layers, Smartphone, PlayCircle } from 'lucide-react'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
 import PromptComparison from '@/components/hero/PromptComparison'
 
@@ -167,6 +167,9 @@ export default function Home() {
               <Link href="#pricing" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
                 Pricing
               </Link>
+              <Link href="/demo" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
+                Demo
+              </Link>
               <Link href="/privacy" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
                 Privacy
               </Link>
@@ -226,6 +229,13 @@ export default function Home() {
                 </svg>
                 Download for iOS
               </a>
+              <Link
+                href="/demo"
+                className="w-full sm:w-auto bg-white/10 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-white/20 transition flex items-center justify-center gap-2 border border-white/20"
+              >
+                Watch Demo
+                <PlayCircle className="w-5 h-5" aria-hidden="true" />
+              </Link>
               <Link
                 href="/login"
                 className="w-full sm:w-auto bg-white/10 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:bg-white/20 transition flex items-center justify-center gap-2 border border-white/20"
@@ -372,6 +382,7 @@ export default function Home() {
               <ul className="space-y-2 text-[var(--text-secondary)]">
                 <li><Link href="#features" className="hover:text-[var(--accent-cyan)] transition">Features</Link></li>
                 <li><Link href="#pricing" className="hover:text-[var(--accent-cyan)] transition">Pricing</Link></li>
+                <li><Link href="/demo" className="hover:text-[var(--accent-cyan)] transition">Demo</Link></li>
                 <li><a href="https://apps.apple.com/us/app/promptomize/id6758075605" className="hover:text-[var(--accent-cyan)] transition" rel="noopener noreferrer">Download</a></li>
               </ul>
             </nav>
