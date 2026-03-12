@@ -18,6 +18,13 @@ const authRoutes = ['/login']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const host = request.headers.get('host')
+
+  if (host === 'www.promptomize.app') {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.hostname = 'promptomize.app'
+    return NextResponse.redirect(redirectUrl, 308)
+  }
 
   // Check for access token in sessionStorage is done client-side
   // Here we just check for refresh token cookie as a secondary indicator
