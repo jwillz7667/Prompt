@@ -3,11 +3,37 @@ import Stripe from 'stripe'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
 const BACKEND_WEBHOOK_SECRET = process.env.BACKEND_WEBHOOK_SECRET || ''
+const PRICE_IDS = {
+  pro: new Set([
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL,
+  ].filter(Boolean)),
+  premium: new Set([
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY,
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL,
+  ].filter(Boolean)),
+}
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2025-02-24.acacia',
   })
+}
+
+function getTierFromPriceId(priceId?: string | null): 'PRO' | 'PREMIUM' | null {
+  if (!priceId) {
+    return null
+  }
+
+  if (PRICE_IDS.premium.has(priceId)) {
+    return 'PREMIUM'
+  }
+
+  if (PRICE_IDS.pro.has(priceId)) {
+    return 'PRO'
+  }
+
+  return null
 }
 
 export async function POST(request: NextRequest) {
@@ -91,10 +117,10 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
   const priceId = subscription.items.data[0]?.price.id
 
-  // Determine tier from price ID
-  let tier = 'PRO'
-  if (priceId.includes('premium')) {
-    tier = 'PREMIUM'
+  const tier = getTierFromPriceId(priceId)
+  if (!tier) {
+    console.error('Unknown Stripe price ID in checkout completion:', priceId)
+    return
   }
 
   // Notify backend
@@ -119,10 +145,10 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
     return
   }
 
-  // Determine tier from price ID
-  let tier = 'PRO'
-  if (priceId.includes('premium')) {
-    tier = 'PREMIUM'
+  const tier = getTierFromPriceId(priceId)
+  if (!tier) {
+    console.error('Unknown Stripe price ID in subscription update:', priceId)
+    return
   }
 
   await notifyBackend('subscription.updated', {
