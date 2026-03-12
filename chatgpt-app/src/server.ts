@@ -339,6 +339,15 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok' })
 })
 
+app.get('/.well-known/openai-apps-challenge', (_req, res) => {
+  if (!env.OPENAI_APPS_DOMAIN_CHALLENGE_TOKEN) {
+    res.status(404).end()
+    return
+  }
+
+  res.type('text/plain').send(env.OPENAI_APPS_DOMAIN_CHALLENGE_TOKEN)
+})
+
 const httpServer = createServer(async (req, res) => {
   if (!req.url) {
     res.writeHead(400).end('Missing URL')

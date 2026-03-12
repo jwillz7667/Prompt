@@ -6,6 +6,7 @@ const envSchema = z.object({
   PROMPTOMIZE_CHATGPT_API_KEY: z.string().min(1),
   CHATGPT_APP_BASE_URL: z.url(),
   CHATGPT_WIDGET_DOMAIN: z.url(),
+  OPENAI_APPS_DOMAIN_CHALLENGE_TOKEN: z.string().min(1).optional(),
 })
 
 export type AppEnv = z.infer<typeof envSchema>
@@ -17,5 +18,6 @@ export function readEnv(): AppEnv {
     PROMPTOMIZE_CHATGPT_API_KEY: process.env['PROMPTOMIZE_CHATGPT_API_KEY'],
     CHATGPT_APP_BASE_URL: process.env['CHATGPT_APP_BASE_URL'],
     CHATGPT_WIDGET_DOMAIN: process.env['CHATGPT_WIDGET_DOMAIN'],
+    OPENAI_APPS_DOMAIN_CHALLENGE_TOKEN: process.env['OPENAI_APPS_DOMAIN_CHALLENGE_TOKEN'],
   })
 }

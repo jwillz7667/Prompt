@@ -10,6 +10,7 @@ Copy `.env.example` to `.env` and fill in:
 - `PROMPTOMIZE_CHATGPT_API_KEY`
 - `CHATGPT_APP_BASE_URL`
 - `CHATGPT_WIDGET_DOMAIN`
+- `OPENAI_APPS_DOMAIN_CHALLENGE_TOKEN` (optional, for OpenAI domain verification)
 
 ## Local run
 
