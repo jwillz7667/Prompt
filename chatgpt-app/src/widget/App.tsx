@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getModalityDetail } from '../shared/modalityDetails'
 import type {
   CapabilitiesPayload,
   EnhanceRequestPayload,
@@ -27,12 +28,12 @@ function extractStructuredContent<T>(value: unknown): T | null {
 
 const fallbackCapabilities: CapabilitiesPayload = {
   modalities: [
-    { id: 'text', name: 'Text' },
-    { id: 'image', name: 'Image' },
-    { id: 'video', name: 'Video' },
-    { id: 'audio', name: 'Audio' },
-    { id: 'code', name: 'Code' },
-    { id: '3d', name: '3D' },
+    { id: 'text', name: 'Text', description: getModalityDetail('text').description },
+    { id: 'image', name: 'Image', description: getModalityDetail('image').description },
+    { id: 'video', name: 'Video', description: getModalityDetail('video').description },
+    { id: 'audio', name: 'Audio', description: getModalityDetail('audio').description },
+    { id: 'code', name: 'Code', description: getModalityDetail('code').description },
+    { id: '3d', name: '3D', description: getModalityDetail('3d').description },
   ],
   tones: [
     { id: 'professional', name: 'Professional' },
@@ -62,18 +63,21 @@ export default function App() {
   const [capabilities, setCapabilities] = useState<CapabilitiesPayload>(
     initialResult?.capabilities ?? fallbackCapabilities
   )
-  const [prompt, setPrompt] = useState(
-    initialResult?.request.prompt ?? 'Write a stronger product launch prompt for my new AI feature.'
-  )
+  const [prompt, setPrompt] = useState(initialResult?.request.prompt ?? '')
   const [modality, setModality] = useState<Modality>(initialResult?.request.modality ?? 'text')
   const [tone, setTone] = useState<Tone | ''>(initialResult?.request.tone ?? '')
   const [length, setLength] = useState<PromptLength | ''>(initialResult?.request.length ?? 'standard')
   const [customInstructions, setCustomInstructions] = useState(
     initialResult?.request.customInstructions ?? ''
   )
-  const [copyState, setCopyState] = useState('Copy enhanced prompt')
+  const [copyState, setCopyState] = useState('Copy optimized prompt')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const activeModality = getModalityDetail(modality)
+  const activeModalityDescription =
+    capabilities.modalities.find((item) => item.id === modality)?.description ?? activeModality.description
+  const resultModality = result?.request.modality ?? modality
+  const resultModalityDetail = getModalityDetail(resultModality)
 
   useEffect(() => {
     document.documentElement.dataset.theme = window.openai?.theme === 'dark' ? 'dark' : 'light'
@@ -120,6 +124,11 @@ export default function App() {
       return
     }
 
+    if (!prompt.trim()) {
+      setError(`Enter the ${activeModality.name.toLowerCase()} prompt you want Promptomize to optimize.`)
+      return
+    }
+
     setBusy(true)
     setError(null)
 
@@ -157,10 +166,10 @@ export default function App() {
     try {
       await navigator.clipboard.writeText(result.enhancedPrompt)
       setCopyState('Copied')
-      window.setTimeout(() => setCopyState('Copy enhanced prompt'), 1500)
+      window.setTimeout(() => setCopyState('Copy optimized prompt'), 1500)
     } catch {
       setCopyState('Copy blocked')
-      window.setTimeout(() => setCopyState('Copy enhanced prompt'), 1500)
+      window.setTimeout(() => setCopyState('Copy optimized prompt'), 1500)
     }
   }
 
@@ -174,10 +183,10 @@ export default function App() {
       <section className="hero-card">
         <div>
           <span className="eyebrow">Promptomize</span>
-          <h1>Refine prompts without leaving ChatGPT.</h1>
+          <h1>Choose a modality, then optimize the prompt.</h1>
           <p>
-            Tune modality, tone, and output depth, then regenerate or copy the final prompt into
-            your next workflow.
+            Pick the workflow first, paste the rough prompt, and get back a modality-specific
+            version you can use immediately.
           </p>
         </div>
         <button className="secondary-button" onClick={handleOpenExternal} type="button">
@@ -188,34 +197,48 @@ export default function App() {
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>Prompt input</h2>
-            <p>Configure the same enhancement settings exposed by the Promptomize public API.</p>
+            <h2>Prompt setup</h2>
+            <p>Choose the target workflow, then configure how Promptomize should optimize the prompt.</p>
           </div>
           <span className="status-chip">{busy ? 'Enhancing' : 'Ready'}</span>
         </div>
 
         <label className="field">
-          <span>Prompt</span>
+          <span>Modality</span>
+          <select value={modality} onChange={(event) => setModality(event.target.value as Modality)}>
+            {capabilities.modalities.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="modality-card">
+          <div className="modality-card-header">
+            <strong>{activeModality.name} optimization</strong>
+            <span className="modality-pill">{activeModality.name}</span>
+          </div>
+          <p>{activeModalityDescription}</p>
+          <p className="modality-helper">{activeModality.helper}</p>
+          <div className="example-box">
+            <span>Example input</span>
+            <strong>{activeModality.example}</strong>
+          </div>
+        </div>
+
+        <label className="field">
+          <span>Prompt to optimize</span>
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             maxLength={capabilities.limits.maxPromptLength}
             rows={6}
+            placeholder={activeModality.placeholder}
           />
         </label>
 
         <div className="grid">
-          <label className="field">
-            <span>Modality</span>
-            <select value={modality} onChange={(event) => setModality(event.target.value as Modality)}>
-              {capabilities.modalities.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <label className="field">
             <span>Tone</span>
             <select value={tone} onChange={(event) => setTone(event.target.value as Tone | '')}>
@@ -257,11 +280,11 @@ export default function App() {
 
         <div className="actions">
           <button className="primary-button" onClick={handleEnhance} type="button" disabled={busy}>
-            {busy ? 'Enhancing...' : result ? 'Regenerate' : 'Enhance prompt'}
+            {busy ? `Optimizing ${activeModality.name}...` : result ? `Re-optimize ${activeModality.name}` : `Optimize ${activeModality.name}`}
           </button>
           <span className="hint">
-            Limits: {capabilities.limits.maxPromptLength.toLocaleString()} chars prompt,{' '}
-            {capabilities.limits.maxCustomInstructions.toLocaleString()} chars instructions.
+            Choose a modality first. Limits: {capabilities.limits.maxPromptLength.toLocaleString()}{' '}
+            chars prompt, {capabilities.limits.maxCustomInstructions.toLocaleString()} chars instructions.
           </span>
         </div>
       </section>
@@ -269,8 +292,8 @@ export default function App() {
       <section className="panel result-panel">
         <div className="panel-header">
           <div>
-            <h2>Enhanced prompt</h2>
-            <p>Copy the result directly or regenerate after changing the controls above.</p>
+            <h2>{resultModalityDetail.name} optimized prompt</h2>
+            <p>Copy the result directly or switch modalities and run it again for a different workflow.</p>
           </div>
           {result?.quota ? (
             <span className="status-chip">
@@ -280,7 +303,7 @@ export default function App() {
         </div>
 
         <div className="result-box">
-          {result?.enhancedPrompt ?? 'Run the enhancement tool to populate the final prompt here.'}
+          {result?.enhancedPrompt ?? `Choose a modality and run the tool to generate an optimized ${activeModality.name.toLowerCase()} prompt here.`}
         </div>
 
         <div className="actions split">

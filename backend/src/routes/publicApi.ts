@@ -103,7 +103,7 @@ publicApiRouter.post(
             },
             onComplete: async (result) => {
               // Record usage
-              recordApiUsage(req, res, {
+              await recordApiUsage(req, res, {
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 modality: data.modality,
@@ -152,7 +152,7 @@ publicApiRouter.post(
         });
 
         // Record usage
-        recordApiUsage(req, res, {
+        await recordApiUsage(req, res, {
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           modality: data.modality,
@@ -176,8 +176,9 @@ publicApiRouter.post(
       const latencyMs = Date.now() - startTime;
 
       if (error instanceof z.ZodError) {
-        recordApiUsage(req, res, {});
-        res.status(400).json({
+        res.status(400);
+        await recordApiUsage(req, res, {});
+        res.json({
           error: 'Validation error',
           code: 'VALIDATION_ERROR',
           details: error.errors.map((e) => ({

@@ -44,6 +44,15 @@ export interface ApiTierConfig {
   features: string[];
 }
 
+export interface ApiCreditPackConfig {
+  id: 'BOOST_5K' | 'GROWTH_25K' | 'SCALE_100K';
+  name: string;
+  description: string;
+  credits: number;
+  priceCents: number;
+  featured?: boolean;
+}
+
 export const API_TIER_CONFIG: Record<ApiTier, ApiTierConfig> = {
   API_FREE: {
     tier: ApiTier.API_FREE,
@@ -112,6 +121,31 @@ export const API_TIER_CONFIG: Record<ApiTier, ApiTierConfig> = {
   },
 };
 
+export const API_CREDIT_PACKS: ApiCreditPackConfig[] = [
+  {
+    id: 'BOOST_5K',
+    name: 'Boost 5K',
+    description: 'A small prepaid top-up for prototypes and new launches.',
+    credits: 5000,
+    priceCents: 1900,
+  },
+  {
+    id: 'GROWTH_25K',
+    name: 'Growth 25K',
+    description: 'A larger prepaid balance for active production workloads.',
+    credits: 25000,
+    priceCents: 7900,
+    featured: true,
+  },
+  {
+    id: 'SCALE_100K',
+    name: 'Scale 100K',
+    description: 'High-volume prepaid credits for heavier API usage.',
+    credits: 100000,
+    priceCents: 24900,
+  },
+];
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -120,24 +154,75 @@ export interface ApiSubscriptionInfo {
   tier: ApiTier;
   status: ApiSubscriptionStatus;
   monthlyRequestLimit: number;
+  baseMonthlyRequests: number;
   requestsPerMinute: number;
   currentPeriodUsage: number;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   remainingRequests: number;
+  prepaidCreditsRemaining: number;
   canMakeRequests: boolean;
   overageAllowed: boolean;
   features: string[];
+  hasBillingAccount: boolean;
 }
 
 interface ApiSubscriptionCache {
   tier: string;
   status: string;
   monthlyLimit: number;
+  baseMonthlyLimit: number;
   rateLimit: number;
   periodUsage: number;
   periodStart: string;
   periodEnd: string;
+  prepaidCreditsRemaining: number;
+  hasBillingAccount: boolean;
+}
+
+type SubscriptionSnapshot = Pick<
+  ApiSubscription,
+  'tier' | 'includedRequests' | 'currentPeriodUsage' | 'stripeCustomerId'
+>;
+
+function getBaseMonthlyRequests(tier: ApiTier): number {
+  return API_TIER_CONFIG[tier].monthlyRequests;
+}
+
+function isUnlimitedPlan(tier: ApiTier, includedRequests: number): boolean {
+  return getBaseMonthlyRequests(tier) === -1 || includedRequests === -1;
+}
+
+export function getPrepaidCreditsRemaining(snapshot: SubscriptionSnapshot): number {
+  if (isUnlimitedPlan(snapshot.tier, snapshot.includedRequests)) {
+    return 0;
+  }
+
+  const baseMonthlyRequests = Math.max(0, getBaseMonthlyRequests(snapshot.tier));
+  return Math.max(
+    0,
+    snapshot.includedRequests - Math.max(snapshot.currentPeriodUsage, baseMonthlyRequests)
+  );
+}
+
+function getRemainingRequests(snapshot: SubscriptionSnapshot): number {
+  if (isUnlimitedPlan(snapshot.tier, snapshot.includedRequests)) {
+    return -1;
+  }
+
+  return Math.max(0, snapshot.includedRequests - snapshot.currentPeriodUsage);
+}
+
+function getEffectiveIncludedRequests(snapshot: SubscriptionSnapshot): number {
+  if (isUnlimitedPlan(snapshot.tier, snapshot.includedRequests)) {
+    return -1;
+  }
+
+  return snapshot.includedRequests;
+}
+
+function getBillingAccountState(snapshot: Pick<ApiSubscription, 'stripeCustomerId'>): boolean {
+  return Boolean(snapshot.stripeCustomerId);
 }
 
 // ============================================================================
@@ -152,22 +237,25 @@ export async function getApiSubscriptionInfo(developerId: string): Promise<ApiSu
   const cached = await cache.get<ApiSubscriptionCache>(`api-subscription:${developerId}`);
   if (cached) {
     const config = API_TIER_CONFIG[cached.tier as ApiTier];
-    const remainingRequests = config.monthlyRequests === -1
+    const remainingRequests = cached.monthlyLimit === -1
       ? -1
-      : Math.max(0, config.monthlyRequests - cached.periodUsage);
+      : Math.max(0, cached.monthlyLimit - cached.periodUsage);
 
     return {
       tier: cached.tier as ApiTier,
       status: cached.status as ApiSubscriptionStatus,
-      monthlyRequestLimit: config.monthlyRequests,
+      monthlyRequestLimit: cached.monthlyLimit,
+      baseMonthlyRequests: cached.baseMonthlyLimit,
       requestsPerMinute: config.requestsPerMinute,
       currentPeriodUsage: cached.periodUsage,
       currentPeriodStart: new Date(cached.periodStart),
       currentPeriodEnd: new Date(cached.periodEnd),
       remainingRequests,
+      prepaidCreditsRemaining: cached.prepaidCreditsRemaining,
       canMakeRequests: remainingRequests === -1 || remainingRequests > 0 || config.overagePerHundred > 0,
       overageAllowed: config.overagePerHundred > 0,
       features: config.features,
+      hasBillingAccount: cached.hasBillingAccount,
     };
   }
 
@@ -182,33 +270,40 @@ export async function getApiSubscriptionInfo(developerId: string): Promise<ApiSu
   }
 
   const config = API_TIER_CONFIG[subscription.tier];
-  const remainingRequests = config.monthlyRequests === -1
-    ? -1
-    : Math.max(0, config.monthlyRequests - subscription.currentPeriodUsage);
+  const monthlyRequestLimit = getEffectiveIncludedRequests(subscription);
+  const remainingRequests = getRemainingRequests(subscription);
+  const prepaidCreditsRemaining = getPrepaidCreditsRemaining(subscription);
+  const hasBillingAccount = getBillingAccountState(subscription);
 
   // Cache the result
   await cache.set(`api-subscription:${developerId}`, {
     tier: subscription.tier,
     status: subscription.status,
-    monthlyLimit: config.monthlyRequests,
+    monthlyLimit: monthlyRequestLimit,
+    baseMonthlyLimit: config.monthlyRequests,
     rateLimit: config.requestsPerMinute,
     periodUsage: subscription.currentPeriodUsage,
     periodStart: subscription.currentPeriodStart.toISOString(),
     periodEnd: subscription.currentPeriodEnd.toISOString(),
+    prepaidCreditsRemaining,
+    hasBillingAccount,
   }, 60); // 1 minute cache
 
   return {
     tier: subscription.tier,
     status: subscription.status,
-    monthlyRequestLimit: config.monthlyRequests,
+    monthlyRequestLimit,
+    baseMonthlyRequests: config.monthlyRequests,
     requestsPerMinute: config.requestsPerMinute,
     currentPeriodUsage: subscription.currentPeriodUsage,
     currentPeriodStart: subscription.currentPeriodStart,
     currentPeriodEnd: subscription.currentPeriodEnd,
     remainingRequests,
+    prepaidCreditsRemaining,
     canMakeRequests: remainingRequests === -1 || remainingRequests > 0 || config.overagePerHundred > 0,
     overageAllowed: config.overagePerHundred > 0,
     features: config.features,
+    hasBillingAccount,
   };
 }
 
@@ -294,6 +389,13 @@ export async function updateApiSubscription(
   }
 ): Promise<ApiSubscription> {
   const config = API_TIER_CONFIG[data.tier];
+  const existingSubscription = await prisma.apiSubscription.findUnique({
+    where: { developerId },
+  });
+  const carriedCredits = existingSubscription ? getPrepaidCreditsRemaining(existingSubscription) : 0;
+  const includedRequests = config.monthlyRequests === -1
+    ? -1
+    : config.monthlyRequests + carriedCredits;
 
   const subscription = await prisma.apiSubscription.upsert({
     where: { developerId },
@@ -303,7 +405,7 @@ export async function updateApiSubscription(
       stripeSubscriptionId: data.stripeSubscriptionId,
       stripeCustomerId: data.stripeCustomerId,
       stripePriceId: data.stripePriceId,
-      includedRequests: config.monthlyRequests,
+      includedRequests,
       overageRateCents: config.overagePerHundred,
       currentPeriodStart: data.currentPeriodStart,
       currentPeriodEnd: data.currentPeriodEnd,
@@ -316,7 +418,7 @@ export async function updateApiSubscription(
       stripeSubscriptionId: data.stripeSubscriptionId,
       stripeCustomerId: data.stripeCustomerId,
       stripePriceId: data.stripePriceId,
-      includedRequests: config.monthlyRequests,
+      includedRequests,
       overageRateCents: config.overagePerHundred,
       currentPeriodStart: data.currentPeriodStart || new Date(),
       currentPeriodEnd: data.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -339,9 +441,22 @@ export async function resetPeriodUsage(
   periodStart: Date,
   periodEnd: Date
 ): Promise<void> {
+  const existingSubscription = await prisma.apiSubscription.findUnique({
+    where: { developerId },
+  });
+
+  if (!existingSubscription) {
+    return;
+  }
+
+  const baseMonthlyRequests = getBaseMonthlyRequests(existingSubscription.tier);
+  const carriedCredits = getPrepaidCreditsRemaining(existingSubscription);
+  const includedRequests = baseMonthlyRequests === -1 ? -1 : baseMonthlyRequests + carriedCredits;
+
   await prisma.apiSubscription.update({
     where: { developerId },
     data: {
+      includedRequests,
       currentPeriodUsage: 0,
       currentPeriodStart: periodStart,
       currentPeriodEnd: periodEnd,
@@ -403,22 +518,7 @@ export async function createCheckoutSession(
     throw new Error(`Price ID not configured for tier: ${tier}`);
   }
 
-  // Get or create Stripe customer
-  let stripeCustomerId: string | undefined;
-
-  const existingSubscription = await prisma.apiSubscription.findUnique({
-    where: { developerId },
-  });
-
-  if (existingSubscription?.stripeCustomerId) {
-    stripeCustomerId = existingSubscription.stripeCustomerId;
-  } else {
-    const customer = await stripe.customers.create({
-      email,
-      metadata: { developerId },
-    });
-    stripeCustomerId = customer.id;
-  }
+  const stripeCustomerId = await getOrCreateStripeCustomer(developerId, email);
 
   // Create checkout session
   const session = await stripe.checkout.sessions.create({
@@ -453,6 +553,138 @@ export async function createCheckoutSession(
   logger.info({ developerId, tier, sessionId: session.id }, 'API checkout session created');
 
   return { url: session.url };
+}
+
+async function getOrCreateStripeCustomer(
+  developerId: string,
+  email: string
+): Promise<string> {
+  if (!stripe) {
+    throw new Error('Stripe is not configured. Please set STRIPE_API_SECRET_KEY.');
+  }
+
+  const subscription = await prisma.apiSubscription.findUnique({
+    where: { developerId },
+  });
+
+  if (subscription?.stripeCustomerId) {
+    return subscription.stripeCustomerId;
+  }
+
+  const customer = await stripe.customers.create({
+    email,
+    metadata: { developerId },
+  });
+
+  await prisma.apiSubscription.upsert({
+    where: { developerId },
+    update: {
+      stripeCustomerId: customer.id,
+    },
+    create: {
+      developerId,
+      tier: ApiTier.API_FREE,
+      status: ApiSubscriptionStatus.ACTIVE,
+      stripeCustomerId: customer.id,
+      includedRequests: API_TIER_CONFIG.API_FREE.monthlyRequests,
+      overageRateCents: API_TIER_CONFIG.API_FREE.overagePerHundred,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      currentPeriodUsage: 0,
+    },
+  });
+
+  await cache.del(`api-subscription:${developerId}`);
+
+  return customer.id;
+}
+
+export function getAvailableCreditPacks(): ApiCreditPackConfig[] {
+  return API_CREDIT_PACKS;
+}
+
+export function getCreditPackById(packId: string): ApiCreditPackConfig | undefined {
+  return API_CREDIT_PACKS.find((pack) => pack.id === packId);
+}
+
+export async function createCreditCheckoutSession(
+  developerId: string,
+  email: string,
+  packId: ApiCreditPackConfig['id'],
+  successUrl: string,
+  cancelUrl: string
+): Promise<{ url: string }> {
+  if (!stripe) {
+    throw new Error('Stripe is not configured. Please set STRIPE_API_SECRET_KEY.');
+  }
+
+  const pack = getCreditPackById(packId);
+
+  if (!pack) {
+    throw new Error(`Unknown API credit pack: ${packId}`);
+  }
+
+  const stripeCustomerId = await getOrCreateStripeCustomer(developerId, email);
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer: stripeCustomerId,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    invoice_creation: {
+      enabled: true,
+    },
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          unit_amount: pack.priceCents,
+          product_data: {
+            name: `${pack.name} API Credit Pack`,
+            description: `${pack.credits.toLocaleString()} prepaid Promptomize API request credits`,
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    metadata: {
+      developerId,
+      type: 'api_credit_purchase',
+      creditPackId: pack.id,
+      credits: pack.credits.toString(),
+    },
+  });
+
+  if (!session.url) {
+    throw new Error('Failed to create credit checkout session');
+  }
+
+  logger.info({ developerId, packId, sessionId: session.id }, 'API credit checkout session created');
+
+  return { url: session.url };
+}
+
+export async function addPurchasedCredits(
+  developerId: string,
+  credits: number
+): Promise<ApiSubscription> {
+  const subscription = await ensureApiSubscription(developerId);
+  const nextIncludedRequests = subscription.includedRequests === -1
+    ? -1
+    : subscription.includedRequests + credits;
+
+  const updated = await prisma.apiSubscription.update({
+    where: { developerId },
+    data: {
+      includedRequests: nextIncludedRequests,
+    },
+  });
+
+  await cache.del(`api-subscription:${developerId}`);
+
+  logger.info({ developerId, credits, includedRequests: updated.includedRequests }, 'API credits added');
+
+  return updated;
 }
 
 /**

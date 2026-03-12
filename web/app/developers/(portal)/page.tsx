@@ -92,7 +92,7 @@ export default function DevelopersOverviewPage() {
       {/* Stats Overview */}
       <div>
         <h2 className="text-xl font-semibold text-primary mb-4">Overview</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardContent className="p-6">
               <div className="text-sm text-muted">Current Plan</div>
@@ -129,6 +129,18 @@ export default function DevelopersOverviewPage() {
                   ? '∞'
                   : subscription?.quota?.limit?.toLocaleString() || 100}
               </span>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-sm text-muted">Prepaid Credits</div>
+              <div className="mt-2 text-2xl font-bold text-primary">
+                {subLoading ? '...' : subscription?.credits?.purchasedRemaining?.toLocaleString() || 0}
+              </div>
+              <Link href="/developers/billing">
+                <span className="text-xs text-accent hover:underline">Buy more</span>
+              </Link>
             </CardContent>
           </Card>
 

@@ -1,12 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
   useApiSubscriptionStatus,
   useApiPlans,
+  useApiCreditPacks,
   useApiBilling,
   useApiInvoices,
   useCreateApiCheckout,
+  useCreateApiCreditCheckout,
   useCreateApiPortalSession,
   useCancelApiSubscription,
 } from '@/lib/hooks/useApiKeys'
@@ -16,11 +19,15 @@ import { toast } from '@/lib/stores/uiStore'
 import { cn } from '@/lib/utils/cn'
 
 export default function BillingPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const { data: subscription, isLoading: subLoading } = useApiSubscriptionStatus()
   const { data: plans } = useApiPlans()
+  const { data: creditPacks } = useApiCreditPacks()
   const { data: billing } = useApiBilling()
   const { data: invoices } = useApiInvoices(5)
   const checkoutMutation = useCreateApiCheckout()
+  const creditCheckoutMutation = useCreateApiCreditCheckout()
   const portalMutation = useCreateApiPortalSession()
   const cancelMutation = useCancelApiSubscription()
 
@@ -28,15 +35,45 @@ export default function BillingPage() {
 
   const currentTier = subscription?.tier || 'API_FREE'
   const isFreeTier = currentTier === 'API_FREE'
+  const hasBillingAccount = Boolean(subscription?.hasBillingAccount)
+
+  useEffect(() => {
+    const checkout = searchParams.get('checkout')
+
+    if (!checkout) {
+      return
+    }
+
+    if (checkout === 'plan-success') {
+      toast.success('Billing updated', 'Your API plan checkout completed successfully.')
+    } else if (checkout === 'credits-success') {
+      toast.success('Credits added', 'Your API credits were added to your account.')
+    } else if (checkout === 'canceled') {
+      toast.info('Checkout canceled', 'No billing changes were made.')
+    }
+
+    router.replace('/developers/billing')
+  }, [router, searchParams])
 
   const handleUpgrade = async (tier: 'API_STARTER' | 'API_PRO') => {
     try {
-      const successUrl = `${window.location.origin}/developers/billing?checkout=success`
+      const successUrl = `${window.location.origin}/developers/billing?checkout=plan-success`
       const cancelUrl = `${window.location.origin}/developers/billing?checkout=canceled`
       const result = await checkoutMutation.mutateAsync({ tier, successUrl, cancelUrl })
       window.location.href = result.url
     } catch (error) {
       toast.error('Failed to start checkout', (error as Error).message)
+    }
+  }
+
+  const handleBuyCredits = async (packId: 'BOOST_5K' | 'GROWTH_25K' | 'SCALE_100K') => {
+    try {
+      const successUrl = `${window.location.origin}/developers/billing?checkout=credits-success`
+      const cancelUrl = `${window.location.origin}/developers/billing?checkout=canceled`
+      const result = await creditCheckoutMutation.mutateAsync({ packId, successUrl, cancelUrl })
+      window.location.href = result.url
+    } catch (error) {
+      toast.error('Failed to start credit checkout', (error as Error).message)
     }
   }
 
@@ -101,16 +138,44 @@ export default function BillingPage() {
             )}
           </div>
 
-          {!isFreeTier && (
+          {(hasBillingAccount || !isFreeTier) && (
             <div className="flex gap-3 mt-6">
               <Button variant="secondary" onClick={handleManageBilling}>
-                Manage Billing
+                {isFreeTier ? 'View Receipts' : 'Manage Billing'}
               </Button>
-              <Button variant="ghost" onClick={() => setCancelConfirm(true)}>
-                Cancel Plan
-              </Button>
+              {!isFreeTier && (
+                <Button variant="ghost" onClick={() => setCancelConfirm(true)}>
+                  Cancel Plan
+                </Button>
+              )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Credit Balance */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <h3 className="font-medium text-primary">Prepaid API Credits</h3>
+              <p className="text-sm text-muted mt-1">
+                Purchased credits are used after your plan&apos;s included monthly requests.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-muted">Available</div>
+              <div className="text-3xl font-bold text-primary mt-1">
+                {subLoading ? '...' : (subscription?.credits?.purchasedRemaining ?? 0).toLocaleString()}
+              </div>
+              <div className="text-xs text-muted mt-1">
+                Plan includes{' '}
+                {subscription?.credits?.monthlyIncluded === 'unlimited'
+                  ? 'unlimited monthly requests'
+                  : `${subscription?.credits?.monthlyIncluded?.toLocaleString() || 0} monthly requests`}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -148,6 +213,53 @@ export default function BillingPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Credit Packs */}
+      <div>
+        <h3 className="text-lg font-semibold text-primary mb-4">Buy API Credits</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          {creditPacks?.map((pack) => (
+            <Card
+              key={pack.id}
+              className={cn(
+                pack.featured && 'border-accent/50'
+              )}
+            >
+              <CardContent className="p-6">
+                {pack.featured && (
+                  <span className="text-xs bg-accent text-white px-2 py-0.5 rounded mb-2 inline-block">
+                    Best value
+                  </span>
+                )}
+                <h4 className="text-lg font-semibold text-primary">{pack.name}</h4>
+                <div className="mt-2">
+                  <span className="text-3xl font-bold text-primary">${pack.price.toFixed(2)}</span>
+                </div>
+                <p className="text-sm text-muted mt-2">{pack.description}</p>
+
+                <div className="mt-4 rounded-xl bg-secondary p-4">
+                  <div className="text-sm text-muted">Credits added</div>
+                  <div className="text-2xl font-bold text-primary mt-1">
+                    {pack.credits.toLocaleString()}
+                  </div>
+                  <div className="text-xs text-muted mt-1">
+                    1 credit = 1 API request
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full mt-6"
+                  variant={pack.featured ? 'primary' : 'secondary'}
+                  onClick={() => handleBuyCredits(pack.id)}
+                  disabled={creditCheckoutMutation.isPending}
+                >
+                  {creditCheckoutMutation.isPending ? 'Loading...' : 'Buy Credits'}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
 
       {/* Plans */}
       <div>

@@ -11,9 +11,11 @@ import { logger } from '../utils/logger.js';
 import {
   updateApiSubscription,
   resetPeriodUsage,
+  addPurchasedCredits,
   ApiTier,
 } from '../services/apiSubscriptionService.js';
-import { ApiSubscriptionStatus } from '@prisma/client';
+import { ApiSubscriptionStatus, IdempotencyStatus, Prisma } from '@prisma/client';
+import { prisma } from '../utils/prisma.js';
 
 export const apiStripeWebhookRouter = Router();
 
@@ -34,6 +36,64 @@ const PRICE_TO_TIER: Record<string, ApiTier> = {
 
 function getTierFromPriceId(priceId: string): ApiTier {
   return PRICE_TO_TIER[priceId] || ApiTier.API_FREE;
+}
+
+async function beginWebhookProcessing(event: Stripe.Event): Promise<'process' | 'skip'> {
+  const idempotencyKey = `api-stripe:${event.id}`;
+
+  const existing = await prisma.webhookIdempotencyKey.findUnique({
+    where: { idempotencyKey },
+  });
+
+  if (existing?.status === IdempotencyStatus.COMPLETED) {
+    logger.info({ eventId: event.id, eventType: event.type }, 'Skipping previously processed API Stripe webhook');
+    return 'skip';
+  }
+
+  if (existing?.status === IdempotencyStatus.PROCESSING) {
+    logger.warn({ eventId: event.id, eventType: event.type }, 'API Stripe webhook already processing');
+    return 'skip';
+  }
+
+  if (existing) {
+    await prisma.webhookIdempotencyKey.delete({
+      where: { id: existing.id },
+    });
+  }
+
+  await prisma.webhookIdempotencyKey.create({
+    data: {
+      idempotencyKey,
+      endpoint: '/api/v1/webhooks/api-stripe',
+      payload: event as unknown as Prisma.InputJsonValue,
+      status: IdempotencyStatus.PROCESSING,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
+
+  return 'process';
+}
+
+async function completeWebhookProcessing(event: Stripe.Event): Promise<void> {
+  await prisma.webhookIdempotencyKey.update({
+    where: { idempotencyKey: `api-stripe:${event.id}` },
+    data: {
+      status: IdempotencyStatus.COMPLETED,
+      statusCode: 200,
+      responseBody: { received: true } as Prisma.InputJsonValue,
+      completedAt: new Date(),
+    },
+  });
+}
+
+async function failWebhookProcessing(event: Stripe.Event): Promise<void> {
+  await prisma.webhookIdempotencyKey.updateMany({
+    where: { idempotencyKey: `api-stripe:${event.id}` },
+    data: {
+      status: IdempotencyStatus.FAILED,
+      completedAt: new Date(),
+    },
+  });
 }
 
 // ============================================================================
@@ -72,9 +132,9 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
 
   try {
     // Use raw body for signature verification
-    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody || req.body;
+    const rawBody = (req as Request & { rawBody?: Buffer | string }).rawBody || req.body;
     event = stripe.webhooks.constructEvent(
-      typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody),
+      rawBody,
       sig,
       webhookSecret
     );
@@ -87,7 +147,19 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
   logger.info({ eventType: event.type, eventId: event.id }, 'Received API Stripe webhook');
 
   try {
+    const idempotencyState = await beginWebhookProcessing(event);
+
+    if (idempotencyState === 'skip') {
+      res.json({ received: true });
+      return;
+    }
+
     switch (event.type) {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded':
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
         await handleSubscriptionUpdate(event.data.object as Stripe.Subscription);
@@ -109,8 +181,10 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
         logger.debug({ eventType: event.type }, 'Unhandled event type');
     }
 
+    await completeWebhookProcessing(event);
     res.json({ received: true });
   } catch (error) {
+    await failWebhookProcessing(event);
     logger.error({ error, eventType: event.type }, 'Error processing webhook');
     res.status(500).json({ error: 'Webhook processing failed' });
   }
@@ -185,6 +259,103 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Prom
   logger.info(
     { userId, tier, status, subscriptionId: subscription.id },
     'API subscription updated'
+  );
+}
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
+  const metadata = session.metadata || {};
+  const developerId = metadata['developerId'];
+
+  if (!developerId) {
+    logger.warn({ sessionId: session.id }, 'No developerId in API Stripe checkout metadata');
+    return;
+  }
+
+  if (metadata['type'] !== 'api_credit_purchase') {
+    logger.debug({ sessionId: session.id }, 'Checkout session is not an API credit purchase');
+    return;
+  }
+
+  if (session.mode !== 'payment') {
+    logger.debug({ sessionId: session.id, mode: session.mode }, 'Ignoring non-payment API credit checkout session');
+    return;
+  }
+
+  if (session.payment_status !== 'paid') {
+    logger.info({ sessionId: session.id, paymentStatus: session.payment_status }, 'API credit checkout not paid yet');
+    return;
+  }
+
+  const fulfillmentKey = `api-credit-session:${session.id}`;
+  const existingFulfillment = await prisma.webhookIdempotencyKey.findUnique({
+    where: { idempotencyKey: fulfillmentKey },
+  });
+
+  if (existingFulfillment?.status === IdempotencyStatus.COMPLETED) {
+    logger.info({ sessionId: session.id }, 'API credit checkout session already fulfilled');
+    return;
+  }
+
+  if (!existingFulfillment) {
+    try {
+      await prisma.webhookIdempotencyKey.create({
+        data: {
+          idempotencyKey: fulfillmentKey,
+          endpoint: '/api/v1/webhooks/api-stripe/credits',
+          payload: session as unknown as Prisma.InputJsonValue,
+          status: IdempotencyStatus.PROCESSING,
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        },
+      });
+    } catch (error) {
+      logger.warn({ error, sessionId: session.id }, 'API credit checkout fulfillment is already being processed');
+      return;
+    }
+  }
+
+  const credits = Number.parseInt(metadata['credits'] || '0', 10);
+
+  if (!Number.isFinite(credits) || credits <= 0) {
+    logger.warn({ sessionId: session.id, credits: metadata['credits'] }, 'Invalid API credit amount in checkout metadata');
+    return;
+  }
+
+  await addPurchasedCredits(developerId, credits);
+
+  if (typeof session.customer === 'string') {
+    await prisma.apiSubscription.upsert({
+      where: { developerId },
+      update: {
+        stripeCustomerId: session.customer,
+      },
+      create: {
+        developerId,
+        tier: ApiTier.API_FREE,
+        status: ApiSubscriptionStatus.ACTIVE,
+        stripeCustomerId: session.customer,
+        includedRequests: 100 + credits,
+        overageRateCents: 0,
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        currentPeriodUsage: 0,
+      },
+    });
+  }
+
+  await prisma.webhookIdempotencyKey.update({
+    where: { idempotencyKey: fulfillmentKey },
+    data: {
+      status: IdempotencyStatus.COMPLETED,
+      statusCode: 200,
+      responseBody: { credits } as Prisma.InputJsonValue,
+      completedAt: new Date(),
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  logger.info(
+    { developerId, sessionId: session.id, credits, packId: metadata['creditPackId'] },
+    'API credit purchase applied'
   );
 }
 

@@ -13,6 +13,7 @@ import {
 } from '@modelcontextprotocol/ext-apps/server'
 import { readEnv } from './lib/env.js'
 import { enhancePrompt, fetchCapabilities } from './lib/promptomize.js'
+import { getModalityDetail } from './shared/modalityDetails.js'
 import {
   PROMPTOMIZE_TOOL_URI,
   type CapabilitiesPayload,
@@ -127,7 +128,7 @@ function enforceSessionLimit(session: SessionRecord): void {
 
 function summarizeCapabilities(capabilities: CapabilitiesPayload): string {
   const modalities = capabilities.modalities.map((item) => item.name).join(', ')
-  return `Promptomize supports ${modalities}.`
+  return `Promptomize supports ${modalities}. Choose a modality first, then paste the prompt you want optimized for that workflow.`
 }
 
 function toStructuredContent(value: object): Record<string, unknown> {
@@ -203,7 +204,7 @@ function createPromptomizeServer(sessionRecord: SessionRecord): McpServer {
     {
       title: 'Enhance a prompt with Promptomize',
       description:
-        'Use this when the user wants a stronger, clearer, or more platform-aware prompt for text, image, video, audio, code, or 3D workflows.',
+        'Use this when the user wants to choose a modality and rewrite a rough prompt into a stronger prompt optimized for text, image, video, audio, code, or 3D workflows.',
       inputSchema: {
         prompt: z.string().min(1).max(100000),
         modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
@@ -244,7 +245,7 @@ function createPromptomizeServer(sessionRecord: SessionRecord): McpServer {
         content: [
           {
             type: 'text',
-            text: `Enhanced the ${request.modality} prompt in ${request.length ?? 'standard'} detail.`,
+            text: `Optimized the prompt for ${getModalityDetail(request.modality).name} in ${request.length ?? 'standard'} detail.`,
           },
         ],
         structuredContent: toStructuredContent(response),

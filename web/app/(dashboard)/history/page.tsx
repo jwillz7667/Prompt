@@ -66,9 +66,15 @@ export default function HistoryPage() {
     toast.success('Copied to clipboard')
   }, [])
 
-  const handleReenhance = useCallback((originalPrompt: string) => {
+  const handleReenhance = useCallback((originalPrompt: string, modality?: Prompt['modality']) => {
     setSelectedPrompt(null)
-    router.push(`/dashboard?prompt=${encodeURIComponent(originalPrompt)}`)
+    const params = new URLSearchParams({
+      prompt: originalPrompt,
+    })
+    if (modality) {
+      params.set('modality', modality)
+    }
+    router.push(`/dashboard?${params.toString()}`)
   }, [router])
 
   const handleDelete = useCallback(async () => {
@@ -352,7 +358,7 @@ export default function HistoryPage() {
               </Button>
               <Button
                 variant="secondary"
-                onClick={() => handleReenhance(selectedPrompt.originalPrompt)}
+                onClick={() => handleReenhance(selectedPrompt.originalPrompt, selectedPrompt.modality)}
                 leftIcon={<RefreshCw className="h-4 w-4" />}
               >
                 Enhance Again

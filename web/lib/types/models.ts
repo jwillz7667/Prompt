@@ -53,6 +53,7 @@ export interface Prompt {
   id: string
   originalPrompt: string
   enhancedPrompt: string
+  modality: PromptModality
   tone: ToneType | null
   outputLength: OutputLength | null
   model: string | null
@@ -188,6 +189,7 @@ export type ToneType =
   | 'max'
 
 export type OutputLength = 'concise' | 'standard' | 'detailed'
+export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d'
 
 export type AppearanceMode = 'system' | 'light' | 'dark'
 
@@ -216,4 +218,3 @@ export interface StripeProduct {
   amount: number
   currency: string
 }
-

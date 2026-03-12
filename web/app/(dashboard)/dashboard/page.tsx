@@ -13,7 +13,7 @@ import { useSubscription } from '@/lib/hooks/useSubscription'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
 import { toast } from '@/lib/stores/uiStore'
 import { cn } from '@/lib/utils/cn'
-import type { ToneType, OutputLength } from '@/lib/types/models'
+import type { ToneType, OutputLength, PromptModality } from '@/lib/types/models'
 import {
   Sparkles,
   Copy,
@@ -24,6 +24,12 @@ import {
   AlertCircle,
   Flame,
   ExternalLink,
+  FileText,
+  ImageIcon,
+  Video,
+  Mic,
+  Code2,
+  Box,
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -66,10 +72,110 @@ const lengthOptions: SelectOption[] = [
   { value: 'detailed', label: 'Detailed', description: 'Comprehensive coverage' },
 ]
 
+const modalityOptions: SelectOption[] = [
+  {
+    value: 'text',
+    label: 'Text',
+    description: 'Writing, analysis, business, and general AI tasks',
+    icon: <FileText className="h-4 w-4" />,
+  },
+  {
+    value: 'image',
+    label: 'Image',
+    description: 'Photos, illustrations, concept art, and product shots',
+    icon: <ImageIcon className="h-4 w-4" />,
+  },
+  {
+    value: 'video',
+    label: 'Video',
+    description: 'Motion, scenes, pacing, and camera direction',
+    icon: <Video className="h-4 w-4" />,
+  },
+  {
+    value: 'audio',
+    label: 'Audio',
+    description: 'Music, voice, sound design, and lyrics',
+    icon: <Mic className="h-4 w-4" />,
+  },
+  {
+    value: 'code',
+    label: 'Code',
+    description: 'Functions, components, debugging, and refactors',
+    icon: <Code2 className="h-4 w-4" />,
+  },
+  {
+    value: '3d',
+    label: '3D',
+    description: 'Assets, renders, visualization, and printable models',
+    icon: <Box className="h-4 w-4" />,
+  },
+]
+
+const modalityDetails: Record<
+  PromptModality,
+  {
+    title: string
+    description: string
+    placeholder: string
+    helper: string
+    outputLabel: string
+  }
+> = {
+  text: {
+    title: 'Text prompts',
+    description: 'Optimize prompts for writing, summarization, research, planning, and assistant workflows.',
+    placeholder: "Enter the writing or assistant task you want improved. Example: 'Write a launch email for a new AI feature aimed at product managers.'",
+    helper: 'Promptomize will emphasize structure, audience, tone, and clear output requirements for text models.',
+    outputLabel: 'text',
+  },
+  image: {
+    title: 'Image prompts',
+    description: 'Optimize prompts for image generators with stronger subject, composition, style, lighting, and camera detail.',
+    placeholder: "Describe the scene you want improved. Example: 'A luxury perfume bottle on black marble with water droplets and dramatic lighting.'",
+    helper: 'Best for Midjourney, DALL-E, Flux, and other image-generation workflows.',
+    outputLabel: 'image',
+  },
+  video: {
+    title: 'Video prompts',
+    description: 'Optimize prompts for motion, pacing, camera movement, scene progression, and cinematic detail.',
+    placeholder: "Describe the sequence you want improved. Example: 'A futuristic sports car racing through neon Tokyo at night for a short ad.'",
+    helper: 'Promptomize will add motion cues, camera direction, timing, and scene continuity for video tools.',
+    outputLabel: 'video',
+  },
+  audio: {
+    title: 'Audio prompts',
+    description: 'Optimize prompts for music, lyrics, voice, or sound design with richer sonic and production language.',
+    placeholder: "Describe the audio output you want improved. Example: 'An uplifting synth-pop anthem with a female lead vocal and glossy 80s production.'",
+    helper: 'Best for music generation, voice synthesis, podcast scripting, and sound design workflows.',
+    outputLabel: 'audio',
+  },
+  code: {
+    title: 'Code prompts',
+    description: 'Optimize prompts for implementation details, frameworks, constraints, architecture, and test expectations.',
+    placeholder: "Describe the coding task you want improved. Example: 'Build a secure Express auth API with JWT refresh tokens, rate limiting, and tests.'",
+    helper: 'Promptomize will sharpen technical requirements, expected outputs, constraints, and edge cases.',
+    outputLabel: 'code',
+  },
+  '3d': {
+    title: '3D prompts',
+    description: 'Optimize prompts for 3D assets, renders, topology, materials, scale, and target use cases.',
+    placeholder: "Describe the 3D asset or render you want improved. Example: 'A stylized medieval sword game asset with leather grip and worn steel blade.'",
+    helper: 'Best for 3D generation, visualization, asset ideation, and 3D-printing prep prompts.',
+    outputLabel: '3D',
+  },
+}
+
+const promptModalityValues: PromptModality[] = ['text', 'image', 'video', 'audio', 'code', '3d']
+
+function isPromptModality(value: string | null): value is PromptModality {
+  return value !== null && promptModalityValues.includes(value as PromptModality)
+}
+
 export default function DashboardPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
+  const [modality, setModality] = useState<PromptModality>('text')
   const [copied, setCopied] = useState(false)
   const [maxModeEnabled, setMaxModeEnabled] = useState(false)
   const [maxModeUsedToday, setMaxModeUsedToday] = useState(0)
@@ -86,8 +192,14 @@ export default function DashboardPage() {
   // Pre-fill prompt from URL params (for re-enhance from history)
   useEffect(() => {
     const promptParam = searchParams.get('prompt')
-    if (promptParam) {
-      setPrompt(promptParam)
+    const modalityParam = searchParams.get('modality')
+
+    if (isPromptModality(modalityParam)) {
+      setModality(modalityParam)
+    }
+
+    if (promptParam || modalityParam) {
+      setPrompt(promptParam ?? '')
       reset() // Clear any previous enhancement
       // Clean up URL
       router.replace('/dashboard', { scroll: false })
@@ -104,6 +216,9 @@ export default function DashboardPage() {
   const maxModeLimit = tier === 'PRO' ? 5 : 0 // Pro gets 5/day, Free gets 0
   const maxModeRemaining = hasUnlimitedMaxMode ? Infinity : maxModeLimit - maxModeUsedToday
   const canUseMaxMode = hasUnlimitedMaxMode || (tier === 'PRO' && maxModeRemaining > 0)
+  const activeModality = modalityDetails[modality]
+  const outputModality = result?.modality ?? modality
+  const outputModalityDetails = modalityDetails[outputModality]
 
   const handleEnhance = useCallback(async () => {
     if (!prompt.trim()) {
@@ -131,8 +246,9 @@ export default function DashboardPage() {
       const effectiveTone = maxModeEnabled ? 'max' : selectedTone
 
       await enhance(prompt, {
+        modality,
         tone: effectiveTone as ToneType,
-        outputLength,
+        length: outputLength,
         deepThink: canDeepThink && deepThinkEnabled,
       })
 
@@ -146,7 +262,7 @@ export default function DashboardPage() {
     } catch (err) {
       // Error already shown in state
     }
-  }, [prompt, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, maxModeEnabled, hasUnlimitedMaxMode, canUseMaxMode, tier])
+  }, [prompt, modality, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, maxModeEnabled, hasUnlimitedMaxMode, canUseMaxMode, tier])
 
   const handleCopy = useCallback(async () => {
     const textToCopy = result?.enhancedPrompt || streamedContent
@@ -172,7 +288,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">Enhance Your Prompt</h1>
         <p className="mt-1 text-[var(--text-secondary)]">
-          Transform your ideas into powerful AI instructions
+          Choose a modality, then turn rough ideas into stronger AI-ready prompts.
         </p>
       </div>
 
@@ -183,7 +299,7 @@ export default function DashboardPage() {
           <div className="flex-1">
             <p className="font-medium text-[var(--text-primary)]">Daily limit reached</p>
             <p className="text-sm text-[var(--text-secondary)]">
-              You've used all {usage.dailyPromptsLimit} prompts today.
+              You&apos;ve used all {usage.dailyPromptsLimit} prompts today.
             </p>
           </div>
           <Link href="/upgrade">
@@ -199,13 +315,40 @@ export default function DashboardPage() {
         <CardContent className="p-0">
           {/* Input Section */}
           <div className="p-6 pb-4 border-b border-[var(--border)]">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)] mb-4">
+              <div className="relative z-30">
+                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                  Modality
+                </label>
+                <Select
+                  options={modalityOptions}
+                  value={modality}
+                  onChange={(value) => setModality(value as PromptModality)}
+                  placeholder="Select modality"
+                  disabled={isEnhancing}
+                />
+              </div>
+
+              <div className="rounded-2xl border border-[var(--border)] bg-brand-indigo/5 dark:bg-brand-cyan/5 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{activeModality.outputLabel}</Badge>
+                  <p className="font-medium text-[var(--text-primary)]">{activeModality.title}</p>
+                </div>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">{activeModality.description}</p>
+                <p className="mt-2 text-xs text-[var(--text-tertiary)]">{activeModality.helper}</p>
+              </div>
+            </div>
+
             <Textarea
-              placeholder="Enter your prompt here... e.g., 'Write a blog post about AI'"
+              placeholder={activeModality.placeholder}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[150px] text-base border-0 bg-transparent focus:ring-0 resize-none"
               disabled={isEnhancing}
             />
+            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
+              Promptomize will optimize this prompt specifically for {activeModality.outputLabel.toLowerCase()} workflows.
+            </p>
 
             {/* Options Row */}
             <div className="flex flex-wrap items-end gap-4 mt-4 pt-4 border-t border-[var(--border)]">
@@ -293,9 +436,9 @@ export default function DashboardPage() {
                 disabled={!prompt.trim() || isEnhancing || !canEnhance}
                 isLoading={isEnhancing}
                 leftIcon={!isEnhancing && <Sparkles className="h-5 w-5" />}
-                className="min-w-[140px]"
+                className="min-w-[180px]"
               >
-                {isEnhancing ? 'Enhancing...' : 'Enhance'}
+                {isEnhancing ? `Optimizing ${activeModality.outputLabel}...` : `Optimize ${activeModality.outputLabel}`}
               </Button>
             </div>
           </div>
@@ -328,6 +471,12 @@ export default function DashboardPage() {
 
                   {/* Enhanced output */}
                   <div className="relative">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Badge variant="outline">{outputModalityDetails.outputLabel} optimized</Badge>
+                      <span className="text-xs text-[var(--text-tertiary)]">
+                        Structured for {outputModalityDetails.outputLabel.toLowerCase()} generation workflows.
+                      </span>
+                    </div>
                     <div
                       className={cn(
                         'min-h-[120px] whitespace-pre-wrap text-base text-[var(--text-primary)]',
@@ -336,7 +485,7 @@ export default function DashboardPage() {
                     >
                       {displayContent || (
                         <span className="text-[var(--text-tertiary)]">
-                          Enhanced prompt will appear here...
+                          Your optimized {outputModalityDetails.outputLabel.toLowerCase()} prompt will appear here...
                         </span>
                       )}
                       {isEnhancing && progress === 'streaming' && (

@@ -10,6 +10,7 @@ import type {
   PromptUsage,
   ToneType,
   OutputLength,
+  PromptModality,
   DeepseekModel,
   SubscriptionTier,
   StripeProduct,
@@ -32,8 +33,9 @@ export interface RefreshResponse {
 // Prompts
 export interface EnhanceRequest {
   prompt: string
+  modality?: PromptModality
   tone?: ToneType
-  outputLength?: OutputLength
+  length?: OutputLength
   model?: DeepseekModel
   temperature?: number
   customInstructions?: string

@@ -307,8 +307,12 @@ export async function getMonthlyUsage(developerId: string): Promise<MonthlyUsage
 
   const totalRequests = subscription.currentPeriodUsage;
   const totalTokens = usageRecords.reduce((sum, r) => sum + r.totalTokens, 0);
-  const overageRequests = Math.max(0, totalRequests - subscription.includedRequests);
-  const estimatedCostCents = Math.ceil(overageRequests / 100) * subscription.overageRateCents;
+  const overageRequests = subscription.includedRequests < 0
+    ? 0
+    : Math.max(0, totalRequests - subscription.includedRequests);
+  const estimatedCostCents = overageRequests > 0
+    ? Math.ceil(overageRequests / 100) * subscription.overageRateCents
+    : 0;
 
   return {
     periodStart: subscription.currentPeriodStart,
@@ -346,8 +350,8 @@ export async function calculateBilling(
 
   const includedRequests = subscription?.includedRequests || 100;
   const overageRateCents = subscription?.overageRateCents || 1;
-  const overageRequests = Math.max(0, requestCount - includedRequests);
-  const overageCostCents = Math.ceil(overageRequests / 100) * overageRateCents;
+  const overageRequests = includedRequests < 0 ? 0 : Math.max(0, requestCount - includedRequests);
+  const overageCostCents = overageRequests > 0 ? Math.ceil(overageRequests / 100) * overageRateCents : 0;
 
   // Base price based on tier
   const basePriceCents = getBasePriceCents(subscription?.tier || 'API_FREE');

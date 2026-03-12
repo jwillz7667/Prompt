@@ -7,7 +7,7 @@
 
 import { Response, NextFunction } from 'express';
 import { getApiSubscriptionInfo, canMakeRequest } from '../services/apiSubscriptionService.js';
-import { recordUsageAsync } from '../services/apiUsageService.js';
+import { recordUsage, recordUsageAsync } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
 import type { ApiKeyRequest } from './apiKeyAuth.js';
 
@@ -106,7 +106,7 @@ export const enforceApiQuota = async (
  * Record usage after successful response.
  * Call this in route handlers after sending successful response.
  */
-export const recordApiUsage = (
+export const recordApiUsage = async (
   req: ApiQuotaRequest,
   res: Response,
   options: {
@@ -114,14 +114,14 @@ export const recordApiUsage = (
     outputTokens?: number;
     modality?: string;
   } = {}
-): void => {
+): Promise<void> => {
   if (!req.apiKey) {
     return;
   }
 
   const latencyMs = req.usageStart ? Date.now() - req.usageStart : 0;
 
-  recordUsageAsync({
+  await recordUsage({
     apiKeyId: req.apiKey.id,
     developerId: req.apiKey.developerId,
     endpoint: req.path,
@@ -185,6 +185,10 @@ export async function getQuotaInfo(developerId: string): Promise<{
   rateLimit: {
     requestsPerMinute: number;
   };
+  credits: {
+    purchasedRemaining: number;
+    monthlyIncluded: number | 'unlimited';
+  };
   features: string[];
 }> {
   const info = await getApiSubscriptionInfo(developerId);
@@ -201,6 +205,10 @@ export async function getQuotaInfo(developerId: string): Promise<{
     },
     rateLimit: {
       requestsPerMinute: info.requestsPerMinute,
+    },
+    credits: {
+      purchasedRemaining: info.prepaidCreditsRemaining,
+      monthlyIncluded: info.baseMonthlyRequests === -1 ? 'unlimited' : info.baseMonthlyRequests,
     },
     features: info.features,
   };

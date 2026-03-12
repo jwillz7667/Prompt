@@ -17,7 +17,9 @@ import {
   getAvailablePermissions,
   getApiSubscriptionStatus,
   getApiPlans,
+  getApiCreditPacks,
   createApiCheckout,
+  createApiCreditCheckout,
   createApiPortalSession,
   cancelApiSubscription,
   getApiInvoices,
@@ -47,6 +49,7 @@ export const apiSubscriptionQueryKeys = {
   all: ['apiSubscription'] as const,
   status: () => [...apiSubscriptionQueryKeys.all, 'status'] as const,
   plans: () => [...apiSubscriptionQueryKeys.all, 'plans'] as const,
+  creditPacks: () => [...apiSubscriptionQueryKeys.all, 'creditPacks'] as const,
   invoices: (limit?: number) => [...apiSubscriptionQueryKeys.all, 'invoices', limit] as const,
   billing: () => [...apiSubscriptionQueryKeys.all, 'billing'] as const,
 }
@@ -219,6 +222,17 @@ export function useApiPlans() {
   })
 }
 
+export function useApiCreditPacks() {
+  return useQuery({
+    queryKey: apiSubscriptionQueryKeys.creditPacks(),
+    queryFn: async () => {
+      const response = await getApiCreditPacks()
+      return response.packs
+    },
+    staleTime: 1000 * 60 * 60,
+  })
+}
+
 /**
  * Fetch invoice history.
  */
@@ -260,6 +274,20 @@ export function useCreateApiCheckout() {
       successUrl: string
       cancelUrl: string
     }) => createApiCheckout(tier, successUrl, cancelUrl),
+  })
+}
+
+export function useCreateApiCreditCheckout() {
+  return useMutation({
+    mutationFn: ({
+      packId,
+      successUrl,
+      cancelUrl,
+    }: {
+      packId: 'BOOST_5K' | 'GROWTH_25K' | 'SCALE_100K'
+      successUrl: string
+      cancelUrl: string
+    }) => createApiCreditCheckout(packId, successUrl, cancelUrl),
   })
 }
 

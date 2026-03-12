@@ -148,6 +148,64 @@ textarea {
   min-height: 96px;
 }
 
+.modality-card {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(91, 76, 219, 0.08), transparent 24%),
+    var(--bg-tertiary);
+  border-radius: 20px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.modality-card p {
+  margin: 8px 0 0;
+}
+
+.modality-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modality-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(0, 230, 230, 0.12);
+  color: var(--brand-cyan-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.modality-helper {
+  color: var(--text-secondary);
+}
+
+.example-box {
+  margin-top: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.example-box span {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.example-box strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .grid {
   display: grid;
   gap: 12px;

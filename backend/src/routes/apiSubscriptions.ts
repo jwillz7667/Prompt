@@ -11,10 +11,12 @@ import { authenticateDeveloper, type DeveloperAuthenticatedRequest } from '../mi
 import {
   getApiSubscriptionInfo,
   createCheckoutSession,
+  createCreditCheckoutSession,
   createPortalSession,
   cancelApiSubscription,
   getInvoices,
   getAvailablePlans,
+  getAvailableCreditPacks,
   ApiTier,
 } from '../services/apiSubscriptionService.js';
 import { getMonthlyUsage, calculateBilling } from '../services/apiUsageService.js';
@@ -49,6 +51,11 @@ apiSubscriptionsRouter.get('/status', async (req: DeveloperAuthenticatedRequest,
         limit: subscriptionInfo.monthlyRequestLimit === -1 ? 'unlimited' : subscriptionInfo.monthlyRequestLimit,
         remaining: subscriptionInfo.remainingRequests === -1 ? 'unlimited' : subscriptionInfo.remainingRequests,
       },
+      credits: {
+        purchasedRemaining: subscriptionInfo.prepaidCreditsRemaining,
+        monthlyIncluded:
+          subscriptionInfo.baseMonthlyRequests === -1 ? 'unlimited' : subscriptionInfo.baseMonthlyRequests,
+      },
       rateLimit: {
         requestsPerMinute: subscriptionInfo.requestsPerMinute,
       },
@@ -66,10 +73,35 @@ apiSubscriptionsRouter.get('/status', async (req: DeveloperAuthenticatedRequest,
       features: subscriptionInfo.features,
       canMakeRequests: subscriptionInfo.canMakeRequests,
       overageAllowed: subscriptionInfo.overageAllowed,
+      hasBillingAccount: subscriptionInfo.hasBillingAccount,
     });
   } catch (error) {
     logger.error({ error }, 'Get API subscription status error');
     res.status(500).json({ error: 'Failed to get subscription status' });
+  }
+});
+
+// ============================================================================
+// GET /credit-packs - Get available prepaid API credit packs
+// ============================================================================
+
+apiSubscriptionsRouter.get('/credit-packs', async (_req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const creditPacks = getAvailableCreditPacks();
+
+    res.json({
+      packs: creditPacks.map((pack) => ({
+        id: pack.id,
+        name: pack.name,
+        description: pack.description,
+        credits: pack.credits,
+        price: pack.priceCents / 100,
+        featured: Boolean(pack.featured),
+      })),
+    });
+  } catch (error) {
+    logger.error({ error }, 'Get API credit packs error');
+    res.status(500).json({ error: 'Failed to get credit packs' });
   }
 });
 
@@ -137,6 +169,46 @@ apiSubscriptionsRouter.post('/checkout', async (req: DeveloperAuthenticatedReque
     }
     logger.error({ error }, 'Create checkout session error');
     res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// ============================================================================
+// POST /credits/checkout - Create Stripe checkout session for prepaid credits
+// ============================================================================
+
+const creditCheckoutSchema = z.object({
+  packId: z.enum(['BOOST_5K', 'GROWTH_25K', 'SCALE_100K']),
+  successUrl: z.string().url(),
+  cancelUrl: z.string().url(),
+});
+
+apiSubscriptionsRouter.post('/credits/checkout', async (req: DeveloperAuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.developer) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data = creditCheckoutSchema.parse(req.body);
+
+    const result = await createCreditCheckoutSession(
+      req.developer.id,
+      req.developer.email,
+      data.packId,
+      data.successUrl,
+      data.cancelUrl
+    );
+
+    logger.info({ developerId: req.developer.id, packId: data.packId }, 'API credit checkout session created');
+
+    res.json({ url: result.url });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      return;
+    }
+    logger.error({ error }, 'Create API credit checkout session error');
+    res.status(500).json({ error: 'Failed to create API credit checkout session' });
   }
 });
 

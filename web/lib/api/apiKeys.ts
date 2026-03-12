@@ -212,6 +212,10 @@ export interface ApiSubscriptionStatus {
     limit: number | 'unlimited'
     remaining: number | 'unlimited'
   }
+  credits: {
+    purchasedRemaining: number
+    monthlyIncluded: number | 'unlimited'
+  }
   rateLimit: {
     requestsPerMinute: number
   }
@@ -229,6 +233,16 @@ export interface ApiSubscriptionStatus {
   features: string[]
   canMakeRequests: boolean
   overageAllowed: boolean
+  hasBillingAccount: boolean
+}
+
+export interface ApiCreditPack {
+  id: 'BOOST_5K' | 'GROWTH_25K' | 'SCALE_100K'
+  name: string
+  description: string
+  credits: number
+  price: number
+  featured: boolean
 }
 
 export interface BillingInfo {
@@ -273,6 +287,10 @@ export async function getApiPlans(): Promise<{ plans: ApiTierPlan[] }> {
   return api.get<{ plans: ApiTierPlan[] }>('/api-subscriptions/plans')
 }
 
+export async function getApiCreditPacks(): Promise<{ packs: ApiCreditPack[] }> {
+  return api.get<{ packs: ApiCreditPack[] }>('/api-subscriptions/credit-packs')
+}
+
 /**
  * Create a Stripe checkout session for API subscription.
  */
@@ -283,6 +301,18 @@ export async function createApiCheckout(
 ): Promise<{ url: string }> {
   return api.post<{ url: string }>('/api-subscriptions/checkout', {
     tier,
+    successUrl,
+    cancelUrl,
+  })
+}
+
+export async function createApiCreditCheckout(
+  packId: ApiCreditPack['id'],
+  successUrl: string,
+  cancelUrl: string
+): Promise<{ url: string }> {
+  return api.post<{ url: string }>('/api-subscriptions/credits/checkout', {
+    packId,
     successUrl,
     cancelUrl,
   })

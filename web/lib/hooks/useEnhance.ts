@@ -5,11 +5,12 @@ import { enhancePromptStream } from '@/lib/api/prompts'
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
 import type { EnhanceRequest, StreamEvent } from '@/lib/types/api'
-import type { Prompt, ToneType, OutputLength } from '@/lib/types/models'
+import type { Prompt, ToneType, OutputLength, PromptModality } from '@/lib/types/models'
 
 interface EnhanceOptions {
+  modality?: PromptModality
   tone?: ToneType
-  outputLength?: OutputLength
+  length?: OutputLength
   customInstructions?: string
   deepThink?: boolean
 }
@@ -54,8 +55,9 @@ export function useEnhance() {
 
       const request: EnhanceRequest = {
         prompt,
+        modality: options.modality ?? 'text',
         tone: options.tone ?? settings.selectedTone,
-        outputLength: options.outputLength ?? settings.outputLength,
+        length: options.length ?? settings.outputLength,
         model: settings.selectedModel,
         temperature: settings.temperature,
         customInstructions: options.customInstructions ?? settings.customInstructions,

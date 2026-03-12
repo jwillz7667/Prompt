@@ -6,6 +6,7 @@ import type {
   QuotaPayload,
   UsagePayload,
 } from '../shared/types.js'
+import { enrichModalityCapabilities } from '../shared/modalityDetails.js'
 
 const capabilityItemSchema = z.object({
   id: z.string(),
@@ -115,6 +116,7 @@ export async function fetchCapabilities(
   const parsed = capabilitiesSchema.parse(payload)
   const value: CapabilitiesPayload = {
     ...parsed,
+    modalities: enrichModalityCapabilities(parsed.modalities),
     fetchedAt: new Date().toISOString(),
   }
 
