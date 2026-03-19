@@ -13,6 +13,7 @@ struct VariationsView: View {
     @State private var expandedIndex: Int?
     @State private var showCopied = false
     @State private var copiedIndex: Int?
+    @State private var trackedVariationId: String?
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
@@ -21,6 +22,15 @@ struct VariationsView: View {
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
+    private var displayedComparison: VariationComparison? {
+        if let trackedVariationId,
+           let tracked = service.comparison(for: trackedVariationId) {
+            return tracked
+        }
+
+        return service.latestComparison(matchingPrompt: promptText)
     }
 
     var body: some View {
@@ -36,7 +46,8 @@ struct VariationsView: View {
                             originalPromptCard
                             strategySelector
                             generateButton
-                            if let error = service.error {
+                            if let error = service.error,
+                               displayedComparison?.status != .failed {
                                 errorBanner(error.localizedDescription)
                             }
                             resultsSection
@@ -53,6 +64,11 @@ struct VariationsView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
                         .foregroundStyle(accentColor)
+                }
+            }
+            .task(id: promptText) {
+                if let comparison = await service.resumePendingGenerationIfNeeded(for: promptText) {
+                    trackedVariationId = comparison.variationId
                 }
             }
         }
@@ -123,7 +139,12 @@ struct VariationsView: View {
             if service.isLoading {
                 HStack(spacing: 8) {
                     ProgressView().tint(.white)
-                    Text("Generating Variations...")
+                    Text("Starting Background Generation...")
+                }
+            } else if displayedComparison?.isPending == true {
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white)
+                    Text("Generating in Background...")
                 }
             } else {
                 Label("Generate Variations", systemImage: "rectangle.on.rectangle")
@@ -131,16 +152,27 @@ struct VariationsView: View {
             }
         }
         .buttonStyle(GlassPrimaryButtonStyle())
-        .disabled(service.isLoading)
+        .disabled(service.isLoading || displayedComparison?.isPending == true)
     }
 
     // MARK: - Results
 
     @ViewBuilder
     private var resultsSection: some View {
-        if let comparison = service.currentComparison {
+        if let comparison = displayedComparison {
             VStack(spacing: 16) {
-                metricsCard(comparison.metrics)
+                if comparison.isPending {
+                    generationStatusCard(for: comparison)
+                }
+
+                if comparison.status == .failed,
+                   let message = comparison.errorMessage {
+                    errorBanner(message)
+                }
+
+                if !comparison.results.isEmpty {
+                    metricsCard(comparison.metrics)
+                }
 
                 ForEach(comparison.results) { result in
                     variationCard(
@@ -152,6 +184,35 @@ struct VariationsView: View {
             }
             .transition(.opacity.combined(with: .scale(scale: 0.98)))
         }
+    }
+
+    private func generationStatusCard(for comparison: VariationComparison) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(accentColor)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(comparison.status == .queued ? "Queued" : "Generating")
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(textPrimary)
+
+                    Text("You can leave this screen or close the app. Generation will continue on the server and reload when ready.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(textSecondary)
+                }
+
+                Spacer()
+            }
+
+            if !comparison.results.isEmpty {
+                Text("Partial results are available now and will continue updating automatically.")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(textTertiary)
+            }
+        }
+        .padding(16)
+        .liquidGlass(cornerRadius: 16)
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -399,7 +460,8 @@ struct VariationsView: View {
 
     private func generate() async {
         do {
-            _ = try await service.generateVariations(prompt: promptText, strategy: selectedStrategy)
+            let comparison = try await service.generateVariations(prompt: promptText, strategy: selectedStrategy)
+            trackedVariationId = comparison.variationId
         } catch {
             print("Failed to generate variations: \(error)")
         }

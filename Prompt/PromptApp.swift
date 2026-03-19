@@ -104,6 +104,7 @@ struct PromptApp: App {
 // MARK: - Root View
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
     @State private var showSupportTicket: String?
 
@@ -129,14 +130,25 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: authManager.isAuthenticated)
         .animation(.easeInOut(duration: 0.3), value: authManager.isCheckingSession)
         .task {
+            await VariationsService.shared.bootstrap()
             // Request notification permissions when authenticated
             if authManager.isAuthenticated {
                 await setupNotifications()
             }
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard authManager.isAuthenticated else { return }
+
+            if newPhase == .active {
+                Task {
+                    await VariationsService.shared.appDidBecomeActive()
+                }
+            }
+        }
         .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
             if isAuthenticated {
                 Task {
+                    await VariationsService.shared.bootstrap()
                     await setupNotifications()
                 }
             }

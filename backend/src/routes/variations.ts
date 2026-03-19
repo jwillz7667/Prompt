@@ -10,7 +10,7 @@ import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { enforceQuota } from '../middleware/quotaEnforcement.js';
 import { logger } from '../utils/logger.js';
 import {
-  generateVariations,
+  queueVariationGeneration,
   getVariationComparison,
   rateVariation,
   selectVariationWinner,
@@ -77,16 +77,14 @@ router.post('/generate', enforceQuota('enhance_prompt'), async (req: Authenticat
         ? 'max_compare'
         : (strategy || 'quick');
 
-    const variationId = await generateVariations(
+    const comparison = await queueVariationGeneration(
       req.user!.id,
       prompt,
       promptId,
       config ? (config as VariationConfig) : normalizedStrategy
     );
 
-    const comparison = await getVariationComparison(variationId);
-
-    return res.status(201).json({
+    return res.status(202).json({
       success: true,
       data: comparison,
     });
@@ -112,7 +110,7 @@ router.post('/generate', enforceQuota('enhance_prompt'), async (req: Authenticat
  */
 router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const comparison = await getVariationComparison(req.params.id!);
+    const comparison = await getVariationComparison(req.params.id!, req.user!.id);
 
     return res.json({
       success: true,
@@ -141,7 +139,7 @@ router.post('/:id/rate', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { index, rating } = rateVariationSchema.parse(req.body);
 
-    await rateVariation(req.params.id!, index, rating);
+    await rateVariation(req.params.id!, index, rating, req.user!.id);
 
     return res.json({
       success: true,
@@ -153,6 +151,12 @@ router.post('/:id/rate', async (req: AuthenticatedRequest, res: Response) => {
         success: false,
         error: 'Invalid request data',
         details: error.errors,
+      });
+    }
+    if ((error as Error).message === 'Variation not found') {
+      return res.status(404).json({
+        success: false,
+        error: 'Variation not found',
       });
     }
     logger.error({ error }, 'Failed to rate variation');
@@ -171,7 +175,7 @@ router.post('/:id/select', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { winnerIndex } = selectWinnerSchema.parse(req.body);
 
-    await selectVariationWinner(req.params.id!, winnerIndex);
+    await selectVariationWinner(req.params.id!, winnerIndex, req.user!.id);
 
     return res.json({
       success: true,
@@ -183,6 +187,12 @@ router.post('/:id/select', async (req: AuthenticatedRequest, res: Response) => {
         success: false,
         error: 'Invalid request data',
         details: error.errors,
+      });
+    }
+    if ((error as Error).message === 'Variation not found') {
+      return res.status(404).json({
+        success: false,
+        error: 'Variation not found',
       });
     }
     logger.error({ error }, 'Failed to select winner');

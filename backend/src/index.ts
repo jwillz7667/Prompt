@@ -22,6 +22,7 @@ import contextsRouter from './routes/contexts.js';
 import sandboxRouter from './routes/sandbox.js';
 import workflowsRouter from './routes/workflows.js';
 import variationsRouter from './routes/variations.js';
+import { resumePendingVariationGenerations } from './services/variationsService.js';
 // Enterprise API routes
 import { apiKeysRouter } from './routes/apiKeys.js';
 import { publicApiRouter } from './routes/publicApi.js';
@@ -192,6 +193,11 @@ httpServer.listen(port, '0.0.0.0', () => {
     env: process.env['NODE_ENV'] || 'development',
     database: process.env['DATABASE_URL'] ? 'configured' : 'NOT SET',
   }, 'Server started with Socket.IO');
+
+  void resumePendingVariationGenerations()
+    .catch((error) => {
+      logger.error({ error }, 'Failed to resume pending variation generations');
+    });
 });
 
 export default app;

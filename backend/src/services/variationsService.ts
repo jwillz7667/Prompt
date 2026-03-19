@@ -36,8 +36,13 @@ export interface VariationResultData {
 
 export interface VariationComparison {
   variationId: string;
+  originalPrompt: string;
+  status: VariationJobStatus;
   results: VariationResultData[];
   winner?: number;
+  errorMessage?: string;
+  createdAt: Date;
+  updatedAt: Date;
   metrics: {
     averageTokens: number;
     tokenRange: { min: number; max: number };
@@ -51,11 +56,80 @@ export interface VariationListItem {
   originalPrompt: string;
   status: string;
   selectedVariationIndex?: number;
+  errorMessage?: string;
   createdAt: Date;
+  updatedAt: Date;
   results?: VariationResultData[];
 }
 
 const variationGenerationLimit = pLimit(4);
+const variationJobProcessingLimit = pLimit(2);
+
+type VariationJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+interface VariationMetadata {
+  originalPrompt?: string;
+  config?: VariationConfig;
+  userId?: string;
+  modality?: PromptModality;
+  results?: VariationResultData[];
+  comparisonData?: {
+    averageTokens: number;
+    tokenRange: { min: number; max: number };
+    lengthRange: { min: number; max: number };
+    diversityScore: number;
+  };
+  errors?: string[];
+  selectedVariationIndex?: number;
+  jobStatus?: VariationJobStatus;
+  errorMessage?: string;
+  queuedAt?: string;
+  processingStartedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+}
+
+function parseVariationMetadata(metadata: Prisma.JsonValue | null | undefined): VariationMetadata {
+  return (metadata ?? {}) as VariationMetadata;
+}
+
+function serializeVariationMetadata(metadata: VariationMetadata): Prisma.InputJsonValue {
+  return metadata as unknown as Prisma.InputJsonValue;
+}
+
+function semanticVariationStatus(
+  status: VariationStatus,
+  metadata: VariationMetadata
+): VariationJobStatus {
+  if (metadata.jobStatus) {
+    return metadata.jobStatus;
+  }
+
+  switch (status) {
+    case VariationStatus.DRAFT:
+      return 'queued';
+    case VariationStatus.TESTING:
+      return 'processing';
+    case VariationStatus.WINNER:
+      return 'completed';
+    case VariationStatus.ARCHIVED:
+      return 'failed';
+  }
+}
+
+function mergeVariationMetadata(
+  existing: Prisma.JsonValue | null | undefined,
+  patch: Partial<VariationMetadata>
+): Prisma.InputJsonValue {
+  const sanitizedPatch = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined)
+  );
+
+  return {
+    ...parseVariationMetadata(existing),
+    ...sanitizedPatch,
+  } as unknown as Prisma.InputJsonValue;
+}
 
 function modalityFocusedVariants(modality: PromptModality): VariationVariant[] {
   switch (modality) {
@@ -324,147 +398,354 @@ async function ensurePromptSeed(
   return seed.id;
 }
 
-export async function generateVariations(
+function scheduleVariationGeneration(variationId: string, reason: string): void {
+  void variationJobProcessingLimit(async () => {
+    try {
+      await processVariationGenerationJob(variationId);
+    } catch (error) {
+      logger.error({ error, variationId, reason }, 'Variation background job crashed');
+      await markVariationFailed(
+        variationId,
+        error instanceof Error ? error.message : 'Unknown variation generation error'
+      );
+    }
+  });
+}
+
+async function buildVariationResults(
+  variationId: string,
+  userId: string,
+  originalPrompt: string,
+  modality: PromptModality,
+  variationConfig: VariationConfig
+): Promise<{ results: VariationResultData[]; generationErrors: string[] }> {
+  const results: VariationResultData[] = [];
+  const generationErrors: string[] = [];
+  let index = 0;
+
+  if (variationConfig.includeOriginal) {
+    results.push({
+      index,
+      label: 'Original',
+      mode: 'original',
+      focus: 'baseline',
+      enhancedPrompt: originalPrompt,
+      tokensUsed: Math.ceil(originalPrompt.length / 4),
+    });
+    index += 1;
+  }
+
+  const variants = variationConfig.maxVariations
+    ? variationConfig.variants.slice(0, variationConfig.maxVariations)
+    : variationConfig.variants;
+
+  const baseIndex = index;
+  const generatedResults = await Promise.all(
+    variants.map((variant, variantOffset) => variationGenerationLimit(async () => {
+      const resultIndex = baseIndex + variantOffset;
+
+      try {
+        const enhanced = await enhancePrompt({
+          prompt: originalPrompt,
+          tier: variant.mode === 'max' ? 'advanced' : 'standard',
+          mode: variant.mode,
+          modality,
+          subModality: variant.subModality,
+          customInstructions: variant.customInstructions,
+        });
+
+        const result: VariationResultData = {
+          index: resultIndex,
+          label: variant.label,
+          mode: variant.mode,
+          focus: variant.focus,
+          enhancedPrompt: enhanced.enhancedPrompt,
+          tokensUsed: enhanced.totalTokens,
+        };
+
+        await prisma.variationResult.create({
+          data: {
+            variationId,
+            sessionId: crypto.randomUUID(),
+            selected: false,
+            userId,
+            metadata: {
+              index: result.index,
+              label: result.label,
+              mode: result.mode,
+              focus: result.focus,
+              enhancedPrompt: result.enhancedPrompt,
+              tokensUsed: result.tokensUsed,
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown variation generation error';
+        generationErrors.push(`${variant.label}: ${message}`);
+        logger.error({ error, variationId, variant }, 'Failed to generate variation result');
+        return null;
+      }
+    }))
+  );
+
+  results.push(...generatedResults.filter((result): result is VariationResultData => result !== null));
+  results.sort((left, right) => left.index - right.index);
+
+  return { results, generationErrors };
+}
+
+async function markVariationFailed(variationId: string, message: string): Promise<void> {
+  const existing = await prisma.promptVariation.findUnique({
+    where: { id: variationId },
+    select: { metadata: true },
+  });
+
+  if (!existing) {
+    return;
+  }
+
+  await prisma.promptVariation.update({
+    where: { id: variationId },
+    data: {
+      status: VariationStatus.ARCHIVED,
+      metadata: mergeVariationMetadata(existing.metadata, {
+        jobStatus: 'failed',
+        errorMessage: message,
+        failedAt: new Date().toISOString(),
+      }),
+    },
+  });
+}
+
+async function processVariationGenerationJob(variationId: string): Promise<void> {
+  const variation = await prisma.promptVariation.findUnique({
+    where: { id: variationId },
+    include: {
+      prompt: {
+        select: {
+          userId: true,
+        },
+      },
+    },
+  });
+
+  if (!variation) {
+    return;
+  }
+
+  const metadata = parseVariationMetadata(variation.metadata);
+  const status = semanticVariationStatus(variation.status, metadata);
+
+  if (status === 'completed' || status === 'failed') {
+    return;
+  }
+
+  if (variation.status === VariationStatus.DRAFT) {
+    const claimed = await prisma.promptVariation.updateMany({
+      where: {
+        id: variationId,
+        status: VariationStatus.DRAFT,
+      },
+      data: {
+        status: VariationStatus.TESTING,
+        metadata: mergeVariationMetadata(variation.metadata, {
+          jobStatus: 'processing',
+          errorMessage: undefined,
+          processingStartedAt: new Date().toISOString(),
+        }),
+      },
+    });
+
+    if (claimed.count === 0) {
+      return;
+    }
+  }
+
+  const freshVariation = await prisma.promptVariation.findUnique({
+    where: { id: variationId },
+    include: {
+      prompt: {
+        select: {
+          userId: true,
+        },
+      },
+    },
+  });
+
+  if (!freshVariation) {
+    return;
+  }
+
+  const freshMetadata = parseVariationMetadata(freshVariation.metadata);
+  const originalPrompt = freshMetadata.originalPrompt ?? freshVariation.variantPrompt;
+  const modality = freshMetadata.modality ?? detectModality(originalPrompt);
+  const userId = freshMetadata.userId ?? freshVariation.prompt.userId;
+  const variationConfig = resolveConfig(
+    (freshMetadata.config as VariationConfig | string | undefined) ?? 'quick',
+    modality
+  );
+
+  await prisma.variationResult.deleteMany({
+    where: { variationId },
+  });
+
+  const { results, generationErrors } = await buildVariationResults(
+    variationId,
+    userId,
+    originalPrompt,
+    modality,
+    variationConfig
+  );
+
+  if (results.length === 0) {
+    await prisma.promptVariation.update({
+      where: { id: variationId },
+      data: {
+        status: VariationStatus.ARCHIVED,
+        metadata: mergeVariationMetadata(freshVariation.metadata, {
+          config: variationConfig,
+          userId,
+          modality,
+          errors: generationErrors,
+          jobStatus: 'failed',
+          errorMessage: 'Unable to generate prompt variations right now. Please try again.',
+          failedAt: new Date().toISOString(),
+        }),
+      },
+    });
+    return;
+  }
+
+  const metrics = calculateVariationMetrics(results);
+
+  await prisma.promptVariation.update({
+    where: { id: variationId },
+    data: {
+      status: VariationStatus.WINNER,
+      metadata: mergeVariationMetadata(freshVariation.metadata, {
+        originalPrompt,
+        config: variationConfig,
+        userId,
+        modality,
+        results,
+        comparisonData: metrics,
+        errors: generationErrors.length > 0 ? generationErrors : undefined,
+        jobStatus: 'completed',
+        errorMessage: undefined,
+        completedAt: new Date().toISOString(),
+      }),
+    },
+  });
+}
+
+function buildVariationComparison(variation: {
+  id: string;
+  variantPrompt: string;
+  status: VariationStatus;
+  metadata: Prisma.JsonValue | null;
+  createdAt: Date;
+  updatedAt: Date;
+  results: Array<{ metadata: unknown; rating: number | null }>;
+}): VariationComparison {
+  const metadata = parseVariationMetadata(variation.metadata);
+  const results = variation.results.map((result) => extractResultData(result));
+
+  return {
+    variationId: variation.id,
+    originalPrompt: metadata.originalPrompt ?? variation.variantPrompt,
+    status: semanticVariationStatus(variation.status, metadata),
+    results,
+    winner: typeof metadata.selectedVariationIndex === 'number'
+      ? metadata.selectedVariationIndex
+      : undefined,
+    errorMessage: typeof metadata.errorMessage === 'string'
+      ? metadata.errorMessage
+      : undefined,
+    createdAt: variation.createdAt,
+    updatedAt: variation.updatedAt,
+    metrics: metadata.comparisonData ?? calculateVariationMetrics(results),
+  };
+}
+
+export async function queueVariationGeneration(
   userId: string,
   originalPrompt: string,
   promptId: string | undefined,
   config: VariationConfig | string = 'quick'
-): Promise<string> {
-  try {
-    const modality = detectModality(originalPrompt);
-    const variationConfig = resolveConfig(config, modality);
-    const seedPromptId = await ensurePromptSeed(userId, originalPrompt, promptId, modality);
+): Promise<VariationComparison> {
+  const modality = detectModality(originalPrompt);
+  const variationConfig = resolveConfig(config, modality);
+  const seedPromptId = await ensurePromptSeed(userId, originalPrompt, promptId, modality);
 
-    const variation = await prisma.promptVariation.create({
-      data: {
-        promptId: seedPromptId,
-        variantName: `variation-${Date.now()}`,
-        variantPrompt: originalPrompt,
-        status: VariationStatus.TESTING,
-        metadata: {
-          originalPrompt,
-          config: variationConfig,
-          userId,
-          modality,
-        } as unknown as Prisma.InputJsonValue,
+  const variation = await prisma.promptVariation.create({
+    data: {
+      promptId: seedPromptId,
+      variantName: `variation-${Date.now()}`,
+      variantPrompt: originalPrompt,
+      status: VariationStatus.DRAFT,
+      metadata: serializeVariationMetadata({
+        originalPrompt,
+        config: variationConfig,
+        userId,
+        modality,
+        jobStatus: 'queued',
+        queuedAt: new Date().toISOString(),
+      }),
+    },
+    include: {
+      results: {
+        orderBy: { createdAt: 'asc' },
       },
-    });
+    },
+  });
 
-    const results: VariationResultData[] = [];
-    const generationErrors: string[] = [];
-    let index = 0;
+  scheduleVariationGeneration(variation.id, 'request');
+  return buildVariationComparison(variation);
+}
 
-    if (variationConfig.includeOriginal) {
-      results.push({
-        index,
-        label: 'Original',
-        mode: 'original',
-        focus: 'baseline',
-        enhancedPrompt: originalPrompt,
-        tokensUsed: Math.ceil(originalPrompt.length / 4),
-      });
-      index += 1;
+export async function resumePendingVariationGenerations(): Promise<void> {
+  const pendingVariations = await prisma.promptVariation.findMany({
+    where: {
+      status: {
+        in: [VariationStatus.DRAFT, VariationStatus.TESTING],
+      },
+    },
+    select: {
+      id: true,
+      metadata: true,
+      status: true,
+    },
+  });
+
+  if (pendingVariations.length === 0) {
+    return;
+  }
+
+  logger.info({ count: pendingVariations.length }, 'Resuming pending variation generations');
+
+  for (const variation of pendingVariations) {
+    const metadata = parseVariationMetadata(variation.metadata);
+    const semanticStatus = semanticVariationStatus(variation.status, metadata);
+
+    if (semanticStatus === 'completed' || semanticStatus === 'failed') {
+      continue;
     }
 
-    const variants = variationConfig.maxVariations
-      ? variationConfig.variants.slice(0, variationConfig.maxVariations)
-      : variationConfig.variants;
-
-    const baseIndex = index;
-    const generatedResults = await Promise.all(
-      variants.map((variant, variantOffset) => variationGenerationLimit(async () => {
-        const resultIndex = baseIndex + variantOffset;
-
-        try {
-          const enhanced = await enhancePrompt({
-            prompt: originalPrompt,
-            tier: variant.mode === 'max' ? 'advanced' : 'standard',
-            mode: variant.mode,
-            modality,
-            subModality: variant.subModality,
-            customInstructions: variant.customInstructions,
-          });
-
-          const result: VariationResultData = {
-            index: resultIndex,
-            label: variant.label,
-            mode: variant.mode,
-            focus: variant.focus,
-            enhancedPrompt: enhanced.enhancedPrompt,
-            tokensUsed: enhanced.totalTokens,
-          };
-
-          await prisma.variationResult.create({
-            data: {
-              variationId: variation.id,
-              sessionId: crypto.randomUUID(),
-              selected: false,
-              userId,
-              metadata: {
-                index: result.index,
-                label: result.label,
-                mode: result.mode,
-                focus: result.focus,
-                enhancedPrompt: result.enhancedPrompt,
-                tokensUsed: result.tokensUsed,
-              } as unknown as Prisma.InputJsonValue,
-            },
-          });
-
-          return result;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown variation generation error';
-          generationErrors.push(`${variant.label}: ${message}`);
-          logger.error({ error, variant }, 'Failed to generate variation');
-          return null;
-        }
-      }))
-    );
-
-    results.push(...generatedResults.filter((result): result is VariationResultData => result !== null));
-    results.sort((left, right) => left.index - right.index);
-    index = results.length > 0
-      ? Math.max(...results.map((result) => result.index)) + 1
-      : index;
-
-    if (results.length === 0) {
+    if (variation.status === VariationStatus.TESTING) {
       await prisma.promptVariation.update({
         where: { id: variation.id },
         data: {
-          metadata: {
-            originalPrompt,
-            config: variationConfig,
-            userId,
-            modality,
-            errors: generationErrors,
-          } as unknown as Prisma.InputJsonValue,
+          status: VariationStatus.DRAFT,
+          metadata: mergeVariationMetadata(variation.metadata, {
+            jobStatus: 'queued',
+          }),
         },
       });
-
-      throw new Error('Unable to generate prompt variations right now. Please try again.');
     }
 
-    const metrics = calculateVariationMetrics(results);
-
-    await prisma.promptVariation.update({
-      where: { id: variation.id },
-      data: {
-        metadata: {
-          originalPrompt,
-          config: variationConfig,
-          userId,
-          modality,
-          results,
-          comparisonData: metrics,
-          ...(generationErrors.length > 0 ? { errors: generationErrors } : {}),
-        } as unknown as Prisma.InputJsonValue,
-      },
-    });
-
-    return variation.id;
-  } catch (error) {
-    logger.error({ error }, 'Failed to generate variations');
-    throw error;
+    scheduleVariationGeneration(variation.id, 'startup-recovery');
   }
 }
 
@@ -521,9 +802,19 @@ function extractResultData(result: { metadata: unknown; rating: number | null })
   };
 }
 
-export async function getVariationComparison(variationId: string): Promise<VariationComparison> {
-  const variation = await prisma.promptVariation.findUnique({
-    where: { id: variationId },
+export async function getVariationComparison(
+  variationId: string,
+  userId?: string
+): Promise<VariationComparison> {
+  const variation = await prisma.promptVariation.findFirst({
+    where: userId
+      ? {
+        id: variationId,
+        prompt: { userId },
+      }
+      : {
+        id: variationId,
+      },
     include: {
       results: {
         orderBy: { createdAt: 'asc' },
@@ -535,29 +826,36 @@ export async function getVariationComparison(variationId: string): Promise<Varia
     throw new Error('Variation not found');
   }
 
-  const results = variation.results.map((result) => extractResultData(result));
-  const metadata = (variation.metadata ?? {}) as Record<string, any>;
-
-  return {
-    variationId,
-    results,
-    winner: typeof metadata.selectedVariationIndex === 'number'
-      ? metadata.selectedVariationIndex
-      : undefined,
-    metrics: metadata.comparisonData ?? calculateVariationMetrics(results),
-  };
+  return buildVariationComparison(variation);
 }
 
 export async function rateVariation(
   variationId: string,
   index: number,
-  rating: number
+  rating: number,
+  userId?: string
 ): Promise<void> {
-  const allResults = await prisma.variationResult.findMany({
-    where: { variationId },
+  const variation = await prisma.promptVariation.findFirst({
+    where: userId
+      ? {
+        id: variationId,
+        prompt: { userId },
+      }
+      : {
+        id: variationId,
+      },
+    select: {
+      id: true,
+      metadata: true,
+      results: true,
+    },
   });
 
-  const target = allResults.find((result) => {
+  if (!variation) {
+    throw new Error('Variation not found');
+  }
+
+  const target = variation.results.find((result) => {
     const metadata = (result.metadata ?? {}) as Record<string, unknown>;
     return metadata.index === index;
   });
@@ -577,22 +875,19 @@ export async function rateVariation(
   }
 
   const ratedResults = await prisma.variationResult.findMany({
-    where: { variationId, rating: { not: null } },
+    where: { variationId: variation.id, rating: { not: null } },
     orderBy: { rating: 'desc' },
   });
 
   if (ratedResults[0]) {
     const bestMetadata = (ratedResults[0].metadata ?? {}) as Record<string, unknown>;
-    const variation = await prisma.promptVariation.findUnique({ where: { id: variationId } });
-    const variationMetadata = (variation?.metadata ?? {}) as Record<string, unknown>;
 
     await prisma.promptVariation.update({
-      where: { id: variationId },
+      where: { id: variation.id },
       data: {
-        metadata: {
-          ...variationMetadata,
-          selectedVariationIndex: bestMetadata.index ?? 0,
-        } as unknown as Prisma.InputJsonValue,
+        metadata: mergeVariationMetadata(variation.metadata, {
+          selectedVariationIndex: typeof bestMetadata.index === 'number' ? bestMetadata.index : 0,
+        }),
       },
     });
   }
@@ -600,27 +895,41 @@ export async function rateVariation(
 
 export async function selectVariationWinner(
   variationId: string,
-  winnerIndex: number
+  winnerIndex: number,
+  userId?: string
 ): Promise<void> {
-  const variation = await prisma.promptVariation.findUnique({
-    where: { id: variationId },
+  const variation = await prisma.promptVariation.findFirst({
+    where: userId
+      ? {
+        id: variationId,
+        prompt: { userId },
+      }
+      : {
+        id: variationId,
+      },
+    select: {
+      id: true,
+      metadata: true,
+    },
   });
 
-  const variationMetadata = (variation?.metadata ?? {}) as Record<string, unknown>;
+  if (!variation) {
+    throw new Error('Variation not found');
+  }
 
   await prisma.promptVariation.update({
-    where: { id: variationId },
+    where: { id: variation.id },
     data: {
       status: VariationStatus.WINNER,
-      metadata: {
-        ...variationMetadata,
+      metadata: mergeVariationMetadata(variation.metadata, {
         selectedVariationIndex: winnerIndex,
-      } as unknown as Prisma.InputJsonValue,
+        jobStatus: 'completed',
+      }),
     },
   });
 
   const results = await prisma.variationResult.findMany({
-    where: { variationId },
+    where: { variationId: variation.id },
   });
 
   for (const result of results) {
@@ -676,11 +985,15 @@ export async function getUserVariations(
       originalPrompt: typeof metadata.originalPrompt === 'string'
         ? metadata.originalPrompt
         : variation.variantPrompt,
-      status: variation.status.toLowerCase(),
+      status: semanticVariationStatus(variation.status, parseVariationMetadata(variation.metadata)),
       selectedVariationIndex: typeof metadata.selectedVariationIndex === 'number'
         ? metadata.selectedVariationIndex
         : undefined,
+      errorMessage: typeof metadata.errorMessage === 'string'
+        ? metadata.errorMessage
+        : undefined,
       createdAt: variation.createdAt,
+      updatedAt: variation.updatedAt,
       results: variation.results.map((result) => extractResultData(result)),
     };
   });
