@@ -43,6 +43,13 @@ struct VariationsView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 20) {
+                            PromptPageHeader(
+                                title: "Variations",
+                                subtitle: "Generate alternate rewrites without leaving the chat workflow",
+                                onLeadingTap: { dismiss() }
+                            )
+                            .padding(.top, 12)
+
                             originalPromptCard
                             strategySelector
                             generateButton
@@ -57,15 +64,7 @@ struct VariationsView: View {
                     }
                 }
             }
-            .navigationTitle("Variations")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(accentColor)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .task(id: promptText) {
                 if let comparison = await service.resumePendingGenerationIfNeeded(for: promptText) {
                     trackedVariationId = comparison.variationId

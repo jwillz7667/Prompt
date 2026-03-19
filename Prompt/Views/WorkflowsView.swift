@@ -32,42 +32,45 @@ struct WorkflowsView: View {
             ZStack {
                 LiquidGlassBackground()
 
-                Group {
-                    if service.isLoading && service.workflows.isEmpty {
-                        loadingView
-                    } else if service.workflows.isEmpty {
-                        emptyStateView
-                    } else {
-                        workflowsList
+                VStack(spacing: 0) {
+                    PromptPageHeader(
+                        title: "Workflows",
+                        subtitle: "Build reusable multi-step prompt systems",
+                        onLeadingTap: { dismiss() }
+                    ) {
+                        Menu {
+                            Button {
+                                showCreateSheet = true
+                            } label: {
+                                Label("New Workflow", systemImage: "plus")
+                            }
+                            Button {
+                                showImportSheet = true
+                            } label: {
+                                Label("Import JSON", systemImage: "square.and.arrow.down")
+                            }
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(textPrimary)
+                        }
+                        .buttonStyle(GlassIconButtonStyle(size: 40))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    Group {
+                        if service.isLoading && service.workflows.isEmpty {
+                            loadingView
+                        } else if service.workflows.isEmpty {
+                            emptyStateView
+                        } else {
+                            workflowsList
+                        }
                     }
                 }
             }
-            .navigationTitle("Workflows")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(accentColor)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            showCreateSheet = true
-                        } label: {
-                            Label("New Workflow", systemImage: "plus")
-                        }
-                        Button {
-                            showImportSheet = true
-                        } label: {
-                            Label("Import JSON", systemImage: "square.and.arrow.down")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .foregroundStyle(accentColor)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .task { await service.loadWorkflowsIfNeeded() }
             .sheet(isPresented: $showCreateSheet) {
                 CreateWorkflowSheet(service: service)

@@ -11,6 +11,7 @@ import Charts
 
 struct AnalyticsView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AnalyticsViewModel()
     @State private var selectedPeriod = 30
 
@@ -22,11 +23,19 @@ struct AnalyticsView: View {
 
     var body: some View {
         ZStack {
-            // Consistent liquid glass background
             LiquidGlassBackground()
 
             ScrollView {
                 VStack(spacing: 20) {
+                PromptPageHeader(
+                    title: "Analytics",
+                    subtitle: "Usage trends, streaks, and model activity",
+                    leadingSystemImage: "chevron.left",
+                    onLeadingTap: { dismiss() }
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+
                 // Period selector
                 Picker("Period", selection: $selectedPeriod) {
                     Text("7 Days").tag(7)
@@ -56,9 +65,7 @@ struct AnalyticsView: View {
                 .padding(.top)
             }
         }
-        .navigationTitle("Analytics")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             await viewModel.fetchAnalytics(days: selectedPeriod)
             await viewModel.fetchStreak()

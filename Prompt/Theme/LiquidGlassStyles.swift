@@ -478,6 +478,77 @@ struct LiquidGlassSectionHeader: View {
     }
 }
 
+// MARK: - Prompt Page Header
+
+struct PromptPageHeader<Trailing: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let title: String
+    let subtitle: String?
+    let leadingSystemImage: String
+    let onLeadingTap: () -> Void
+    @ViewBuilder let trailing: Trailing
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        leadingSystemImage: String = "xmark",
+        onLeadingTap: @escaping () -> Void,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.leadingSystemImage = leadingSystemImage
+        self.onLeadingTap = onLeadingTap
+        self.trailing = trailing()
+    }
+
+    private var accentStart: Color {
+        colorScheme == .dark ? Color.brandPurple : Color.brandPurpleDark
+    }
+
+    private var accentEnd: Color {
+        colorScheme == .dark ? Color.brandCyan : Color.adaptiveButtonPrimary
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onLeadingTap) {
+                Image(systemName: leadingSystemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.adaptiveTextPrimary)
+            }
+            .buttonStyle(GlassIconButtonStyle(size: 40))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [accentStart, accentEnd],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(Color.adaptiveTextSecondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            trailing
+        }
+        .padding(16)
+        .liquidGlass(cornerRadius: 28, shadowIntensity: 0.65, borderGlow: true)
+    }
+}
+
 // MARK: - Liquid Glass Divider
 
 struct LiquidGlassDivider: View {

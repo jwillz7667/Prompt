@@ -31,13 +31,16 @@ struct PaywallView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Consistent liquid glass background
                 LiquidGlassBackground()
 
                 ScrollView {
                     VStack(spacing: 24) {
-                    // Header
-                    headerSection
+                    PromptPageHeader(
+                        title: "Premium",
+                        subtitle: "Unlock stronger prompts, more usage, and advanced tools",
+                        onLeadingTap: { dismiss() }
+                    )
+                    .padding(.top, 12)
 
                     // Trial banner (if eligible)
                     if trialEligible && storeKit.currentTier == .free {
@@ -63,16 +66,7 @@ struct PaywallView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") {
-                        dismiss()
-                    }
-                    .foregroundStyle(Color.adaptiveTextSecondary)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .task {
                 await loadData()
             }

@@ -2,8 +2,7 @@
 //  ThreadView.swift
 //  Prompt
 //
-//  Chat-native prompt optimization surface used for both the main home screen
-//  and historical thread detail screens.
+//  Primary chat workspace for prompt optimization threads.
 //
 
 import SwiftUI
@@ -19,28 +18,33 @@ struct ThreadView: View {
     @Environment(SettingsManager.self) private var settings
     @Environment(StoreKitManager.self) private var storeKit
     @Environment(PromptHistoryManager.self) private var historyManager
+    @Environment(AuthManager.self) private var authManager
 
     @Bindable var viewModel: ThreadViewModel
     var threadId: String?
     var presentationStyle: PresentationStyle = .detail
+    var onOpenThreads: (() -> Void)? = nil
+    var onOpenProfile: (() -> Void)? = nil
+    var onOpenHistory: (() -> Void)? = nil
+    var onOpenSettings: (() -> Void)? = nil
+    var onOpenPaywall: (() -> Void)? = nil
+    var onStartNewConversation: (() -> Void)? = nil
 
-    @StateObject private var contextService = ContextService.shared
     @State private var expandedPowerTool: PowerToolsSection.PowerTool?
     @State private var showFullVariations = false
     @State private var showSandbox = false
     @State private var showWorkflows = false
-    @State private var showContextsManager = false
-    @State private var showContextPicker = false
     @State private var showPaywallSheet = false
+    @State private var showWorkspaceActions = false
     @FocusState private var isInputFocused: Bool
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
+    private var backgroundPrimary: Color { Color.adaptiveBackgroundPrimary }
+    private var backgroundTertiary: Color { Color.adaptiveBackgroundTertiary }
     private var accentColor: Color { Color.adaptiveButtonPrimary }
-    private var composerBorder: Color {
-        isInputFocused ? accentColor.opacity(0.55) : Color.white.opacity(colorScheme == .dark ? 0.12 : 0.5)
-    }
+    private var brandSecondaryAccent: Color { colorScheme == .dark ? Color.brandPurple : Color.brandPurpleDark }
 
     private var canUseMaxMode: Bool {
         guard let remaining = storeKit.usageInfo?.maxModeRemaining else { return true }
@@ -56,34 +60,57 @@ struct ThreadView: View {
         presentationStyle == .home && !viewModel.hasConversation
     }
 
+    private var workspaceSubtitle: String {
+        if viewModel.hasConversation {
+            return "Refine the same prompt thread without leaving the workspace"
+        }
+
+        if settings.maxModeEnabled {
+            return "A clean chat workspace for stronger prompt rewrites"
+        }
+
+        return "Send a rough prompt and keep refining it in one thread"
+    }
+
+    private var modalitySummary: String {
+        settings.selectedModality.displayName
+    }
+
+    private var usageSummary: String? {
+        guard let usage = storeKit.usageInfo else { return nil }
+        let remaining = max(usage.dailyPromptsLimit - usage.dailyPromptsUsed, 0)
+        if usage.dailyPromptsLimit == .max {
+            return "Unlimited"
+        }
+        return "\(remaining) left today"
+    }
+
+    private var inputPlaceholder: String {
+        viewModel.hasConversation ? "Reply with another optimization request" : "Ask Promptomize"
+    }
+
     var body: some View {
         Group {
             if presentationStyle == .detail {
-                threadContent
+                threadSurface
                     .navigationTitle(viewModel.threadTitle)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             } else {
-                threadContent
+                threadSurface
             }
         }
         .background { LiquidGlassBackground() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            composerInset
+        }
         .task {
             if let threadId {
                 await viewModel.loadThread(id: threadId)
             }
         }
-        .task {
-            await contextService.loadContextsIfNeeded()
-        }
         .sheet(isPresented: $showPaywallSheet) {
             PaywallView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-        }
-        .sheet(isPresented: $showContextsManager) {
-            ContextsView()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(24)
@@ -106,10 +133,38 @@ struct ThreadView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(24)
         }
-        .popover(isPresented: $showContextPicker) {
-            contextPickerPopover
-                .frame(width: 300, height: 340)
-                .presentationCompactAdaptation(.popover)
+        .confirmationDialog("Workspace", isPresented: $showWorkspaceActions, titleVisibility: .visible) {
+            if let onStartNewConversation, viewModel.hasConversation {
+                Button("New Chat") {
+                    triggerHaptic(.light)
+                    onStartNewConversation()
+                }
+            }
+
+            if let onOpenThreads {
+                Button("Threads") {
+                    triggerHaptic(.light)
+                    onOpenThreads()
+                }
+            }
+
+            if let onOpenHistory {
+                Button("History") {
+                    triggerHaptic(.light)
+                    onOpenHistory()
+                }
+            }
+
+            if let onOpenSettings {
+                Button("Profile & Settings") {
+                    triggerHaptic(.light)
+                    onOpenSettings()
+                }
+            }
+
+            Button("Plans & Usage") {
+                presentPaywall()
+            }
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
@@ -118,43 +173,213 @@ struct ThreadView: View {
         }
         .onChange(of: viewModel.showPaywall) { _, shouldShow in
             guard shouldShow else { return }
-            showPaywallSheet = true
+            presentPaywall()
             viewModel.showPaywall = false
         }
     }
 
-    private var threadContent: some View {
+    private var threadSurface: some View {
         VStack(spacing: 0) {
+            if presentationStyle == .home {
+                workspaceHeader
+            }
+
             messagesArea
-
-            Divider()
-                .opacity(0.3)
-
-            composerArea
         }
+    }
+
+    // MARK: - Header
+
+    private var workspaceHeader: some View {
+        HStack(spacing: 12) {
+            iconButton(systemName: "line.3.horizontal", action: {
+                triggerHaptic(.light)
+                onOpenThreads?()
+            })
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Promptomize")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [brandSecondaryAccent, accentColor],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+
+                Text(workspaceSubtitle)
+                    .font(.system(.caption, design: .rounded, weight: .medium))
+                    .foregroundStyle(textSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            if let onStartNewConversation, viewModel.hasConversation {
+                iconButton(systemName: "square.and.pencil", action: {
+                    triggerHaptic(.light)
+                    onStartNewConversation()
+                })
+            }
+
+            if let onOpenHistory {
+                iconButton(systemName: "bubble.left.and.text.bubble", action: {
+                    triggerHaptic(.light)
+                    onOpenHistory()
+                })
+            }
+
+            profileButton
+        }
+        .padding(16)
+        .liquidGlass(cornerRadius: 28, shadowIntensity: 0.65, borderGlow: true)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+    }
+
+    private func statusChip(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(textPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(GlassCapsuleButtonStyle(tintColor: tint.opacity(0.9), intensity: .subtle))
+    }
+
+    private func iconButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(textPrimary)
+        }
+        .buttonStyle(GlassIconButtonStyle(size: 40))
+    }
+
+    private var profileButton: some View {
+        Button {
+            triggerHaptic(.light)
+            onOpenProfile?()
+        } label: {
+            Group {
+                if let avatarUrl = authManager.currentUser?.avatarUrl,
+                   let url = URL(string: avatarUrl) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } placeholder: {
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(textPrimary)
+                    }
+                } else {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(textPrimary)
+                }
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+        }
+        .buttonStyle(GlassIconButtonStyle(size: 40))
     }
 
     // MARK: - Messages
 
+    @ViewBuilder
     private var messagesArea: some View {
+        if isHomeWelcomeState {
+            welcomeState
+        } else {
+            conversationMessagesArea
+        }
+    }
+
+    private var welcomeState: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [brandSecondaryAccent.opacity(0.95), accentColor.opacity(0.9)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 52, height: 52)
+
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(Color.adaptiveTextOnAccent)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Start a new optimization")
+                                .font(.system(.title3, design: .rounded, weight: .bold))
+                                .foregroundStyle(textPrimary)
+
+                            Text("Drop a rough prompt into the composer and keep refining it in one focused chat workflow.")
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        Label(settings.maxModeEnabled ? "MAX ready" : "Standard ready", systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill")
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
+                            .foregroundStyle(textPrimary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .liquidGlassChip(isSelected: settings.maxModeEnabled, accentColor: settings.maxModeEnabled ? .orange : accentColor)
+
+                        Label(modalitySummary, systemImage: settings.selectedModality.icon)
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
+                            .foregroundStyle(textPrimary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .liquidGlassChip(isSelected: false, accentColor: brandSecondaryAccent)
+
+                        if let usageSummary {
+                            Label(usageSummary, systemImage: "chart.bar.fill")
+                                .font(.system(.caption, design: .rounded, weight: .semibold))
+                                .foregroundStyle(textPrimary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .liquidGlassChip(isSelected: false, accentColor: accentColor)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(20)
+                .liquidGlass(cornerRadius: 24, shadowIntensity: 0.72, borderGlow: true)
+
+                Spacer(minLength: 220)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 24)
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var conversationMessagesArea: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 18) {
-                    if isHomeWelcomeState {
-                        welcomeState
-                            .id("welcome")
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    } else if viewModel.turnMessages.isEmpty && !viewModel.isStreaming {
-                        emptyState
-                            .id("empty")
-                    }
-
-                    if let attachedContext = viewModel.attachedContext, viewModel.hasConversation {
-                        attachedContextCard(attachedContext)
-                            .id("thread-context")
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-
+                LazyVStack(spacing: 16) {
                     ForEach(viewModel.turnMessages) { message in
                         messageRow(message)
                     }
@@ -169,12 +394,12 @@ struct ThreadView: View {
                     }
 
                     Color.clear
-                        .frame(height: 8)
+                        .frame(height: 4)
                         .id("thread-bottom")
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, isHomeWelcomeState ? 36 : 12)
-                .padding(.bottom, 20)
+                .padding(.top, presentationStyle == .home ? 8 : 16)
+                .padding(.bottom, 16)
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: viewModel.turnMessages.count) { _, _ in
@@ -197,20 +422,18 @@ struct ThreadView: View {
 
     private var processingIndicator: some View {
         HStack {
-            Spacer()
             HStack(spacing: 8) {
                 ProgressView()
-                    .scaleEffect(0.72)
-                Text("Optimizing in thread...")
+                    .scaleEffect(0.8)
+                Text("Optimizing...")
                     .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(textSecondary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-            }
+            .liquidGlass(cornerRadius: 18, shadowIntensity: 0.45)
+
+            Spacer(minLength: 60)
         }
     }
 
@@ -235,7 +458,7 @@ struct ThreadView: View {
                 triggerHaptic(.medium)
             },
             onShowPaywall: {
-                showPaywallSheet = true
+                presentPaywall()
             },
             onOpenSheet: { tool in
                 handlePowerToolSheet(tool)
@@ -245,467 +468,146 @@ struct ThreadView: View {
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
 
-    // MARK: - Welcome / Empty
-
-    private var welcomeState: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Group {
-                        if UIImage(named: "AppLogo") != nil {
-                            Image("AppLogo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 42, height: 42)
-                        } else {
-                            Image(systemName: "sparkles.rectangle.stack.fill")
-                                .font(.system(size: 28, weight: .medium))
-                                .foregroundStyle(accentColor)
-                        }
-                    }
-
-                    Text("Prompt conversations, not one-off cards.")
-                        .font(.system(.title2, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Text("Start with a rough prompt, optimize it into a live thread, then keep refining with MAX mode, contexts, and power tools without leaving the conversation.")
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let attachedContext = viewModel.attachedContext {
-                attachedContextHeroPill(attachedContext)
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Try a starting point")
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                    .foregroundStyle(textTertiary)
-
-                ForEach(starterPrompts, id: \.title) { prompt in
-                    Button {
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                            viewModel.userPrompt = prompt.prompt
-                        }
-                        isInputFocused = true
-                        triggerHaptic(.light)
-                    } label: {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: prompt.icon)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(accentColor)
-                                .frame(width: 18, height: 18)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(prompt.title)
-                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(textPrimary)
-
-                                Text(prompt.prompt)
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(textSecondary)
-                                    .lineLimit(2)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(textTertiary)
-                        }
-                        .padding(14)
-                    }
-                    .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 18))
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(22)
-        .liquidGlass(cornerRadius: 28, shadowIntensity: 0.95, borderGlow: true)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 14) {
-            Spacer()
-                .frame(height: 60)
-
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(textTertiary)
-
-            Text("Continue refining in this thread")
-                .font(.system(.title3, design: .rounded, weight: .semibold))
-                .foregroundStyle(textPrimary)
-
-            Text("Every follow-up builds on the latest optimized prompt, so you can refine intent, constraints, and modality without starting over.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(textSecondary)
-                .multilineTextAlignment(.center)
-
-            Spacer()
-                .frame(height: 20)
-        }
-        .padding(.horizontal, 20)
-    }
-
     // MARK: - Composer
 
-    private var composerArea: some View {
-        VStack(spacing: 12) {
-            contextAttachmentRow
-            composerCard
-            selectorRow
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-        .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
-    }
-
-    private var contextAttachmentRow: some View {
-        HStack(spacing: 8) {
-            if let attachedContext = viewModel.attachedContext {
-                HStack(spacing: 8) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(accentColor)
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(attachedContext.name)
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                            .foregroundStyle(textPrimary)
-                            .lineLimit(1)
-                        if let description = attachedContext.description, !description.isEmpty {
-                            Text(description)
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(textTertiary)
-                                .lineLimit(1)
-                        }
-                    }
-
-                    Button {
-                        Task {
-                            await viewModel.updateAttachedContext(nil)
-                        }
-                        triggerHaptic(.light)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(textTertiary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .liquidGlassChip(isSelected: true, accentColor: accentColor)
-
-                Button("Change") {
-                    openContextSelector()
-                }
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .foregroundStyle(textSecondary)
-                .buttonStyle(GlassCapsuleButtonStyle())
-            } else {
-                Button {
-                    openContextSelector()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("Attach Context")
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                    }
-                    .foregroundStyle(textSecondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(GlassCapsuleButtonStyle())
-            }
-
-            Spacer()
-        }
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: viewModel.attachedContext)
-    }
-
-    private var composerCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $viewModel.userPrompt)
-                    .font(.system(.body, design: .default))
+    private var composerInset: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            Button {
+                triggerHaptic(.light)
+                showWorkspaceActions = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(textPrimary)
-                    .frame(minHeight: isHomeWelcomeState ? 140 : 100, maxHeight: 220)
-                    .scrollContentBackground(.hidden)
-                    .focused($isInputFocused)
-
-                if viewModel.userPrompt.isEmpty {
-                    Text(isHomeWelcomeState ? "Paste the raw prompt you want optimized..." : "Send a follow-up refinement...")
-                        .font(.body)
-                        .foregroundStyle(textTertiary)
-                        .padding(.top, 8)
-                        .allowsHitTesting(false)
-                }
             }
+            .buttonStyle(GlassIconButtonStyle(size: 56))
 
-            HStack(alignment: .center, spacing: 12) {
-                Text("\(viewModel.userPrompt.count) chars")
-                    .font(.system(.caption, design: .rounded, weight: .medium))
-                    .foregroundStyle(textTertiary)
-                    .contentTransition(.numericText())
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ZStack(alignment: .leading) {
+                        if viewModel.userPrompt.isEmpty {
+                            Text(inputPlaceholder)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(textTertiary)
+                                .allowsHitTesting(false)
+                        }
 
-                Spacer()
-
-                if isHomeWelcomeState {
-                    Button(action: submitPrompt) {
-                        HStack(spacing: 8) {
-                            if viewModel.isStreaming {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 13, weight: .semibold))
+                        TextField("", text: $viewModel.userPrompt, axis: .vertical)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(textPrimary)
+                            .lineLimit(1...5)
+                            .textFieldStyle(.plain)
+                            .focused($isInputFocused)
+                            .submitLabel(.send)
+                            .onSubmit {
+                                if viewModel.canSend {
+                                    submitPrompt()
+                                }
                             }
-                            Text(viewModel.isStreaming ? "Optimizing..." : "Optimize Prompt")
-                                .font(.system(.subheadline, design: .rounded, weight: .bold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .foregroundStyle(viewModel.canSend ? Color.adaptiveTextOnAccent : textTertiary)
                     }
-                    .buttonStyle(LiquidGlassButtonStyle(
-                        cornerRadius: 18,
-                        tintColor: viewModel.canSend ? accentColor : nil,
-                        intensity: viewModel.canSend ? .prominent : .subtle
-                    ))
-                    .disabled(!viewModel.canSend)
-                } else {
-                    Button(action: submitPrompt) {
-                        Image(systemName: viewModel.isStreaming ? "ellipsis.circle.fill" : "arrow.up.circle.fill")
-                            .font(.system(size: 34))
-                            .foregroundStyle(viewModel.canSend ? accentColor : textTertiary)
-                            .symbolEffect(.bounce, value: viewModel.isStreaming)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isInputFocused = true
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!viewModel.canSend)
-                }
-            }
-        }
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .stroke(composerBorder, lineWidth: isInputFocused ? 1.4 : 1)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(accentColor.opacity(colorScheme == .dark ? 0.06 : 0.04))
-                }
-        }
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.28 : 0.08), radius: 18, y: 10)
-        .animation(.spring(response: 0.28, dampingFraction: 0.84), value: viewModel.canSend)
-        .animation(.spring(response: 0.28, dampingFraction: 0.84), value: isInputFocused)
-    }
 
-    private var selectorRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                CompactModalitySelector(
-                    selectedModality: Binding(
-                        get: { settings.selectedModality },
-                        set: { newValue in
-                            settings.selectedModality = newValue
-                            settings.savePreferences()
-                        }
-                    )
-                )
-
-                if settings.selectedModality == .audio {
-                    CompactAudioSubModalitySelector(
-                        selectedSubModality: Binding(
-                            get: { settings.selectedAudioSubModality },
-                            set: { newValue in
-                                settings.selectedAudioSubModality = newValue
-                                settings.savePreferences()
+                    HStack(spacing: 8) {
+                        Menu {
+                            ForEach(ModalityType.allCases) { modality in
+                                Button(modality.displayName) {
+                                    applyModality(modality)
+                                }
                             }
-                        )
-                    )
-                    .transition(.scale.combined(with: .opacity))
-                }
-
-                Button {
-                    if !settings.maxModeEnabled && !canUseMaxMode {
-                        showPaywallSheet = true
-                        return
-                    }
-                    settings.maxModeEnabled.toggle()
-                    settings.savePreferences()
-                    triggerHaptic(.light)
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: settings.maxModeEnabled ? "flame.fill" : "flame")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("MAX")
-                            .font(.system(.caption2, design: .rounded, weight: .bold))
-                        if let remaining = storeKit.usageInfo?.maxModeRemaining, remaining >= 0 {
-                            Text("\(remaining)")
-                                .font(.system(size: 9, weight: .bold, design: .rounded))
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .liquidGlassChip(isSelected: settings.maxModeEnabled, accentColor: .orange)
-                }
-                .buttonStyle(.plain)
-            }
-            .animation(.spring(response: 0.28, dampingFraction: 0.84), value: settings.selectedModality)
-        }
-    }
-
-    // MARK: - Context
-
-    private func attachedContextCard(_ context: ThreadAttachedContextRecord) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "folder.fill.badge.plus")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(accentColor)
-                    .frame(width: 28, height: 28)
-                    .background {
-                        Circle()
-                            .fill(accentColor.opacity(0.14))
-                    }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Thread Context")
-                        .font(.system(.caption, design: .rounded, weight: .semibold))
-                        .foregroundStyle(textTertiary)
-                    Text(context.name)
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                        .foregroundStyle(textPrimary)
-                }
-
-                Spacer()
-            }
-
-            if let description = context.description, !description.isEmpty {
-                Text(description)
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !context.tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(context.tags.prefix(4), id: \.self) { tag in
-                            Text(tag)
-                                .font(.system(.caption2, design: .rounded, weight: .medium))
-                                .foregroundStyle(textSecondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .liquidGlass(cornerRadius: 8)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .liquidGlass(cornerRadius: 20, shadowIntensity: 0.65, borderGlow: true)
-    }
-
-    private func attachedContextHeroPill(_ context: ThreadAttachedContextRecord) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(accentColor)
-            Text("Using \(context.name)")
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .foregroundStyle(textPrimary)
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .liquidGlassChip(isSelected: true, accentColor: accentColor)
-    }
-
-    private var contextPickerPopover: some View {
-        NavigationStack {
-            List {
-                if !contextService.contexts.isEmpty {
-                    ForEach(contextService.contexts) { context in
-                        Button {
-                            Task {
-                                await viewModel.updateAttachedContext(context)
-                            }
-                            showContextPicker = false
-                            triggerHaptic(.light)
                         } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: context.isGlobal ? "globe" : "folder.fill")
-                                    .foregroundStyle(accentColor)
-                                    .frame(width: 18)
+                            composerControlChip(
+                                title: modalitySummary,
+                                systemImage: settings.selectedModality.icon,
+                                tint: brandSecondaryAccent
+                            )
+                        }
+                        .buttonStyle(.plain)
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(context.name)
-                                        .font(.system(.subheadline, design: .rounded, weight: .medium))
-                                        .foregroundStyle(textPrimary)
-                                    if let description = context.description, !description.isEmpty {
-                                        Text(description)
-                                            .font(.system(.caption, design: .rounded))
-                                            .foregroundStyle(textSecondary)
-                                            .lineLimit(1)
+                        if settings.selectedModality == .audio {
+                            Menu {
+                                ForEach(AudioSubModalityType.allCases) { subModality in
+                                    Button(subModality.displayName) {
+                                        applyAudioSubModality(subModality)
                                     }
                                 }
-
-                                Spacer()
-
-                                if viewModel.attachedContext?.id == context.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(accentColor)
-                                }
+                            } label: {
+                                composerControlChip(
+                                    title: settings.selectedAudioSubModality.displayName,
+                                    systemImage: settings.selectedAudioSubModality.icon,
+                                    tint: accentColor
+                                )
                             }
+                            .buttonStyle(.plain)
+                        }
+
+                        Button(action: toggleMaxMode) {
+                            composerControlChip(
+                                title: settings.maxModeEnabled ? "MAX" : "Standard",
+                                systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill",
+                                tint: settings.maxModeEnabled ? .orange : accentColor
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer(minLength: 0)
+
+                        if !viewModel.userPrompt.isEmpty {
+                            Text("\(viewModel.userPrompt.count)")
+                                .font(.system(.caption, design: .rounded, weight: .medium))
+                                .foregroundStyle(textSecondary)
+                                .contentTransition(.numericText())
                         }
                     }
-                } else {
-                    ContentUnavailableView(
-                        "No Contexts Yet",
-                        systemImage: "folder.badge.plus",
-                        description: Text("Create a reusable context first, then attach it to the thread.")
-                    )
                 }
-            }
-            .listStyle(.plain)
-            .navigationTitle("Attach Context")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Manage") {
-                        showContextPicker = false
-                        showContextsManager = true
+
+                Button(action: submitPrompt) {
+                    ZStack {
+                        Circle()
+                            .fill(viewModel.canSend ? accentColor : backgroundTertiary)
+
+                        if viewModel.isStreaming {
+                            ProgressView()
+                                .tint(viewModel.canSend ? Color.adaptiveTextOnAccent : textSecondary)
+                                .scaleEffect(0.85)
+                        } else {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(viewModel.canSend ? Color.adaptiveTextOnAccent : textSecondary)
+                        }
                     }
-                    .foregroundStyle(accentColor)
+                    .frame(width: 44, height: 44)
                 }
+                .buttonStyle(.plain)
+                .disabled(!viewModel.canSend)
             }
+            .frame(minHeight: 56)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .liquidGlassInput(cornerRadius: 28, isFocused: isInputFocused)
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, presentationStyle == .home ? 12 : 8)
+        .background {
+            Rectangle()
+                .fill(backgroundPrimary.opacity(colorScheme == .dark ? 0.92 : 0.85))
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.84), value: viewModel.canSend)
     }
 
     // MARK: - Actions
 
-    private func openContextSelector() {
-        if contextService.contexts.isEmpty {
-            showContextsManager = true
+    private func presentPaywall() {
+        if let onOpenPaywall {
+            onOpenPaywall()
         } else {
-            showContextPicker = true
+            showPaywallSheet = true
         }
-        triggerHaptic(.light)
     }
 
     private func handlePowerToolSheet(_ tool: PowerToolsSection.PowerTool) {
@@ -716,19 +618,19 @@ struct ThreadView: View {
             showSandbox = true
         case .workflows:
             showWorkflows = true
-        case .contexts:
-            showContextsManager = true
         }
     }
 
     private func submitPrompt() {
+        guard viewModel.canSend else { return }
+
         triggerHaptic(.medium)
         isInputFocused = false
 
         if settings.maxModeEnabled && !canUseMaxMode {
             settings.maxModeEnabled = false
             settings.savePreferences()
-            showPaywallSheet = true
+            presentPaywall()
             return
         }
 
@@ -738,37 +640,44 @@ struct ThreadView: View {
         }
     }
 
+    private func applyModality(_ modality: ModalityType) {
+        settings.selectedModality = modality
+        settings.savePreferences()
+        triggerHaptic(.light)
+    }
+
+    private func applyAudioSubModality(_ subModality: AudioSubModalityType) {
+        settings.selectedAudioSubModality = subModality
+        settings.savePreferences()
+        triggerHaptic(.light)
+    }
+
+    private func toggleMaxMode() {
+        if !settings.maxModeEnabled && !canUseMaxMode {
+            presentPaywall()
+            return
+        }
+
+        settings.maxModeEnabled.toggle()
+        settings.savePreferences()
+        triggerHaptic(.light)
+    }
+
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
     }
-}
 
-private extension ThreadView {
-    struct StarterPrompt: Identifiable {
-        let title: String
-        let icon: String
-        let prompt: String
-
-        var id: String { title }
-    }
-
-    var starterPrompts: [StarterPrompt] {
-        [
-            StarterPrompt(
-                title: "Product spec upgrade",
-                icon: "doc.text.magnifyingglass",
-                prompt: "Turn this rough product spec into a concise but production-ready AI prompt that defines scope, constraints, deliverables, and acceptance criteria."
-            ),
-            StarterPrompt(
-                title: "Creative prompt rewrite",
-                icon: "photo.on.rectangle.angled",
-                prompt: "Rewrite this rough image idea into a strong generation prompt with better subject hierarchy, composition, lighting, and failure-avoidance constraints."
-            ),
-            StarterPrompt(
-                title: "Coding task refinement",
-                icon: "chevron.left.forwardslash.chevron.right",
-                prompt: "Transform this rough coding request into a stronger implementation prompt that specifies environment, files to change, edge cases, testing expectations, and completion criteria."
-            ),
-        ]
+    private func composerControlChip(title: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+            Text(title)
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(textPrimary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .liquidGlassChip(isSelected: false, accentColor: tint)
     }
 }

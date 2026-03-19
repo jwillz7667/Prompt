@@ -44,10 +44,26 @@ struct SupportView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Consistent liquid glass background
                 LiquidGlassBackground()
 
                 VStack(spacing: 0) {
+                PromptPageHeader(
+                    title: "Support",
+                    subtitle: "Chat with support and review your tickets",
+                    onLeadingTap: { dismiss() }
+                ) {
+                    Button {
+                        showTicketsList = true
+                    } label: {
+                        Image(systemName: "ticket")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(textPrimary)
+                    }
+                    .buttonStyle(GlassIconButtonStyle(size: 40))
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
                 // Chat messages
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -146,26 +162,7 @@ struct SupportView: View {
                 .background(.ultraThinMaterial)
             }
             }
-            .navigationTitle("Support")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
-                        dismiss()
-                    }
-                    .foregroundStyle(textPrimary)
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showTicketsList = true
-                    } label: {
-                        Image(systemName: "ticket")
-                            .foregroundStyle(textPrimary)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showTicketsList) {
                 TicketsListView()
             }

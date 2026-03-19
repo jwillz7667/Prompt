@@ -16,7 +16,6 @@ export interface EnhancePromptRequest {
   subModality?: string;
   customInstructions?: string;
   targetCharacterLength?: number;
-  attachedContextSummary?: string;
 }
 
 export interface EnhancePromptResult {
@@ -313,12 +312,6 @@ function buildUserMessage(request: ReturnType<typeof normalizeRequest>): string 
     sections.push('<custom_instructions>');
     sections.push(request.customInstructions.trim());
     sections.push('</custom_instructions>');
-  }
-
-  if (request.attachedContextSummary?.trim()) {
-    sections.push('<thread_context>');
-    sections.push(request.attachedContextSummary.trim());
-    sections.push('</thread_context>');
   }
 
   const lengthConstraint = buildLengthConstraint(

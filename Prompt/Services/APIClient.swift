@@ -72,7 +72,10 @@ actor APIClient {
     }
 
     var isAuthenticated: Bool {
-        accessToken != nil
+        if accessToken == nil {
+            loadStoredTokens()
+        }
+        return accessToken != nil
     }
 
     // MARK: - Request Methods
@@ -119,80 +122,163 @@ actor APIClient {
         body: (any Encodable)? = nil
     ) -> AsyncThrowingStream<StreamEvent, Error> {
         AsyncThrowingStream { continuation in
-            Task {
+            let task = Task {
                 do {
-                    guard let url = URL(string: "\(baseURL)\(endpoint)") else {
-                        continuation.finish(throwing: APIError.invalidURL)
-                        return
-                    }
-
-                    var request = URLRequest(url: url)
-                    request.httpMethod = method.rawValue
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    request.timeoutInterval = 120 // Longer timeout for streaming
-
-                    let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
-                    request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
-
-                    guard let token = accessToken else {
-                        continuation.finish(throwing: APIError.notAuthenticated)
-                        return
-                    }
-                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-                    if let body = body {
-                        request.httpBody = try JSONEncoder().encode(body)
-                    }
-
-                    let (bytes, response) = try await urlSession.bytes(for: request)
-
-                    guard let httpResponse = response as? HTTPURLResponse else {
-                        continuation.finish(throwing: APIError.invalidResponse)
-                        return
-                    }
-
-                    if httpResponse.statusCode == 401 {
-                        continuation.finish(throwing: APIError.unauthorized)
-                        return
-                    }
-
-                    guard httpResponse.statusCode == 200 else {
-                        continuation.finish(throwing: APIError.httpError(httpResponse.statusCode))
-                        return
-                    }
-
-                    for try await line in bytes.lines {
-                        if line.hasPrefix("data: ") {
-                            let data = String(line.dropFirst(6))
-                            if data == "[DONE]" {
-                                continuation.finish()
-                                return
-                            }
-
-                            if let jsonData = data.data(using: .utf8) {
-                                do {
-                                    let event = try await MainActor.run {
-                                        try JSONDecoder().decode(StreamEvent.self, from: jsonData)
-                                    }
-                                    continuation.yield(event)
-
-                                    if case .error = event.type {
-                                        continuation.finish(throwing: APIError.badRequest(event.message ?? "Stream error"))
-                                        return
-                                    }
-                                } catch {
-                                    continue
-                                }
-                            }
-                        }
-                    }
-
-                    continuation.finish()
+                    try await streamRequest(
+                        endpoint,
+                        method: method,
+                        body: body,
+                        isRetry: false,
+                        continuation: continuation
+                    )
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func streamRequest(
+        _ endpoint: String,
+        method: HTTPMethod,
+        body: (any Encodable)?,
+        isRetry: Bool,
+        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
+    ) async throws {
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        if accessToken == nil {
+            loadStoredTokens()
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method.rawValue
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.timeoutInterval = 120
+
+        let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
+        request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
+
+        guard let token = accessToken else {
+            throw APIError.notAuthenticated
+        }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        if let body = body {
+            request.httpBody = try Self.makeJSONEncoder().encode(body)
+        }
+
+        do {
+            let (bytes, response) = try await urlSession.bytes(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+
+            if httpResponse.statusCode == 401 {
+                if !isRetry {
+                    try await refreshAccessToken()
+                    try await streamRequest(
+                        endpoint,
+                        method: method,
+                        body: body,
+                        isRetry: true,
+                        continuation: continuation
+                    )
+                    return
+                }
+
+                throw APIError.unauthorized
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                let errorBody = try await streamErrorBody(from: bytes)
+                throw streamAPIError(statusCode: httpResponse.statusCode, body: errorBody)
+            }
+
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+
+                guard line.hasPrefix("data: ") else { continue }
+
+                let payload = String(line.dropFirst(6))
+                if payload == "[DONE]" {
+                    continuation.finish()
+                    return
+                }
+
+                guard let jsonData = payload.data(using: .utf8) else { continue }
+
+                do {
+                    let event = try await MainActor.run {
+                        try JSONDecoder().decode(StreamEvent.self, from: jsonData)
+                    }
+                    continuation.yield(event)
+
+                    if case .error = event.type {
+                        throw APIError.badRequest(event.message ?? "Stream error")
+                    }
+                } catch let error as APIError {
+                    throw error
+                } catch {
+                    continue
+                }
+            }
+
+            continuation.finish()
+        } catch let urlError as URLError where urlError.code == .timedOut {
+            throw APIError.requestTimedOut
+        }
+    }
+
+    private func streamErrorBody(from bytes: URLSession.AsyncBytes) async throws -> Data {
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+        }
+        return data
+    }
+
+    private func streamAPIError(statusCode: Int, body: Data) -> APIError {
+        switch statusCode {
+        case 400:
+            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: body)
+            return .badRequest(errorResponse?.message ?? errorResponse?.error ?? "Bad request")
+
+        case 403:
+            let errorResponse = try? JSONDecoder().decode(QuotaErrorResponse.self, from: body)
+            if errorResponse?.code == "QUOTA_EXCEEDED" {
+                return .quotaExceeded(remaining: errorResponse?.remainingQuota ?? 0)
+            }
+            if errorResponse?.code == "FEATURE_LOCKED" {
+                return .featureLocked
+            }
+            let message = errorResponse?.message ?? errorResponse?.error ?? "Request failed (403)"
+            return .serverMessage(message, statusCode)
+
+        case 404:
+            return .notFound
+
+        case 429:
+            return .rateLimited
+
+        case 500...599:
+            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: body)
+            if let message = errorResponse?.message ?? errorResponse?.error {
+                return .serverMessage(message, statusCode)
+            }
+            return .serverError(statusCode)
+
+        default:
+            return .httpError(statusCode)
         }
     }
 
@@ -218,6 +304,10 @@ actor APIClient {
         let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
         request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
         request.timeoutInterval = timeoutInterval
+
+        if requiresAuth && accessToken == nil {
+            loadStoredTokens()
+        }
 
         if requiresAuth {
             guard let token = accessToken else {
@@ -297,6 +387,10 @@ actor APIClient {
     // MARK: - Token Refresh
 
     private func refreshAccessToken() async throws {
+        if refreshToken == nil {
+            loadStoredTokens()
+        }
+
         guard let refresh = refreshToken else {
             throw APIError.notAuthenticated
         }
@@ -391,11 +485,11 @@ actor APIClient {
 
     private static func makeJSONEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
-        let fractionalFormatter = ISO8601DateFormatter()
-        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         encoder.dateEncodingStrategy = .custom { date, encoder in
             var container = encoder.singleValueContainer()
+            let fractionalFormatter = ISO8601DateFormatter()
+            fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             try container.encode(fractionalFormatter.string(from: date))
         }
 

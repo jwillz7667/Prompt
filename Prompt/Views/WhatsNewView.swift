@@ -29,7 +29,7 @@ struct WhatsNewView: View {
         WhatsNewFeature(
             icon: "bolt.fill",
             title: "Power Tools",
-            description: "Variations, Sandbox, Workflows, and Contexts now share one production-ready power tools grid after each enhancement.",
+            description: "Variations, Sandbox, and Workflows now live in one production-ready power tools grid after each enhancement.",
             iconColor: .brandPurple
         ),
         WhatsNewFeature(
@@ -53,7 +53,7 @@ struct WhatsNewView: View {
         WhatsNewFeature(
             icon: "doc.on.doc",
             title: "Quick Access",
-            description: "Continue Thread and reusable Contexts stay close to the input so advanced prompt setup is faster.",
+            description: "Continue the same optimization thread with a cleaner message-style workspace and faster access to follow-up actions.",
             iconColor: .green
         )
     ]

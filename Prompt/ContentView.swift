@@ -10,13 +10,11 @@ import UIKit
 import StoreKit
 
 struct ContentView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
     @Environment(StoreKitManager.self) private var storeKit
 
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
-    @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
     @State private var homeThreadViewModel = ThreadViewModel()
 
@@ -36,81 +34,23 @@ struct ContentView: View {
     @AppStorage("lastReviewPromptDate") private var lastReviewPromptDateString = ""
     @AppStorage("enhancementCount") private var enhancementCount = 0
 
-    private var textPrimary: Color { Color.adaptiveTextPrimary }
-    private var textSecondary: Color { Color.adaptiveTextSecondary }
-
     var body: some View {
         NavigationStack {
             ZStack {
-                LiquidGlassBackground()
-
                 ThreadView(
                     viewModel: homeThreadViewModel,
-                    presentationStyle: .home
+                    presentationStyle: .home,
+                    onOpenThreads: { showThreads = true },
+                    onOpenProfile: { showProfile = true },
+                    onOpenHistory: { showHistory = true },
+                    onOpenSettings: { showSettings = true },
+                    onOpenPaywall: { showPaywall = true },
+                    onStartNewConversation: { newConversation() }
                 )
             }
-            .navigationTitle("Promptomize")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    profileButton
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 8) {
-                        if syncManager.pendingCount > 0 || syncManager.isSyncing {
-                            SyncStatusIndicator(
-                                pendingCount: syncManager.pendingCount,
-                                isSyncing: syncManager.isSyncing,
-                                isOnline: networkMonitor.isConnected
-                            )
-                        }
-
-                        if let usage = storeKit.usageInfo {
-                            Button {
-                                showPaywall = true
-                            } label: {
-                                UsageIndicator(used: usage.dailyPromptsUsed, limit: usage.dailyPromptsLimit)
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        if homeThreadViewModel.hasConversation {
-                            toolbarButton(icon: "square.and.pencil") {
-                                newConversation()
-                            }
-                        }
-
-                        Menu {
-                            Button {
-                                showHistory = true
-                            } label: {
-                                Label("History", systemImage: "clock.arrow.circlepath")
-                            }
-
-                            Button {
-                                showThreads = true
-                            } label: {
-                                Label("Threads", systemImage: "bubble.left.and.bubble.right")
-                            }
-
-                            Button {
-                                showSettings = true
-                            } label: {
-                                Label("Settings", systemImage: "gearshape.fill")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .font(.system(size: 17, weight: .medium))
-                                .foregroundStyle(textPrimary)
-                        }
-                        .buttonStyle(GlassIconButtonStyle(size: 32))
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
-                SettingsView()
+                ProfileView()
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)
@@ -210,84 +150,6 @@ struct ContentView: View {
             if shouldOpen {
                 deeplinkManager.clearEnhanceTrigger()
             }
-        }
-    }
-
-    // MARK: - Toolbar
-
-    private func toolbarButton(icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(textPrimary)
-                .frame(width: 32, height: 32)
-        }
-        .buttonStyle(GlassIconButtonStyle(size: 32))
-    }
-
-    private var profileButton: some View {
-        Button {
-            showProfile = true
-        } label: {
-            if let avatarUrl = authManager.currentUser?.avatarUrl,
-               let url = URL(string: avatarUrl) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    profilePlaceholderContent
-                }
-                .frame(width: 32, height: 32)
-                .clipShape(Circle())
-                .overlay {
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: colorScheme == .dark
-                                    ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
-                                    : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.2)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.4
-                        )
-                }
-            } else {
-                profilePlaceholder
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var profilePlaceholderContent: some View {
-        Image(systemName: "person.fill")
-            .font(.caption)
-            .foregroundStyle(textSecondary)
-    }
-
-    private var profilePlaceholder: some View {
-        ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: 36, height: 36)
-
-            Image(systemName: "person.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(textSecondary)
-        }
-        .overlay {
-            Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: colorScheme == .dark
-                            ? [Color.white.opacity(0.2), Color.white.opacity(0.05)]
-                            : [Color.white.opacity(0.8), Color.brandPurple.opacity(0.2)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
         }
     }
 

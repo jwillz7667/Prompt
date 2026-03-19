@@ -28,37 +28,37 @@ struct ThreadListView: View {
             ZStack {
                 LiquidGlassBackground()
 
-                if viewModel.isLoadingThreads && viewModel.threads.isEmpty {
-                    ProgressView()
-                        .tint(accentColor)
-                } else if viewModel.threads.isEmpty {
-                    emptyState
-                } else {
-                    threadList
-                }
-            }
-            .navigationTitle("Threads")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") {
-                        dismiss()
+                VStack(spacing: 0) {
+                    PromptPageHeader(
+                        title: "Threads",
+                        subtitle: "Jump back into any prompt conversation",
+                        onLeadingTap: { dismiss() }
+                    ) {
+                        Button {
+                            triggerHaptic(.light)
+                            showNewThread = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(textPrimary)
+                        }
+                        .buttonStyle(GlassIconButtonStyle(size: 40))
                     }
-                    .foregroundStyle(accentColor)
-                }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        triggerHaptic(.light)
-                        showNewThread = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(accentColor)
+                    if viewModel.isLoadingThreads && viewModel.threads.isEmpty {
+                        ProgressView()
+                            .tint(accentColor)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if viewModel.threads.isEmpty {
+                        emptyState
+                    } else {
+                        threadList
                     }
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $selectedThreadId) { threadId in
                 ThreadView(viewModel: viewModel, threadId: threadId)
             }

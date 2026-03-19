@@ -732,11 +732,6 @@ model Thread {
   title                    String?
   modality                 String       @default("text")
   isArchived               Boolean      @default(false)
-  attachedContextId        String?
-  attachedContextName      String?
-  attachedContextDescription String?    @db.Text
-  attachedContextTags      String[]     @default([])
-  attachedContextSummary   String?      @db.Text
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
   turns                    ThreadTurn[]

@@ -32,33 +32,36 @@ struct SandboxView: View {
             ZStack {
                 LiquidGlassBackground()
 
-                Group {
-                    if service.isLoading && visibleTests.isEmpty {
-                        loadingView
-                    } else if visibleTests.isEmpty {
-                        emptyStateView
-                    } else {
-                        testsList
+                VStack(spacing: 0) {
+                    PromptPageHeader(
+                        title: "Sandbox",
+                        subtitle: "Run prompt tests across supported platforms",
+                        onLeadingTap: { dismiss() }
+                    ) {
+                        Button {
+                            showCreateSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(textPrimary)
+                        }
+                        .buttonStyle(GlassIconButtonStyle(size: 40))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    Group {
+                        if service.isLoading && visibleTests.isEmpty {
+                            loadingView
+                        } else if visibleTests.isEmpty {
+                            emptyStateView
+                        } else {
+                            testsList
+                        }
                     }
                 }
             }
-            .navigationTitle("Sandbox")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(accentColor)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .foregroundStyle(accentColor)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .task { await service.loadTestsIfNeeded() }
             .sheet(isPresented: $showCreateSheet) {
                 CreateTestSheet(service: service)

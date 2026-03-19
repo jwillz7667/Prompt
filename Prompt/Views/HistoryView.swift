@@ -39,10 +39,17 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Consistent liquid glass background
                 LiquidGlassBackground()
 
                 VStack(spacing: 0) {
+                    PromptPageHeader(
+                        title: "History",
+                        subtitle: "Your optimized prompts in one searchable archive",
+                        onLeadingTap: { dismiss() }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
                     // Tab picker
                     Picker("Filter", selection: $selectedTab) {
                         ForEach(HistoryTab.allCases, id: \.self) { tab in
@@ -66,18 +73,7 @@ struct HistoryView: View {
                     }
                 }
             }
-            .navigationTitle("History")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(accentColor)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .searchable(text: $searchText, prompt: "Search prompts...")
             .onChange(of: searchText) { _, newValue in
                 historyManager.searchQuery = newValue

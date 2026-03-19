@@ -16,9 +16,11 @@ struct ProfileView: View {
     @Environment(SettingsManager.self) private var settings
     @Environment(\.dismiss) private var dismiss
 
+    @StateObject private var unreadManager = UnreadMessageManager.shared
     @State private var showSignOutAlert = false
     @State private var showDeleteAccountAlert = false
     @State private var showPaywall = false
+    @State private var showSupport = false
     @State private var stats: UserStats?
     @State private var isLoadingStats = false
 
@@ -47,11 +49,66 @@ struct ProfileView: View {
     }
 
     var body: some View {
+        @Bindable var bindableSettings = settings
+
         NavigationStack {
             ZStack {
                 LiquidGlassBackground()
 
-                List {
+                VStack(spacing: 0) {
+                    PromptPageHeader(
+                        title: "Profile",
+                        subtitle: "Account details, app settings, and subscription status",
+                        onLeadingTap: {
+                            if isEditingProfile {
+                                isEditingProfile = false
+                                profileSaveError = nil
+                            } else {
+                                dismiss()
+                            }
+                        }
+                    ) {
+                        Group {
+                            if isEditingProfile {
+                                Button {
+                                    Task { await saveProfile() }
+                                } label: {
+                                    if isSavingProfile {
+                                        ProgressView()
+                                            .tint(accentColor)
+                                    } else {
+                                        Text("Save")
+                                            .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                            .foregroundStyle(textPrimary)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 9)
+                                    }
+                                }
+                                .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor))
+                                .disabled(isSavingProfile)
+                            } else {
+                                Menu {
+                                    Button {
+                                        startEditing()
+                                    } label: {
+                                        Label("Edit Profile", systemImage: "pencil")
+                                    }
+                                    Button("Close") {
+                                        dismiss()
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(textPrimary)
+                                }
+                                .buttonStyle(GlassIconButtonStyle(size: 40))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    List {
                 // User info section
                 if let user = authManager.currentUser {
                     Section {
@@ -140,6 +197,166 @@ struct ProfileView: View {
                         .foregroundStyle(textTertiary)
                 }
 
+                Section {
+                    Picker(selection: $bindableSettings.appearanceMode) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            HStack {
+                                Image(systemName: mode.icon)
+                                Text(mode.displayName)
+                            }
+                            .tag(mode)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "paintbrush.fill")
+                                .foregroundStyle(accentColor)
+                                .frame(width: 28)
+                            Text("Appearance")
+                                .foregroundStyle(textPrimary)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .listRowBackground(bgSecondary)
+                } header: {
+                    Text("Appearance")
+                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Choose your preferred color scheme. System follows your device settings.")
+                        .foregroundStyle(textTertiary)
+                }
+
+                Section {
+                    HStack {
+                        Image(systemName: "thermometer.medium")
+                            .foregroundStyle(accentColor)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Temperature")
+                                .foregroundStyle(textPrimary)
+                            Text(String(format: "%.1f", settings.temperature))
+                                .font(.caption)
+                                .foregroundStyle(textSecondary)
+                        }
+                        Spacer()
+                        Slider(value: $bindableSettings.temperature, in: 0...1.5, step: 0.1)
+                            .frame(width: 150)
+                            .tint(accentColor)
+                    }
+                    .listRowBackground(bgSecondary)
+
+                    HStack {
+                        Image(systemName: "number.square.fill")
+                            .foregroundStyle(accentColor)
+                            .frame(width: 28)
+                        Stepper("Max Tokens: \(settings.maxTokens)", value: $bindableSettings.maxTokens, in: 1024...65536, step: 1024)
+                            .foregroundStyle(textPrimary)
+                    }
+                    .listRowBackground(bgSecondary)
+
+                    HStack {
+                        Image(systemName: "character.cursor.ibeam")
+                            .foregroundStyle(accentColor)
+                            .frame(width: 28)
+                        Text("Target Length")
+                            .foregroundStyle(textPrimary)
+                        Spacer()
+
+                        if let targetLength = settings.targetCharacterLength {
+                            Text("\(targetLength) chars")
+                                .font(.caption)
+                                .foregroundStyle(textSecondary)
+                        }
+
+                        TextField("Optional", value: $bindableSettings.targetCharacterLength, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.numberPad)
+                    }
+                    .listRowBackground(bgSecondary)
+                } header: {
+                    Text("Generation Settings")
+                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Higher temperature increases exploration. Max tokens and target length shape how much the optimizer can return.")
+                        .foregroundStyle(textTertiary)
+                }
+
+                Section {
+                    NavigationLink {
+                        AnalyticsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "chart.bar.fill")
+                                .foregroundStyle(accentColor)
+                                .frame(width: 28)
+                            Text("Analytics")
+                                .foregroundStyle(textPrimary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(textTertiary)
+                        }
+                    }
+                    .listRowBackground(bgSecondary)
+                } header: {
+                    Text("Insights")
+                        .foregroundStyle(textSecondary)
+                }
+
+                Section {
+                    Button {
+                        showSupport = true
+                        unreadManager.markAllAsRead()
+                    } label: {
+                        HStack {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    .foregroundStyle(accentColor)
+                                    .frame(width: 28)
+
+                                if unreadManager.hasUnreadMessages {
+                                    Circle()
+                                        .fill(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
+                                        .frame(width: 12, height: 12)
+                                        .overlay(
+                                            Text(unreadManager.unreadCount > 9 ? "9+" : "\(unreadManager.unreadCount)")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundStyle(Color.white)
+                                        )
+                                        .offset(x: 6, y: -4)
+                                }
+                            }
+
+                            Text("Contact Support")
+                                .foregroundStyle(textPrimary)
+                            Spacer()
+
+                            if unreadManager.hasUnreadMessages {
+                                Text("New")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
+                                    .clipShape(Capsule())
+                            }
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(textTertiary)
+                        }
+                    }
+                    .listRowBackground(bgSecondary)
+                } header: {
+                    Text("Help")
+                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Open support chat or review tickets without leaving your account workspace.")
+                        .foregroundStyle(textTertiary)
+                }
+
                 // Subscription section
                 Section {
                     VStack(spacing: 16) {
@@ -220,6 +437,7 @@ struct ProfileView: View {
                 Section {
                     statsRow(label: "Version", value: appVersion)
                     statsRow(label: "Build", value: buildNumber)
+                    statsRow(label: "Powered By", value: "DeepSeek AI")
 
                     Link(destination: URL(string: "https://promptomize.app/support")!) {
                         HStack {
@@ -258,54 +476,24 @@ struct ProfileView: View {
                         .foregroundStyle(textSecondary)
                 }
             }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-            }
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if isEditingProfile {
-                        Button("Cancel") {
-                            isEditingProfile = false
-                            profileSaveError = nil
-                        }
-                        .foregroundStyle(textSecondary)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if isEditingProfile {
-                        Button {
-                            Task { await saveProfile() }
-                        } label: {
-                            if isSavingProfile {
-                                ProgressView()
-                                    .tint(accentColor)
-                            } else {
-                                Text("Save")
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(accentColor)
-                            }
-                        }
-                        .disabled(isSavingProfile)
-                    } else {
-                        Menu {
-                            Button {
-                                startEditing()
-                            } label: {
-                                Label("Edit Profile", systemImage: "pencil")
-                            }
-                            Button("Done") {
-                                dismiss()
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle.fill")
-                                .foregroundStyle(accentColor)
-                        }
-                    }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
+            .onChange(of: settings.appearanceMode) { _, _ in
+                settings.savePreferences()
+            }
+            .onChange(of: settings.temperature) { _, _ in
+                settings.savePreferences()
+            }
+            .onChange(of: settings.maxTokens) { _, _ in
+                settings.savePreferences()
+            }
+            .onChange(of: settings.targetCharacterLength) { _, _ in
+                settings.savePreferences()
+            }
+            .preferredColorScheme(settings.appearanceMode.colorScheme)
             .task {
                 await loadStats()
             }
@@ -333,6 +521,12 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 PaywallView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+            }
+            .sheet(isPresented: $showSupport) {
+                SupportView()
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)

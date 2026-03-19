@@ -124,6 +124,17 @@ if (process.env['NODE_ENV'] !== 'test') {
   app.use(requestLogger());
 }
 
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'promptomize-api',
+    status: 'ok',
+  });
+});
+
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send('User-agent: *\nDisallow: /');
+});
+
 // Routes
 app.use('/health', healthRouter);
 app.use('/api/v1/auth', authRouter);

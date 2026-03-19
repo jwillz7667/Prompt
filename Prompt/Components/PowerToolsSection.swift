@@ -2,7 +2,7 @@
 //  PowerToolsSection.swift
 //  Prompt
 //
-//  Container view for the 2x2 Power Tools grid with inline expanded content.
+//  Container view for inline power tools available from the thread workspace.
 //
 
 import SwiftUI
@@ -15,7 +15,6 @@ struct PowerToolsSection: View {
         case variations
         case sandbox
         case workflows
-        case contexts
 
         var id: String { rawValue }
 
@@ -24,7 +23,6 @@ struct PowerToolsSection: View {
             case .variations: return "rectangle.on.rectangle"
             case .sandbox: return "flask"
             case .workflows: return "arrow.triangle.branch"
-            case .contexts: return "folder.badge.plus"
             }
         }
 
@@ -33,7 +31,6 @@ struct PowerToolsSection: View {
             case .variations: return "Variations"
             case .sandbox: return "Sandbox"
             case .workflows: return "Workflows"
-            case .contexts: return "Contexts"
             }
         }
 
@@ -42,7 +39,6 @@ struct PowerToolsSection: View {
             case .variations: return "Generate alt"
             case .sandbox: return "Test prompts"
             case .workflows: return "Automate"
-            case .contexts: return "Reusable input"
             }
         }
 
@@ -51,7 +47,6 @@ struct PowerToolsSection: View {
             case .variations: return Color.brandPurple
             case .sandbox: return .orange
             case .workflows: return .green
-            case .contexts: return Color.brandCyan
             }
         }
 
@@ -59,7 +54,6 @@ struct PowerToolsSection: View {
             switch self {
             case .variations: return "PRO"
             case .sandbox, .workflows: return "PREMIUM"
-            case .contexts: return nil
             }
         }
     }
@@ -114,8 +108,6 @@ struct PowerToolsSection: View {
             return storeKit.currentTier == .free
         case .sandbox, .workflows:
             return storeKit.currentTier != .premium
-        case .contexts:
-            return false
         }
     }
 
@@ -229,33 +221,6 @@ struct PowerToolsSection: View {
                         .buttonStyle(LiquidGlassButtonStyle(
                             cornerRadius: 12,
                             tintColor: .green,
-                            intensity: .standard
-                        ))
-                    }
-
-                case .contexts:
-                    VStack(spacing: 12) {
-                        Text("Attach reusable project context and working constraints to your prompt pipeline.")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.adaptiveTextSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Button {
-                            onOpenSheet(.contexts)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "folder.badge.plus")
-                                    .font(.system(size: 14, weight: .semibold))
-                                Text("Open Contexts")
-                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .foregroundStyle(.white)
-                        }
-                        .buttonStyle(LiquidGlassButtonStyle(
-                            cornerRadius: 12,
-                            tintColor: Color.brandCyan,
                             intensity: .standard
                         ))
                     }
