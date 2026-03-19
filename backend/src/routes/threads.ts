@@ -34,6 +34,7 @@ const createThreadSchema = z.object({
   subModality: z.string().max(50).optional(),
   mode: z.enum(['standard', 'max']).default('standard'),
   customInstructions: z.string().max(2000).optional(),
+  attachedContextId: z.string().max(100).optional(),
 });
 
 const addTurnSchema = z.object({
@@ -46,6 +47,8 @@ const addTurnSchema = z.object({
 const updateThreadSchema = z.object({
   title: z.string().max(200).optional(),
   isArchived: z.boolean().optional(),
+  attachedContextId: z.string().max(100).optional(),
+  clearAttachedContext: z.boolean().optional(),
 });
 
 const listQuerySchema = z.object({
@@ -71,6 +74,146 @@ function buildSubscriptionPayload(
   };
 }
 
+type ThreadWithContextFields = {
+  attachedContextId: string | null;
+  attachedContextName: string | null;
+  attachedContextDescription: string | null;
+  attachedContextTags: string[];
+  attachedContextSummary: string | null;
+};
+
+type ResolvedThreadContext = {
+  attachedContextId: string;
+  attachedContextName: string;
+  attachedContextDescription: string | null;
+  attachedContextTags: string[];
+  attachedContextSummary: string;
+};
+
+const THREAD_CONTEXT_SUMMARY_LIMIT = 16_000;
+
+function stringifyContextValue(value: unknown, indent = 0): string {
+  const padding = ' '.repeat(indent);
+
+  if (value === null || value === undefined) {
+    return `${padding}- null`;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return `${padding}- []`;
+    }
+
+    return value
+      .map((item) => {
+        if (item !== null && typeof item === 'object') {
+          return `${padding}-\n${stringifyContextValue(item, indent + 2)}`;
+        }
+
+        return `${padding}- ${String(item)}`;
+      })
+      .join('\n');
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) {
+      return `${padding}{}`;
+    }
+
+    return entries
+      .map(([key, entryValue]) => {
+        if (entryValue !== null && typeof entryValue === 'object') {
+          return `${padding}${key}:\n${stringifyContextValue(entryValue, indent + 2)}`;
+        }
+
+        return `${padding}${key}: ${String(entryValue)}`;
+      })
+      .join('\n');
+  }
+
+  return `${padding}${String(value)}`;
+}
+
+function buildThreadContextSummary(context: {
+  name: string;
+  description: string | null;
+  tags: string[];
+  contextData: unknown;
+}): string {
+  const lines = [`Context name: ${context.name}`];
+
+  if (context.description?.trim()) {
+    lines.push(`Description: ${context.description.trim()}`);
+  }
+
+  if (context.tags.length > 0) {
+    lines.push(`Tags: ${context.tags.join(', ')}`);
+  }
+
+  lines.push('Context details:');
+  lines.push(stringifyContextValue(context.contextData, 2));
+
+  const summary = lines.join('\n').trim();
+  if (summary.length <= THREAD_CONTEXT_SUMMARY_LIMIT) {
+    return summary;
+  }
+
+  return `${summary.slice(0, THREAD_CONTEXT_SUMMARY_LIMIT - 18).trimEnd()}\n[truncated context]`;
+}
+
+async function resolveThreadContext(
+  userId: string,
+  attachedContextId?: string
+): Promise<ResolvedThreadContext | null> {
+  if (!attachedContextId) {
+    return null;
+  }
+
+  const context = await prisma.projectContext.findFirst({
+    where: {
+      id: attachedContextId,
+      OR: [
+        { userId },
+        { isGlobal: true },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      tags: true,
+      contextData: true,
+    },
+  });
+
+  if (!context) {
+    return null;
+  }
+
+  return {
+    attachedContextId: context.id,
+    attachedContextName: context.name,
+    attachedContextDescription: context.description,
+    attachedContextTags: context.tags,
+    attachedContextSummary: buildThreadContextSummary(context),
+  };
+}
+
+function mapAttachedContext(thread: ThreadWithContextFields) {
+  if (!thread.attachedContextName || !thread.attachedContextSummary) {
+    return null;
+  }
+
+  return {
+    id: thread.attachedContextId,
+    name: thread.attachedContextName,
+    description: thread.attachedContextDescription,
+    tags: thread.attachedContextTags,
+    summary: thread.attachedContextSummary,
+  };
+}
+
 // ============================================================================
 // CREATE THREAD (first turn, streams SSE)
 // ============================================================================
@@ -86,6 +229,12 @@ threadRouter.post(
       }
 
       const data = createThreadSchema.parse(req.body);
+      const attachedContext = await resolveThreadContext(req.user.id, data.attachedContextId);
+
+      if (data.attachedContextId && !attachedContext) {
+        res.status(400).json({ error: 'Attached context not found' });
+        return;
+      }
 
       // Set up SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
@@ -111,6 +260,7 @@ threadRouter.post(
           userId: req.user.id,
           title: autoTitle,
           modality: data.modality,
+          ...(attachedContext ?? {}),
         },
       });
 
@@ -123,6 +273,7 @@ threadRouter.post(
           modality: data.modality,
           subModality: data.subModality,
           customInstructions: data.customInstructions,
+          attachedContextSummary: attachedContext?.attachedContextSummary,
           previousTurns: [],
         },
         {
@@ -288,6 +439,7 @@ threadRouter.post(
           modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d',
           subModality: data.subModality,
           customInstructions: data.customInstructions,
+          attachedContextSummary: thread.attachedContextSummary ?? undefined,
           previousTurns,
         },
         {
@@ -442,6 +594,7 @@ threadRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
       isArchived: t.isArchived,
       turnCount: t._count.turns,
       lastPreview: t.turns[0]?.enhancedPrompt?.substring(0, 120) || null,
+      attachedContext: mapAttachedContext(t),
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
     }));
@@ -491,7 +644,18 @@ threadRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
-    res.json({ thread });
+    res.json({
+      thread: {
+        id: thread.id,
+        title: thread.title,
+        modality: thread.modality,
+        isArchived: thread.isArchived,
+        attachedContext: mapAttachedContext(thread),
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+        turns: thread.turns,
+      },
+    });
   } catch (error) {
     console.error('Get thread error:', error);
     res.status(500).json({ error: 'Failed to get thread' });
@@ -511,10 +675,38 @@ threadRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
 
     const data = updateThreadSchema.parse(req.body);
     const threadId = req.params.id as string;
+    const attachedContext = data.clearAttachedContext
+      ? {
+          attachedContextId: null,
+          attachedContextName: null,
+          attachedContextDescription: null,
+          attachedContextTags: [],
+          attachedContextSummary: null,
+        }
+      : await resolveThreadContext(req.user.id, data.attachedContextId);
+
+    if (data.attachedContextId && !attachedContext) {
+      res.status(400).json({ error: 'Attached context not found' });
+      return;
+    }
+
+    const updateData = {
+      ...(data.title !== undefined ? { title: data.title } : {}),
+      ...(data.isArchived !== undefined ? { isArchived: data.isArchived } : {}),
+      ...(data.clearAttachedContext || data.attachedContextId !== undefined
+        ? (attachedContext ?? {
+            attachedContextId: null,
+            attachedContextName: null,
+            attachedContextDescription: null,
+            attachedContextTags: [],
+            attachedContextSummary: null,
+          })
+        : {}),
+    };
 
     const result = await prisma.thread.updateMany({
       where: { id: threadId, userId: req.user.id },
-      data,
+      data: updateData,
     });
 
     if (result.count === 0) {
@@ -524,9 +716,35 @@ threadRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
 
     const updated = await prisma.thread.findUnique({
       where: { id: threadId },
+      include: {
+        turns: {
+          orderBy: { turnIndex: 'desc' },
+          take: 1,
+          select: {
+            enhancedPrompt: true,
+          },
+        },
+        _count: {
+          select: { turns: true },
+        },
+      },
     });
 
-    res.json({ thread: updated });
+    res.json({
+      thread: updated
+        ? {
+            id: updated.id,
+            title: updated.title,
+            modality: updated.modality,
+            isArchived: updated.isArchived,
+            turnCount: updated._count.turns,
+            lastPreview: updated.turns[0]?.enhancedPrompt?.substring(0, 120) || null,
+            attachedContext: mapAttachedContext(updated),
+            createdAt: updated.createdAt,
+            updatedAt: updated.updatedAt,
+          }
+        : null,
+    });
   } catch (error) {
     console.error('Update thread error:', error);
     if (error instanceof z.ZodError) {

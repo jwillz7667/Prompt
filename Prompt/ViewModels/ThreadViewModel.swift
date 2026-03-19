@@ -17,7 +17,9 @@ final class ThreadViewModel {
     var threads: [ThreadRecord] = []
     var currentThread: ThreadDetailDTO?
     var turns: [ThreadTurnRecord] = []
+    var attachedContext: ThreadAttachedContextRecord?
     var userPrompt: String = ""
+    var pendingUserPrompt: String?
     var isStreaming: Bool = false
     var streamingContent: String = ""
     var isLoadingThreads: Bool = false
@@ -53,6 +55,15 @@ final class ThreadViewModel {
                 tokens: turn.totalTokens
             ))
         }
+        if let pendingUserPrompt, isStreaming {
+            messages.append(ThreadMessage(
+                id: "pending-user",
+                role: .user,
+                content: pendingUserPrompt,
+                turnIndex: turns.count,
+                tokens: nil
+            ))
+        }
         // Append streaming partial if active
         if isStreaming && !streamingContent.isEmpty {
             messages.append(ThreadMessage(
@@ -72,6 +83,14 @@ final class ThreadViewModel {
 
     var threadTitle: String {
         currentThread?.title ?? "New Thread"
+    }
+
+    var latestEnhancedPrompt: String? {
+        turns.last?.enhancedPrompt
+    }
+
+    var hasConversation: Bool {
+        !turns.isEmpty || isStreaming
     }
 
     // MARK: - Private
@@ -116,10 +135,17 @@ final class ThreadViewModel {
             )
             currentThread = response.thread
             turns = response.thread.turns.map { ThreadTurnRecord(from: $0) }
+            attachedContext = response.thread.attachedContext.map(ThreadAttachedContextRecord.init)
         } catch let error as APIError {
+            currentThread = nil
+            turns = []
+            attachedContext = nil
             errorMessage = error.localizedDescription
             showError = true
         } catch {
+            currentThread = nil
+            turns = []
+            attachedContext = nil
             errorMessage = "Failed to load thread"
             showError = true
         }
@@ -137,6 +163,8 @@ final class ThreadViewModel {
             if currentThread?.id == id {
                 currentThread = nil
                 turns = []
+                attachedContext = nil
+                pendingUserPrompt = nil
             }
         } catch {
             errorMessage = "Failed to delete thread"
@@ -148,28 +176,64 @@ final class ThreadViewModel {
         guard let threadId = currentThread?.id else { return }
 
         do {
-            let body = UpdateThreadRequest(title: title, isArchived: nil)
+            let body = UpdateThreadRequest(
+                title: title,
+                isArchived: nil,
+                attachedContextId: nil,
+                clearAttachedContext: nil
+            )
             let _: ThreadUpdateResponse = try await APIClient.shared.request(
                 "/threads/\(threadId)",
                 method: .patch,
                 body: body
             )
-            // Update local state
-            if var thread = currentThread {
-                thread = ThreadDetailDTO(
+            if let thread = currentThread {
+                currentThread = ThreadDetailDTO(
                     id: thread.id,
                     title: title,
                     modality: thread.modality,
                     isArchived: thread.isArchived,
+                    attachedContext: thread.attachedContext,
                     createdAt: thread.createdAt,
                     updatedAt: thread.updatedAt,
                     turns: thread.turns
                 )
-                currentThread = thread
             }
         } catch {
             errorMessage = "Failed to update title"
             showError = true
+        }
+    }
+
+    func setDraftContext(_ context: ProjectContext?) {
+        attachedContext = context.map(ThreadAttachedContextRecord.init)
+    }
+
+    func updateAttachedContext(_ context: ProjectContext?) async {
+        if let threadId = currentThread?.id {
+            do {
+                let body = UpdateThreadRequest(
+                    title: nil,
+                    isArchived: nil,
+                    attachedContextId: context?.id,
+                    clearAttachedContext: context == nil
+                )
+                let _: ThreadUpdateResponse = try await APIClient.shared.request(
+                    "/threads/\(threadId)",
+                    method: .patch,
+                    body: body
+                )
+                attachedContext = context.map(ThreadAttachedContextRecord.init)
+                await loadThread(id: threadId)
+            } catch let error as APIError {
+                errorMessage = error.localizedDescription
+                showError = true
+            } catch {
+                errorMessage = "Failed to update thread context"
+                showError = true
+            }
+        } else {
+            attachedContext = context.map(ThreadAttachedContextRecord.init)
         }
     }
 
@@ -193,10 +257,12 @@ final class ThreadViewModel {
             modality: settings.selectedModality.apiModality,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
-            customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
+            customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions,
+            attachedContextId: attachedContext?.id
         )
 
         let sentPrompt = userPrompt
+        pendingUserPrompt = sentPrompt
         userPrompt = ""
 
         let stream = await APIClient.shared.requestStream(
@@ -247,9 +313,12 @@ final class ThreadViewModel {
                     if let completedThreadId = completedThreadId {
                         await loadThread(id: completedThreadId)
                     }
+                    pendingUserPrompt = nil
                 case .error:
                     errorMessage = event.message ?? "Enhancement failed"
                     showError = true
+                    userPrompt = sentPrompt
+                    pendingUserPrompt = nil
                 }
             }
         } catch let error as APIError {
@@ -259,9 +328,13 @@ final class ThreadViewModel {
                 errorMessage = error.localizedDescription
                 showError = true
             }
+            userPrompt = sentPrompt
+            pendingUserPrompt = nil
         } catch {
             errorMessage = "Stream connection failed"
             showError = true
+            userPrompt = sentPrompt
+            pendingUserPrompt = nil
         }
 
         isStreaming = false
@@ -294,15 +367,7 @@ final class ThreadViewModel {
         )
 
         let sentPrompt = userPrompt
-        // Add user message immediately for responsive UI
-        let userMsg = ThreadMessage(
-            id: "pending-user-\(turns.count)",
-            role: .user,
-            content: sentPrompt,
-            turnIndex: turns.count,
-            tokens: nil
-        )
-        _ = userMsg // Used via turnMessages computed property after turns update
+        pendingUserPrompt = sentPrompt
         userPrompt = ""
 
         let stream = await APIClient.shared.requestStream(
@@ -346,9 +411,12 @@ final class ThreadViewModel {
                         totalTokens: turnRecord.totalTokens,
                         processingMs: turnRecord.processingMs
                     )
+                    pendingUserPrompt = nil
                 case .error:
                     errorMessage = event.message ?? "Enhancement failed"
                     showError = true
+                    userPrompt = sentPrompt
+                    pendingUserPrompt = nil
                 }
             }
         } catch let error as APIError {
@@ -358,9 +426,13 @@ final class ThreadViewModel {
                 errorMessage = error.localizedDescription
                 showError = true
             }
+            userPrompt = sentPrompt
+            pendingUserPrompt = nil
         } catch {
             errorMessage = "Stream connection failed"
             showError = true
+            userPrompt = sentPrompt
+            pendingUserPrompt = nil
         }
 
         isStreaming = false
@@ -372,7 +444,9 @@ final class ThreadViewModel {
     func resetThread() {
         currentThread = nil
         turns = []
+        attachedContext = nil
         userPrompt = ""
+        pendingUserPrompt = nil
         streamingContent = ""
         isStreaming = false
     }
