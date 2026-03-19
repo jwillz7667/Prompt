@@ -1,4 +1,5 @@
 import { type TierFeatures } from './subscriptionService.js';
+import { imageAnalysisService, type PromptImageAttachment } from './imageAnalysisService.js';
 import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
@@ -16,6 +17,7 @@ export interface EnhancePromptRequest {
   subModality?: string;
   customInstructions?: string;
   targetCharacterLength?: number;
+  imageAttachment?: PromptImageAttachment;
 }
 
 export interface EnhancePromptResult {
@@ -25,11 +27,13 @@ export interface EnhancePromptResult {
   outputTokens: number;
   totalTokens: number;
   processingMs: number;
+  imageAttachment?: PromptImageAttachment;
 }
 
 export interface ThreadTurnContext {
   originalPrompt: string;
   enhancedPrompt: string;
+  imageAttachment?: PromptImageAttachment;
 }
 
 export interface EnhancePromptInThreadRequest extends EnhancePromptRequest {
@@ -179,12 +183,37 @@ function normalizeRequest(request: EnhancePromptRequest) {
 
   return {
     ...request,
+    prompt: normalizePromptText(request.prompt, modality, request.imageAttachment),
     mode,
     modality,
     model,
     temperature,
     maxTokens,
   };
+}
+
+function normalizePromptText(
+  prompt: string,
+  modality: PromptModality,
+  imageAttachment?: PromptImageAttachment
+): string {
+  const trimmed = prompt.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  if (!imageAttachment) {
+    return trimmed;
+  }
+
+  switch (modality) {
+    case 'video':
+      return 'Turn this uploaded image into a production-ready video generation prompt that preserves the scene while adding believable motion.';
+    case 'image':
+      return 'Turn this uploaded image into a stronger image generation prompt while preserving its visual identity.';
+    default:
+      return 'Use the uploaded image as the primary reference while rewriting the prompt.';
+  }
 }
 
 function buildSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
@@ -224,6 +253,12 @@ function buildSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadA
     '- return only the rewritten prompt',
     '- respect explicit length, format, audience, safety, style, and deliverable constraints stated by the user',
     '- do not inject platform-specific syntax or named model targeting unless the user explicitly asked for it',
+    ...(request.imageAttachment
+      ? [
+          '- when a source image is provided, treat the source image analysis as canonical scene context',
+          '- preserve visible subject identity, composition, environment, and lighting unless the user explicitly asks to transform them',
+        ]
+      : []),
     '',
     QUALITY_PROFILES[request.tier],
     '',
@@ -324,6 +359,18 @@ function buildUserMessage(request: ReturnType<typeof normalizeRequest>): string 
     sections.push('<hard_length_constraint>');
     sections.push(lengthConstraint);
     sections.push('</hard_length_constraint>');
+  }
+
+  if (request.imageAttachment) {
+    sections.push('<source_image>');
+    sections.push(`<mime_type>${request.imageAttachment.mimeType}</mime_type>`);
+    sections.push(`<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`);
+    if (request.imageAttachment.analysis?.trim()) {
+      sections.push('<visual_analysis>');
+      sections.push(request.imageAttachment.analysis.trim());
+      sections.push('</visual_analysis>');
+    }
+    sections.push('</source_image>');
   }
 
   sections.push('<raw_user_request>');
@@ -503,7 +550,7 @@ function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { pr
   for (const turn of turnsToInclude) {
     messages.push({
       role: 'user',
-      content: `Previous raw request:\n${turn.originalPrompt}`,
+      content: `Previous raw request:\n${buildPreviousTurnRequest(turn)}`,
     });
     messages.push({
       role: 'assistant',
@@ -519,6 +566,39 @@ function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { pr
   return messages;
 }
 
+function buildPreviousTurnRequest(turn: ThreadTurnContext): string {
+  const sections: string[] = [];
+
+  if (turn.originalPrompt.trim()) {
+    sections.push(turn.originalPrompt.trim());
+  }
+
+  if (turn.imageAttachment?.analysis?.trim()) {
+    sections.push(`Source image analysis:\n${turn.imageAttachment.analysis.trim()}`);
+  }
+
+  if (sections.length === 0) {
+    return 'Image-driven request with no additional text instructions.';
+  }
+
+  return sections.join('\n\n');
+}
+
+async function enrichRequestWithImageAnalysis<T extends EnhancePromptRequest>(request: T): Promise<T> {
+  if (!request.imageAttachment) {
+    return request;
+  }
+
+  return {
+    ...request,
+    imageAttachment: await imageAnalysisService.enrichAttachmentForPrompt(
+      request.imageAttachment,
+      request.prompt,
+      request.modality ?? detectModality(request.prompt)
+    ),
+  };
+}
+
 function getApiKey(): string {
   const apiKey = process.env['DEEPSEEK_API_KEY'];
   if (!apiKey) {
@@ -528,10 +608,11 @@ function getApiKey(): string {
 }
 
 export async function enhancePrompt(request: EnhancePromptRequest): Promise<EnhancePromptResult> {
-  const normalized = normalizeRequest(request);
+  const enrichedRequest = await enrichRequestWithImageAnalysis(request);
+  const normalized = normalizeRequest(enrichedRequest);
   const apiKey = getApiKey();
 
-  return requestCompletion(
+  const result = await requestCompletion(
     {
       model: normalized.model,
       messages: buildMessages(normalized),
@@ -541,6 +622,11 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
     },
     apiKey
   );
+
+  return {
+    ...result,
+    imageAttachment: normalized.imageAttachment,
+  };
 }
 
 export async function enhancePromptStream(
@@ -548,7 +634,8 @@ export async function enhancePromptStream(
   callbacks: StreamCallbacks
 ): Promise<void> {
   try {
-    const normalized = normalizeRequest(request);
+    const enrichedRequest = await enrichRequestWithImageAnalysis(request);
+    const normalized = normalizeRequest(enrichedRequest);
     const apiKey = getApiKey();
 
     await streamCompletion(
@@ -560,7 +647,15 @@ export async function enhancePromptStream(
         stream: true,
       },
       apiKey,
-      callbacks
+      {
+        ...callbacks,
+        onComplete: (result) => {
+          callbacks.onComplete({
+            ...result,
+            imageAttachment: normalized.imageAttachment,
+          });
+        },
+      }
     );
   } catch (error) {
     callbacks.onError(error instanceof Error ? error : new Error(String(error)));
@@ -572,7 +667,8 @@ export async function enhancePromptInThreadStream(
   callbacks: StreamCallbacks
 ): Promise<void> {
   try {
-    const normalized = normalizeRequest(request);
+    const enrichedRequest = await enrichRequestWithImageAnalysis(request);
+    const normalized = normalizeRequest(enrichedRequest);
     const apiKey = getApiKey();
 
     await streamCompletion(
@@ -587,7 +683,15 @@ export async function enhancePromptInThreadStream(
         stream: true,
       },
       apiKey,
-      callbacks
+      {
+        ...callbacks,
+        onComplete: (result) => {
+          callbacks.onComplete({
+            ...result,
+            imageAttachment: normalized.imageAttachment,
+          });
+        },
+      }
     );
   } catch (error) {
     callbacks.onError(error instanceof Error ? error : new Error(String(error)));

@@ -193,6 +193,8 @@ final class SwiftDataManager {
                         local.originalPrompt = record.originalPrompt
                         local.enhancedPrompt = record.enhancedPrompt
                         local.model = record.model
+                        local.modality = record.modality
+                        local.imageAttachment = record.imageAttachment
                         local.totalTokens = record.totalTokens
                         local.title = record.title
                         local.tags = record.tags

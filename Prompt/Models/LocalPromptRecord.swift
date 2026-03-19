@@ -31,6 +31,16 @@ final class LocalPromptRecord {
     /// Model used for enhancement (e.g., "deepseek-reasoner")
     var model: String
 
+    /// Prompt modality used for generation
+    var modality: String
+
+    /// Optional persisted source image attachment
+    var imageAttachmentDataURL: String?
+    var imageAttachmentMimeType: String?
+    var imageAttachmentWidth: Int?
+    var imageAttachmentHeight: Int?
+    var imageAttachmentAnalysis: String?
+
     /// Total tokens used for this prompt
     var totalTokens: Int
 
@@ -69,11 +79,41 @@ final class LocalPromptRecord {
         }
     }
 
+    var imageAttachment: PromptImageAttachment? {
+        get {
+            guard
+                let dataUrl = imageAttachmentDataURL,
+                let mimeType = imageAttachmentMimeType,
+                let width = imageAttachmentWidth,
+                let height = imageAttachmentHeight
+            else {
+                return nil
+            }
+
+            return PromptImageAttachment(
+                dataUrl: dataUrl,
+                mimeType: mimeType,
+                width: width,
+                height: height,
+                analysis: imageAttachmentAnalysis
+            )
+        }
+        set {
+            imageAttachmentDataURL = newValue?.dataUrl
+            imageAttachmentMimeType = newValue?.mimeType
+            imageAttachmentWidth = newValue?.width
+            imageAttachmentHeight = newValue?.height
+            imageAttachmentAnalysis = newValue?.analysis
+        }
+    }
+
     init(
         id: String = UUID().uuidString,
         originalPrompt: String,
         enhancedPrompt: String,
         model: String,
+        modality: String,
+        imageAttachment: PromptImageAttachment? = nil,
         totalTokens: Int,
         title: String? = nil,
         tags: [String] = [],
@@ -88,6 +128,7 @@ final class LocalPromptRecord {
         self.originalPrompt = originalPrompt
         self.enhancedPrompt = enhancedPrompt
         self.model = model
+        self.modality = modality
         self.totalTokens = totalTokens
         self.title = title
         self.tags = tags
@@ -97,6 +138,7 @@ final class LocalPromptRecord {
         self.isSynced = isSynced
         self.lastSyncedAt = lastSyncedAt
         self.pendingActionRaw = pendingAction?.rawValue
+        self.imageAttachment = imageAttachment
     }
 
     /// Create from PromptRecord (API response)
@@ -106,6 +148,8 @@ final class LocalPromptRecord {
             originalPrompt: record.originalPrompt,
             enhancedPrompt: record.enhancedPrompt,
             model: record.model,
+            modality: record.modality,
+            imageAttachment: record.imageAttachment,
             totalTokens: record.totalTokens,
             title: record.title,
             tags: record.tags,
@@ -124,6 +168,8 @@ final class LocalPromptRecord {
             originalPrompt: originalPrompt,
             enhancedPrompt: enhancedPrompt,
             model: model,
+            modality: modality,
+            imageAttachment: imageAttachment,
             totalTokens: totalTokens,
             title: title,
             tags: tags,

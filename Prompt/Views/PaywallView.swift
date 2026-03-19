@@ -11,7 +11,6 @@ import StoreKit
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openURL) private var openURL
     @Environment(StoreKitManager.self) private var storeKit
 
     @State private var selectedProduct: Product?
@@ -35,11 +34,11 @@ struct PaywallView: View {
     private var currentPlanTitle: String {
         switch storeKit.currentTier {
         case .free:
-            return "Unlock premium prompt workflows"
+            return "Unlock Premium prompt workflows"
         case .pro:
             return "Upgrade from Pro to Premium"
         case .premium:
-            return "Manage your Premium membership"
+            return "Premium is active"
         }
     }
     private var currentPlanSubtitle: String {
@@ -49,7 +48,20 @@ struct PaywallView: View {
         case .pro:
             return "Move into unlimited usage, MAX access, and the full production toolset."
         case .premium:
-            return "Review your active plan, switch billing options, or restore purchases without leaving the app."
+            return "This account already has the full prompt workflow unlocked."
+        }
+    }
+    private var headerTitle: String {
+        storeKit.currentTier == .premium ? "Premium" : "Unlock Premium"
+    }
+    private var headerSubtitle: String {
+        switch storeKit.currentTier {
+        case .free:
+            return "Choose a plan and unlock stronger prompts, MAX mode, and the full toolset."
+        case .pro:
+            return "Step up from Pro and unlock unlimited usage, MAX mode, and the full workflow."
+        case .premium:
+            return "Your account already has the strongest prompt workflow unlocked."
         }
     }
     private var selectedProductIsCurrent: Bool {
@@ -58,9 +70,14 @@ struct PaywallView: View {
     }
     private var primaryActionTitle: String {
         if selectedProductIsCurrent {
-            return "Manage in App Store"
+            return "Current plan active"
         }
-        return selectedProduct != nil ? "Continue with Selected Plan" : "Select a Plan"
+
+        guard let selectedProduct, let productId = ProductID(rawValue: selectedProduct.id) else {
+            return "Choose a Plan"
+        }
+
+        return "Unlock \(productId.tier.displayName)"
     }
 
     var body: some View {
@@ -71,8 +88,8 @@ struct PaywallView: View {
                 ScrollView {
                     VStack(spacing: 18) {
                         PromptPageHeader(
-                            title: "Plans & Billing",
-                            subtitle: "Premium access, restore, and App Store subscription management",
+                            title: headerTitle,
+                            subtitle: headerSubtitle,
                             onLeadingTap: { dismiss() }
                         ) {
                             SubscriptionBadge(tier: storeKit.currentTier)
@@ -114,7 +131,7 @@ struct PaywallView: View {
                     dismiss()
                 }
             } message: {
-                Text("Your subscription is now active. Enjoy your premium features!")
+                Text("Premium is now unlocked on this account.")
             }
         }
     }
@@ -124,21 +141,7 @@ struct PaywallView: View {
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [brandPurple.opacity(0.95), accentColor.opacity(0.9)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 58, height: 58)
-
-                    Image(systemName: storeKit.currentTier == .premium ? "crown.fill" : "sparkles")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.adaptiveTextOnAccent)
-                }
+                AppBrandMark(size: 58, showsGlassBackdrop: true)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(currentPlanTitle)
@@ -203,7 +206,7 @@ struct PaywallView: View {
                 Spacer()
             }
 
-            Text("Try the full premium prompt workflow before committing. Cancel anytime during the trial period in the App Store.")
+            Text("Try the full premium workflow before committing. Cancel during the trial if it is not the right fit.")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -458,7 +461,7 @@ struct PaywallView: View {
 
     private var actionSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            LiquidGlassSectionHeader(title: "Complete purchase", icon: "creditcard.fill")
+            LiquidGlassSectionHeader(title: "Unlock Premium", icon: "creditcard.fill")
 
             VStack(alignment: .leading, spacing: 14) {
                 if let selectedProduct {
@@ -487,25 +490,7 @@ struct PaywallView: View {
 
                 purchaseButton
 
-                HStack(spacing: 12) {
-                    restoreButton
-
-                    if storeKit.hasActiveSubscription {
-                        Button {
-                            openManageSubscriptions()
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "slider.horizontal.3")
-                                Text("Manage")
-                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                        }
-                        .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 18))
-                        .disabled(isProcessing)
-                    }
-                }
+                restoreButton
 
                 legalSection
             }
@@ -517,11 +502,7 @@ struct PaywallView: View {
     private var purchaseButton: some View {
         Button {
             Task {
-                if selectedProductIsCurrent {
-                    openManageSubscriptions()
-                } else {
-                    await purchase()
-                }
+                await purchase()
             }
         } label: {
             HStack(spacing: 8) {
@@ -529,7 +510,7 @@ struct PaywallView: View {
                     ProgressView()
                         .tint(Color.adaptiveTextOnAccent)
                 } else {
-                    Image(systemName: selectedProductIsCurrent ? "slider.horizontal.3" : "crown.fill")
+                    Image(systemName: selectedProductIsCurrent ? "checkmark.seal.fill" : "crown.fill")
                         .font(.system(size: 14, weight: .bold))
                     Text(primaryActionTitle)
                         .font(.system(.headline, design: .rounded, weight: .bold))
@@ -544,7 +525,7 @@ struct PaywallView: View {
             tintColor: selectedProduct != nil ? accentColor : nil,
             intensity: selectedProduct != nil ? .prominent : .subtle
         ))
-        .disabled(selectedProduct == nil || isProcessing)
+        .disabled(selectedProduct == nil || isProcessing || selectedProductIsCurrent)
     }
 
     private var restoreButton: some View {
@@ -555,7 +536,7 @@ struct PaywallView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.clockwise")
-                Text("Restore")
+                Text("Restore Purchase")
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
@@ -664,10 +645,6 @@ struct PaywallView: View {
         return "\(product.displayPrice) • \(isAnnual ? "Annual" : "Monthly")"
     }
 
-    private func openManageSubscriptions() {
-        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
-        openURL(url)
-    }
 }
 
 #Preview {

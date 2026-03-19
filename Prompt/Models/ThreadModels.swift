@@ -36,6 +36,7 @@ struct ThreadTurnDTO: Codable, Sendable {
     let turnIndex: Int
     let originalPrompt: String
     let enhancedPrompt: String
+    let imageAttachment: PromptImageAttachment?
     let model: String
     let inputTokens: Int
     let outputTokens: Int
@@ -75,6 +76,7 @@ struct CreateThreadRequest: Encodable, Sendable {
     let subModality: String?
     let mode: String?
     let customInstructions: String?
+    let imageAttachment: PromptImageAttachment?
     let previousTurns: [SeedThreadTurnRequest]?
 }
 
@@ -83,6 +85,7 @@ struct AddTurnRequest: Encodable, Sendable {
     let subModality: String?
     let mode: String?
     let customInstructions: String?
+    let imageAttachment: PromptImageAttachment?
 }
 
 struct UpdateThreadRequest: Encodable, Sendable {
@@ -93,6 +96,7 @@ struct UpdateThreadRequest: Encodable, Sendable {
 struct SeedThreadTurnRequest: Encodable, Sendable {
     let originalPrompt: String
     let enhancedPrompt: String
+    let imageAttachment: PromptImageAttachment?
     let model: String?
     let totalTokens: Int?
     let processingMs: Int?
@@ -104,6 +108,7 @@ struct GuestEnhanceRequest: Encodable, Sendable {
     let subModality: String?
     let mode: String?
     let customInstructions: String?
+    let imageAttachment: PromptImageAttachment?
     let previousTurns: [SeedThreadTurnRequest]
 }
 
@@ -167,6 +172,7 @@ struct ThreadTurnRecord: Identifiable, Sendable {
     let turnIndex: Int
     let originalPrompt: String
     let enhancedPrompt: String
+    let imageAttachment: PromptImageAttachment?
     let model: String
     let totalTokens: Int
     let processingMs: Int
@@ -177,6 +183,7 @@ struct ThreadTurnRecord: Identifiable, Sendable {
         self.turnIndex = dto.turnIndex
         self.originalPrompt = dto.originalPrompt
         self.enhancedPrompt = dto.enhancedPrompt
+        self.imageAttachment = dto.imageAttachment
         self.model = dto.model
         self.totalTokens = dto.totalTokens
         self.processingMs = dto.processingMs
@@ -189,6 +196,7 @@ struct ThreadMessage: Identifiable, Sendable {
     let id: String
     let role: Role
     let content: String
+    let imageAttachment: PromptImageAttachment?
     let turnIndex: Int
     let tokens: Int?
 

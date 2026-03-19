@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
   enforceQuota,
@@ -17,8 +18,63 @@ import {
   getMaxModeQuota,
   recordMaxModeUsage,
 } from '../services/maxModeQuotaService.js';
+import type { PromptImageAttachment } from '../services/imageAnalysisService.js';
 
 export const threadRouter = Router();
+
+const imageAttachmentSchema = z.object({
+  dataUrl: z.string().startsWith('data:image/').max(3_000_000),
+  mimeType: z.string().regex(/^image\/(jpeg|jpg|png|webp|heic|heif)$/i),
+  width: z.number().int().min(1).max(8_192),
+  height: z.number().int().min(1).max(8_192),
+  analysis: z.string().max(1_500).optional(),
+});
+
+function validatePromptOrImage(
+  value: { prompt?: string; imageAttachment?: unknown },
+  ctx: z.RefinementCtx
+) {
+  if ((value.prompt?.trim().length ?? 0) > 0 || value.imageAttachment) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'Prompt text or an uploaded image is required.',
+    path: ['prompt'],
+  });
+}
+
+function toImageAttachmentJson(
+  attachment?: {
+    dataUrl: string;
+    mimeType: string;
+    width: number;
+    height: number;
+    analysis?: string | null;
+  }
+): Prisma.InputJsonValue | undefined {
+  if (!attachment) {
+    return undefined;
+  }
+
+  return {
+    dataUrl: attachment.dataUrl,
+    mimeType: attachment.mimeType,
+    width: attachment.width,
+    height: attachment.height,
+    ...(attachment.analysis ? { analysis: attachment.analysis } : {}),
+  } as Prisma.InputJsonValue;
+}
+
+function fromImageAttachmentJson(value: Prisma.JsonValue | null): PromptImageAttachment | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const parsed = imageAttachmentSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
 
 // All thread routes require authentication
 threadRouter.use(authenticate);
@@ -28,29 +84,32 @@ threadRouter.use(authenticate);
 // ============================================================================
 
 const createThreadSchema = z.object({
-  prompt: z.string().min(1).max(100000),
+  prompt: z.string().max(100000).default(''),
   title: z.string().max(200).optional(),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   subModality: z.string().max(50).optional(),
   mode: z.enum(['standard', 'max']).default('standard'),
   customInstructions: z.string().max(2000).optional(),
+  imageAttachment: imageAttachmentSchema.optional(),
   previousTurns: z.array(
     z.object({
-      originalPrompt: z.string().min(1).max(100000),
+      originalPrompt: z.string().max(100000).default(''),
       enhancedPrompt: z.string().min(1).max(500000),
       model: z.string().max(100).optional(),
       totalTokens: z.number().int().min(0).optional(),
       processingMs: z.number().int().min(0).optional(),
+      imageAttachment: imageAttachmentSchema.optional(),
     })
   ).max(20).default([]),
-});
+}).superRefine(validatePromptOrImage);
 
 const addTurnSchema = z.object({
-  prompt: z.string().min(1).max(100000),
+  prompt: z.string().max(100000).default(''),
   subModality: z.string().max(50).optional(),
   mode: z.enum(['standard', 'max']).default('standard'),
   customInstructions: z.string().max(2000).optional(),
-});
+  imageAttachment: imageAttachmentSchema.optional(),
+}).superRefine(validatePromptOrImage);
 
 const updateThreadSchema = z.object({
   title: z.string().max(200).optional(),
@@ -112,7 +171,10 @@ threadRouter.post(
         : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       // Auto-generate title from first prompt (truncated)
-      const autoTitle = data.title || data.prompt.substring(0, 80) + (data.prompt.length > 80 ? '...' : '');
+      const autoTitle = data.title
+        || (data.prompt.trim()
+          ? data.prompt.substring(0, 80) + (data.prompt.length > 80 ? '...' : '')
+          : 'Image to Video Prompt');
 
       // Create thread
       const thread = await prisma.thread.create({
@@ -130,6 +192,7 @@ threadRouter.post(
             turnIndex: index,
             originalPrompt: turn.originalPrompt,
             enhancedPrompt: turn.enhancedPrompt,
+            imageAttachment: toImageAttachmentJson(turn.imageAttachment),
             model: turn.model ?? 'guest-preview',
             inputTokens: 0,
             outputTokens: 0,
@@ -149,6 +212,7 @@ threadRouter.post(
           subModality: data.subModality,
           customInstructions: data.customInstructions,
           previousTurns: data.previousTurns,
+          imageAttachment: data.imageAttachment,
         },
         {
           onToken: (token) => {
@@ -162,6 +226,7 @@ threadRouter.post(
                 turnIndex: data.previousTurns.length,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
+                imageAttachment: toImageAttachmentJson(result.imageAttachment),
                 model: result.model,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
@@ -217,6 +282,7 @@ threadRouter.post(
                   processingMs: result.processingMs,
                 },
                 subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
+                imageAttachment: result.imageAttachment,
               })}\n\n`
             );
             res.write('data: [DONE]\n\n');
@@ -271,6 +337,7 @@ threadRouter.post(
             select: {
               originalPrompt: true,
               enhancedPrompt: true,
+              imageAttachment: true,
             },
           },
         },
@@ -300,6 +367,7 @@ threadRouter.post(
       const previousTurns: ThreadTurnContext[] = thread.turns.map((t) => ({
         originalPrompt: t.originalPrompt,
         enhancedPrompt: t.enhancedPrompt,
+        imageAttachment: fromImageAttachmentJson(t.imageAttachment),
       }));
 
       const nextTurnIndex = thread.turns.length;
@@ -314,6 +382,7 @@ threadRouter.post(
           subModality: data.subModality,
           customInstructions: data.customInstructions,
           previousTurns,
+          imageAttachment: data.imageAttachment,
         },
         {
           onToken: (token) => {
@@ -327,6 +396,7 @@ threadRouter.post(
                 turnIndex: nextTurnIndex,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
+                imageAttachment: toImageAttachmentJson(result.imageAttachment),
                 model: result.model,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
@@ -386,6 +456,7 @@ threadRouter.post(
                   processingMs: result.processingMs,
                 },
                 subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
+                imageAttachment: result.imageAttachment,
               })}\n\n`
             );
             res.write('data: [DONE]\n\n');

@@ -152,6 +152,7 @@ model Prompt {
   temperature     Float    @default(0.7)
   maxTokens       Int      @default(8192)
   modality        String   @default("text")  // text, image, video, audio, code, 3d
+  imageAttachment Json?
 
   // Usage stats
   inputTokens     Int      @default(0)
@@ -746,6 +747,7 @@ model ThreadTurn {
   turnIndex       Int
   originalPrompt  String   @db.Text
   enhancedPrompt  String   @db.Text
+  imageAttachment Json?
   model           String   @default("deepseek-chat")
   inputTokens     Int      @default(0)
   outputTokens    Int      @default(0)

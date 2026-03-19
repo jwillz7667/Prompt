@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 import UIKit
 
 struct ThreadView: View {
@@ -37,7 +38,10 @@ struct ThreadView: View {
     @State private var showWorkflows = false
     @State private var showPaywallSheet = false
     @State private var showWorkspaceActions = false
+    @State private var showAttachmentActions = false
+    @State private var showPhotoPicker = false
     @State private var showMaxModeToast = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
     @FocusState private var isInputFocused: Bool
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -158,10 +162,34 @@ struct ThreadView: View {
                 presentPaywall()
             }
         }
+        .confirmationDialog("Image Reference", isPresented: $showAttachmentActions, titleVisibility: .visible) {
+            Button(viewModel.selectedImageAttachment == nil ? "Choose Image" : "Replace Image") {
+                showPhotoPicker = true
+            }
+
+            if viewModel.selectedImageAttachment != nil {
+                Button("Remove Image", role: .destructive) {
+                    removeSelectedImage()
+                }
+            }
+        }
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotoItem,
+            matching: .images,
+            preferredItemEncoding: .compatible
+        )
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "An unknown error occurred")
+        }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                await handleSelectedPhotoItem(newItem)
+                selectedPhotoItem = nil
+            }
         }
         .onChange(of: viewModel.showPaywall) { _, shouldShow in
             guard shouldShow else { return }
@@ -404,9 +432,9 @@ struct ThreadView: View {
         HStack(alignment: .bottom, spacing: 12) {
             Button {
                 triggerHaptic(.light)
-                showWorkspaceActions = true
+                showAttachmentActions = true
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: viewModel.selectedImageAttachment == nil ? "plus" : "photo.fill")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(textPrimary)
             }
@@ -414,9 +442,25 @@ struct ThreadView: View {
 
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 10) {
+                    if let attachment = viewModel.selectedImageAttachment {
+                        VStack(alignment: .leading, spacing: 8) {
+                            PromptImageAttachmentCard(
+                                attachment: attachment,
+                                height: 134,
+                                showsAnalysisBadge: false,
+                                onRemove: removeSelectedImage
+                            )
+                            .frame(height: 134)
+
+                            Text("This image will be analyzed and turned into a video-ready prompt.")
+                                .font(.system(.caption, design: .rounded, weight: .medium))
+                                .foregroundStyle(textSecondary)
+                        }
+                    }
+
                     ZStack(alignment: .leading) {
                         if viewModel.userPrompt.isEmpty {
-                            Text(inputPlaceholder)
+                            Text(viewModel.selectedImageAttachment == nil ? inputPlaceholder : "Describe the motion, camera, or style you want...")
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(textTertiary)
                                 .allowsHitTesting(false)
@@ -663,5 +707,34 @@ struct ThreadView: View {
                 )
         )
         .shadow(color: Color.orange.opacity(0.28), radius: 14, y: 8)
+    }
+
+    private func handleSelectedPhotoItem(_ item: PhotosPickerItem) async {
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                throw ImageAttachmentProcessorError.failedToLoad
+            }
+
+            let attachment = try ImageAttachmentProcessor.process(data: data)
+            await MainActor.run {
+                viewModel.selectedImageAttachment = attachment
+                if settings.selectedModality != .video {
+                    settings.selectedModality = .video
+                    settings.savePreferences()
+                }
+                triggerHaptic(.light)
+                isInputFocused = true
+            }
+        } catch {
+            await MainActor.run {
+                viewModel.errorMessage = error.localizedDescription
+                viewModel.showError = true
+            }
+        }
+    }
+
+    private func removeSelectedImage() {
+        viewModel.selectedImageAttachment = nil
+        triggerHaptic(.light)
     }
 }

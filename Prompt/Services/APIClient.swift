@@ -765,6 +765,7 @@ struct StreamEvent: Codable, Sendable {
     let threadId: String?
     let turnId: String?
     let turnIndex: Int?
+    let imageAttachment: PromptImageAttachment?
     let usage: StreamUsage?
     let subscription: StreamSubscription?
     let guestQuota: GuestQuotaState?

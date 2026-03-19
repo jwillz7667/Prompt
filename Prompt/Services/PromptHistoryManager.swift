@@ -41,6 +41,11 @@ final class PromptHistoryManager {
         loadFromCache()
     }
 
+    private func contentHash(for record: PromptRecord) -> String {
+        let imageHash = record.imageAttachment?.dataUrl.prefix(64) ?? ""
+        return "\(record.originalPrompt.prefix(100))|\(record.enhancedPrompt.prefix(100))|\(imageHash)"
+    }
+
     // MARK: - Cache-First Loading
 
     /// Load prompts from local cache immediately
@@ -59,7 +64,7 @@ final class PromptHistoryManager {
             guard !seenIds.contains(promptRecord.id) else { return nil }
 
             // Create content hash to detect duplicate content with different IDs
-            let contentHash = "\(promptRecord.originalPrompt.prefix(100))|\(promptRecord.enhancedPrompt.prefix(100))"
+            let contentHash = contentHash(for: promptRecord)
             guard !seenContentHashes.contains(contentHash) else { return nil }
 
             seenIds.insert(promptRecord.id)
@@ -112,7 +117,7 @@ final class PromptHistoryManager {
                 // Deduplicate by content hash
                 var seenHashes = Set<String>()
                 prompts = newRecords.filter { record in
-                    let contentHash = "\(record.originalPrompt.prefix(100))|\(record.enhancedPrompt.prefix(100))"
+                    let contentHash = contentHash(for: record)
                     guard !seenHashes.contains(contentHash) else { return false }
                     seenHashes.insert(contentHash)
                     return true
@@ -120,9 +125,9 @@ final class PromptHistoryManager {
             } else {
                 // Append only records not already in the list (deduplicate by ID and content)
                 let existingIds = Set(prompts.map { $0.id })
-                let existingHashes = Set(prompts.map { "\($0.originalPrompt.prefix(100))|\($0.enhancedPrompt.prefix(100))" })
+                let existingHashes = Set(prompts.map { contentHash(for: $0) })
                 let uniqueNewRecords = newRecords.filter { record in
-                    let contentHash = "\(record.originalPrompt.prefix(100))|\(record.enhancedPrompt.prefix(100))"
+                    let contentHash = contentHash(for: record)
                     return !existingIds.contains(record.id) && !existingHashes.contains(contentHash)
                 }
                 prompts.append(contentsOf: uniqueNewRecords)
@@ -155,6 +160,8 @@ final class PromptHistoryManager {
         original: String,
         enhanced: String,
         model: String,
+        modality: String,
+        imageAttachment: PromptImageAttachment?,
         temperature: Double,
         maxTokens: Int,
         inputTokens: Int,
@@ -170,6 +177,8 @@ final class PromptHistoryManager {
             originalPrompt: original,
             enhancedPrompt: enhanced,
             model: model,
+            modality: modality,
+            imageAttachment: imageAttachment,
             totalTokens: totalTokens,
             isSynced: false,
             pendingAction: .create
@@ -199,6 +208,8 @@ final class PromptHistoryManager {
                 originalPrompt: original,
                 enhancedPrompt: enhanced,
                 model: model,
+                modality: modality,
+                imageAttachment: imageAttachment,
                 temperature: normalizedTemperature,
                 maxTokens: normalizedMaxTokens,
                 inputTokens: inputTokens,
@@ -294,6 +305,8 @@ struct PromptRecord: Identifiable, Codable {
     let originalPrompt: String
     let enhancedPrompt: String
     let model: String
+    let modality: String
+    let imageAttachment: PromptImageAttachment?
     let totalTokens: Int
     var title: String?
     var tags: [String]
@@ -306,6 +319,8 @@ struct PromptRecord: Identifiable, Codable {
         self.originalPrompt = dto.originalPrompt
         self.enhancedPrompt = dto.enhancedPrompt
         self.model = dto.model
+        self.modality = dto.modality
+        self.imageAttachment = dto.imageAttachment
         self.totalTokens = dto.totalTokens
         self.title = dto.title
         self.tags = dto.tags
@@ -320,6 +335,8 @@ struct PromptDTO: Codable {
     let originalPrompt: String
     let enhancedPrompt: String
     let model: String
+    let modality: String
+    let imageAttachment: PromptImageAttachment?
     let totalTokens: Int
     let title: String?
     let tags: [String]
@@ -344,6 +361,8 @@ struct CreatePromptRequest: Encodable {
     let originalPrompt: String
     let enhancedPrompt: String
     let model: String
+    let modality: String
+    let imageAttachment: PromptImageAttachment?
     let temperature: Double
     let maxTokens: Int
     let inputTokens: Int

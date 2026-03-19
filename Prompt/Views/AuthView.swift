@@ -30,101 +30,167 @@ struct AuthView: View {
 
     var body: some View {
         ZStack {
-            // Liquid Glass animated background
             LiquidGlassBackground()
 
-            VStack(spacing: 40) {
-                Spacer()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 18) {
+                    if mode == .standard {
+                        HStack {
+                            Spacer()
 
-                VStack(spacing: 20) {
-                    AppBrandMark(size: 124, showsGlassBackdrop: true)
-
-                    VStack(spacing: 10) {
-                        Text(title)
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(textPrimary)
-                            .multilineTextAlignment(.center)
-
-                        Text(subtitle)
-                            .font(.system(.subheadline, design: .rounded, weight: .medium))
-                            .foregroundStyle(textSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                    }
-                }
-
-                if mode == .guestUnlock {
-                    VStack(alignment: .leading, spacing: 12) {
-                        benefitRow(systemImage: "checkmark.circle.fill", text: "Keep the chat going without losing your progress")
-                        benefitRow(systemImage: "flame.fill", text: "Claim your 7-day Premium trial right after sign-in")
-                        benefitRow(systemImage: "lock.shield.fill", text: "Secure your threads, history, and premium tools")
-                    }
-                    .padding(18)
-                    .liquidGlass(cornerRadius: 24, shadowIntensity: 0.64, borderGlow: true)
-                    .padding(.horizontal, 28)
-                }
-
-                Spacer()
-
-                // Sign in buttons
-                VStack(spacing: 16) {
-                    // Apple Sign In
-                    SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = [.fullName, .email]
-                    } onCompletion: { result in
-                        switch result {
-                        case .success(let authorization):
-                            Task {
-                                await authManager.handleAppleSignIn(authorization: authorization)
-                                if authManager.error == nil {
-                                    onAuthenticated?()
-                                    dismiss()
-                                }
+                            Button {
+                                dismiss()
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(textPrimary)
                             }
-                        case .failure(let error):
-                            print("[Auth] Apple Sign In failed: \(error)")
+                            .buttonStyle(GlassIconButtonStyle(size: 40))
                         }
-                    }
-                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                    .frame(height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                    // Loading indicator
-                    if authManager.isLoading {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(textPrimary)
-                            .padding()
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                    } else {
+                        Color.clear
+                            .frame(height: 20)
                     }
 
-                    // Error message
-                    if let error = authManager.error {
-                        Text(error.localizedDescription)
-                            .font(.caption)
-                            .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                    VStack(spacing: 18) {
+                        heroCard
+
+                        if mode == .guestUnlock {
+                            unlockCard
+                        }
+
+                        signInCard
+
+                        termsFooter
                     }
+                    .frame(maxWidth: 560)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
                 }
-                .padding(.horizontal, 32)
-
-                // Terms and privacy
-                VStack(spacing: 8) {
-                    Text("By continuing, you agree to our")
-                        .font(.caption)
-                        .foregroundStyle(textSecondary)
-
-                    HStack(spacing: 4) {
-                        Link("Terms of Service", destination: URL(string: "https://promptomize.app/terms")!)
-                        Text("and")
-                            .foregroundStyle(textSecondary)
-                        Link("Privacy Policy", destination: URL(string: "https://promptomize.app/privacy")!)
-                    }
-                    .font(.caption)
-                }
-                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity)
             }
         }
+    }
+
+    private var heroCard: some View {
+        VStack(spacing: 18) {
+            AppBrandMark(size: 96, showsGlassBackdrop: true)
+
+            VStack(spacing: 10) {
+                Text(title)
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(textPrimary)
+                    .multilineTextAlignment(.center)
+
+                Text(subtitle)
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 28)
+        .liquidGlass(cornerRadius: 28, shadowIntensity: 0.74, borderGlow: true)
+    }
+
+    private var unlockCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(accentColor)
+
+                Text("What you unlock after sign-in")
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                benefitRow(systemImage: "checkmark.circle.fill", text: "Keep this chat and continue refining without losing your work")
+                benefitRow(systemImage: "flame.fill", text: "Claim the 7-day Premium trial right after sign-in")
+                benefitRow(systemImage: "lock.shield.fill", text: "Save your history, sync your account, and unlock paid tools")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 24, shadowIntensity: 0.7, borderGlow: true)
+    }
+
+    private var signInCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(mode == .guestUnlock ? "Continue with Apple" : "Sign in with Apple")
+                .font(.system(.headline, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+
+            Text(mode == .guestUnlock ? "Sign in to keep this workflow moving and unlock the Premium offer." : "Use your Apple account to sync prompts, history, and plan access.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            SignInWithAppleButton(.signIn) { request in
+                request.requestedScopes = [.fullName, .email]
+            } onCompletion: { result in
+                switch result {
+                case .success(let authorization):
+                    Task {
+                        await authManager.handleAppleSignIn(authorization: authorization)
+                        if authManager.error == nil {
+                            onAuthenticated?()
+                            dismiss()
+                        }
+                    }
+                case .failure(let error):
+                    print("[Auth] Apple Sign In failed: \(error)")
+                }
+            }
+            .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+            .frame(height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            if authManager.isLoading {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(accentColor)
+
+                    Text("Signing you in...")
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .foregroundStyle(textSecondary)
+                }
+            }
+
+            if let error = authManager.error {
+                Text(error.localizedDescription)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 24, shadowIntensity: 0.7)
+    }
+
+    private var termsFooter: some View {
+        VStack(spacing: 8) {
+            Text("By continuing, you agree to our")
+                .font(.caption)
+                .foregroundStyle(textSecondary)
+
+            HStack(spacing: 4) {
+                Link("Terms of Service", destination: URL(string: "https://promptomize.app/terms")!)
+                Text("and")
+                    .foregroundStyle(textSecondary)
+                Link("Privacy Policy", destination: URL(string: "https://promptomize.app/privacy")!)
+            }
+            .font(.caption)
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 12)
     }
 
     private var title: String {
@@ -132,16 +198,16 @@ struct AuthView: View {
         case .standard:
             return "Promptomize"
         case .guestUnlock:
-            return "Keep optimizing"
+            return "Keep the workflow moving"
         }
     }
 
     private var subtitle: String {
         switch mode {
         case .standard:
-            return "Transform your prompts with AI-powered enhancement"
+            return "Upgrade weak prompts into production-ready instructions with a cleaner, faster chat workflow."
         case .guestUnlock:
-            return "You’ve used your guest prompts. Sign in to continue and unlock the Premium trial offer."
+            return "Your guest prompts are used up. Sign in to keep this thread, save your work, and unlock the Premium trial offer."
         }
     }
 

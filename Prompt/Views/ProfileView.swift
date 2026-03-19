@@ -10,7 +10,6 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openURL) private var openURL
     @Environment(AuthManager.self) private var authManager
     @Environment(GuestSessionManager.self) private var guestSession
     @Environment(PromptHistoryManager.self) private var historyManager
@@ -60,7 +59,7 @@ struct ProfileView: View {
                 VStack(spacing: 0) {
                     PromptPageHeader(
                         title: "Profile",
-                        subtitle: "Account details, app settings, and subscription status",
+                        subtitle: "Account details, Premium access, and app settings",
                         onLeadingTap: {
                             if isEditingProfile {
                                 isEditingProfile = false
@@ -201,38 +200,14 @@ struct ProfileView: View {
                                 handlePlanAction()
                             }
                         }
-
-                        if storeKit.currentTier != .free {
-                            Button {
-                                openAppStoreSubscriptions()
-                            } label: {
-                                HStack {
-                                    Image(systemName: "creditcard.fill")
-                                        .foregroundStyle(accentColor)
-                                        .frame(width: 28)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Manage Billing in App Store")
-                                            .foregroundStyle(textPrimary)
-                                        Text("Update renewal settings or cancel from Apple subscriptions")
-                                            .font(.caption)
-                                            .foregroundStyle(textSecondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right.square")
-                                        .font(.caption)
-                                        .foregroundStyle(textTertiary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
                     }
                     .padding(.vertical, 4)
                     .listRowBackground(bgSecondary)
                 } header: {
-                    Text("Plan & Billing")
+                    Text("Premium")
                         .foregroundStyle(textSecondary)
                 } footer: {
-                    Text("Upgrade, review plan status, or manage your active App Store subscription.")
+                    Text("Start the trial, unlock Premium, or restore a past purchase.")
                         .foregroundStyle(textTertiary)
                 }
 
@@ -664,16 +639,7 @@ struct ProfileView: View {
     }
 
     private func handlePlanAction() {
-        if storeKit.currentTier == .premium {
-            openAppStoreSubscriptions()
-        } else {
-            showPaywall = true
-        }
-    }
-
-    private func openAppStoreSubscriptions() {
-        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
-        openURL(url)
+        showPaywall = true
     }
 
     private func formatTokens(_ tokens: String) -> String {

@@ -197,6 +197,8 @@ final class SyncManager {
             originalPrompt: record.originalPrompt,
             enhancedPrompt: record.enhancedPrompt,
             model: record.model,
+            modality: record.modality,
+            imageAttachment: record.imageAttachment,
             temperature: 0.7,
             maxTokens: 4096,
             inputTokens: 0,

@@ -18,7 +18,9 @@ final class ThreadViewModel {
     var currentThread: ThreadDetailDTO?
     var turns: [ThreadTurnRecord] = []
     var userPrompt: String = ""
+    var selectedImageAttachment: PromptImageAttachment?
     var pendingUserPrompt: String?
+    var pendingImageAttachment: PromptImageAttachment?
     var isStreaming: Bool = false
     var streamingContent: String = ""
     var isLoadingThreads: Bool = false
@@ -43,6 +45,7 @@ final class ThreadViewModel {
                 id: "\(turn.id)-user",
                 role: .user,
                 content: turn.originalPrompt,
+                imageAttachment: turn.imageAttachment,
                 turnIndex: turn.turnIndex,
                 tokens: nil
             ))
@@ -50,15 +53,17 @@ final class ThreadViewModel {
                 id: "\(turn.id)-assistant",
                 role: .assistant,
                 content: turn.enhancedPrompt,
+                imageAttachment: nil,
                 turnIndex: turn.turnIndex,
                 tokens: turn.totalTokens
             ))
         }
-        if let pendingUserPrompt, isStreaming {
+        if isStreaming, pendingUserPrompt != nil || pendingImageAttachment != nil {
             messages.append(ThreadMessage(
                 id: "pending-user",
                 role: .user,
-                content: pendingUserPrompt,
+                content: pendingUserPrompt ?? "",
+                imageAttachment: pendingImageAttachment,
                 turnIndex: turns.count,
                 tokens: nil
             ))
@@ -69,6 +74,7 @@ final class ThreadViewModel {
                 id: "streaming",
                 role: .assistant,
                 content: streamingContent,
+                imageAttachment: nil,
                 turnIndex: turns.count,
                 tokens: nil
             ))
@@ -77,7 +83,7 @@ final class ThreadViewModel {
     }
 
     var canSend: Bool {
-        !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isStreaming
+        (!userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedImageAttachment != nil) && !isStreaming
     }
 
     var threadTitle: String {
@@ -229,7 +235,8 @@ final class ThreadViewModel {
         initialPrompt: String? = nil
     ) async {
         let promptToSend = (initialPrompt ?? userPrompt).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !promptToSend.isEmpty else { return }
+        let sentAttachment = selectedImageAttachment
+        guard !promptToSend.isEmpty || sentAttachment != nil else { return }
         let isAuthenticated = await APIClient.shared.isAuthenticated
 
         if !isAuthenticated {
@@ -258,12 +265,15 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             customInstructions: sanitizedCustomInstructions(from: settings),
+            imageAttachment: sentAttachment,
             previousTurns: seededTurnsForRequest
         )
 
         let sentPrompt = promptToSend
         pendingUserPrompt = sentPrompt
+        pendingImageAttachment = sentAttachment
         userPrompt = ""
+        selectedImageAttachment = nil
 
         let stream = await streamForNewConversation(
             request: request,
@@ -290,6 +300,7 @@ final class ThreadViewModel {
                         turnIndex: turnIndex,
                         originalPrompt: sentPrompt,
                         enhancedPrompt: streamingContent,
+                        imageAttachment: event.imageAttachment ?? sentAttachment,
                         model: settings.effectiveModel.rawValue,
                         totalTokens: event.usage?.totalTokens ?? 0,
                         processingMs: event.usage?.processingMs ?? 0,
@@ -303,6 +314,8 @@ final class ThreadViewModel {
                         original: sentPrompt,
                         enhanced: turnRecord.enhancedPrompt,
                         model: turnRecord.model,
+                        modality: settings.selectedModality.apiModality,
+                        imageAttachment: turnRecord.imageAttachment,
                         temperature: settings.temperature,
                         maxTokens: settings.maxTokens,
                         inputTokens: 0,
@@ -316,6 +329,7 @@ final class ThreadViewModel {
                         await loadThread(id: completedThreadId)
                     }
                     pendingUserPrompt = nil
+                    pendingImageAttachment = nil
                 case .error:
                     if event.guestQuota?.isExhausted == true {
                         guestSession.presentAuthenticationGate()
@@ -323,7 +337,9 @@ final class ThreadViewModel {
                     errorMessage = event.message ?? "Enhancement failed"
                     showError = true
                     userPrompt = sentPrompt
+                    selectedImageAttachment = sentAttachment
                     pendingUserPrompt = nil
+                    pendingImageAttachment = nil
                     streamingContent = ""
                 }
             }
@@ -335,13 +351,17 @@ final class ThreadViewModel {
                 showError = true
             }
             userPrompt = sentPrompt
+            selectedImageAttachment = sentAttachment
             pendingUserPrompt = nil
+            pendingImageAttachment = nil
             streamingContent = ""
         } catch {
             errorMessage = "Stream connection failed"
             showError = true
             userPrompt = sentPrompt
+            selectedImageAttachment = sentAttachment
             pendingUserPrompt = nil
+            pendingImageAttachment = nil
             streamingContent = ""
         }
     }
@@ -353,7 +373,8 @@ final class ThreadViewModel {
             await startNewThread(settings: settings, historyManager: historyManager)
             return
         }
-        guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let sentAttachment = selectedImageAttachment
+        guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sentAttachment != nil else { return }
         let isAuthenticated = await APIClient.shared.isAuthenticated
 
         if !isAuthenticated {
@@ -373,12 +394,15 @@ final class ThreadViewModel {
             prompt: userPrompt,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
-            customInstructions: sanitizedCustomInstructions(from: settings)
+            customInstructions: sanitizedCustomInstructions(from: settings),
+            imageAttachment: sentAttachment
         )
 
         let sentPrompt = userPrompt
         pendingUserPrompt = sentPrompt
+        pendingImageAttachment = sentAttachment
         userPrompt = ""
+        selectedImageAttachment = nil
 
         let stream = await APIClient.shared.requestStream(
             "/threads/\(threadId)/turns/stream",
@@ -403,6 +427,7 @@ final class ThreadViewModel {
                         turnIndex: turnIndex,
                         originalPrompt: sentPrompt,
                         enhancedPrompt: streamingContent,
+                        imageAttachment: event.imageAttachment ?? sentAttachment,
                         model: settings.effectiveModel.rawValue,
                         totalTokens: event.usage?.totalTokens ?? 0,
                         processingMs: event.usage?.processingMs ?? 0,
@@ -416,6 +441,8 @@ final class ThreadViewModel {
                         original: sentPrompt,
                         enhanced: turnRecord.enhancedPrompt,
                         model: turnRecord.model,
+                        modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                        imageAttachment: turnRecord.imageAttachment,
                         temperature: settings.temperature,
                         maxTokens: settings.maxTokens,
                         inputTokens: 0,
@@ -424,6 +451,7 @@ final class ThreadViewModel {
                         processingMs: turnRecord.processingMs
                     )
                     pendingUserPrompt = nil
+                    pendingImageAttachment = nil
                 case .error:
                     if event.guestQuota?.isExhausted == true {
                         guestSession.presentAuthenticationGate()
@@ -431,7 +459,9 @@ final class ThreadViewModel {
                     errorMessage = event.message ?? "Enhancement failed"
                     showError = true
                     userPrompt = sentPrompt
+                    selectedImageAttachment = sentAttachment
                     pendingUserPrompt = nil
+                    pendingImageAttachment = nil
                     streamingContent = ""
                 }
             }
@@ -440,6 +470,7 @@ final class ThreadViewModel {
                 currentThread = nil
                 turns = []
                 pendingUserPrompt = nil
+                pendingImageAttachment = nil
                 streamingContent = ""
                 isStreaming = false
                 endBackgroundTask()
@@ -458,13 +489,17 @@ final class ThreadViewModel {
                 showError = true
             }
             userPrompt = sentPrompt
+            selectedImageAttachment = sentAttachment
             pendingUserPrompt = nil
+            pendingImageAttachment = nil
             streamingContent = ""
         } catch {
             errorMessage = "Stream connection failed"
             showError = true
             userPrompt = sentPrompt
+            selectedImageAttachment = sentAttachment
             pendingUserPrompt = nil
+            pendingImageAttachment = nil
             streamingContent = ""
         }
     }
@@ -475,7 +510,9 @@ final class ThreadViewModel {
         currentThread = nil
         turns = []
         userPrompt = ""
+        selectedImageAttachment = nil
         pendingUserPrompt = nil
+        pendingImageAttachment = nil
         streamingContent = ""
         isStreaming = false
     }
@@ -510,6 +547,7 @@ final class ThreadViewModel {
             SeedThreadTurnRequest(
                 originalPrompt: turn.originalPrompt,
                 enhancedPrompt: turn.enhancedPrompt,
+                imageAttachment: turn.imageAttachment,
                 model: turn.model,
                 totalTokens: turn.totalTokens,
                 processingMs: turn.processingMs
@@ -536,6 +574,7 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             customInstructions: sanitizedCustomInstructions(from: settings),
+            imageAttachment: request.imageAttachment,
             previousTurns: seededTurnsForRequest ?? []
         )
 
@@ -551,11 +590,12 @@ final class ThreadViewModel {
 // MARK: - ThreadTurnRecord Convenience Init
 
 extension ThreadTurnRecord {
-    init(id: String, turnIndex: Int, originalPrompt: String, enhancedPrompt: String, model: String, totalTokens: Int, processingMs: Int, createdAt: Date) {
+    init(id: String, turnIndex: Int, originalPrompt: String, enhancedPrompt: String, imageAttachment: PromptImageAttachment?, model: String, totalTokens: Int, processingMs: Int, createdAt: Date) {
         self.id = id
         self.turnIndex = turnIndex
         self.originalPrompt = originalPrompt
         self.enhancedPrompt = enhancedPrompt
+        self.imageAttachment = imageAttachment
         self.model = model
         self.totalTokens = totalTokens
         self.processingMs = processingMs

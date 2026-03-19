@@ -28,7 +28,7 @@ struct HistoryView: View {
     @State private var threadViewModel = ThreadViewModel()
 
     /// Callback to re-run a prompt from history
-    var onRerunPrompt: ((String) -> Void)?
+    var onRerunPrompt: ((PromptRecord) -> Void)?
 
     enum HistoryTab: String, CaseIterable {
         case prompts = "Prompts"
@@ -142,7 +142,7 @@ struct HistoryView: View {
                     // Re-run this prompt
                     selectedPrompt = nil
                     dismiss()
-                    onRerunPrompt?(prompt.originalPrompt)
+                    onRerunPrompt?(prompt)
                 }
             }
             .alert("Delete Prompt", isPresented: $showDeleteConfirmation) {
@@ -482,6 +482,31 @@ struct PromptRowView: View {
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
+    private var fallbackTitle: String {
+        if let title = prompt.title, !title.isEmpty {
+            return title
+        }
+
+        let trimmed = prompt.originalPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return String(trimmed.prefix(50)) + (trimmed.count > 50 ? "..." : "")
+        }
+
+        return prompt.imageAttachment == nil ? "Prompt" : "Image to Video Prompt"
+    }
+
+    private var fallbackSubtitle: String {
+        let trimmed = prompt.originalPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+
+        if let analysis = prompt.imageAttachment?.analysis, !analysis.isEmpty {
+            return analysis
+        }
+
+        return "Image reference attached"
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -498,13 +523,22 @@ struct PromptRowView: View {
             }
             .buttonStyle(.plain)
 
+            if let attachment = prompt.imageAttachment {
+                PromptImageAttachmentCard(
+                    attachment: attachment,
+                    height: 84,
+                    showsAnalysisBadge: false
+                )
+                .frame(width: 84, height: 84)
+            }
+
             VStack(alignment: .leading, spacing: 8) {
-                Text(prompt.title ?? String(prompt.originalPrompt.prefix(50)) + "...")
+                Text(fallbackTitle)
                     .font(.headline)
                     .foregroundStyle(textPrimary)
                     .lineLimit(1)
 
-                Text(prompt.originalPrompt)
+                Text(fallbackSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(textSecondary)
                     .lineLimit(2)
@@ -552,20 +586,46 @@ struct PromptDetailView: View {
 
                 ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Original prompt
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Original Prompt", systemImage: "text.cursor")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(textPrimary)
+                    if !prompt.originalPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Original Prompt", systemImage: "text.cursor")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(textPrimary)
 
-                        Text(prompt.originalPrompt)
-                            .font(.body)
-                            .foregroundStyle(textPrimary)
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(bgSecondary)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            Text(prompt.originalPrompt)
+                                .font(.body)
+                                .foregroundStyle(textPrimary)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(bgSecondary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+
+                    if let attachment = prompt.imageAttachment {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Source Image", systemImage: "photo")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(textPrimary)
+
+                            PromptImageAttachmentCard(
+                                attachment: attachment,
+                                height: 220,
+                                showsAnalysisBadge: attachment.hasAnalysis
+                            )
+
+                            if let analysis = attachment.analysis, !analysis.isEmpty {
+                                Text(analysis)
+                                    .font(.subheadline)
+                                    .foregroundStyle(textSecondary)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(bgSecondary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
                     }
 
                     // Enhanced prompt
@@ -695,6 +755,12 @@ struct PromptDetailView: View {
                                 Text("Model")
                                     .foregroundStyle(textSecondary)
                                 Text(prompt.model)
+                                    .foregroundStyle(textPrimary)
+                            }
+                            GridRow {
+                                Text("Modality")
+                                    .foregroundStyle(textSecondary)
+                                Text(prompt.modality.uppercased())
                                     .foregroundStyle(textPrimary)
                             }
                             GridRow {

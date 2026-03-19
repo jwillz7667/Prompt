@@ -67,16 +67,29 @@ struct ThreadMessageBubble: View {
     // MARK: - User Bubble (solid accent, iMessage-style)
 
     private var userBubble: some View {
-        Text(message.content)
-            .font(.system(.body))
-            .foregroundStyle(Color.adaptiveTextOnAccent)
-            .textSelection(.enabled)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(accentColor)
-            )
+        VStack(alignment: .trailing, spacing: 8) {
+            if let attachment = message.imageAttachment {
+                PromptImageAttachmentCard(
+                    attachment: attachment,
+                    height: 190,
+                    showsAnalysisBadge: false
+                )
+                .frame(maxWidth: 240)
+            }
+
+            if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(message.content)
+                    .font(.system(.body))
+                    .foregroundStyle(Color.adaptiveTextOnAccent)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(accentColor)
+                    )
+            }
+        }
     }
 
     // MARK: - Assistant Bubble (glass + accent outline)

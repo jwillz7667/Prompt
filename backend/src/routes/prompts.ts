@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
   enforceQuota,
@@ -28,9 +29,55 @@ import {
 
 export const promptRouter = Router();
 
+const imageAttachmentSchema = z.object({
+  dataUrl: z.string().startsWith('data:image/').max(3_000_000),
+  mimeType: z.string().regex(/^image\/(jpeg|jpg|png|webp|heic|heif)$/i),
+  width: z.number().int().min(1).max(8_192),
+  height: z.number().int().min(1).max(8_192),
+  analysis: z.string().max(1_500).optional(),
+});
+
+function requirePromptOrImage(
+  value: { prompt?: string; originalPrompt?: string; imageAttachment?: unknown },
+  ctx: z.RefinementCtx
+) {
+  const prompt = value.prompt ?? value.originalPrompt ?? '';
+  if (prompt.trim().length > 0 || value.imageAttachment) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'Prompt text or an uploaded image is required.',
+    path: value.prompt !== undefined ? ['prompt'] : ['originalPrompt'],
+  });
+}
+
+function toImageAttachmentJson(
+  attachment?: {
+    dataUrl: string;
+    mimeType: string;
+    width: number;
+    height: number;
+    analysis?: string | null;
+  }
+): Prisma.InputJsonValue | undefined {
+  if (!attachment) {
+    return undefined;
+  }
+
+  return {
+    dataUrl: attachment.dataUrl,
+    mimeType: attachment.mimeType,
+    width: attachment.width,
+    height: attachment.height,
+    ...(attachment.analysis ? { analysis: attachment.analysis } : {}),
+  } as Prisma.InputJsonValue;
+}
+
 // Validation schemas
 const createPromptSchema = z.object({
-  originalPrompt: z.string().min(1).max(100000),
+  originalPrompt: z.string().max(100000).default(''),
   enhancedPrompt: z.string().min(1).max(500000),
   model: z.string().default('deepseek-reasoner'),
   temperature: z.number().min(0).max(2).default(0.7),
@@ -47,9 +94,11 @@ const createPromptSchema = z.object({
   outputTokens: z.number().int().min(0).default(0),
   totalTokens: z.number().int().min(0).default(0),
   processingMs: z.number().int().min(0).default(0),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+  imageAttachment: imageAttachmentSchema.optional(),
   title: z.string().max(200).optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
-});
+}).superRefine(requirePromptOrImage);
 
 const updatePromptSchema = z.object({
   title: z.string().max(200).optional(),
@@ -68,8 +117,8 @@ const listQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
-const enhancePromptSchema = z.object({
-  prompt: z.string().min(1).max(100000),
+const enhancePromptSchemaBase = z.object({
+  prompt: z.string().max(100000).default(''),
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.preprocess(
@@ -86,16 +135,20 @@ const enhancePromptSchema = z.object({
   customInstructions: z.string().max(2000).optional(),
   targetCharacterLength: z.number().int().min(1).max(100000).optional(),
   subModality: z.string().optional(),
+  imageAttachment: imageAttachmentSchema.optional(),
 });
 
-const guestEnhancePromptSchema = enhancePromptSchema.extend({
+const enhancePromptSchema = enhancePromptSchemaBase.superRefine(requirePromptOrImage);
+
+const guestEnhancePromptSchema = enhancePromptSchemaBase.extend({
   previousTurns: z.array(
     z.object({
-      originalPrompt: z.string().min(1).max(100000),
+      originalPrompt: z.string().max(100000).default(''),
       enhancedPrompt: z.string().min(1).max(500000),
+      imageAttachment: imageAttachmentSchema.optional(),
     })
   ).max(20).default([]),
-});
+}).superRefine(requirePromptOrImage);
 
 function writeSSEEvent(
   res: Response,
@@ -159,6 +212,7 @@ promptRouter.post(
           customInstructions: data.customInstructions,
           targetCharacterLength: data.targetCharacterLength,
           previousTurns: data.previousTurns,
+          imageAttachment: data.imageAttachment,
         },
         {
           onToken: (token) => {
@@ -175,6 +229,7 @@ promptRouter.post(
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
               },
+              imageAttachment: result.imageAttachment,
               guestQuota: quota,
             });
             res.write('data: [DONE]\n\n');
@@ -287,6 +342,7 @@ promptRouter.post(
         customInstructions: data.customInstructions,
         targetCharacterLength: data.targetCharacterLength,
         subModality: data.subModality,
+        imageAttachment: data.imageAttachment,
       });
 
       // Save the prompt to the database
@@ -299,6 +355,7 @@ promptRouter.post(
           temperature: data.temperature || 0.7,
           maxTokens,
           modality: data.modality,
+          imageAttachment: toImageAttachmentJson(result.imageAttachment),
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           totalTokens: result.totalTokens,
@@ -354,6 +411,7 @@ promptRouter.post(
           totalTokens: result.totalTokens,
           processingMs: result.processingMs,
         },
+        imageAttachment: result.imageAttachment,
         subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
       });
     } catch (error) {
@@ -429,6 +487,7 @@ promptRouter.post(
           customInstructions: data.customInstructions,
           targetCharacterLength: data.targetCharacterLength,
           subModality: data.subModality,
+          imageAttachment: data.imageAttachment,
         },
         {
           onToken: (token) => {
@@ -445,6 +504,7 @@ promptRouter.post(
                 temperature: data.temperature || 0.7,
                 maxTokens,
                 modality: data.modality,
+                imageAttachment: toImageAttachmentJson(result.imageAttachment),
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
@@ -497,6 +557,7 @@ promptRouter.post(
                   totalTokens: result.totalTokens,
                   processingMs: result.processingMs,
                 },
+                imageAttachment: result.imageAttachment,
                 subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
               })}\n\n`
             );
@@ -543,7 +604,19 @@ promptRouter.post(
       const prompt = await prisma.prompt.create({
         data: {
           userId: req.user.id,
-          ...data,
+          originalPrompt: data.originalPrompt,
+          enhancedPrompt: data.enhancedPrompt,
+          model: data.model,
+          temperature: data.temperature,
+          maxTokens: data.maxTokens,
+          modality: data.modality,
+          imageAttachment: toImageAttachmentJson(data.imageAttachment),
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          totalTokens: data.totalTokens,
+          processingMs: data.processingMs,
+          title: data.title,
+          tags: data.tags,
         },
       });
 
@@ -654,6 +727,8 @@ promptRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
           originalPrompt: true,
           enhancedPrompt: true,
           model: true,
+          modality: true,
+          imageAttachment: true,
           totalTokens: true,
           title: true,
           tags: true,

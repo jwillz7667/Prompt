@@ -105,10 +105,13 @@ collectionRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): P
         originalPrompt: true,
         enhancedPrompt: true,
         model: true,
+        modality: true,
+        imageAttachment: true,
         totalTokens: true,
         title: true,
         tags: true,
         isFavorite: true,
+        isArchived: true,
         createdAt: true,
       },
     });

@@ -140,43 +140,57 @@ struct UpgradePromptCard: View {
     let onUpgrade: () -> Void
 
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+    private var isActionable: Bool { currentTier != .premium }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(upgradeTitle)
-                        .font(.headline)
+                        .font(.system(.headline, design: .rounded, weight: .bold))
                         .foregroundStyle(Color.adaptiveTextPrimary)
 
                     Text(upgradeSubtitle)
-                        .font(.subheadline)
+                        .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(Color.adaptiveTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
 
                 Image(systemName: actionSystemImage)
-                    .font(.title)
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(accentColor)
             }
 
-            Button(action: onUpgrade) {
-                HStack(spacing: 8) {
-                    Image(systemName: actionSystemImage)
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(actionTitle)
-                        .font(.subheadline.bold())
-                }
-                    .font(.subheadline.bold())
+            if isActionable {
+                Button(action: onUpgrade) {
+                    HStack(spacing: 8) {
+                        Image(systemName: actionSystemImage)
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(actionTitle)
+                            .font(.system(.subheadline, design: .rounded, weight: .bold))
+                    }
                     .foregroundStyle(Color.adaptiveTextOnAccent)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(GlassPrimaryButtonStyle(cornerRadius: 14))
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Premium is active")
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                }
+                .foregroundStyle(accentColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .liquidGlassChip(isSelected: true, accentColor: accentColor)
             }
-            .buttonStyle(GlassPrimaryButtonStyle(cornerRadius: 10))
         }
-        .padding()
-        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.6)
+        .padding(18)
+        .liquidGlass(cornerRadius: 20, shadowIntensity: 0.66)
     }
 
     private var upgradeTitle: String {
@@ -186,7 +200,7 @@ struct UpgradePromptCard: View {
         case .pro:
             return "Upgrade to Premium"
         case .premium:
-            return "Manage Premium"
+            return "Premium unlocked"
         }
     }
 
@@ -197,7 +211,7 @@ struct UpgradePromptCard: View {
         case .pro:
             return "Unlock unlimited prompts and advanced features"
         case .premium:
-            return "Review billing, renewal, and App Store subscription settings"
+            return "Your full prompt workflow is already unlocked on this account"
         }
     }
 
@@ -208,7 +222,7 @@ struct UpgradePromptCard: View {
         case .pro:
             return "Upgrade to Premium"
         case .premium:
-            return "Manage Subscription"
+            return "Premium Active"
         }
     }
 
@@ -217,7 +231,7 @@ struct UpgradePromptCard: View {
         case .free, .pro:
             return "crown.fill"
         case .premium:
-            return "slider.horizontal.3"
+            return "checkmark.seal.fill"
         }
     }
 }
@@ -405,7 +419,7 @@ struct QuotaExceededBanner: View {
 struct TrialBanner: View {
     @Environment(\.colorScheme) private var colorScheme
     let daysRemaining: Int
-    let onManage: () -> Void
+    let onAction: () -> Void
 
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
 
@@ -427,8 +441,8 @@ struct TrialBanner: View {
 
             Spacer()
 
-            Button(action: onManage) {
-                Text("Manage")
+            Button(action: onAction) {
+                Text("See Plans")
                     .font(.caption.bold())
                     .foregroundStyle(accentColor)
                     .padding(.horizontal, 12)

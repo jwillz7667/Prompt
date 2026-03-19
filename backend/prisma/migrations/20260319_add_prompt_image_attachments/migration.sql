@@ -1,0 +1,5 @@
+ALTER TABLE "Prompt"
+ADD COLUMN IF NOT EXISTS "imageAttachment" JSONB;
+
+ALTER TABLE "ThreadTurn"
+ADD COLUMN IF NOT EXISTS "imageAttachment" JSONB;

@@ -13,6 +13,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
     @Environment(GuestSessionManager.self) private var guestSession
+    @Environment(SettingsManager.self) private var settings
     @Environment(StoreKitManager.self) private var storeKit
 
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
@@ -35,6 +36,42 @@ struct ContentView: View {
     @AppStorage("enhancementCount") private var enhancementCount = 0
 
     var body: some View {
+        navigationContent
+        .task {
+            await loadHomeThreadIfNeeded()
+        }
+        .onAppear {
+            checkPaywallReminder()
+            checkWhatsNew()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            handleScenePhaseChange(newPhase)
+        }
+        .onChange(of: authManager.currentUser?.id) { _, newId in
+            guard newId != nil else { return }
+            guestSession.completeAuthenticationFlow()
+        }
+        .onChange(of: homeThreadViewModel.currentThread?.id) { _, newId in
+            handleThreadIdentityChange(newId)
+        }
+        .onChange(of: homeThreadViewModel.turns.count) { oldValue, newValue in
+            handleTurnCountChange(oldValue: oldValue, newValue: newValue)
+        }
+        .onChange(of: deeplinkManager.shouldOpenHistory) { _, shouldOpen in
+            handleHistoryDeeplink(shouldOpen)
+        }
+        .onChange(of: deeplinkManager.shouldOpenSettings) { _, shouldOpen in
+            handleSettingsDeeplink(shouldOpen)
+        }
+        .onChange(of: deeplinkManager.shouldOpenPaywall) { _, shouldOpen in
+            handlePaywallDeeplink(shouldOpen)
+        }
+        .onChange(of: deeplinkManager.shouldOpenEnhance) { _, shouldOpen in
+            handleEnhanceDeeplink(shouldOpen)
+        }
+    }
+
+    private var navigationContent: some View {
         NavigationStack {
             ZStack {
                 ThreadView(
@@ -45,120 +82,19 @@ struct ContentView: View {
                     onOpenHistory: { showHistory = true },
                     onOpenSettings: { showSettings = true },
                     onOpenPaywall: { showPaywall = true },
-                    onStartNewConversation: { newConversation() }
+                    onStartNewConversation: newConversation
                 )
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showSettings) {
-                ProfileView()
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(24)
-            }
-            .sheet(isPresented: $showHistory) {
-                HistoryView { originalPrompt in
-                    homeThreadViewModel.userPrompt = originalPrompt
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-            }
-            .sheet(isPresented: $showProfile) {
-                ProfileView()
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(24)
-            }
-            .sheet(isPresented: $showPaywall) {
-                PaywallView()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(24)
-            }
-            .sheet(isPresented: $showWhatsNew) {
-                WhatsNewView {
-                    lastSeenWhatsNewVersion = currentAppVersion
-                    showWhatsNew = false
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-            }
-            .fullScreenCover(
-                isPresented: Binding(
-                    get: { guestSession.shouldPresentAuthenticationGate },
-                    set: { guestSession.shouldPresentAuthenticationGate = $0 }
-                )
-            ) {
-                AuthView(mode: .guestUnlock) {
-                    guestSession.completeAuthenticationFlow()
-                    presentOnboardingPaywallIfNeeded()
-                }
-                .interactiveDismissDisabled(true)
-            }
+            .sheet(isPresented: $showSettings, content: profileSheet)
+            .sheet(isPresented: $showHistory, content: historySheet)
+            .sheet(isPresented: $showProfile, content: profileSheet)
+            .sheet(isPresented: $showPaywall, content: paywallSheet)
+            .sheet(isPresented: $showWhatsNew, content: whatsNewSheet)
+            .fullScreenCover(isPresented: authenticationGateBinding, content: authGateSheet)
             .overlay(alignment: .top) {
                 OfflineBanner()
                     .animation(.spring(response: 0.3), value: networkMonitor.isConnected)
-            }
-        }
-        .task {
-            await loadHomeThreadIfNeeded()
-        }
-        .onAppear {
-            checkPaywallReminder()
-            checkWhatsNew()
-        }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
-                checkDailyPaywallReminder()
-            }
-        }
-        .onChange(of: authManager.currentUser?.id) { _, newId in
-            guard newId != nil else { return }
-            guestSession.completeAuthenticationFlow()
-        }
-        .onChange(of: homeThreadViewModel.currentThread?.id) { _, newId in
-            homeThreadId = newId ?? ""
-            if newId == nil {
-                lastObservedTurnCount = 0
-            }
-        }
-        .onChange(of: homeThreadViewModel.turns.count) { oldValue, newValue in
-            guard didHydrateHomeThread else { return }
-            guard newValue > oldValue else {
-                lastObservedTurnCount = newValue
-                return
-            }
-
-            let delta = max(0, newValue - max(oldValue, lastObservedTurnCount))
-            if delta > 0 {
-                enhancementCount += delta
-                checkReviewPrompt()
-            }
-
-            lastObservedTurnCount = newValue
-        }
-        .onChange(of: deeplinkManager.shouldOpenHistory) { _, shouldOpen in
-            if shouldOpen {
-                showHistory = true
-                deeplinkManager.clearHistoryTrigger()
-            }
-        }
-        .onChange(of: deeplinkManager.shouldOpenSettings) { _, shouldOpen in
-            if shouldOpen {
-                showSettings = true
-                deeplinkManager.clearSettingsTrigger()
-            }
-        }
-        .onChange(of: deeplinkManager.shouldOpenPaywall) { _, shouldOpen in
-            if shouldOpen {
-                showPaywall = true
-                deeplinkManager.clearPaywallTrigger()
-            }
-        }
-        .onChange(of: deeplinkManager.shouldOpenEnhance) { _, shouldOpen in
-            if shouldOpen {
-                deeplinkManager.clearEnhanceTrigger()
             }
         }
     }
@@ -185,6 +121,119 @@ struct ContentView: View {
         homeThreadId = ""
         lastObservedTurnCount = 0
         didHydrateHomeThread = true
+    }
+
+    private func applyHistoryPrompt(_ prompt: PromptRecord) {
+        homeThreadViewModel.userPrompt = prompt.originalPrompt
+        homeThreadViewModel.selectedImageAttachment = prompt.imageAttachment
+        if let modality = ModalityType(rawValue: prompt.modality) {
+            settings.selectedModality = modality
+            settings.savePreferences()
+        }
+        showHistory = false
+    }
+
+    private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+        if newPhase == .active {
+            checkDailyPaywallReminder()
+        }
+    }
+
+    private func handleThreadIdentityChange(_ newValue: String?) {
+        homeThreadId = newValue ?? ""
+        if newValue == nil {
+            lastObservedTurnCount = 0
+        }
+    }
+
+    private func handleTurnCountChange(oldValue: Int, newValue: Int) {
+        guard didHydrateHomeThread else { return }
+        guard newValue > oldValue else {
+            lastObservedTurnCount = newValue
+            return
+        }
+
+        let delta = max(0, newValue - max(oldValue, lastObservedTurnCount))
+        if delta > 0 {
+            enhancementCount += delta
+            checkReviewPrompt()
+        }
+
+        lastObservedTurnCount = newValue
+    }
+
+    private func handleHistoryDeeplink(_ shouldOpen: Bool) {
+        guard shouldOpen else { return }
+        showHistory = true
+        deeplinkManager.clearHistoryTrigger()
+    }
+
+    private func handleSettingsDeeplink(_ shouldOpen: Bool) {
+        guard shouldOpen else { return }
+        showSettings = true
+        deeplinkManager.clearSettingsTrigger()
+    }
+
+    private func handlePaywallDeeplink(_ shouldOpen: Bool) {
+        guard shouldOpen else { return }
+        showPaywall = true
+        deeplinkManager.clearPaywallTrigger()
+    }
+
+    private func handleEnhanceDeeplink(_ shouldOpen: Bool) {
+        guard shouldOpen else { return }
+        deeplinkManager.clearEnhanceTrigger()
+    }
+
+    private var authenticationGateBinding: Binding<Bool> {
+        Binding(
+            get: { guestSession.shouldPresentAuthenticationGate },
+            set: { guestSession.shouldPresentAuthenticationGate = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private func profileSheet() -> some View {
+        ProfileView()
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(24)
+    }
+
+    @ViewBuilder
+    private func historySheet() -> some View {
+        HistoryView(onRerunPrompt: applyHistoryPrompt)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(24)
+    }
+
+    @ViewBuilder
+    private func paywallSheet() -> some View {
+        PaywallView()
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(24)
+    }
+
+    @ViewBuilder
+    private func whatsNewSheet() -> some View {
+        WhatsNewView {
+            lastSeenWhatsNewVersion = currentAppVersion
+            showWhatsNew = false
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(24)
+    }
+
+    @ViewBuilder
+    private func authGateSheet() -> some View {
+        AuthView(mode: .guestUnlock) {
+            guestSession.completeAuthenticationFlow()
+            presentOnboardingPaywallIfNeeded()
+        }
+        .interactiveDismissDisabled(true)
     }
 
     // MARK: - What's New
