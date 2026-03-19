@@ -73,16 +73,14 @@ struct CreateThreadRequest: Encodable, Sendable {
     let title: String?
     let modality: String
     let subModality: String?
-    let tone: String?
-    let length: String?
+    let mode: String?
     let customInstructions: String?
 }
 
 struct AddTurnRequest: Encodable, Sendable {
     let prompt: String
     let subModality: String?
-    let tone: String?
-    let length: String?
+    let mode: String?
     let customInstructions: String?
 }
 
@@ -150,4 +148,3 @@ struct ThreadMessage: Identifiable, Sendable {
         case assistant
     }
 }
-

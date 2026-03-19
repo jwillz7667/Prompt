@@ -132,7 +132,7 @@ struct PlatformOptimizationView: View {
             GridItem(.flexible(), spacing: 12),
             GridItem(.flexible(), spacing: 12)
         ], spacing: 12) {
-            ForEach(PlatformType.allCases) { platform in
+            ForEach(PlatformType.storefrontAvailableCases) { platform in
                 platformCard(platform)
             }
         }
@@ -461,7 +461,7 @@ struct PlatformOptimizationView: View {
         do {
             let result = try await service.estimateCost(
                 prompt: promptText,
-                platforms: PlatformType.allCases.filter { $0 != .custom }
+                platforms: PlatformType.storefrontSelectableCases
             )
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 costEstimate = result
@@ -472,4 +472,3 @@ struct PlatformOptimizationView: View {
         isEstimating = false
     }
 }
-

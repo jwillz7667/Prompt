@@ -510,12 +510,7 @@ class SandboxService {
         take: limit,
         include: {
           results: {
-            select: {
-              platform: true,
-              error: true,
-              latencyMs: true,
-              cost: true
-            }
+            orderBy: { platform: 'asc' }
           }
         }
       });

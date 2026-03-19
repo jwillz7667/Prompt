@@ -419,7 +419,11 @@ extension AuthManager: ASAuthorizationControllerDelegate {
                     self.error = .unknown
                 case .notInteractive:
                     self.error = .notInteractive
+                case .credentialImport, .credentialExport, .preferSignInWithApple:
+                    self.error = .failed
                 case .matchedExcludedCredential:
+                    self.error = .failed
+                case .deviceNotConfiguredForPasskeyCreation:
                     self.error = .failed
                 @unknown default:
                     self.error = .unknown
@@ -487,11 +491,12 @@ struct FullName: Encodable, Sendable {
 
 extension AuthManager: ASAuthorizationControllerPresentationContextProviding {
     nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        // Get the first connected window scene's key window
-        let scenes = UIApplication.shared.connectedScenes
-        let windowScene = scenes.first as? UIWindowScene
-        let window = windowScene?.windows.first { $0.isKeyWindow }
-        return window ?? ASPresentationAnchor()
+        MainActor.assumeIsolated {
+            let scenes = UIApplication.shared.connectedScenes
+            let windowScene = scenes.first as? UIWindowScene
+            let window = windowScene?.windows.first { $0.isKeyWindow }
+            return window ?? ASPresentationAnchor()
+        }
     }
 }
 

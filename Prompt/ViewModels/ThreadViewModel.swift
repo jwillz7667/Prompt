@@ -192,8 +192,7 @@ final class ThreadViewModel {
             title: nil,
             modality: settings.selectedModality.apiModality,
             subModality: settings.effectiveSubModality,
-            tone: settings.effectiveTone.rawValue,
-            length: settings.outputLength.rawValue,
+            mode: settings.promptMode.rawValue,
             customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
         )
 
@@ -223,7 +222,7 @@ final class ThreadViewModel {
                         turnIndex: turnIndex,
                         originalPrompt: sentPrompt,
                         enhancedPrompt: streamingContent,
-                        model: "deepseek-chat",
+                        model: settings.effectiveModel.rawValue,
                         totalTokens: event.usage?.totalTokens ?? 0,
                         processingMs: event.usage?.processingMs ?? 0,
                         createdAt: Date()
@@ -290,8 +289,7 @@ final class ThreadViewModel {
         let request = AddTurnRequest(
             prompt: userPrompt,
             subModality: settings.effectiveSubModality,
-            tone: settings.effectiveTone.rawValue,
-            length: settings.outputLength.rawValue,
+            mode: settings.promptMode.rawValue,
             customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions
         )
 
@@ -328,7 +326,7 @@ final class ThreadViewModel {
                         turnIndex: turnIndex,
                         originalPrompt: sentPrompt,
                         enhancedPrompt: streamingContent,
-                        model: "deepseek-chat",
+                        model: settings.effectiveModel.rawValue,
                         totalTokens: event.usage?.totalTokens ?? 0,
                         processingMs: event.usage?.processingMs ?? 0,
                         createdAt: Date()

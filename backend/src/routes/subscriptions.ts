@@ -9,6 +9,7 @@ import {
   ensureSubscriptionExists,
   recordUsage,
 } from '../services/subscriptionService.js';
+import { getMaxModeQuota } from '../services/maxModeQuotaService.js';
 import {
   verifySignedTransaction,
   processVerifiedTransaction,
@@ -42,6 +43,7 @@ subscriptionRouter.get('/status', async (req: AuthenticatedRequest, res: Respons
         select: { stripeCustomerId: true },
       }),
     ]);
+    const maxModeQuota = await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
     res.json({
       subscription: {
@@ -55,6 +57,9 @@ subscriptionRouter.get('/status', async (req: AuthenticatedRequest, res: Respons
         dailyPromptsUsed: subscriptionInfo.dailyPromptsUsed,
         dailyPromptsLimit: subscriptionInfo.dailyPromptsLimit,
         canCreatePrompt: subscriptionInfo.canPerformAction,
+        maxModeUsedToday: maxModeQuota.usedToday,
+        maxModeDailyLimit: maxModeQuota.dailyLimit,
+        maxModeRemaining: maxModeQuota.isUnlimited ? -1 : maxModeQuota.remaining,
       },
       features: subscriptionInfo.features,
       // Stripe customer ID for web portal

@@ -11,6 +11,7 @@ import UIKit
 
 struct HistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppStoreComplianceManager.self) private var complianceManager
     @Environment(PromptHistoryManager.self) private var historyManager
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -280,6 +281,7 @@ struct PromptRowView: View {
 
 struct PromptDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppStoreComplianceManager.self) private var complianceManager
     let prompt: PromptRecord
     var onRerun: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
@@ -369,21 +371,22 @@ struct PromptDetailView: View {
                             intensity: .standard
                         ))
 
-                        // Try in ChatGPT
-                        Button {
-                            openInChatGPT(prompt: prompt.enhancedPrompt)
-                        } label: {
-                            Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
+                        if complianceManager.allowsChatGPTFeatures {
+                            Button {
+                                openInChatGPT(prompt: prompt.enhancedPrompt)
+                            } label: {
+                                Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                            }
+                            .buttonStyle(LiquidGlassButtonStyle(
+                                cornerRadius: 10,
+                                tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
+                                intensity: .standard
+                            ))
                         }
-                        .buttonStyle(LiquidGlassButtonStyle(
-                            cornerRadius: 10,
-                            tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
-                            intensity: .standard
-                        ))
                     }
 
                     // Re-enhance button (primary action)
@@ -567,7 +570,8 @@ struct PromptDetailView: View {
     }
 
     private func openInChatGPT(prompt: String) {
-        guard !prompt.isEmpty,
+        guard complianceManager.allowsChatGPTFeatures,
+              !prompt.isEmpty,
               let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
             return

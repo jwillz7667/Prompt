@@ -13,6 +13,11 @@ final class SandboxService: ObservableObject {
     @Published private(set) var currentTest: SandboxTest?
     
     private let apiClient = APIClient.shared
+
+    private struct Envelope<T: Decodable>: Decodable {
+        let success: Bool
+        let data: T
+    }
     
     private init() {
         Task {
@@ -38,11 +43,13 @@ final class SandboxService: ObservableObject {
             scheduledFor: scheduledFor
         )
         
-        let test: SandboxTest = try await apiClient.request(
+        let response: Envelope<SandboxTest> = try await apiClient.request(
             "/sandbox",
             method: .post,
-            body: request
+            body: request,
+            timeoutInterval: 60
         )
+        let test = response.data
         
         // Add to local cache
         tests.insert(test, at: 0)
@@ -58,10 +65,12 @@ final class SandboxService: ObservableObject {
     
     /// Execute a scheduled test
     func executeTest(testId: String) async throws -> SandboxTest {
-        let test: SandboxTest = try await apiClient.request(
+        let response: Envelope<SandboxTest> = try await apiClient.request(
             "/sandbox/\(testId)/execute",
-            method: .post
+            method: .post,
+            timeoutInterval: 120
         )
+        let test = response.data
         
         // Update local cache
         if let index = tests.firstIndex(where: { $0.id == testId }) {
@@ -79,10 +88,11 @@ final class SandboxService: ObservableObject {
     
     /// Get a specific test with results
     func getTest(id: String) async throws -> SandboxTest {
-        let test: SandboxTest = try await apiClient.request(
+        let response: Envelope<SandboxTest> = try await apiClient.request(
             "/sandbox/\(id)",
             method: .get
         )
+        let test = response.data
         
         // Update local cache
         if let index = tests.firstIndex(where: { $0.id == id }) {
@@ -95,12 +105,11 @@ final class SandboxService: ObservableObject {
     
     /// List all tests
     func listTests(limit: Int = 50) async throws -> [SandboxTest] {
-        let queryItems = [URLQueryItem(name: "limit", value: String(limit))]
-        
-        let fetchedTests: [SandboxTest] = try await apiClient.request(
+        let response: Envelope<[SandboxTest]> = try await apiClient.request(
             "/sandbox?limit=\(limit)",
             method: .get
         )
+        let fetchedTests = response.data
         
         self.tests = fetchedTests
         
@@ -125,12 +134,12 @@ final class SandboxService: ObservableObject {
     
     /// Get comparison statistics for a test
     func compareTestResults(testId: String) async throws -> TestComparison {
-        let comparison: TestComparison = try await apiClient.request(
+        let response: Envelope<TestComparison> = try await apiClient.request(
             "/sandbox/\(testId)/compare",
-            method: .get
+            method: .get,
+            timeoutInterval: 60
         )
-        
-        return comparison
+        return response.data
     }
     
     // MARK: - Batch Testing
@@ -147,11 +156,13 @@ final class SandboxService: ObservableObject {
             parameters: parameters
         )
         
-        let createdTests: [SandboxTest] = try await apiClient.request(
+        let response: Envelope<[SandboxTest]> = try await apiClient.request(
             "/sandbox/batch",
             method: .post,
-            body: request
+            body: request,
+            timeoutInterval: 90
         )
+        let createdTests = response.data
         
         // Add to local cache
         tests.insert(contentsOf: createdTests, at: 0)
@@ -164,12 +175,13 @@ final class SandboxService: ObservableObject {
     /// Get available platforms for testing
     func loadAvailablePlatforms() async {
         do {
-            let platforms: [AvailablePlatform] = try await apiClient.request(
+            let response: Envelope<[AvailablePlatform]> = try await apiClient.request(
                 "/sandbox/platforms/available",
-                method: .get
+                method: .get,
+                timeoutInterval: 60
             )
-            
-            self.availablePlatforms = platforms
+
+            self.availablePlatforms = response.data
         } catch {
             print("Failed to load available platforms: \(error)")
         }

@@ -25,6 +25,16 @@ enum PlatformType: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    @MainActor
+    static var storefrontAvailableCases: [PlatformType] {
+        AppStoreComplianceManager.shared.visiblePlatforms()
+    }
+
+    @MainActor
+    static var storefrontSelectableCases: [PlatformType] {
+        storefrontAvailableCases.filter { $0 != .custom }
+    }
+
     var displayName: String {
         switch self {
         case .chatGPT: return "ChatGPT"

@@ -7,7 +7,6 @@ struct WorkflowsView: View {
     @StateObject private var service = WorkflowService.shared
 
     @State private var showCreateSheet = false
-    @State private var showTemplateSheet = false
     @State private var showImportSheet = false
     @State private var selectedWorkflow: Workflow?
     @State private var statusFilter: WorkflowStatus?
@@ -59,11 +58,6 @@ struct WorkflowsView: View {
                             Label("New Workflow", systemImage: "plus")
                         }
                         Button {
-                            showTemplateSheet = true
-                        } label: {
-                            Label("Templates", systemImage: "doc.text")
-                        }
-                        Button {
                             showImportSheet = true
                         } label: {
                             Label("Import JSON", systemImage: "square.and.arrow.down")
@@ -77,9 +71,6 @@ struct WorkflowsView: View {
             .task { await service.loadWorkflowsIfNeeded() }
             .sheet(isPresented: $showCreateSheet) {
                 CreateWorkflowSheet(service: service)
-            }
-            .sheet(isPresented: $showTemplateSheet) {
-                TemplateLibrarySheet(service: service)
             }
             .sheet(isPresented: $showImportSheet) {
                 ImportWorkflowSheet(service: service)
@@ -198,7 +189,7 @@ struct WorkflowsView: View {
         .contextMenu {
             Button {
                 Task {
-                    _ = try? await service.cloneWorkflow(id: workflow.id)
+                    _ = try? await service.cloneWorkflow(id: workflow.id, newName: "\(workflow.name) Copy")
                 }
             } label: {
                 Label("Clone", systemImage: "doc.on.doc")
@@ -267,14 +258,6 @@ struct WorkflowsView: View {
                         .font(.system(.body, design: .rounded, weight: .semibold))
                 }
                 .buttonStyle(GlassPrimaryButtonStyle())
-
-                Button {
-                    showTemplateSheet = true
-                } label: {
-                    Label("Templates", systemImage: "doc.text")
-                        .font(.system(.body, design: .rounded, weight: .semibold))
-                }
-                .buttonStyle(GlassSecondaryButtonStyle())
             }
         }
         .padding(40)
@@ -529,7 +512,7 @@ private struct WorkflowDetailSheet: View {
                             HStack(spacing: 10) {
                                 Button {
                                     Task {
-                                        _ = try? await service.cloneWorkflow(id: workflow.id)
+                                        _ = try? await service.cloneWorkflow(id: workflow.id, newName: "\(workflow.name) Copy")
                                         dismiss()
                                     }
                                 } label: {
@@ -983,122 +966,6 @@ private struct ExecutionDetailSheet: View {
                 }
             }
             .padding(.bottom, isLast ? 0 : 16)
-        }
-    }
-}
-
-// MARK: - Template Library Sheet
-
-private struct TemplateLibrarySheet: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
-    let service: WorkflowService
-
-    @State private var templates: [WorkflowTemplate] = []
-    @State private var isLoading = true
-
-    private var textPrimary: Color { Color.adaptiveTextPrimary }
-    private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var textTertiary: Color { Color.adaptiveTextTertiary }
-    private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                LiquidGlassBackground()
-
-                if isLoading {
-                    ProgressView().tint(accentColor)
-                } else if templates.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "doc.text")
-                            .font(.system(size: 40, weight: .light))
-                            .foregroundStyle(textTertiary)
-                        Text("No templates available")
-                            .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(textSecondary)
-                    }
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(templates) { template in
-                                templateCard(template)
-                            }
-                        }
-                        .padding(20)
-                        .padding(.bottom, 100)
-                    }
-                }
-            }
-            .navigationTitle("Templates")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(accentColor)
-                }
-            }
-            .task {
-                do {
-                    templates = try await service.loadTemplates()
-                } catch {
-                    print("Failed to load templates: \(error)")
-                }
-                isLoading = false
-            }
-        }
-    }
-
-    private func templateCard(_ template: WorkflowTemplate) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(template.name)
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(textPrimary)
-
-            Text(template.description)
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(textSecondary)
-                .lineLimit(3)
-
-            HStack {
-                Label("\(template.steps.count) steps", systemImage: "list.number")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(textTertiary)
-
-                Spacer()
-
-                Button {
-                    Task { await useTemplate(template) }
-                } label: {
-                    Text("Use Template")
-                        .font(.system(.caption, design: .rounded, weight: .semibold))
-                }
-                .buttonStyle(GlassCapsuleButtonStyle())
-            }
-        }
-        .padding(16)
-        .liquidGlass(cornerRadius: 16)
-    }
-
-    private func useTemplate(_ template: WorkflowTemplate) async {
-        let steps = template.steps.map { step in
-            CreateWorkflowRequest.WorkflowStepRequest(
-                name: step.name,
-                promptTemplate: step.promptTemplate,
-                outputFormat: step.outputFormat
-            )
-        }
-        let request = CreateWorkflowRequest(
-            name: template.name,
-            description: template.description,
-            steps: steps
-        )
-        do {
-            _ = try await service.createWorkflow(request: request)
-            dismiss()
-        } catch {
-            print("Failed to use template: \(error)")
         }
     }
 }

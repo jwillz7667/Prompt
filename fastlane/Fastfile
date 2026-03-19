@@ -3,13 +3,170 @@
 
 default_platform(:ios)
 
+APP_IDENTIFIER = "com.res.promptomizer"
+ROOT_DIR = File.expand_path("..", __dir__)
+API_KEY_PATH = File.join(ROOT_DIR, "fastlane", "api_key.json")
+PROJECT_PATH = File.join(ROOT_DIR, "Prompt.xcodeproj")
+SCHEME = "Prompt"
+METADATA_PATH = File.join(ROOT_DIR, "fastlane", "metadata")
+SCREENSHOTS_PATH = File.join(ROOT_DIR, "fastlane", "screenshots")
+SCREENSHOT_WORKSPACE_PATH = File.join(ROOT_DIR, "Prompt.xcodeproj", "project.xcworkspace")
+EXPORT_OPTIONS_PATH = File.join(ROOT_DIR, "ExportOptions.plist")
+BUILD_OUTPUT_PATH = File.join(ROOT_DIR, "build")
+
 platform :ios do
+  private_lane :ensure_release_files! do
+    UI.user_error!("Missing App Store Connect API key JSON at #{API_KEY_PATH}") unless File.exist?(API_KEY_PATH)
+    UI.user_error!("Missing export options at #{EXPORT_OPTIONS_PATH}") unless File.exist?(EXPORT_OPTIONS_PATH)
+  end
+
+  private_lane :current_release_version do |options|
+    options[:version] || get_version_number(
+      xcodeproj: PROJECT_PATH,
+      target: SCHEME
+    )
+  end
+
+  private_lane :next_release_build_number do |options|
+    version = current_release_version(options)
+
+    latest_build = latest_testflight_build_number(
+      api_key_path: API_KEY_PATH,
+      app_identifier: APP_IDENTIFIER,
+      platform: "ios",
+      version: version,
+      initial_build_number: 0
+    )
+
+    latest_build + 1
+  end
+
+  desc "Show live App Store and current TestFlight release state"
+  lane :release_status do |options|
+    ensure_release_files!
+
+    version = current_release_version(options)
+    live_build = app_store_build_number(
+      api_key_path: API_KEY_PATH,
+      app_identifier: APP_IDENTIFIER,
+      platform: "ios",
+      live: true
+    )
+    live_version = lane_context[SharedValues::LATEST_VERSION]
+    latest_testflight_build = latest_testflight_build_number(
+      api_key_path: API_KEY_PATH,
+      app_identifier: APP_IDENTIFIER,
+      platform: "ios",
+      version: version,
+      initial_build_number: 0
+    )
+
+    UI.message("Live App Store version: #{live_version} (build #{live_build})")
+    UI.message("Current project version: #{version}")
+    UI.message("Latest TestFlight build for #{version}: #{latest_testflight_build}")
+    UI.message("Next available build number: #{latest_testflight_build + 1}")
+  end
+
+  desc "Sync version/build numbers for the next App Store build"
+  lane :prepare_release do |options|
+    ensure_release_files!
+
+    current_version = get_version_number(
+      xcodeproj: PROJECT_PATH,
+      target: SCHEME
+    )
+    target_version = options[:version] || current_version
+
+    if target_version != current_version
+      increment_version_number(
+        xcodeproj: PROJECT_PATH,
+        version_number: target_version
+      )
+    end
+
+    next_build = options[:build_number] || next_release_build_number(version: target_version)
+
+    increment_build_number(
+      xcodeproj: PROJECT_PATH,
+      build_number: next_build.to_s,
+      skip_info_plist: true
+    )
+
+    UI.success("Prepared #{target_version} (build #{next_build})")
+  end
+
+  desc "Create a signed App Store archive and IPA locally without uploading"
+  lane :build_release do |options|
+    ensure_release_files!
+
+    build_app(
+      project: PROJECT_PATH,
+      scheme: SCHEME,
+      clean: true,
+      export_options: EXPORT_OPTIONS_PATH,
+      output_directory: BUILD_OUTPUT_PATH,
+      output_name: options[:output_name] || "Prompt",
+      archive_path: options[:archive_path] || File.join(BUILD_OUTPUT_PATH, "Prompt.xcarchive")
+    )
+  end
+
+  desc "Prepare the next build and create the local release artifacts"
+  lane :release_candidate do |options|
+    prepare_release(options)
+    build_release(options)
+  end
+
+  desc "Upload the current archive/IPA to TestFlight"
+  lane :upload_testflight_release do |options|
+    ensure_release_files!
+
+    skip_build = options[:skip_build].to_s == "true"
+    release_candidate(options) unless skip_build
+
+    changelog = options[:changelog]
+    release_notes_path = File.join(METADATA_PATH, "en-US", "release_notes.txt")
+    changelog ||= File.read(release_notes_path).strip if File.exist?(release_notes_path)
+    ipa_path = options[:ipa] || File.join(BUILD_OUTPUT_PATH, "Prompt.ipa")
+
+    upload_to_testflight(
+      api_key_path: API_KEY_PATH,
+      app_identifier: APP_IDENTIFIER,
+      ipa: ipa_path,
+      changelog: changelog,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Upload App Store metadata and screenshots without uploading a binary"
+  lane :upload_store_listing do |options|
+    ensure_release_files!
+
+    skip_screenshots = options[:skip_screenshots].to_s == "true"
+    version = current_release_version(options)
+
+    deliver(
+      api_key_path: API_KEY_PATH,
+      app_identifier: APP_IDENTIFIER,
+      app_version: version,
+      metadata_path: METADATA_PATH,
+      screenshots_path: SCREENSHOTS_PATH,
+      skip_binary_upload: true,
+      skip_screenshots: skip_screenshots,
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      overwrite_screenshots: false,
+      run_precheck_before_submit: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
   desc "Capture App Store screenshots"
   lane :screenshots do
     capture_screenshots(
-      workspace: "Prompt.xcodeproj/project.xcworkspace",
+      workspace: SCREENSHOT_WORKSPACE_PATH,
       scheme: "PromptUITests",
-      output_directory: "./fastlane/screenshots",
+      output_directory: SCREENSHOTS_PATH,
       clear_previous_screenshots: true,
       override_status_bar: true,
       localize_simulator: true
@@ -17,9 +174,9 @@ platform :ios do
   end
 
   desc "Frame screenshots with device frames"
-  lane :frame_screenshots do
+  lane :frame_marketing_screenshots do
     frame_screenshots(
-      path: "./fastlane/screenshots",
+      path: SCREENSHOTS_PATH,
       silver: false,
       force_device_type: "iPhone 15 Pro Max"
     )
@@ -28,6 +185,6 @@ platform :ios do
   desc "Generate and frame all screenshots"
   lane :marketing_screenshots do
     screenshots
-    frame_screenshots
+    frame_marketing_screenshots
   end
 end

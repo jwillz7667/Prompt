@@ -36,6 +36,9 @@ struct VariationsView: View {
                             originalPromptCard
                             strategySelector
                             generateButton
+                            if let error = service.error {
+                                errorBanner(error.localizedDescription)
+                            }
                             resultsSection
                         }
                         .padding(20)
@@ -151,6 +154,19 @@ struct VariationsView: View {
         }
     }
 
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .liquidGlass(cornerRadius: 12)
+    }
+
     // MARK: - Metrics Card
 
     private func metricsCard(_ metrics: VariationMetrics) -> some View {
@@ -230,8 +246,7 @@ struct VariationsView: View {
                     .background(accentColor.opacity(0.15))
                     .clipShape(Capsule())
 
-                // Tone badge
-                Text(result.tone.capitalized)
+                Text(result.label)
                     .font(.system(.caption2, design: .rounded, weight: .medium))
                     .foregroundStyle(textSecondary)
                     .padding(.horizontal, 8)
@@ -239,14 +254,23 @@ struct VariationsView: View {
                     .background(accentColor.opacity(0.08))
                     .clipShape(Capsule())
 
-                // Length badge
-                Text(result.length.capitalized)
+                Text(result.mode.uppercased())
                     .font(.system(.caption2, design: .rounded, weight: .medium))
                     .foregroundStyle(textSecondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(accentColor.opacity(0.08))
                     .clipShape(Capsule())
+
+                if let focus = result.focus {
+                    Text(focus.capitalized)
+                        .font(.system(.caption2, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(accentColor.opacity(0.08))
+                        .clipShape(Capsule())
+                }
 
                 Spacer()
 

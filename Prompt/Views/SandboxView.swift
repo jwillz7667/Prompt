@@ -15,6 +15,13 @@ struct SandboxView: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+    private var visibleTests: [SandboxTest] {
+        service.tests.filter { test in
+            test.platforms.contains { platform in
+                AppStoreComplianceManager.shared.isPlatformAvailable(platform)
+            }
+        }
+    }
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
@@ -26,9 +33,9 @@ struct SandboxView: View {
                 LiquidGlassBackground()
 
                 Group {
-                    if service.isLoading && service.tests.isEmpty {
+                    if service.isLoading && visibleTests.isEmpty {
                         loadingView
-                    } else if service.tests.isEmpty {
+                    } else if visibleTests.isEmpty {
                         emptyStateView
                     } else {
                         testsList
@@ -77,7 +84,7 @@ struct SandboxView: View {
     private var testsList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(service.tests) { test in
+                ForEach(visibleTests) { test in
                     testCard(test)
                 }
             }
@@ -91,7 +98,12 @@ struct SandboxView: View {
     }
 
     private func testCard(_ test: SandboxTest) -> some View {
-        Button {
+        let visiblePlatforms = test.platforms.filter { platform in
+            AppStoreComplianceManager.shared.isPlatformAvailable(platform)
+        }
+        let visibleResults = (test.results ?? []).filter { AppStoreComplianceManager.shared.isPlatformAvailable($0.platform) }
+
+        return Button {
             triggerHaptic()
             selectedTest = test
         } label: {
@@ -110,7 +122,7 @@ struct SandboxView: View {
                 HStack(spacing: 8) {
                     // Platform icons
                     HStack(spacing: -4) {
-                        ForEach(test.platforms.prefix(4)) { platform in
+                        ForEach(visiblePlatforms.prefix(4)) { platform in
                             Image(systemName: platform.icon)
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)
@@ -118,8 +130,8 @@ struct SandboxView: View {
                                 .background(Color(hex: platform.color))
                                 .clipShape(Circle())
                         }
-                        if test.platforms.count > 4 {
-                            Text("+\(test.platforms.count - 4)")
+                        if visiblePlatforms.count > 4 {
+                            Text("+\(visiblePlatforms.count - 4)")
                                 .font(.system(.caption2, design: .rounded, weight: .bold))
                                 .foregroundStyle(textTertiary)
                                 .frame(width: 22, height: 22)
@@ -130,8 +142,8 @@ struct SandboxView: View {
 
                     Spacer()
 
-                    if let results = test.results {
-                        Text("\(results.count) results")
+                    if !visibleResults.isEmpty {
+                        Text("\(visibleResults.count) results")
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(textTertiary)
                     }
@@ -241,6 +253,11 @@ private struct CreateTestSheet: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+    private var supportedPlatforms: [PlatformType] {
+        service.availablePlatforms
+            .map(\.platform)
+            .filter { AppStoreComplianceManager.shared.isPlatformAvailable($0) }
+    }
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
@@ -279,9 +296,16 @@ private struct CreateTestSheet: View {
                                 GridItem(.flexible()),
                                 GridItem(.flexible())
                             ], spacing: 8) {
-                                ForEach(PlatformType.allCases) { platform in
+                                ForEach(supportedPlatforms) { platform in
                                     platformChip(platform)
                                 }
+                            }
+
+                            if supportedPlatforms.isEmpty {
+                                Text("No supported sandbox platforms are currently available for this account.")
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(textTertiary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
 
@@ -354,6 +378,11 @@ private struct CreateTestSheet: View {
                         .foregroundStyle(textSecondary)
                 }
             }
+            .task { await service.loadAvailablePlatforms() }
+            .onChange(of: supportedPlatforms) { _, updatedPlatforms in
+                let supportedSet = Set(updatedPlatforms)
+                selectedPlatforms = selectedPlatforms.intersection(supportedSet)
+            }
         }
     }
 
@@ -424,6 +453,9 @@ private struct TestDetailSheet: View {
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+    private var visibleResults: [PlatformTestResult] {
+        (test.results ?? []).filter { AppStoreComplianceManager.shared.isPlatformAvailable($0.platform) }
+    }
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
@@ -457,13 +489,13 @@ private struct TestDetailSheet: View {
                         }
 
                         // Results
-                        if let results = test.results, !results.isEmpty {
+                        if !visibleResults.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("Results")
                                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
                                     .foregroundStyle(textSecondary)
 
-                                ForEach(results) { result in
+                                ForEach(visibleResults) { result in
                                     resultCard(result)
                                 }
                             }

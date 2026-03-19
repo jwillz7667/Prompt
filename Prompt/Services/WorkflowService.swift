@@ -7,7 +7,6 @@ final class WorkflowService: ObservableObject {
     static let shared = WorkflowService()
 
     @Published private(set) var workflows: [Workflow] = []
-    @Published private(set) var templates: [WorkflowTemplate] = []
     @Published private(set) var isLoading = false
     @Published private(set) var error: Error?
 
@@ -15,17 +14,23 @@ final class WorkflowService: ObservableObject {
 
     private init() {}
 
+    private struct Envelope<T: Decodable>: Decodable {
+        let success: Bool
+        let data: T
+    }
+
     // MARK: - CRUD
 
     /// Create a new workflow
     func createWorkflow(request: CreateWorkflowRequest) async throws -> Workflow {
-        let workflow: Workflow = try await apiClient.request(
+        let response: Envelope<Workflow> = try await apiClient.request(
             "/workflows",
             method: .post,
-            body: request
+            body: request,
+            timeoutInterval: 60
         )
-        workflows.insert(workflow, at: 0)
-        return workflow
+        workflows.insert(response.data, at: 0)
+        return response.data
     }
 
     /// List all workflows
@@ -35,20 +40,21 @@ final class WorkflowService: ObservableObject {
             urlString += "?status=\(status.rawValue)"
         }
 
-        let fetched: [Workflow] = try await apiClient.request(
+        let response: Envelope<[Workflow]> = try await apiClient.request(
             urlString,
             method: .get
         )
-        self.workflows = fetched
-        return fetched
+        self.workflows = response.data
+        return response.data
     }
 
     /// Get a specific workflow
     func getWorkflow(id: String) async throws -> Workflow {
-        let workflow: Workflow = try await apiClient.request(
+        let response: Envelope<Workflow> = try await apiClient.request(
             "/workflows/\(id)",
             method: .get
         )
+        let workflow = response.data
         if let index = workflows.firstIndex(where: { $0.id == id }) {
             workflows[index] = workflow
         }
@@ -64,11 +70,12 @@ final class WorkflowService: ObservableObject {
         }
 
         let request = UpdateRequest(name: name, description: description, steps: steps)
-        let workflow: Workflow = try await apiClient.request(
+        let response: Envelope<Workflow> = try await apiClient.request(
             "/workflows/\(id)",
             method: .put,
             body: request
         )
+        let workflow = response.data
         if let index = workflows.firstIndex(where: { $0.id == id }) {
             workflows[index] = workflow
         }
@@ -88,92 +95,79 @@ final class WorkflowService: ObservableObject {
 
     /// Execute a workflow
     func executeWorkflow(id: String, request: ExecuteWorkflowRequest) async throws -> WorkflowExecution {
-        let execution: WorkflowExecution = try await apiClient.request(
+        let response: Envelope<WorkflowExecution> = try await apiClient.request(
             "/workflows/\(id)/execute",
             method: .post,
-            body: request
+            body: request,
+            timeoutInterval: 120
         )
-        return execution
+        return response.data
     }
 
     /// Get execution details
     func getExecution(executionId: String) async throws -> WorkflowExecution {
-        let execution: WorkflowExecution = try await apiClient.request(
+        let response: Envelope<WorkflowExecution> = try await apiClient.request(
             "/workflows/executions/\(executionId)",
             method: .get
         )
-        return execution
+        return response.data
     }
 
     /// List executions for a workflow
     func listExecutions(workflowId: String) async throws -> [WorkflowExecution] {
-        let executions: [WorkflowExecution] = try await apiClient.request(
+        let response: Envelope<[WorkflowExecution]> = try await apiClient.request(
             "/workflows/\(workflowId)/executions",
             method: .get
         )
-        return executions
+        return response.data
     }
 
     // MARK: - Clone, Export, Import
 
     /// Clone a workflow
-    func cloneWorkflow(id: String) async throws -> Workflow {
-        let workflow: Workflow = try await apiClient.request(
+    func cloneWorkflow(id: String, newName: String) async throws -> Workflow {
+        struct CloneRequest: Codable {
+            let newName: String
+        }
+
+        let response: Envelope<Workflow> = try await apiClient.request(
             "/workflows/\(id)/clone",
-            method: .post
+            method: .post,
+            body: CloneRequest(newName: newName)
         )
-        workflows.insert(workflow, at: 0)
-        return workflow
+        workflows.insert(response.data, at: 0)
+        return response.data
     }
 
     /// Export workflow as JSON string
     func exportWorkflow(id: String) async throws -> String {
-        struct ExportResponse: Codable {
-            let workflow: Workflow
-        }
-        let response: ExportResponse = try await apiClient.request(
+        let response: Envelope<CreateWorkflowRequest> = try await apiClient.request(
             "/workflows/\(id)/export",
             method: .get
         )
-        let data = try JSONEncoder().encode(response.workflow)
+        let data = try JSONEncoder().encode(response.data)
         return String(data: data, encoding: .utf8) ?? "{}"
     }
 
     /// Import workflow from JSON
     func importWorkflow(json: String) async throws -> Workflow {
         guard let data = json.data(using: .utf8),
-              let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) != nil else {
             throw URLError(.badServerResponse)
-        }
-
-        struct ImportRequest: Codable {
-            let workflow: CreateWorkflowRequest
         }
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let workflowRequest = try decoder.decode(CreateWorkflowRequest.self, from: data)
-        let request = ImportRequest(workflow: workflowRequest)
 
-        let workflow: Workflow = try await apiClient.request(
+        let response: Envelope<Workflow> = try await apiClient.request(
             "/workflows/import",
             method: .post,
-            body: request
+            body: workflowRequest,
+            timeoutInterval: 60
         )
-        workflows.insert(workflow, at: 0)
-        return workflow
-    }
-
-    // MARK: - Templates
-
-    /// Load predefined workflow templates
-    func loadTemplates() async throws -> [WorkflowTemplate] {
-        let response: [WorkflowTemplate] = try await apiClient.request(
-            "/workflows/templates/available",
-            method: .get
-        )
-        self.templates = response
-        return response
+        workflows.insert(response.data, at: 0)
+        return response.data
     }
 
     // MARK: - Helpers

@@ -30,15 +30,11 @@ publicApiRouter.use(enforceApiQuota);
 const enhanceSchema = z.object({
   prompt: z.string().min(1).max(100000),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
-  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly']).optional(),
-  length: z.enum(['concise', 'standard', 'detailed']).optional(),
+  mode: z.enum(['standard', 'max']).default('standard'),
   maxTokens: z.number().int().min(1).max(8192).optional(),
   customInstructions: z.string().max(2000).optional(),
   stream: z.boolean().default(false),
-  // V3 meta-prompt features
   subModality: z.string().optional(),
-  targetPlatform: z.string().optional(),
-  includeNegativeExamples: z.boolean().optional(),
 });
 
 const historyQuerySchema = z.object({
@@ -88,14 +84,10 @@ publicApiRouter.post(
             prompt: data.prompt,
             tier: promptTier,
             maxTokens,
-            tone: data.tone,
-            length: data.length,
+            mode: data.mode,
             modality: data.modality,
             customInstructions: data.customInstructions,
-            // V3 meta-prompt features
             subModality: data.subModality,
-            targetPlatform: data.targetPlatform,
-            includeNegativeExamples: data.includeNegativeExamples,
           },
           {
             onToken: (token) => {
@@ -141,14 +133,10 @@ publicApiRouter.post(
           prompt: data.prompt,
           tier: promptTier,
           maxTokens,
-          tone: data.tone,
-          length: data.length,
+          mode: data.mode,
           modality: data.modality,
           customInstructions: data.customInstructions,
-          // V3 meta-prompt features
           subModality: data.subModality,
-          targetPlatform: data.targetPlatform,
-          includeNegativeExamples: data.includeNegativeExamples,
         });
 
         // Record usage
@@ -236,17 +224,17 @@ publicApiRouter.get('/models', async (req: ApiKeyRequest, res: Response): Promis
         {
           id: 'image',
           name: 'Image',
-          description: 'Prompts for image generation (DALL-E, Midjourney, Stable Diffusion)',
+          description: 'Prompts for image generation and visual composition',
         },
         {
           id: 'video',
           name: 'Video',
-          description: 'Prompts for video generation (Sora, Runway, Pika)',
+          description: 'Prompts for video generation and motion direction',
         },
         {
           id: 'audio',
           name: 'Audio',
-          description: 'Prompts for audio/music generation (Suno, Udio)',
+          description: 'Prompts for audio, music, voice, and sound design',
         },
         {
           id: 'code',
@@ -259,18 +247,9 @@ publicApiRouter.get('/models', async (req: ApiKeyRequest, res: Response): Promis
           description: 'Prompts for 3D model generation',
         },
       ],
-      tones: [
-        { id: 'professional', name: 'Professional', description: 'Formal business communication' },
-        { id: 'casual', name: 'Casual', description: 'Friendly, conversational tone' },
-        { id: 'academic', name: 'Academic', description: 'Scholarly, research-focused' },
-        { id: 'creative', name: 'Creative', description: 'Artistic and imaginative' },
-        { id: 'technical', name: 'Technical', description: 'Precise, detailed technical language' },
-        { id: 'friendly', name: 'Friendly', description: 'Warm and approachable' },
-      ],
-      lengths: [
-        { id: 'concise', name: 'Concise', description: 'Brief and to the point' },
-        { id: 'standard', name: 'Standard', description: 'Balanced detail level' },
-        { id: 'detailed', name: 'Detailed', description: 'Comprehensive and thorough' },
+      modes: [
+        { id: 'standard', name: 'Standard', description: 'Fast, high-quality prompt enhancement' },
+        { id: 'max', name: 'MAX', description: 'Highest-quality prompt enhancement with deeper planning and validation' },
       ],
       limits: {
         maxPromptLength: 100000,

@@ -246,7 +246,6 @@ final class SyncManager {
     /// Clear all local data and pending sync (for logout)
     func clearAllData() {
         dataManager.clearAllPrompts()
-        dataManager.clearAllTemplates()
         pendingCount = 0
         lastError = nil
     }

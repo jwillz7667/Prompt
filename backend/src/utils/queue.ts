@@ -17,10 +17,9 @@ export interface PromptEnhanceJob {
   promptId: string;
   prompt: string;
   model: string;
+  mode?: 'standard' | 'max';
   temperature: number;
   maxTokens: number;
-  tone?: string;
-  length?: string;
   customInstructions?: string;
 }
 

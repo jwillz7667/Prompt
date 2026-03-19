@@ -40,14 +40,16 @@ actor APIClient {
 
     // MARK: - Token Management
 
-    func setTokens(access: String, refresh: String) {
+    func setTokens(access: String, refresh: String) async {
         self.accessToken = access
         self.refreshToken = refresh
         // Persist tokens securely using shared keychain for extension access
         SharedKeychainHelper.save(key: .accessToken, value: access)
         SharedKeychainHelper.save(key: .refreshToken, value: refresh)
         // Also update shared data manager
-        SharedDataManager.shared.isAuthenticated = true
+        await MainActor.run {
+            SharedDataManager.shared.isAuthenticated = true
+        }
     }
 
     func loadStoredTokens() {
@@ -58,13 +60,15 @@ actor APIClient {
         self.refreshToken = SharedKeychainHelper.load(key: .refreshToken)
     }
 
-    func clearTokens() {
+    func clearTokens() async {
         self.accessToken = nil
         self.refreshToken = nil
         SharedKeychainHelper.deleteAll()
         // Update shared data manager
-        SharedDataManager.shared.isAuthenticated = false
-        SharedDataManager.shared.updateAuthState(isAuthenticated: false, name: nil, email: nil)
+        await MainActor.run {
+            SharedDataManager.shared.isAuthenticated = false
+            SharedDataManager.shared.updateAuthState(isAuthenticated: false, name: nil, email: nil)
+        }
     }
 
     var isAuthenticated: Bool {
@@ -77,10 +81,17 @@ actor APIClient {
         _ endpoint: String,
         method: HTTPMethod = .get,
         body: (any Encodable)? = nil,
-        requiresAuth: Bool = true
+        requiresAuth: Bool = true,
+        timeoutInterval: TimeInterval = 30
     ) async throws -> T {
-        let data = try await performRequest(endpoint, method: method, body: body, requiresAuth: requiresAuth)
-        let decoder = JSONDecoder()
+        let data = try await performRequest(
+            endpoint,
+            method: method,
+            body: body,
+            requiresAuth: requiresAuth,
+            timeoutInterval: timeoutInterval
+        )
+        let decoder = Self.makeJSONDecoder()
         return try decoder.decode(T.self, from: data)
     }
 
@@ -88,9 +99,16 @@ actor APIClient {
         _ endpoint: String,
         method: HTTPMethod = .get,
         body: (any Encodable)? = nil,
-        requiresAuth: Bool = true
+        requiresAuth: Bool = true,
+        timeoutInterval: TimeInterval = 30
     ) async throws {
-        _ = try await performRequest(endpoint, method: method, body: body, requiresAuth: requiresAuth)
+        _ = try await performRequest(
+            endpoint,
+            method: method,
+            body: body,
+            requiresAuth: requiresAuth,
+            timeoutInterval: timeoutInterval
+        )
     }
 
     // MARK: - Streaming Request
@@ -152,13 +170,19 @@ actor APIClient {
                                 return
                             }
 
-                            if let jsonData = data.data(using: .utf8),
-                               let event = try? JSONDecoder().decode(StreamEvent.self, from: jsonData) {
-                                continuation.yield(event)
+                            if let jsonData = data.data(using: .utf8) {
+                                do {
+                                    let event = try await MainActor.run {
+                                        try JSONDecoder().decode(StreamEvent.self, from: jsonData)
+                                    }
+                                    continuation.yield(event)
 
-                                if case .error = event.type {
-                                    continuation.finish(throwing: APIError.badRequest(event.message ?? "Stream error"))
-                                    return
+                                    if case .error = event.type {
+                                        continuation.finish(throwing: APIError.badRequest(event.message ?? "Stream error"))
+                                        return
+                                    }
+                                } catch {
+                                    continue
                                 }
                             }
                         }
@@ -179,6 +203,7 @@ actor APIClient {
         method: HTTPMethod,
         body: (any Encodable)?,
         requiresAuth: Bool,
+        timeoutInterval: TimeInterval,
         isRetry: Bool = false
     ) async throws -> Data {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
@@ -192,7 +217,7 @@ actor APIClient {
         // Get device ID on main actor
         let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
         request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeoutInterval
 
         if requiresAuth {
             guard let token = accessToken else {
@@ -202,10 +227,17 @@ actor APIClient {
         }
 
         if let body = body {
-            request.httpBody = try JSONEncoder().encode(body)
+            request.httpBody = try Self.makeJSONEncoder().encode(body)
         }
 
-        let (data, response) = try await urlSession.data(for: request)
+        let data: Data
+        let response: URLResponse
+
+        do {
+            (data, response) = try await urlSession.data(for: request)
+        } catch let urlError as URLError where urlError.code == .timedOut {
+            throw APIError.requestTimedOut
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -219,13 +251,20 @@ actor APIClient {
             // Token expired - try refresh
             if !isRetry && requiresAuth {
                 try await refreshAccessToken()
-                return try await performRequest(endpoint, method: method, body: body, requiresAuth: requiresAuth, isRetry: true)
+                return try await performRequest(
+                    endpoint,
+                    method: method,
+                    body: body,
+                    requiresAuth: requiresAuth,
+                    timeoutInterval: timeoutInterval,
+                    isRetry: true
+                )
             }
             throw APIError.unauthorized
 
         case 400:
             let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-            throw APIError.badRequest(errorResponse?.error ?? "Bad request")
+            throw APIError.badRequest(errorResponse?.message ?? errorResponse?.error ?? "Bad request")
 
         case 404:
             throw APIError.notFound
@@ -244,6 +283,10 @@ actor APIClient {
             throw APIError.rateLimited
 
         case 500...599:
+            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+            if let message = errorResponse?.message ?? errorResponse?.error {
+                throw APIError.serverMessage(message, httpResponse.statusCode)
+            }
             throw APIError.serverError(httpResponse.statusCode)
 
         default:
@@ -291,14 +334,14 @@ actor APIClient {
             }
 
             guard httpResponse.statusCode == 200 else {
-                clearTokens()
+                await clearTokens()
                 isRefreshing = false
                 resumePendingRequests(with: APIError.unauthorized)
                 throw APIError.unauthorized
             }
 
             let tokenResponse = try JSONDecoder().decode(TokenRefreshResponse.self, from: data)
-            setTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
+            await setTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
 
             isRefreshing = false
             resumePendingRequests(with: nil)
@@ -320,6 +363,44 @@ actor APIClient {
             }
         }
     }
+
+    private static func makeJSONDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+
+            let fractionalFormatter = ISO8601DateFormatter()
+            fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let standardFormatter = ISO8601DateFormatter()
+            standardFormatter.formatOptions = [.withInternetDateTime]
+
+            if let date = fractionalFormatter.date(from: value) ?? standardFormatter.date(from: value) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid ISO8601 date: \(value)"
+            )
+        }
+
+        return decoder
+    }
+
+    private static func makeJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(fractionalFormatter.string(from: date))
+        }
+
+        return encoder
+    }
 }
 
 // MARK: - HTTP Method
@@ -339,11 +420,13 @@ enum APIError: LocalizedError, Sendable {
     case invalidResponse
     case notAuthenticated
     case unauthorized
+    case requestTimedOut
     case badRequest(String)
     case notFound
     case rateLimited
     case quotaExceeded(remaining: Int)
     case featureLocked
+    case serverMessage(String, Int)
     case serverError(Int)
     case httpError(Int)
     case decodingError
@@ -354,11 +437,13 @@ enum APIError: LocalizedError, Sendable {
         case .invalidResponse: return "Invalid response from server"
         case .notAuthenticated: return "Please sign in to continue"
         case .unauthorized: return "Session expired. Please sign in again"
+        case .requestTimedOut: return "This request took too long. Please try again."
         case .badRequest(let message): return message
         case .notFound: return "Resource not found"
         case .rateLimited: return "Too many requests. Please wait a moment"
         case .quotaExceeded: return "You've reached your daily prompt limit"
         case .featureLocked: return "This feature requires a subscription upgrade"
+        case .serverMessage(let message, _): return message
         case .serverError(let code): return "Server error (\(code))"
         case .httpError(let code): return "Request failed (\(code))"
         case .decodingError: return "Failed to process response"
@@ -389,15 +474,17 @@ struct RefreshTokenRequest: Encodable, Sendable {
 struct APIErrorResponse: Decodable, Sendable {
     let error: String
     let code: String?
+    let message: String?
 
     nonisolated init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         error = try container.decode(String.self, forKey: .error)
         code = try container.decodeIfPresent(String.self, forKey: .code)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case error, code
+        case error, code, message
     }
 }
 

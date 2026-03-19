@@ -1,0 +1,23 @@
+Promptomize 1.5 更新内容
+
+POWER TOOLS
+- 增强后新增统一 Power Tools 网格：Platform Optimize、Variations、Sandbox、Workflows 一处完成
+- 可直接在当前页面展开并使用各项工具
+
+内联平台优化
+- 支持对 18 个平台进行提示词校验与优化，覆盖文本、图像、视频、音乐、代码与 3D 工作流
+- 可查看改进统计，并一键应用优化后的提示词
+
+内联变体
+- 支持 Quick、Comprehensive、Creative、Platform 等多种变体策略
+- 横向卡片浏览不同版本，并可立即替换当前结果
+
+重新设计的提示词页面
+- 更清晰的渐进式界面，相关功能在合适的时机出现
+- 工具栏进一步精简，仅保留核心操作
+- 新增 “Start from Template” 与 “Continue Thread” 快捷入口
+
+问题修复
+- 修复 StoreKit JWS 校验问题
+- 修复平台标签在滚动视图中发光效果被裁切的问题
+- 补充 Flux、Pika、Kling、MusicGen、Meshy、Tripo3D 等平台配置

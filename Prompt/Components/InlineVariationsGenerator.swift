@@ -163,11 +163,15 @@ struct InlineVariationsGenerator: View {
 
     private func variationCard(_ variation: VariationResultItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Header: tone + tokens
+            // Header
             HStack {
-                Text(variation.tone.capitalized)
+                Text(variation.label)
                     .font(.system(.caption2, design: .rounded, weight: .bold))
                     .foregroundStyle(accentColor)
+
+                Text(variation.mode.uppercased())
+                    .font(.system(.caption2, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textSecondary)
 
                 Spacer()
 
@@ -233,7 +237,7 @@ struct InlineVariationsGenerator: View {
             )
             self.comparison = result
         } catch {
-            self.error = "Generation failed. Please try again."
+            self.error = error.localizedDescription
         }
 
         isGenerating = false

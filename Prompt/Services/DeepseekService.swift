@@ -8,6 +8,38 @@
 import Foundation
 
 actor DeepseekService {
+    nonisolated private static func makeSubscriptionInfo(
+        from details: EnhanceResponse.SubscriptionDetails?
+    ) -> EnhancedPromptResult.SubscriptionInfo? {
+        guard let details else { return nil }
+
+        return EnhancedPromptResult.SubscriptionInfo(
+            tier: details.tier,
+            promptQuality: details.promptQuality,
+            dailyPromptsUsed: details.dailyPromptsUsed,
+            dailyPromptsLimit: details.dailyPromptsLimit,
+            maxModeUsedToday: details.maxModeUsedToday,
+            maxModeDailyLimit: details.maxModeDailyLimit,
+            maxModeRemaining: details.maxModeRemaining
+        )
+    }
+
+    nonisolated private static func makeSubscriptionInfo(
+        from details: StreamEvent.StreamSubscription?
+    ) -> EnhancedPromptResult.SubscriptionInfo? {
+        guard let details else { return nil }
+
+        return EnhancedPromptResult.SubscriptionInfo(
+            tier: details.tier,
+            promptQuality: details.promptQuality,
+            dailyPromptsUsed: details.dailyPromptsUsed,
+            dailyPromptsLimit: details.dailyPromptsLimit,
+            maxModeUsedToday: nil,
+            maxModeDailyLimit: nil,
+            maxModeRemaining: nil
+        )
+    }
+
     // MARK: - Request/Response Models
 
     struct EnhanceRequest: Encodable, Sendable {
@@ -15,26 +47,22 @@ actor DeepseekService {
         let model: String?
         let temperature: Double?
         let maxTokens: Int?
-        let tone: String?
-        let length: String?
+        let mode: String?
         let modality: String?
         let subModality: String?
         let customInstructions: String?
         let targetCharacterLength: Int?
-        let targetPlatform: String?
 
         enum CodingKeys: String, CodingKey {
             case prompt
             case model
             case temperature
             case maxTokens
-            case tone
-            case length
+            case mode
             case modality
             case subModality
             case customInstructions
             case targetCharacterLength
-            case targetPlatform
         }
     }
 
@@ -65,6 +93,9 @@ actor DeepseekService {
             let promptQuality: String
             let dailyPromptsUsed: Int
             let dailyPromptsLimit: Int
+            let maxModeUsedToday: Int?
+            let maxModeDailyLimit: Int?
+            let maxModeRemaining: Int?
         }
     }
 
@@ -75,26 +106,23 @@ actor DeepseekService {
         model: DeepseekModel,
         temperature: Double,
         maxTokens: Int,
-        tone: ToneType? = nil,
-        length: OutputLength? = nil,
+        mode: PromptGenerationMode = .standard,
         modality: ModalityType? = nil,
         subModality: String? = nil,
         customInstructions: String? = nil,
-        targetCharacterLength: Int? = nil,
-        targetPlatform: String? = nil
+        targetCharacterLength: Int? = nil
     ) async throws -> EnhancedPromptResult {
+        let apiModality = await MainActor.run { modality?.apiModality }
         let request = EnhanceRequest(
             prompt: userPrompt,
             model: model.rawValue,
             temperature: temperature,
             maxTokens: maxTokens,
-            tone: tone?.rawValue,
-            length: length?.rawValue,
-            modality: modality?.apiModality,
+            mode: mode.rawValue,
+            modality: apiModality,
             subModality: subModality,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil,
-            targetCharacterLength: targetCharacterLength,
-            targetPlatform: targetPlatform
+            targetCharacterLength: targetCharacterLength
         )
 
         let response: EnhanceResponse = try await APIClient.shared.request(
@@ -103,18 +131,13 @@ actor DeepseekService {
             body: request
         )
 
-        return EnhancedPromptResult(
-            enhancedPrompt: response.enhancedPrompt,
-            tokensUsed: response.usage?.totalTokens ?? 0,
-            subscription: response.subscription.map { sub in
-                EnhancedPromptResult.SubscriptionInfo(
-                    tier: sub.tier,
-                    promptQuality: sub.promptQuality,
-                    dailyPromptsUsed: sub.dailyPromptsUsed,
-                    dailyPromptsLimit: sub.dailyPromptsLimit
-                )
-            }
-        )
+        return await MainActor.run {
+            EnhancedPromptResult(
+                enhancedPrompt: response.enhancedPrompt,
+                tokensUsed: response.usage?.totalTokens ?? 0,
+                subscription: Self.makeSubscriptionInfo(from: response.subscription)
+            )
+        }
     }
 
     // MARK: - Streaming Enhancement Function
@@ -124,27 +147,24 @@ actor DeepseekService {
         model: DeepseekModel,
         temperature: Double,
         maxTokens: Int,
-        tone: ToneType? = nil,
-        length: OutputLength? = nil,
+        mode: PromptGenerationMode = .standard,
         modality: ModalityType? = nil,
         subModality: String? = nil,
         customInstructions: String? = nil,
         targetCharacterLength: Int? = nil,
-        targetPlatform: String? = nil,
         onToken: @escaping @Sendable (String) -> Void
     ) async throws -> EnhancedPromptResult {
+        let apiModality = await MainActor.run { modality?.apiModality }
         let request = EnhanceRequest(
             prompt: userPrompt,
             model: model.rawValue,
             temperature: temperature,
             maxTokens: maxTokens,
-            tone: tone?.rawValue,
-            length: length?.rawValue,
-            modality: modality?.apiModality,
+            mode: mode.rawValue,
+            modality: apiModality,
             subModality: subModality,
             customInstructions: customInstructions?.isEmpty == false ? customInstructions : nil,
-            targetCharacterLength: targetCharacterLength,
-            targetPlatform: targetPlatform
+            targetCharacterLength: targetCharacterLength
         )
 
         let stream = await APIClient.shared.requestStream(
@@ -164,18 +184,14 @@ actor DeepseekService {
                     onToken(content)
                 }
             case .complete:
-                finalResult = EnhancedPromptResult(
-                    enhancedPrompt: fullContent,
-                    tokensUsed: event.usage?.totalTokens ?? 0,
-                    subscription: event.subscription.map { sub in
-                        EnhancedPromptResult.SubscriptionInfo(
-                            tier: sub.tier,
-                            promptQuality: sub.promptQuality,
-                            dailyPromptsUsed: sub.dailyPromptsUsed,
-                            dailyPromptsLimit: sub.dailyPromptsLimit
-                        )
-                    }
-                )
+                let completedContent = fullContent
+                finalResult = await MainActor.run {
+                    EnhancedPromptResult(
+                        enhancedPrompt: completedContent,
+                        tokensUsed: event.usage?.totalTokens ?? 0,
+                        subscription: Self.makeSubscriptionInfo(from: event.subscription)
+                    )
+                }
             case .error:
                 throw EnhancerError.apiError(event.message ?? "Unknown error")
             }
@@ -207,6 +223,9 @@ struct EnhancedPromptResult: Sendable {
         let promptQuality: String
         let dailyPromptsUsed: Int
         let dailyPromptsLimit: Int
+        let maxModeUsedToday: Int?
+        let maxModeDailyLimit: Int?
+        let maxModeRemaining: Int?
     }
 }
 

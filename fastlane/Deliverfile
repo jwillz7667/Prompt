@@ -1,0 +1,24 @@
+# Deliverfile for Promptomize
+# https://docs.fastlane.tools/actions/deliver/
+
+# App Store Connect API Key authentication
+app_identifier("com.res.promptomizer")
+api_key_path("./fastlane/api_key.json")
+
+# Metadata path
+metadata_path("./fastlane/metadata")
+screenshots_path("./fastlane/screenshots")
+
+# Submit options
+submit_for_review(false)
+automatic_release(false)
+skip_binary_upload(true)
+
+# Metadata handling
+force(true)
+overwrite_screenshots(false)
+skip_screenshots(true)
+
+# Precheck
+run_precheck_before_submit(true)
+precheck_include_in_app_purchases(false)

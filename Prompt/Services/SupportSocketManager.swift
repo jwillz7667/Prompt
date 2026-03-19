@@ -272,7 +272,7 @@ final class SupportSocketManager: ObservableObject {
         // Auto-stop typing after 2 seconds of inactivity
         typingTimer?.invalidate()
         typingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.stopTyping()
             }
         }

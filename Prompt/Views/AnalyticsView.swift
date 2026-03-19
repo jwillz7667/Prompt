@@ -249,9 +249,9 @@ struct AnalyticsView: View {
 
     private func formatModelName(_ model: String) -> String {
         if model.contains("reasoner") {
-            return "Deep Think"
+            return "MAX"
         } else if model.contains("chat") {
-            return "Fast Mode"
+            return "Standard"
         }
         return model
     }
@@ -377,7 +377,6 @@ struct AnalyticsData: Decodable {
         let avgPromptsPerDay: Double
         let avgTokensPerPrompt: Int
         let collectionCount: Int
-        let templateCount: Int
     }
 
     struct Charts: Decodable {

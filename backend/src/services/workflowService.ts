@@ -264,11 +264,6 @@ class WorkflowService {
         orderBy: { updatedAt: 'desc' },
         include: {
           steps: {
-            select: {
-              id: true,
-              name: true,
-              stepOrder: true
-            },
             orderBy: { stepOrder: 'asc' }
           },
           _count: {

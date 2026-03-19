@@ -29,19 +29,19 @@ struct WhatsNewView: View {
         WhatsNewFeature(
             icon: "bolt.fill",
             title: "Power Tools",
-            description: "Platform Optimize, Variations, Sandbox, and Workflows — all accessible from a unified grid after enhancing.",
+            description: "Variations, Sandbox, Workflows, and Contexts now share one production-ready power tools grid after each enhancement.",
             iconColor: .brandPurple
         ),
         WhatsNewFeature(
             icon: "cpu",
-            title: "Inline Platform Optimization",
-            description: "Validate and optimize prompts for ChatGPT, Claude, Midjourney, DALL-E, and 14 more platforms without leaving the screen.",
+            title: "MAX Mode",
+            description: "MAX now folds in deep reasoning and stronger prompt planning for every modality without a separate Deep Think path.",
             iconColor: .brandCyan
         ),
         WhatsNewFeature(
             icon: "rectangle.on.rectangle",
             title: "Inline Variations",
-            description: "Generate prompt alternatives with Quick, Comprehensive, Creative, or Platform strategies — browse and swap results instantly.",
+            description: "Generate prompt alternatives with Standard, MAX, and modality-focused strategies, then swap in the best result instantly.",
             iconColor: .purple
         ),
         WhatsNewFeature(
@@ -53,7 +53,7 @@ struct WhatsNewView: View {
         WhatsNewFeature(
             icon: "doc.on.doc",
             title: "Quick Access",
-            description: "Start from Template and Continue Thread buttons now right below the input — no more digging through menus.",
+            description: "Continue Thread and reusable Contexts stay close to the input so advanced prompt setup is faster.",
             iconColor: .green
         )
     ]

@@ -27,7 +27,8 @@ final class VariationsService: ObservableObject {
             let response: VariationResponse = try await apiClient.request(
                 "/variations/generate",
                 method: .post,
-                body: request
+                body: request,
+                timeoutInterval: 180
             )
 
             guard let comparison = response.data else {
@@ -50,7 +51,8 @@ final class VariationsService: ObservableObject {
     func getVariation(id: String) async throws -> VariationComparison {
         let response: VariationResponse = try await apiClient.request(
             "/variations/\(id)",
-            method: .get
+            method: .get,
+            timeoutInterval: 60
         )
 
         guard let comparison = response.data else {
@@ -78,15 +80,15 @@ final class VariationsService: ObservableObject {
         )
 
         // Update local comparison rating
-        if var comparison = currentComparison, comparison.variationId == variationId {
+        if let comparison = currentComparison, comparison.variationId == variationId {
             var updatedResults = comparison.results
             if let idx = updatedResults.firstIndex(where: { $0.index == index }) {
                 let item = updatedResults[idx]
                 updatedResults[idx] = VariationResultItem(
                     index: item.index,
-                    tone: item.tone,
-                    length: item.length,
-                    platform: item.platform,
+                    label: item.label,
+                    mode: item.mode,
+                    focus: item.focus,
                     enhancedPrompt: item.enhancedPrompt,
                     tokensUsed: item.tokensUsed,
                     score: Double(rating) / 5.0
@@ -115,7 +117,7 @@ final class VariationsService: ObservableObject {
         )
 
         // Update local winner
-        if var comparison = currentComparison, comparison.variationId == variationId {
+        if let comparison = currentComparison, comparison.variationId == variationId {
             self.currentComparison = VariationComparison(
                 variationId: comparison.variationId,
                 results: comparison.results,
@@ -135,7 +137,8 @@ final class VariationsService: ObservableObject {
         do {
             let response: VariationsListResponse = try await apiClient.request(
                 "/variations?limit=\(limit)&offset=\(offset)",
-                method: .get
+                method: .get,
+                timeoutInterval: 60
             )
             self.variations = response.data
             isLoading = false

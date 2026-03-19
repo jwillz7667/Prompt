@@ -25,6 +25,11 @@ struct ThreadView: View {
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
     /// Adaptive accent: cyan in dark, purple in light (matches app brand)
     private var accentColor: Color { Color.adaptiveButtonPrimary }
+    
+    private var canUseMaxMode: Bool {
+        guard let remaining = storeKit.usageInfo?.maxModeRemaining else { return true }
+        return remaining != 0
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -199,7 +204,14 @@ struct ThreadView: View {
                     triggerHaptic(.medium)
                     isInputFocused = false
                     Task {
+                        if settings.maxModeEnabled && !canUseMaxMode {
+                            viewModel.showPaywall = true
+                            settings.maxModeEnabled = false
+                            settings.savePreferences()
+                            return
+                        }
                         await viewModel.addTurn(settings: settings, historyManager: historyManager)
+                        await storeKit.syncWithBackend()
                     }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
@@ -237,23 +249,26 @@ struct ThreadView: View {
                         .transition(.scale.combined(with: .opacity))
                     }
 
-                    CompactToneSelector(
-                        selectedTone: Binding(
-                            get: { settings.selectedTone },
-                            set: { newValue in
-                                settings.selectedTone = newValue
-                                settings.savePreferences()
-                            }
-                        )
-                    )
-
-                    CompactLengthSelector(selectedLength: Binding(
-                        get: { settings.outputLength },
-                        set: { newValue in
-                            settings.outputLength = newValue
-                            settings.savePreferences()
+                    Button {
+                        if !settings.maxModeEnabled && !canUseMaxMode {
+                            viewModel.showPaywall = true
+                            return
                         }
-                    ))
+                        settings.maxModeEnabled.toggle()
+                        settings.savePreferences()
+                        triggerHaptic(.light)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: settings.maxModeEnabled ? "flame.fill" : "flame")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("MAX")
+                                .font(.system(.caption2, design: .rounded, weight: .bold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .liquidGlassChip(isSelected: settings.maxModeEnabled, accentColor: .orange)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .animation(.spring(response: 0.3), value: settings.selectedModality)

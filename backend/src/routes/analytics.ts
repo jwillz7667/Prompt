@@ -139,11 +139,6 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promi
       where: { userId: req.user.id },
     });
 
-    // Get template count
-    const templateCount = await prisma.template.count({
-      where: { userId: req.user.id },
-    });
-
     res.json({
       summary: {
         totalPrompts,
@@ -152,7 +147,6 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promi
         avgPromptsPerDay: Math.round(avgPromptsPerDay * 10) / 10,
         avgTokensPerPrompt: Math.round(avgTokensPerPrompt),
         collectionCount,
-        templateCount,
       },
       charts: {
         promptsByDay: chartData,

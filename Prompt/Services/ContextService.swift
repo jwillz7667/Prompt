@@ -11,6 +11,11 @@ final class ContextService: ObservableObject {
     @Published private(set) var error: Error?
     
     private let apiClient = APIClient.shared
+
+    private struct Envelope<T: Decodable>: Decodable {
+        let success: Bool
+        let data: T
+    }
     
     private init() {}
     
@@ -32,11 +37,12 @@ final class ContextService: ObservableObject {
             isGlobal: isGlobal
         )
         
-        let context: ProjectContext = try await apiClient.request(
+        let response: Envelope<ProjectContext> = try await apiClient.request(
             "/contexts",
             method: .post,
             body: request
         )
+        let context = response.data
         
         // Update local cache
         contexts.append(context)
@@ -61,11 +67,12 @@ final class ContextService: ObservableObject {
             isGlobal: isGlobal
         )
         
-        let context: ProjectContext = try await apiClient.request(
+        let response: Envelope<ProjectContext> = try await apiClient.request(
             "/contexts/\(id)",
             method: .put,
             body: request
         )
+        let context = response.data
         
         // Update local cache
         if let index = contexts.firstIndex(where: { $0.id == id }) {
@@ -88,28 +95,27 @@ final class ContextService: ObservableObject {
     
     /// Get a specific context
     func getContext(id: String) async throws -> ProjectContext {
-        let context: ProjectContext = try await apiClient.request(
+        let response: Envelope<ProjectContext> = try await apiClient.request(
             "/contexts/\(id)",
             method: .get
         )
-        
-        return context
+
+        return response.data
     }
     
     /// List all contexts
     func listContexts(includeGlobal: Bool = true) async throws -> [ProjectContext] {
-        let queryItems = includeGlobal ? [] : [URLQueryItem(name: "includeGlobal", value: "false")]
-        
         // Build URL with query parameters
         var urlString = "/contexts"
         if !includeGlobal {
             urlString += "?includeGlobal=false"
         }
         
-        let fetchedContexts: [ProjectContext] = try await apiClient.request(
+        let response: Envelope<[ProjectContext]> = try await apiClient.request(
             urlString,
             method: .get
         )
+        let fetchedContexts = response.data
         
         // Update local cache
         self.contexts = fetchedContexts
@@ -135,13 +141,13 @@ final class ContextService: ObservableObject {
             includeGlobal: includeGlobal
         )
         
-        let results: [SimilarContext] = try await apiClient.request(
+        let response: Envelope<[SimilarContext]> = try await apiClient.request(
             "/contexts/search",
             method: .post,
             body: request
         )
-        
-        return results
+
+        return response.data
     }
     
     // MARK: - Context Usage
@@ -163,12 +169,12 @@ final class ContextService: ObservableObject {
     
     /// Get contexts used with a specific prompt
     func getPromptContexts(promptId: String) async throws -> [ProjectContext] {
-        let contexts: [ProjectContext] = try await apiClient.request(
+        let response: Envelope<[ProjectContext]> = try await apiClient.request(
             "/contexts/prompt/\(promptId)",
             method: .get
         )
-        
-        return contexts
+
+        return response.data
     }
     
     /// Merge multiple contexts into a new one
@@ -178,11 +184,12 @@ final class ContextService: ObservableObject {
             newName: newName
         )
         
-        let context: ProjectContext = try await apiClient.request(
+        let response: Envelope<ProjectContext> = try await apiClient.request(
             "/contexts/merge",
             method: .post,
             body: request
         )
+        let context = response.data
         
         // Add to local cache
         contexts.append(context)

@@ -17,17 +17,25 @@ struct GetQuotaIntent: AppIntent {
     init() {}
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let shared = SharedDataManager.shared
-
-        if shared.isUnlimited {
-            return .result(
-                dialog: "You have unlimited prompts with your \(shared.subscriptionTier) subscription"
+        let quota = await MainActor.run {
+            (
+                SharedDataManager.shared.isUnlimited,
+                SharedDataManager.shared.subscriptionTier,
+                SharedDataManager.shared.remainingPrompts,
+                SharedDataManager.shared.dailyPromptsUsed,
+                SharedDataManager.shared.dailyPromptsLimit
             )
         }
 
-        let remaining = shared.remainingPrompts
-        let used = shared.dailyPromptsUsed
-        let limit = shared.dailyPromptsLimit
+        if quota.0 {
+            return .result(
+                dialog: "You have unlimited prompts with your \(quota.1) subscription"
+            )
+        }
+
+        let remaining = quota.2
+        let used = quota.3
+        let limit = quota.4
 
         if remaining == 0 {
             return .result(

@@ -43,59 +43,9 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Tone Type
-
-enum ToneType: String, CaseIterable, Identifiable, Codable, Sendable {
-    case professional = "professional"
-    case casual = "casual"
-    case academic = "academic"
-    case creative = "creative"
-    case technical = "technical"
-    case friendly = "friendly"
+enum PromptGenerationMode: String, Codable, Sendable {
+    case standard = "standard"
     case max = "max"
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .professional: return "Professional"
-        case .casual: return "Casual"
-        case .academic: return "Academic"
-        case .creative: return "Creative"
-        case .technical: return "Technical"
-        case .friendly: return "Friendly"
-        case .max: return "MAX"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .professional: return "briefcase.fill"
-        case .casual: return "cup.and.saucer.fill"
-        case .academic: return "graduationcap.fill"
-        case .creative: return "paintbrush.fill"
-        case .technical: return "wrench.and.screwdriver.fill"
-        case .friendly: return "heart.fill"
-        case .max: return "flame.fill"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .professional: return "Formal, business-appropriate"
-        case .casual: return "Relaxed, conversational"
-        case .academic: return "Scholarly, research-oriented"
-        case .creative: return "Imaginative, expressive"
-        case .technical: return "Precise, detail-oriented"
-        case .friendly: return "Warm, supportive"
-        case .max: return "PhD-level prompt engineering"
-        }
-    }
-
-    /// Whether this tone requires Pro or Premium subscription
-    var isPremium: Bool {
-        self == .max
-    }
 }
 
 // MARK: - Modality Type
@@ -137,7 +87,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
 
     var description: String {
         switch self {
-        case .text: return "ChatGPT, Claude, and more"
+        case .text: return "Leading AI assistants and more"
         case .image: return "Midjourney, DALL-E, Flux"
         case .video: return "Sora, Runway, Pika"
         case .music: return "Suno, Udio, MusicGen"
@@ -206,52 +156,14 @@ enum AudioSubModalityType: String, CaseIterable, Identifiable, Codable, Sendable
     }
 }
 
-// MARK: - Output Length
-
-enum OutputLength: String, CaseIterable, Identifiable, Codable, Sendable {
-    case concise = "concise"
-    case standard = "standard"
-    case detailed = "detailed"
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .concise: return "Concise"
-        case .standard: return "Standard"
-        case .detailed: return "Detailed"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .concise: return "text.alignleft"
-        case .standard: return "text.justify"
-        case .detailed: return "doc.text.fill"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .concise: return "Brief, to the point"
-        case .standard: return "Balanced detail"
-        case .detailed: return "Comprehensive"
-        }
-    }
-}
-
 @Observable
 final class SettingsManager {
-    var selectedModel: DeepseekModel = .chat
-    var deepThinkEnabled: Bool = false
     var maxModeEnabled: Bool = false
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
     var appearanceMode: AppearanceMode = .system
 
     // Enhancement controls
-    var selectedTone: ToneType = .professional
-    var outputLength: OutputLength = .standard
     var selectedModality: ModalityType = .text
     var selectedAudioSubModality: AudioSubModalityType = .speech
     var customInstructions: String = ""
@@ -266,9 +178,8 @@ final class SettingsManager {
         }
     }
 
-    /// Returns the effective tone - MAX if enabled, otherwise selected tone
-    var effectiveTone: ToneType {
-        maxModeEnabled ? .max : selectedTone
+    var promptMode: PromptGenerationMode {
+        maxModeEnabled ? .max : .standard
     }
 
     // App Group for sharing with keyboard extension AND persistence across updates
@@ -279,13 +190,10 @@ final class SettingsManager {
 
     // Keys for settings
     private enum Keys {
-        static let deepThinkEnabled = "deepThinkEnabled"
         static let maxModeEnabled = "maxModeEnabled"
         static let temperature = "temperature"
         static let maxTokens = "maxTokens"
         static let appearanceMode = "appearanceMode"
-        static let selectedTone = "selectedTone"
-        static let outputLength = "outputLength"
         static let selectedModality = "selectedModality"
         static let selectedAudioSubModality = "selectedAudioSubModality"
         static let customInstructions = "customInstructions"
@@ -300,9 +208,9 @@ final class SettingsManager {
 
     // MARK: - Computed Properties
 
-    /// Returns the actual model to use based on Deep Think setting
+    /// MAX mode uses the reasoning model; standard mode uses the fast chat model.
     var effectiveModel: DeepseekModel {
-        deepThinkEnabled ? .reasoner : .chat
+        maxModeEnabled ? .reasoner : .chat
     }
 
     // MARK: - Migration
@@ -319,9 +227,6 @@ final class SettingsManager {
         #endif
 
         // Migrate each setting if it exists in standard UserDefaults
-        if UserDefaults.standard.object(forKey: Keys.deepThinkEnabled) != nil {
-            defaults.set(UserDefaults.standard.bool(forKey: Keys.deepThinkEnabled), forKey: Keys.deepThinkEnabled)
-        }
         if UserDefaults.standard.double(forKey: Keys.temperature) > 0 {
             defaults.set(UserDefaults.standard.double(forKey: Keys.temperature), forKey: Keys.temperature)
         }
@@ -330,12 +235,6 @@ final class SettingsManager {
         }
         if let value = UserDefaults.standard.string(forKey: Keys.appearanceMode) {
             defaults.set(value, forKey: Keys.appearanceMode)
-        }
-        if let value = UserDefaults.standard.string(forKey: Keys.selectedTone) {
-            defaults.set(value, forKey: Keys.selectedTone)
-        }
-        if let value = UserDefaults.standard.string(forKey: Keys.outputLength) {
-            defaults.set(value, forKey: Keys.outputLength)
         }
         if let value = UserDefaults.standard.string(forKey: Keys.customInstructions) {
             defaults.set(value, forKey: Keys.customInstructions)
@@ -358,7 +257,6 @@ final class SettingsManager {
             return
         }
 
-        deepThinkEnabled = defaults.bool(forKey: Keys.deepThinkEnabled)
         maxModeEnabled = defaults.bool(forKey: Keys.maxModeEnabled)
 
         let savedTemp = defaults.double(forKey: Keys.temperature)
@@ -371,18 +269,6 @@ final class SettingsManager {
         if let appearanceRaw = defaults.string(forKey: Keys.appearanceMode),
            let mode = AppearanceMode(rawValue: appearanceRaw) {
             appearanceMode = mode
-        }
-
-        // Load tone preference
-        if let toneRaw = defaults.string(forKey: Keys.selectedTone),
-           let tone = ToneType(rawValue: toneRaw) {
-            selectedTone = tone
-        }
-
-        // Load length preference
-        if let lengthRaw = defaults.string(forKey: Keys.outputLength),
-           let length = OutputLength(rawValue: lengthRaw) {
-            outputLength = length
         }
 
         // Load modality preference
@@ -425,13 +311,10 @@ final class SettingsManager {
             return
         }
 
-        defaults.set(deepThinkEnabled, forKey: Keys.deepThinkEnabled)
         defaults.set(maxModeEnabled, forKey: Keys.maxModeEnabled)
         defaults.set(temperature, forKey: Keys.temperature)
         defaults.set(maxTokens, forKey: Keys.maxTokens)
         defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)
-        defaults.set(selectedTone.rawValue, forKey: Keys.selectedTone)
-        defaults.set(outputLength.rawValue, forKey: Keys.outputLength)
         defaults.set(selectedModality.rawValue, forKey: Keys.selectedModality)
         defaults.set(selectedAudioSubModality.rawValue, forKey: Keys.selectedAudioSubModality)
         defaults.set(customInstructions, forKey: Keys.customInstructions)
@@ -459,15 +342,15 @@ enum DeepseekModel: String, CaseIterable, Identifiable, Sendable {
 
     var displayName: String {
         switch self {
-        case .reasoner: return "Advanced Reasoner"
-        case .chat: return "Fast Mode"
+        case .reasoner: return "MAX"
+        case .chat: return "Standard"
         }
     }
 
     var description: String {
         switch self {
-        case .reasoner: return "Most advanced - 128K context, deep reasoning"
-        case .chat: return "Fast & efficient - 128K context, standard mode"
+        case .reasoner: return "Best quality prompt generation with deeper planning, structure, and validation"
+        case .chat: return "Fast, high-quality prompt generation for standard enhancement"
         }
     }
 

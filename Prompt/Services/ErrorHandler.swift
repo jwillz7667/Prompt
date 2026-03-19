@@ -347,6 +347,8 @@ final class ErrorHandler: ObservableObject {
                 return .notAuthenticated
             case .unauthorized:
                 return .sessionExpired
+            case .requestTimedOut:
+                return .timeout
             case .badRequest(let message):
                 if message.lowercased().contains("quota") || message.lowercased().contains("limit") {
                     return .quotaExceeded
@@ -360,6 +362,8 @@ final class ErrorHandler: ObservableObject {
                 return .quotaExceeded
             case .featureLocked:
                 return .featureLocked
+            case .serverMessage(let message, let code):
+                return .serverError(code, message)
             case .serverError(let code):
                 return .serverError(code, nil)
             case .httpError(let code):
@@ -523,10 +527,13 @@ final class NetworkMonitor: ObservableObject {
     }
 
     func startMonitoring() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor in
-                self?.isConnected = path.status == .satisfied
-                self?.connectionType = self?.getConnectionType(path) ?? .unknown
+        monitor.pathUpdateHandler = { [self] path in
+            let isConnected = path.status == .satisfied
+            let connectionType = Self.connectionType(for: path)
+
+            Task { @MainActor [self, isConnected, connectionType] in
+                self.isConnected = isConnected
+                self.connectionType = connectionType
             }
         }
         monitor.start(queue: queue)
@@ -536,7 +543,7 @@ final class NetworkMonitor: ObservableObject {
         monitor.cancel()
     }
 
-    private func getConnectionType(_ path: NWPath) -> ConnectionType {
+    private nonisolated static func connectionType(for path: NWPath) -> ConnectionType {
         if path.usesInterfaceType(.wifi) {
             return .wifi
         } else if path.usesInterfaceType(.cellular) {
@@ -583,8 +590,16 @@ struct ErrorAlertModifier: ViewModifier {
 }
 
 extension View {
+    @MainActor
     func errorAlert(
-        handler: ErrorHandler = .shared,
+        onAction: ((ErrorAction) -> Void)? = nil
+    ) -> some View {
+        errorAlert(handler: .shared, onAction: onAction)
+    }
+
+    @MainActor
+    func errorAlert(
+        handler: ErrorHandler,
         onAction: ((ErrorAction) -> Void)? = nil
     ) -> some View {
         modifier(ErrorAlertModifier(errorHandler: handler, onAction: onAction))

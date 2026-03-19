@@ -29,13 +29,23 @@ router.use(authenticate);
 
 const generateVariationsSchema = z.object({
   prompt: z.string().min(1).max(100000),
-  promptId: z.string().min(1),
-  strategy: z.enum(['quick', 'comprehensive', 'platform_test', 'creative_exploration']).optional(),
+  promptId: z.string().min(1).optional(),
+  strategy: z.enum([
+    'quick',
+    'comprehensive',
+    'modality_focus',
+    'max_compare',
+    'platform_test',
+    'creative_exploration',
+  ]).optional(),
   config: z.object({
-    tones: z.array(z.string()).optional(),
-    lengths: z.array(z.string()).optional(),
-    platforms: z.array(z.string()).optional(),
-    temperature: z.number().min(0).max(2).optional(),
+    variants: z.array(z.object({
+      label: z.string(),
+      mode: z.enum(['standard', 'max']),
+      focus: z.string().optional(),
+      customInstructions: z.string().optional(),
+      subModality: z.string().optional(),
+    })).optional(),
     includeOriginal: z.boolean().optional(),
     maxVariations: z.number().min(1).max(20).optional(),
   }).optional(),
@@ -61,12 +71,17 @@ const selectWinnerSchema = z.object({
 router.post('/generate', enforceQuota('enhance_prompt'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { prompt, promptId, strategy, config } = generateVariationsSchema.parse(req.body);
+    const normalizedStrategy = strategy === 'platform_test'
+      ? 'modality_focus'
+      : strategy === 'creative_exploration'
+        ? 'max_compare'
+        : (strategy || 'quick');
 
     const variationId = await generateVariations(
       req.user!.id,
       prompt,
       promptId,
-      config ? (config as VariationConfig) : (strategy || 'quick')
+      config ? (config as VariationConfig) : normalizedStrategy
     );
 
     const comparison = await getVariationComparison(variationId);

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct EnhancedPromptCard: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppStoreComplianceManager.self) private var complianceManager
 
     let enhancedPrompt: String
     let tokensUsed: Int
@@ -132,20 +133,22 @@ struct EnhancedPromptCard: View {
                     intensity: .standard
                 ))
 
-                Button {
-                    onOpenChatGPT()
-                } label: {
-                    Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                if complianceManager.allowsChatGPTFeatures {
+                    Button {
+                        onOpenChatGPT()
+                    } label: {
+                        Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(LiquidGlassButtonStyle(
+                        cornerRadius: 12,
+                        tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
+                        intensity: .standard
+                    ))
                 }
-                .buttonStyle(LiquidGlassButtonStyle(
-                    cornerRadius: 12,
-                    tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
-                    intensity: .standard
-                ))
             }
 
             // Utility row: Save, Share, Thread, Clear

@@ -1,0 +1,23 @@
+What's New in Promptomize 1.5
+
+POWER TOOLS
+- New unified Power Tools grid after enhancing: Platform Optimise, Variations, Sandbox, and Workflows all in one place
+- Expand any tool inline to use it without leaving the screen
+
+INLINE PLATFORM OPTIMISATION
+- Validate and optimise prompts for 18 platforms across text, image, video, music, code, and 3D workflows
+- See improvement stats and apply optimised prompts with one tap
+
+INLINE VARIATIONS
+- Generate prompt alternatives using Quick, Comprehensive, Creative, or Platform strategies
+- Browse variations in a horizontal card view and swap them in instantly
+
+REDESIGNED PROMPT SCREEN
+- Cleaner, progressive-disclosure layout: features appear when they become relevant
+- Simplified toolbar with only essential buttons
+- New "Start from Template" and "Continue Thread" quick access buttons below input
+
+BUG FIXES
+- Fixed StoreKit JWS verification issue
+- Fixed platform chip glow being clipped in scroll views
+- Added missing platform configurations for Flux, Pika, Kling, MusicGen, Meshy, and Tripo3D

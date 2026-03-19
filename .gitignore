@@ -1,5 +1,10 @@
 Prompt/GoogleService-Info.plist
 
+# App Store Connect API keys
+fastlane/AuthKey*.p8
+fastlane/api_key.json
+*.p8
+
 # Environment files (contain secrets)
 .env
 .env.local
@@ -23,3 +28,5 @@ web/public/worker-*.js.map
 backend/node_modules/
 backend/dist/
 build/
+.vercel
+.env*.local

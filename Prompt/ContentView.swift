@@ -16,6 +16,7 @@ import StoreKit
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(AppStoreComplianceManager.self) private var complianceManager
     @Environment(SettingsManager.self) private var settings
     @Environment(AuthManager.self) private var authManager
     @Environment(PromptHistoryManager.self) private var historyManager
@@ -25,19 +26,16 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showProfile = false
     @State private var showPaywall = false
-    @State private var showTemplates = false
     @State private var showThreads = false
 
     // Power Tools inline expansion
     @State private var expandedPowerTool: PowerToolsSection.PowerTool?
-    @State private var showFullPlatformStudio = false
     @State private var showFullVariations = false
     @State private var showSandbox = false
     @State private var showWorkflows = false
     @State private var showContexts = false
 
     // Inline feature integration
-    @State private var selectedPlatform: PlatformType?
     @State private var attachedContext: ProjectContext?
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var syncManager = SyncManager.shared
@@ -108,7 +106,6 @@ struct ContentView: View {
                                 isTextEditorFocused: $isTextEditorFocused,
                                 isTransforming: isTransforming,
                                 transformationPhaseText: transformationPhaseText,
-                                selectedPlatform: selectedPlatform,
                                 onShowPaywall: { showPaywall = true }
                             )
                             .transition(.asymmetric(
@@ -117,9 +114,7 @@ struct ContentView: View {
                             ))
 
                             EnhancementOptionsBar(
-                                selectedPlatform: $selectedPlatform,
                                 attachedContext: $attachedContext,
-                                onShowTemplates: { showTemplates = true },
                                 onShowThreads: { showThreads = true }
                             )
                             .transition(.opacity.combined(with: .move(edge: .top)))
@@ -288,15 +283,6 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)
             }
-            .sheet(isPresented: $showTemplates) {
-                TemplatesView { template in
-                    viewModel.userPrompt = template.content
-                    showEnhancedView = false
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-            }
             .sheet(isPresented: $showThreads) {
                 ThreadListView()
                     .presentationDetents([.large])
@@ -317,12 +303,6 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showWorkflows) {
                 WorkflowsView()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(24)
-            }
-            .sheet(isPresented: $showFullPlatformStudio) {
-                PlatformOptimizationView(promptText: viewModel.enhancedPrompt.isEmpty ? viewModel.userPrompt : viewModel.enhancedPrompt)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)
@@ -413,14 +393,14 @@ struct ContentView: View {
 
     private func handlePowerToolSheet(_ tool: PowerToolsSection.PowerTool) {
         switch tool {
-        case .platformOptimize:
-            showFullPlatformStudio = true
         case .variations:
             showFullVariations = true
         case .sandbox:
             showSandbox = true
         case .workflows:
             showWorkflows = true
+        case .contexts:
+            showContexts = true
         }
     }
 
@@ -565,8 +545,6 @@ struct ContentView: View {
     private var enhanceButtonTitle: String {
         if viewModel.isLoading {
             return "Enhancing..."
-        } else if let platform = selectedPlatform {
-            return "Enhance for \(platform.displayName)"
         } else {
             return "Enhance Prompt"
         }
@@ -608,11 +586,6 @@ struct ContentView: View {
                     isTextEditorFocused = false
 
                     if !storeKit.canCreatePrompt {
-                        showPaywall = true
-                        return
-                    }
-
-                    if selectedPlatform != nil && storeKit.currentTier == .free {
                         showPaywall = true
                         return
                     }
@@ -665,39 +638,12 @@ struct ContentView: View {
 
     // MARK: - Enhancement Logic
 
-    /// MAX MODE access: Premium = unlimited, Pro = 5/day, Free = none
-    private var maxModeLimit: Int {
-        switch storeKit.currentTier {
-        case .premium: return Int.max
-        case .pro: return 5
-        case .free: return 0
-        }
-    }
-
-    private var maxModeUsedToday: Int {
-        let defaults = UserDefaults(suiteName: "group.com.res.promptomizer")
-        let today = formattedDate(Date())
-        guard let stored = defaults?.dictionary(forKey: "maxModeUsage"),
-              let date = stored["date"] as? String,
-              date == today,
-              let count = stored["count"] as? Int else {
-            return 0
-        }
-        return count
-    }
-
-    private var maxModeRemaining: Int { maxModeLimit - maxModeUsedToday }
-
-    private func incrementMaxModeUsage() {
-        let defaults = UserDefaults(suiteName: "group.com.res.promptomizer")
-        let today = formattedDate(Date())
-        defaults?.set(["date": today, "count": maxModeUsedToday + 1], forKey: "maxModeUsage")
-    }
-
     private func performEnhancement() {
         Task {
-            if settings.maxModeEnabled && storeKit.currentTier == .pro && maxModeRemaining <= 0 {
-                viewModel.errorMessage = "MAX MODE limit reached. Upgrade to Premium for unlimited MAX prompts."
+            if settings.maxModeEnabled,
+               let remaining = storeKit.usageInfo?.maxModeRemaining,
+               remaining == 0 {
+                viewModel.errorMessage = "MAX mode limit reached for today."
                 viewModel.showError = true
                 settings.maxModeEnabled = false
                 settings.savePreferences()
@@ -721,30 +667,18 @@ struct ContentView: View {
                     let existing = settings.customInstructions
                     let contextInstruction = "Use the following context data: \(contextDataStr)"
                     settings.customInstructions = existing.isEmpty ? contextInstruction : "\(existing). \(contextInstruction)"
-                    await viewModel.enhancePrompt(
-                        settings: settings,
-                        targetPlatform: selectedPlatform?.backendPlatformKey
-                    )
+                    await viewModel.enhancePrompt(settings: settings)
                     settings.customInstructions = existing
                 } else {
-                    await viewModel.enhancePrompt(
-                        settings: settings,
-                        targetPlatform: selectedPlatform?.backendPlatformKey
-                    )
+                    await viewModel.enhancePrompt(settings: settings)
                 }
             } else {
-                await viewModel.enhancePrompt(
-                    settings: settings,
-                    targetPlatform: selectedPlatform?.backendPlatformKey
-                )
+                await viewModel.enhancePrompt(settings: settings)
             }
 
             if viewModel.hasEnhancedPrompt {
+                await storeKit.syncWithBackend()
                 withAnimation { transformationPhase = .complete }
-
-                if settings.maxModeEnabled && storeKit.currentTier == .pro {
-                    incrementMaxModeUsage()
-                }
 
                 try? await Task.sleep(nanoseconds: 500_000_000)
 
@@ -766,7 +700,7 @@ struct ContentView: View {
                 if let savedPrompt = await historyManager.savePrompt(
                     original: viewModel.userPrompt,
                     enhanced: viewModel.enhancedPrompt,
-                    model: settings.selectedModel.rawValue,
+                    model: settings.effectiveModel.rawValue,
                     temperature: settings.temperature,
                     maxTokens: settings.maxTokens,
                     inputTokens: 0,
@@ -868,7 +802,8 @@ struct ContentView: View {
     }
 
     private func openInChatGPT() {
-        guard !viewModel.enhancedPrompt.isEmpty,
+        guard complianceManager.allowsChatGPTFeatures,
+              !viewModel.enhancedPrompt.isEmpty,
               let encodedPrompt = viewModel.enhancedPrompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
             return
@@ -987,7 +922,7 @@ struct ContentView: View {
         if let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }) {
-            SKStoreReviewController.requestReview(in: windowScene)
+            AppStore.requestReview(in: windowScene)
         }
     }
 

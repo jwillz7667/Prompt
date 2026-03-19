@@ -87,8 +87,7 @@ const openApiSpec = {
                   value: {
                     prompt: 'A serene mountain landscape at sunset',
                     modality: 'image',
-                    tone: 'creative',
-                    length: 'detailed',
+                    mode: 'standard',
                   },
                 },
                 code: {
@@ -96,7 +95,7 @@ const openApiSpec = {
                   value: {
                     prompt: 'Create a React hook for debouncing input',
                     modality: 'code',
-                    tone: 'technical',
+                    mode: 'max',
                   },
                 },
               },
@@ -178,7 +177,7 @@ const openApiSpec = {
       get: {
         tags: ['Models'],
         summary: 'List available modalities and options',
-        description: 'Returns all available modalities, tones, and lengths for prompt enhancement.',
+        description: 'Returns all available modalities and prompt generation modes.',
         operationId: 'getModels',
         security: [{ ApiKeyAuth: [] }],
         responses: {
@@ -270,15 +269,11 @@ const openApiSpec = {
             default: 'text',
             description: 'Target modality for the prompt',
           },
-          tone: {
+          mode: {
             type: 'string',
-            enum: ['professional', 'casual', 'academic', 'creative', 'technical', 'friendly'],
-            description: 'Desired tone of the enhancement',
-          },
-          length: {
-            type: 'string',
-            enum: ['concise', 'standard', 'detailed'],
-            description: 'Desired detail level',
+            enum: ['standard', 'max'],
+            default: 'standard',
+            description: 'Prompt generation mode',
           },
           maxTokens: {
             type: 'integer',
@@ -353,18 +348,7 @@ const openApiSpec = {
               },
             },
           },
-          tones: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                name: { type: 'string' },
-                description: { type: 'string' },
-              },
-            },
-          },
-          lengths: {
+          modes: {
             type: 'array',
             items: {
               type: 'object',

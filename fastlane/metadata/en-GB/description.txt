@@ -1,0 +1,35 @@
+Promptomize transforms your ideas into powerful, optimised prompts for any AI workflow. Whether you are writing, generating images, planning videos, shaping music prompts, or refining code tasks, Promptomize helps you get better results with platform-aware prompt engineering.
+
+HOW IT WORKS
+Describe what you want to achieve, choose the target modality (text, image, video, audio, code, or 3D), and tap Enhance. The app rewrites your prompt using proven prompt engineering patterns tailored to the task.
+
+POWER TOOLS
+After enhancing, access Platform Optimise, Variations, Sandbox, and Workflows from an inline Power Tools grid. Validate prompts against platform-specific requirements, generate alternative versions, test across multiple services, and automate multi-step workflows.
+
+PLATFORM OPTIMISATION
+Optimise prompts for leading text, image, video, music, code, and 3D platforms. Each platform has different constraints and best practices, and Promptomize adapts your prompt automatically.
+
+CONVERSATION THREADS
+Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
+
+PROJECT CONTEXTS
+Attach reusable project contexts to your prompts for consistent, domain-specific enhancements across sessions.
+
+KEY FEATURES
+- 18+ platform-specific optimisations
+- 6 modalities: Text, Image, Video, Audio, Code, 3D
+- Tone and length controls
+- MAX Mode for advanced prompt engineering
+- Deep Think for advanced reasoning
+- Prompt history with favourites
+- Templates for quick starts
+- Copy to clipboard or open directly in supported external assistants
+- iOS Widget for instant access
+- Offline queue with automatic sync
+
+SUBSCRIPTION TIERS
+- Free: 10 prompts/day
+- Pro: 100 prompts/day + platform optimisation + variations
+- Premium: Unlimited prompts + sandbox comparisons + workflows + MAX Mode
+
+Built with iOS 26 Liquid Glass design. Privacy-first: your prompts are processed securely and never used for training.

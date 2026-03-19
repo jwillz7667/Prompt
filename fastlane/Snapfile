@@ -13,7 +13,9 @@ devices([
 
 # Languages to capture
 languages([
-  "en-US"
+  "en-US",
+  "en-GB",
+  "zh-Hans"
 ])
 
 # Scheme to use for UI tests

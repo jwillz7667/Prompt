@@ -30,7 +30,7 @@ struct InlinePlatformOptimizer: View {
             // Platform chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(PlatformType.allCases.filter { $0 != .custom }) { platform in
+                    ForEach(PlatformType.storefrontSelectableCases) { platform in
                         chipButton(for: platform)
                     }
                 }

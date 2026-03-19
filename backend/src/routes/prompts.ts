@@ -9,6 +9,11 @@ import {
 import { prisma } from '../utils/prisma.js';
 import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
 import { enhancePrompt, enhancePromptStream, getPromptTierFromSubscription } from '../services/deepseekService.js';
+import {
+  ensureMaxModeAvailable,
+  getMaxModeQuota,
+  recordMaxModeUsage,
+} from '../services/maxModeQuotaService.js';
 
 export const promptRouter = Router();
 
@@ -52,16 +57,30 @@ const enhancePromptSchema = z.object({
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().min(1).max(100000).optional(),
-  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'max']).optional(),
-  length: z.enum(['concise', 'standard', 'detailed']).optional(),
+  mode: z.enum(['standard', 'max']).default('standard'),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   customInstructions: z.string().max(2000).optional(),
   targetCharacterLength: z.number().int().min(1).max(100000).optional(),
-  // V3 meta-prompt features
   subModality: z.string().optional(),
-  targetPlatform: z.string().optional(),
-  includeNegativeExamples: z.boolean().optional(),
 });
+
+function buildSubscriptionPayload(
+  subscription: RequestWithSubscription['subscription'] | undefined,
+  maxModeQuota: Awaited<ReturnType<typeof getMaxModeQuota>>,
+  incrementDailyPromptUsage = false
+) {
+  if (!subscription) return undefined;
+
+  return {
+    tier: subscription.tier,
+    promptQuality: subscription.promptQuality,
+    dailyPromptsUsed: subscription.dailyPromptsUsed + (incrementDailyPromptUsage ? 1 : 0),
+    dailyPromptsLimit: subscription.dailyPromptsLimit,
+    maxModeUsedToday: maxModeQuota.usedToday,
+    maxModeDailyLimit: maxModeQuota.dailyLimit,
+    maxModeRemaining: maxModeQuota.isUnlimited ? -1 : maxModeQuota.remaining,
+  };
+}
 
 // ============================================================================
 // ENHANCE PROMPT (AI enhancement with quota enforcement)
@@ -82,6 +101,9 @@ promptRouter.post(
       // Get user's subscription to determine prompt quality tier
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+      const maxModeQuotaBeforeUse = data.mode === 'max'
+        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       // Apply tier-based max tokens limit
       const maxTokens = Math.min(
@@ -96,15 +118,11 @@ promptRouter.post(
         model: data.model,
         temperature: data.temperature,
         maxTokens,
-        tone: data.tone,
-        length: data.length,
+        mode: data.mode,
         modality: data.modality,
         customInstructions: data.customInstructions,
         targetCharacterLength: data.targetCharacterLength,
-        // V3 meta-prompt features
         subModality: data.subModality,
-        targetPlatform: data.targetPlatform,
-        includeNegativeExamples: data.includeNegativeExamples,
       });
 
       // Save the prompt to the database
@@ -158,6 +176,9 @@ promptRouter.post(
 
       // Record usage for quota tracking
       await recordUsage(req.user.id);
+      const maxModeQuota = data.mode === 'max'
+        ? await recordMaxModeUsage(req.user.id, subscriptionInfo.tier)
+        : maxModeQuotaBeforeUse;
 
       // Return enhanced prompt with subscription info
       res.status(200).json({
@@ -169,14 +190,7 @@ promptRouter.post(
           totalTokens: result.totalTokens,
           processingMs: result.processingMs,
         },
-        subscription: req.subscription
-          ? {
-              tier: req.subscription.tier,
-              promptQuality: req.subscription.promptQuality,
-              dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
-              dailyPromptsLimit: req.subscription.dailyPromptsLimit,
-            }
-          : undefined,
+        subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
       });
     } catch (error) {
       console.error('Enhance prompt error:', error);
@@ -185,6 +199,15 @@ promptRouter.post(
         return;
       }
       if (error instanceof Error) {
+        if (error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
+          res.status(403).json({
+            error: 'Quota exceeded',
+            code: 'QUOTA_EXCEEDED',
+            message: 'Free users can use MAX mode up to 5 times per day.',
+            remainingQuota: 0,
+          });
+          return;
+        }
         res.status(500).json({ error: error.message });
         return;
       }
@@ -219,6 +242,9 @@ promptRouter.post(
       // Get user's subscription to determine prompt quality tier
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+      const maxModeQuotaBeforeUse = data.mode === 'max'
+        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       const maxTokens = Math.min(
         data.maxTokens || subscriptionInfo.features.maxTokensPerPrompt,
@@ -234,15 +260,11 @@ promptRouter.post(
           model: data.model,
           temperature: data.temperature,
           maxTokens,
-          tone: data.tone,
-          length: data.length,
+          mode: data.mode,
           modality: data.modality,
           customInstructions: data.customInstructions,
           targetCharacterLength: data.targetCharacterLength,
-          // V3 meta-prompt features
           subModality: data.subModality,
-          targetPlatform: data.targetPlatform,
-          includeNegativeExamples: data.includeNegativeExamples,
         },
         {
           onToken: (token) => {
@@ -296,6 +318,9 @@ promptRouter.post(
               }),
               recordUsage(req.user!.id),
             ]);
+            const maxModeQuota = data.mode === 'max'
+              ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+              : maxModeQuotaBeforeUse;
 
             // Send completion event
             res.write(
@@ -308,14 +333,7 @@ promptRouter.post(
                   totalTokens: result.totalTokens,
                   processingMs: result.processingMs,
                 },
-                subscription: req.subscription
-                  ? {
-                      tier: req.subscription.tier,
-                      promptQuality: req.subscription.promptQuality,
-                      dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
-                      dailyPromptsLimit: req.subscription.dailyPromptsLimit,
-                    }
-                  : undefined,
+                subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
               })}\n\n`
             );
             res.write('data: [DONE]\n\n');
@@ -332,6 +350,8 @@ promptRouter.post(
       console.error('Stream enhance error:', error);
       if (error instanceof z.ZodError) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+      } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Free users can use MAX mode up to 5 times per day.' })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to enhance prompt' })}\n\n`);
       }
@@ -663,4 +683,3 @@ promptRouter.post('/bulk/delete', async (req: AuthenticatedRequest, res: Respons
     res.status(500).json({ error: 'Failed to delete prompts' });
   }
 });
-

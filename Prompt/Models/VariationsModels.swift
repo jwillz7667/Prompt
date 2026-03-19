@@ -5,8 +5,8 @@ import Foundation
 enum VariationStrategy: String, CaseIterable, Identifiable {
     case quick
     case comprehensive
-    case creative = "creative_exploration"
-    case platform = "platform_test"
+    case modalityFocus = "modality_focus"
+    case maxCompare = "max_compare"
 
     var id: String { rawValue }
 
@@ -14,8 +14,8 @@ enum VariationStrategy: String, CaseIterable, Identifiable {
         switch self {
         case .quick: return "Quick"
         case .comprehensive: return "Comprehensive"
-        case .creative: return "Creative"
-        case .platform: return "Platform"
+        case .modalityFocus: return "Modality"
+        case .maxCompare: return "MAX Compare"
         }
     }
 
@@ -23,17 +23,17 @@ enum VariationStrategy: String, CaseIterable, Identifiable {
         switch self {
         case .quick: return "bolt.fill"
         case .comprehensive: return "list.bullet.rectangle"
-        case .creative: return "paintbrush.pointed.fill"
-        case .platform: return "cpu"
+        case .modalityFocus: return "square.stack.3d.up.fill"
+        case .maxCompare: return "flame.fill"
         }
     }
 
     var description: String {
         switch self {
         case .quick: return "4 variations, fast"
-        case .comprehensive: return "Up to 12 variations"
-        case .creative: return "Creative exploration"
-        case .platform: return "Platform-optimized"
+        case .comprehensive: return "Deeper comparison set"
+        case .modalityFocus: return "Modality-tuned options"
+        case .maxCompare: return "All-in MAX variants"
         }
     }
 }
@@ -49,9 +49,9 @@ struct VariationComparison: Codable {
 
 struct VariationResultItem: Codable, Identifiable {
     let index: Int
-    let tone: String
-    let length: String
-    let platform: String?
+    let label: String
+    let mode: String
+    let focus: String?
     let enhancedPrompt: String
     let tokensUsed: Int
     let score: Double?

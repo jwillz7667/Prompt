@@ -12,7 +12,7 @@ import UIKit
 
 // MARK: - Notification Types
 
-enum NotificationType: String {
+enum NotificationType: String, Sendable {
     case supportMessage = "support_message"
     case enhancementComplete = "enhancement_complete"
 }
@@ -22,6 +22,12 @@ enum NotificationType: String {
 @MainActor
 final class NotificationManager: NSObject, ObservableObject {
     static let shared = NotificationManager()
+
+    private struct NotificationPayload: Sendable {
+        let type: NotificationType
+        let ticketId: String?
+        let promptId: String?
+    }
 
     @Published var isAuthorized = false
     @Published var deviceToken: String?
@@ -151,23 +157,26 @@ final class NotificationManager: NSObject, ObservableObject {
     // MARK: - Notification Handling
 
     func handleNotification(userInfo: [AnyHashable: Any], completion: @escaping () -> Void) {
-        guard let typeString = userInfo["type"] as? String,
-              let type = NotificationType(rawValue: typeString) else {
+        guard let payload = Self.notificationPayload(from: userInfo) else {
             completion()
             return
         }
 
-        switch type {
+        handleNotification(payload: payload, completion: completion)
+    }
+
+    private func handleNotification(payload: NotificationPayload, completion: @escaping () -> Void) {
+        switch payload.type {
         case .supportMessage:
             // Increment unread count
             UnreadMessageManager.shared.incrementUnread()
 
-            if let ticketId = userInfo["ticketId"] as? String {
+            if let ticketId = payload.ticketId {
                 onSupportMessageReceived?(ticketId)
             }
 
         case .enhancementComplete:
-            if let promptId = userInfo["promptId"] as? String {
+            if let promptId = payload.promptId {
                 onEnhancementComplete?(promptId)
             }
         }
@@ -183,11 +192,32 @@ final class NotificationManager: NSObject, ObservableObject {
     // MARK: - Badge Management
 
     func clearBadge() {
-        UIApplication.shared.applicationIconBadgeNumber = 0
+        UNUserNotificationCenter.current().setBadgeCount(0) { error in
+            if let error {
+                print("[Notifications] Failed to clear badge: \(error)")
+            }
+        }
     }
 
     func setBadge(_ count: Int) {
-        UIApplication.shared.applicationIconBadgeNumber = count
+        UNUserNotificationCenter.current().setBadgeCount(count) { error in
+            if let error {
+                print("[Notifications] Failed to set badge: \(error)")
+            }
+        }
+    }
+
+    private nonisolated static func notificationPayload(from userInfo: [AnyHashable: Any]) -> NotificationPayload? {
+        guard let typeString = userInfo["type"] as? String,
+              let type = NotificationType(rawValue: typeString) else {
+            return nil
+        }
+
+        return NotificationPayload(
+            type: type,
+            ticketId: userInfo["ticketId"] as? String,
+            promptId: userInfo["promptId"] as? String
+        )
     }
 }
 
@@ -210,10 +240,15 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let userInfo = response.notification.request.content.userInfo
+        guard let payload = NotificationManager.notificationPayload(
+            from: response.notification.request.content.userInfo
+        ) else {
+            completionHandler()
+            return
+        }
 
-        Task { @MainActor in
-            handleNotification(userInfo: userInfo, completion: completionHandler)
+        Task { @MainActor [payload] in
+            NotificationManager.shared.handleNotification(payload: payload, completion: completionHandler)
         }
     }
 }

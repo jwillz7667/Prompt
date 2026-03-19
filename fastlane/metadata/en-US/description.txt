@@ -30,6 +30,6 @@ KEY FEATURES
 SUBSCRIPTION TIERS
 - Free: 10 prompts/day
 - Pro: 100 prompts/day + platform optimization + variations
-- Premium: Unlimited prompts + sandbox testing + workflows + MAX Mode
+- Premium: Unlimited prompts + sandbox comparisons + workflows + MAX Mode
 
 Built with iOS 26 Liquid Glass design. Privacy-first: your prompts are processed securely and never used for training.

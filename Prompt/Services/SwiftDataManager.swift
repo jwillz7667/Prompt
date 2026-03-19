@@ -9,7 +9,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-/// Manages SwiftData persistence for offline prompt and template storage
+/// Manages SwiftData persistence for offline prompt storage
 @MainActor
 final class SwiftDataManager {
     // MARK: - Singleton
@@ -30,7 +30,6 @@ final class SwiftDataManager {
         // Disable CloudKit sync - we use our own backend sync
         let schema = Schema([
             LocalPromptRecord.self,
-            LocalTemplate.self,
         ])
 
         let primaryConfig = ModelConfiguration(
@@ -301,88 +300,6 @@ final class SwiftDataManager {
         } catch {
             #if DEBUG
             print("[SwiftDataManager] Failed to clear prompts: \(error)")
-            #endif
-        }
-    }
-
-    // MARK: - Template Operations
-
-    /// Fetch all templates
-    func fetchTemplates(category: String? = nil) -> [LocalTemplate] {
-        guard let context else {
-            #if DEBUG
-            print("[SwiftDataManager] Context unavailable for fetchTemplates")
-            #endif
-            return []
-        }
-
-        var descriptor = FetchDescriptor<LocalTemplate>(
-            sortBy: [SortDescriptor(\.usageCount, order: .reverse)]
-        )
-
-        if let category {
-            descriptor.predicate = #Predicate { $0.category == category }
-        }
-
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            #if DEBUG
-            print("[SwiftDataManager] Failed to fetch templates: \(error)")
-            #endif
-            return []
-        }
-    }
-
-    /// Insert or update templates from API response
-    func upsertTemplates(_ templates: [Template]) {
-        guard let context else {
-            #if DEBUG
-            print("[SwiftDataManager] Context unavailable for upsertTemplates")
-            #endif
-            return
-        }
-
-        for template in templates {
-            let descriptor = FetchDescriptor<LocalTemplate>(
-                predicate: #Predicate { $0.id == template.id }
-            )
-
-            do {
-                let existing = try context.fetch(descriptor)
-                if let local = existing.first {
-                    local.name = template.name
-                    local.templateDescription = template.description
-                    local.content = template.content
-                    local.category = template.category
-                    local.icon = template.icon
-                    local.isBuiltIn = template.isBuiltIn
-                    local.usageCount = template.usageCount
-                    local.isSynced = true
-                    local.lastSyncedAt = Date()
-                } else {
-                    let local = LocalTemplate(from: template)
-                    context.insert(local)
-                }
-            } catch {
-                #if DEBUG
-                print("[SwiftDataManager] Failed to upsert template \(template.id): \(error)")
-                #endif
-            }
-        }
-
-        saveContext()
-    }
-
-    /// Clear all local templates
-    func clearAllTemplates() {
-        guard let context else { return }
-        do {
-            try context.delete(model: LocalTemplate.self)
-            saveContext()
-        } catch {
-            #if DEBUG
-            print("[SwiftDataManager] Failed to clear templates: \(error)")
             #endif
         }
     }

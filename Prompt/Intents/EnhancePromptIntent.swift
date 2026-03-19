@@ -30,26 +30,46 @@ struct EnhancePromptIntent: AppIntent {
         }
 
         // Check quota
-        let shared = SharedDataManager.shared
-        if !shared.isUnlimited && shared.remainingPrompts <= 0 {
+        let quota = await MainActor.run {
+            (
+                SharedDataManager.shared.isUnlimited,
+                SharedDataManager.shared.remainingPrompts
+            )
+        }
+        if !quota.0 && quota.1 <= 0 {
             throw EnhanceIntentError.quotaExceeded
         }
 
         // Create the enhancement service and perform the request
         let service = DeepseekService()
-        let settings = SettingsManager()
+        let settings = await MainActor.run {
+            let settings = SettingsManager()
+            return (
+                settings.effectiveModel,
+                settings.promptMode,
+                settings.temperature,
+                settings.maxTokens
+            )
+        }
 
         do {
             let result = try await service.enhancePrompt(
                 userPrompt: promptText,
-                model: settings.selectedModel,
-                temperature: settings.temperature,
-                maxTokens: settings.maxTokens
+                model: settings.0,
+                temperature: settings.2,
+                maxTokens: settings.3,
+                mode: settings.1
             )
 
             // Update shared storage
             let promptId = UUID().uuidString
-            shared.addRecentPrompt(id: promptId, original: promptText, enhanced: result.enhancedPrompt)
+            await MainActor.run {
+                SharedDataManager.shared.addRecentPrompt(
+                    id: promptId,
+                    original: promptText,
+                    enhanced: result.enhancedPrompt
+                )
+            }
 
             return .result(
                 value: result.enhancedPrompt,

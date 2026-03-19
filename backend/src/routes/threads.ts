@@ -12,6 +12,11 @@ import {
   getPromptTierFromSubscription,
   type ThreadTurnContext,
 } from '../services/deepseekService.js';
+import {
+  ensureMaxModeAvailable,
+  getMaxModeQuota,
+  recordMaxModeUsage,
+} from '../services/maxModeQuotaService.js';
 
 export const threadRouter = Router();
 
@@ -27,16 +32,14 @@ const createThreadSchema = z.object({
   title: z.string().max(200).optional(),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   subModality: z.string().max(50).optional(),
-  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'max']).optional(),
-  length: z.enum(['concise', 'standard', 'detailed']).optional(),
+  mode: z.enum(['standard', 'max']).default('standard'),
   customInstructions: z.string().max(2000).optional(),
 });
 
 const addTurnSchema = z.object({
   prompt: z.string().min(1).max(100000),
   subModality: z.string().max(50).optional(),
-  tone: z.enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly', 'max']).optional(),
-  length: z.enum(['concise', 'standard', 'detailed']).optional(),
+  mode: z.enum(['standard', 'max']).default('standard'),
   customInstructions: z.string().max(2000).optional(),
 });
 
@@ -50,6 +53,23 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   archived: z.enum(['true', 'false']).optional(),
 });
+
+function buildSubscriptionPayload(
+  subscription: RequestWithSubscription['subscription'] | undefined,
+  maxModeQuota: Awaited<ReturnType<typeof getMaxModeQuota>>
+) {
+  if (!subscription) return undefined;
+
+  return {
+    tier: subscription.tier,
+    promptQuality: subscription.promptQuality,
+    dailyPromptsUsed: subscription.dailyPromptsUsed + 1,
+    dailyPromptsLimit: subscription.dailyPromptsLimit,
+    maxModeUsedToday: maxModeQuota.usedToday,
+    maxModeDailyLimit: maxModeQuota.dailyLimit,
+    maxModeRemaining: maxModeQuota.isUnlimited ? -1 : maxModeQuota.remaining,
+  };
+}
 
 // ============================================================================
 // CREATE THREAD (first turn, streams SSE)
@@ -78,6 +98,9 @@ threadRouter.post(
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       const maxTokens = subscriptionInfo.features.maxTokensPerPrompt;
+      const maxModeQuotaBeforeUse = data.mode === 'max'
+        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       // Auto-generate title from first prompt (truncated)
       const autoTitle = data.title || data.prompt.substring(0, 80) + (data.prompt.length > 80 ? '...' : '');
@@ -96,8 +119,7 @@ threadRouter.post(
           prompt: data.prompt,
           tier: promptTier,
           maxTokens,
-          tone: data.tone,
-          length: data.length,
+          mode: data.mode,
           modality: data.modality,
           subModality: data.subModality,
           customInstructions: data.customInstructions,
@@ -152,6 +174,9 @@ threadRouter.post(
               }),
               recordUsage(req.user!.id),
             ]);
+            const maxModeQuota = data.mode === 'max'
+              ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+              : maxModeQuotaBeforeUse;
 
             // Send completion event
             res.write(
@@ -166,14 +191,7 @@ threadRouter.post(
                   totalTokens: result.totalTokens,
                   processingMs: result.processingMs,
                 },
-                subscription: req.subscription
-                  ? {
-                      tier: req.subscription.tier,
-                      promptQuality: req.subscription.promptQuality,
-                      dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
-                      dailyPromptsLimit: req.subscription.dailyPromptsLimit,
-                    }
-                  : undefined,
+                subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
               })}\n\n`
             );
             res.write('data: [DONE]\n\n');
@@ -192,6 +210,8 @@ threadRouter.post(
       console.error('Create thread error:', error);
       if (error instanceof z.ZodError) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+      } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Free users can use MAX mode up to 5 times per day.' })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to create thread' })}\n\n`);
       }
@@ -247,6 +267,9 @@ threadRouter.post(
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       const maxTokens = subscriptionInfo.features.maxTokensPerPrompt;
+      const maxModeQuotaBeforeUse = data.mode === 'max'
+        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       // Build conversation history from previous turns
       const previousTurns: ThreadTurnContext[] = thread.turns.map((t) => ({
@@ -261,8 +284,7 @@ threadRouter.post(
           prompt: data.prompt,
           tier: promptTier,
           maxTokens,
-          tone: data.tone,
-          length: data.length,
+          mode: data.mode,
           modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d',
           subModality: data.subModality,
           customInstructions: data.customInstructions,
@@ -321,6 +343,9 @@ threadRouter.post(
               }),
               recordUsage(req.user!.id),
             ]);
+            const maxModeQuota = data.mode === 'max'
+              ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+              : maxModeQuotaBeforeUse;
 
             // Send completion event
             res.write(
@@ -335,14 +360,7 @@ threadRouter.post(
                   totalTokens: result.totalTokens,
                   processingMs: result.processingMs,
                 },
-                subscription: req.subscription
-                  ? {
-                      tier: req.subscription.tier,
-                      promptQuality: req.subscription.promptQuality,
-                      dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
-                      dailyPromptsLimit: req.subscription.dailyPromptsLimit,
-                    }
-                  : undefined,
+                subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
               })}\n\n`
             );
             res.write('data: [DONE]\n\n');
@@ -359,6 +377,8 @@ threadRouter.post(
       console.error('Add turn error:', error);
       if (error instanceof z.ZodError) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+      } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Free users can use MAX mode up to 5 times per day.' })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to add turn' })}\n\n`);
       }

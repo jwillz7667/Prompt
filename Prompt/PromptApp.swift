@@ -50,6 +50,7 @@ struct PromptApp: App {
     @State private var storeKitManager = StoreKitManager.shared
     @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
+    @State private var complianceManager = AppStoreComplianceManager.shared
 
     init() {
         // Configure Firebase Analytics and Crashlytics
@@ -75,6 +76,7 @@ struct PromptApp: App {
                 .environment(historyManager)
                 .environment(storeKitManager)
                 .environment(syncManager)
+                .environment(complianceManager)
                 .modelContainer(modelContainer)
                 .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
                 .task {
@@ -89,6 +91,7 @@ struct PromptApp: App {
                 .environment(historyManager)
                 .environment(storeKitManager)
                 .environment(syncManager)
+                .environment(complianceManager)
                 .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
                 .task {
                     // Load subscription data when app starts

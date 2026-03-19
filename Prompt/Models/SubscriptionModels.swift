@@ -108,6 +108,9 @@ struct UsageInfo: Codable {
     let dailyPromptsUsed: Int
     let dailyPromptsLimit: Int
     let canCreatePrompt: Bool
+    let maxModeUsedToday: Int?
+    let maxModeDailyLimit: Int?
+    let maxModeRemaining: Int?
 
     var isUnlimited: Bool {
         dailyPromptsLimit == -1
@@ -122,6 +125,10 @@ struct UsageInfo: Codable {
         if isUnlimited { return 0 }
         guard dailyPromptsLimit > 0 else { return 1.0 }
         return Double(dailyPromptsUsed) / Double(dailyPromptsLimit)
+    }
+
+    var maxModeHasUnlimitedAccess: Bool {
+        maxModeDailyLimit == -1 || maxModeRemaining == -1
     }
 }
 

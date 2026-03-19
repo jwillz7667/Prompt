@@ -155,7 +155,7 @@ export async function sendWelcomeEmail(to: string, name: string | null): Promise
       <ul style="margin: 12px 0 0 0; padding-left: 20px; color: #424245;">
         <li>Enhance any prompt with one tap</li>
         <li>Save your favorite prompts</li>
-        <li>Use templates for common tasks</li>
+        <li>Build reusable workflows and contexts</li>
         <li>Track your usage analytics</li>
       </ul>
     </div>
@@ -228,7 +228,7 @@ export async function sendSubscriptionConfirmation(
     : '';
 
   const features = tier === 'PREMIUM'
-    ? ['Unlimited daily prompts', 'Up to 64,000 tokens per prompt', 'Advanced prompt quality', 'Priority support', 'Deep Think mode']
+    ? ['Unlimited daily prompts', 'Up to 64,000 tokens per prompt', 'Advanced prompt quality', 'Priority support', 'MAX mode']
     : ['100 daily prompts', 'Up to 8,000 tokens per prompt', 'Standard prompt quality', 'Email support'];
 
   const content = `
@@ -654,7 +654,7 @@ export async function sendAccountDeleted(to: string, name: string | null): Promi
     <p>Hi ${displayName},</p>
     <p>Your ${APP_NAME} account has been successfully deleted as requested.</p>
     <div class="info-box">
-      <p style="margin: 0;">All your data, including prompts, templates, and subscription information, has been permanently removed from our systems.</p>
+      <p style="margin: 0;">All your data, including prompts, contexts, workflows, and subscription information, has been permanently removed from our systems.</p>
     </div>
     <p>We're sorry to see you go. If you ever want to come back, you're always welcome to create a new account.</p>
     <p>If you didn't request this deletion, please contact us immediately at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>

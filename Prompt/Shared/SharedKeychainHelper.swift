@@ -14,12 +14,12 @@ enum SharedKeychainHelper {
     // MARK: - Constants
 
     // App Group identifier - must match entitlements
-    private static let appGroupId = "group.com.res.promptomizer"
-    private static let serviceName = "com.res.promptomizer"
+    nonisolated private static let appGroupId = "group.com.res.promptomizer"
+    nonisolated private static let serviceName = "com.res.promptomizer"
 
     // Team ID for keychain access group (matches $(AppIdentifierPrefix) in entitlements)
-    private static let teamId = "487LC4H9U4"
-    private static let accessGroup = "\(teamId).\(appGroupId)"
+    nonisolated private static let teamId = "487LC4H9U4"
+    nonisolated private static let accessGroup = "\(teamId).\(appGroupId)"
 
     // MARK: - Keys
 

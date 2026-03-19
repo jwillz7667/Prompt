@@ -53,7 +53,7 @@ final class PromptViewModel {
 
     // MARK: - Actions
 
-    func enhancePrompt(settings: SettingsManager, targetPlatform: String? = nil) async {
+    func enhancePrompt(settings: SettingsManager) async {
         guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         // Check if user is authenticated
@@ -72,41 +72,37 @@ final class PromptViewModel {
         beginBackgroundTask()
 
         // Start Live Activity
-        await EnhancementActivityManager.shared.startActivity(originalPrompt: userPrompt)
+        EnhancementActivityManager.shared.startActivity(originalPrompt: userPrompt)
 
         do {
             // Update to enhancing stage
-            await EnhancementActivityManager.shared.updateProgress(stage: .enhancing)
+            EnhancementActivityManager.shared.updateProgress(stage: .enhancing)
 
-            // Use streaming for real-time response
-            // effectiveModel returns reasoner if Deep Think is enabled, chat otherwise
-            // effectiveTone returns max if MAX MODE is enabled, selected tone otherwise
+            // Use streaming for real-time response. MAX mode runs on the reasoning model.
             let result = try await service.enhancePromptStream(
                 userPrompt: userPrompt,
                 model: settings.effectiveModel,
                 temperature: settings.temperature,
                 maxTokens: settings.maxTokens,
-                tone: settings.effectiveTone,
-                length: settings.outputLength,
+                mode: settings.promptMode,
                 modality: settings.selectedModality,
                 subModality: settings.effectiveSubModality,
                 customInstructions: settings.customInstructions.isEmpty ? nil : settings.customInstructions,
-                targetCharacterLength: settings.targetCharacterLength,
-                targetPlatform: targetPlatform
-            ) { [weak self] token in
+                targetCharacterLength: settings.targetCharacterLength
+            ) { [self] token in
                 // Update UI with each token on main thread
-                Task { @MainActor in
-                    self?.enhancedPrompt += token
+                Task { @MainActor [self, token] in
+                    self.enhancedPrompt += token
                 }
             }
 
             // Update to optimizing stage briefly
-            await EnhancementActivityManager.shared.updateProgress(stage: .optimizing)
+            EnhancementActivityManager.shared.updateProgress(stage: .optimizing)
 
             tokensUsed = result.tokensUsed
 
             // Complete the Live Activity
-            await EnhancementActivityManager.shared.completeActivity(enhancedPrompt: result.enhancedPrompt)
+            EnhancementActivityManager.shared.completeActivity(enhancedPrompt: result.enhancedPrompt)
 
             // Update shared storage for widgets
             let promptId = UUID().uuidString
@@ -125,14 +121,14 @@ final class PromptViewModel {
                 quotaExceededMessage = "You've reached your daily prompt limit. Upgrade to continue enhancing prompts."
                 showPaywall = true
                 // End Live Activity gracefully
-                await EnhancementActivityManager.shared.failActivity(errorMessage: "Daily limit reached")
+                EnhancementActivityManager.shared.failActivity(errorMessage: "Daily limit reached")
             } else {
                 let appError = ErrorHandler.shared.mapToAppError(error)
                 errorMessage = appError.userMessage
                 showError = true
                 ErrorHandler.shared.handleSilently(error, context: "enhancePrompt")
                 // Fail the Live Activity
-                await EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
+                EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
             }
         } catch {
             let appError = ErrorHandler.shared.mapToAppError(error)
@@ -140,7 +136,7 @@ final class PromptViewModel {
             showError = true
             ErrorHandler.shared.handleSilently(error, context: "enhancePrompt")
             // Fail the Live Activity
-            await EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
+            EnhancementActivityManager.shared.failActivity(errorMessage: appError.userMessage)
         }
 
         isLoading = false
