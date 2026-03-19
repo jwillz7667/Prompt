@@ -8,17 +8,25 @@ import {
 } from '../middleware/quotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
 import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
-import { enhancePrompt, enhancePromptStream, getPromptTierFromSubscription } from '../services/deepseekService.js';
+import {
+  enhancePrompt,
+  enhancePromptStream,
+  enhancePromptInThreadStream,
+  getPromptTierFromSubscription,
+} from '../services/deepseekService.js';
 import {
   ensureMaxModeAvailable,
   getMaxModeQuota,
   recordMaxModeUsage,
 } from '../services/maxModeQuotaService.js';
+import {
+  ensureGuestQuotaAvailable,
+  getGuestQuota,
+  recordGuestPromptUsage,
+  type GuestQuotaSnapshot,
+} from '../services/guestQuotaService.js';
 
 export const promptRouter = Router();
-
-// All prompt routes require authentication
-promptRouter.use(authenticate);
 
 // Validation schemas
 const createPromptSchema = z.object({
@@ -79,6 +87,146 @@ const enhancePromptSchema = z.object({
   targetCharacterLength: z.number().int().min(1).max(100000).optional(),
   subModality: z.string().optional(),
 });
+
+const guestEnhancePromptSchema = enhancePromptSchema.extend({
+  previousTurns: z.array(
+    z.object({
+      originalPrompt: z.string().min(1).max(100000),
+      enhancedPrompt: z.string().min(1).max(500000),
+    })
+  ).max(20).default([]),
+});
+
+function writeSSEEvent(
+  res: Response,
+  payload: Record<string, unknown>
+) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function beginSSE(res: Response) {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+}
+
+function guestQuotaMessage(
+  mode: 'standard' | 'max',
+  quota: GuestQuotaSnapshot
+): string {
+  if (quota.standardRemaining === 0 && quota.maxRemaining === 0) {
+    return 'Sign in to keep optimizing prompts and unlock your 7-day Premium trial.';
+  }
+
+  if (mode === 'standard') {
+    return `Your 5 guest Standard prompts are used. You still have ${quota.maxRemaining} MAX prompt left.`;
+  }
+
+  return `Your guest MAX prompt is already used. You still have ${quota.standardRemaining} Standard prompts left.`;
+}
+
+promptRouter.post(
+  '/guest/enhance/stream',
+  async (req, res): Promise<void> => {
+    beginSSE(res);
+
+    const rawDeviceId = req.header('X-Device-ID')?.trim();
+    if (!rawDeviceId) {
+      writeSSEEvent(res, {
+        type: 'error',
+        message: 'Device identifier missing. Please restart the app and try again.',
+      });
+      res.end();
+      return;
+    }
+
+    try {
+      const data = guestEnhancePromptSchema.parse(req.body);
+      const maxTokens = Math.min(data.maxTokens ?? 4096, data.mode === 'max' ? 6144 : 4096);
+
+      await ensureGuestQuotaAvailable(rawDeviceId, data.mode);
+
+      await enhancePromptInThreadStream(
+        {
+          prompt: data.prompt,
+          tier: 'basic',
+          maxTokens,
+          mode: data.mode,
+          modality: data.modality,
+          subModality: data.subModality,
+          customInstructions: data.customInstructions,
+          targetCharacterLength: data.targetCharacterLength,
+          previousTurns: data.previousTurns,
+        },
+        {
+          onToken: (token) => {
+            writeSSEEvent(res, { type: 'token', content: token });
+          },
+          onComplete: async (result) => {
+            const quota = await recordGuestPromptUsage(rawDeviceId, data.mode);
+
+            writeSSEEvent(res, {
+              type: 'complete',
+              usage: {
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens,
+                processingMs: result.processingMs,
+              },
+              guestQuota: quota,
+            });
+            res.write('data: [DONE]\n\n');
+            res.end();
+          },
+          onError: async (error) => {
+            const quota = await getGuestQuota(rawDeviceId);
+            writeSSEEvent(res, {
+              type: 'error',
+              message: error.message,
+              guestQuota: quota,
+            });
+            res.end();
+          },
+        }
+      );
+    } catch (error) {
+      const quota = await getGuestQuota(rawDeviceId);
+
+      if (error instanceof z.ZodError) {
+        writeSSEEvent(res, {
+          type: 'error',
+          message: 'Invalid request data.',
+          guestQuota: quota,
+        });
+        res.end();
+        return;
+      }
+
+      if (error instanceof Error &&
+        (error.message === 'GUEST_STANDARD_LIMIT_REACHED' || error.message === 'GUEST_MAX_LIMIT_REACHED')) {
+        writeSSEEvent(res, {
+          type: 'error',
+          message: guestQuotaMessage(error.message === 'GUEST_STANDARD_LIMIT_REACHED' ? 'standard' : 'max', quota),
+          guestQuota: quota,
+        });
+        res.end();
+        return;
+      }
+
+      writeSSEEvent(res, {
+        type: 'error',
+        message: 'Failed to enhance prompt',
+        guestQuota: quota,
+      });
+      res.end();
+    }
+  }
+);
+
+// All authenticated prompt routes require a user session
+promptRouter.use(authenticate);
 
 function buildSubscriptionPayload(
   subscription: RequestWithSubscription['subscription'] | undefined,

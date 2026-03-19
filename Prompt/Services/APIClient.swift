@@ -119,7 +119,8 @@ actor APIClient {
     func requestStream(
         _ endpoint: String,
         method: HTTPMethod = .post,
-        body: (any Encodable)? = nil
+        body: (any Encodable)? = nil,
+        requiresAuth: Bool = true
     ) -> AsyncThrowingStream<StreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -128,6 +129,7 @@ actor APIClient {
                         endpoint,
                         method: method,
                         body: body,
+                        requiresAuth: requiresAuth,
                         isRetry: false,
                         continuation: continuation
                     )
@@ -146,6 +148,7 @@ actor APIClient {
         _ endpoint: String,
         method: HTTPMethod,
         body: (any Encodable)?,
+        requiresAuth: Bool,
         isRetry: Bool,
         continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
     ) async throws {
@@ -153,7 +156,7 @@ actor APIClient {
             throw APIError.invalidURL
         }
 
-        if accessToken == nil {
+        if requiresAuth && accessToken == nil {
             loadStoredTokens()
         }
 
@@ -167,10 +170,12 @@ actor APIClient {
         let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
         request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
 
-        guard let token = accessToken else {
-            throw APIError.notAuthenticated
+        if requiresAuth {
+            guard let token = accessToken else {
+                throw APIError.notAuthenticated
+            }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         if let body = body {
             request.httpBody = try Self.makeJSONEncoder().encode(body)
@@ -184,12 +189,13 @@ actor APIClient {
             }
 
             if httpResponse.statusCode == 401 {
-                if !isRetry {
+                if requiresAuth && !isRetry {
                     try await refreshAccessToken()
                     try await streamRequest(
                         endpoint,
                         method: method,
                         body: body,
+                        requiresAuth: requiresAuth,
                         isRetry: true,
                         continuation: continuation
                     )
@@ -761,6 +767,7 @@ struct StreamEvent: Codable, Sendable {
     let turnIndex: Int?
     let usage: StreamUsage?
     let subscription: StreamSubscription?
+    let guestQuota: GuestQuotaState?
 
     struct StreamUsage: Codable, Sendable {
         let inputTokens: Int

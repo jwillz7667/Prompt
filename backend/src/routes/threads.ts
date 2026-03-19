@@ -34,6 +34,15 @@ const createThreadSchema = z.object({
   subModality: z.string().max(50).optional(),
   mode: z.enum(['standard', 'max']).default('standard'),
   customInstructions: z.string().max(2000).optional(),
+  previousTurns: z.array(
+    z.object({
+      originalPrompt: z.string().min(1).max(100000),
+      enhancedPrompt: z.string().min(1).max(500000),
+      model: z.string().max(100).optional(),
+      totalTokens: z.number().int().min(0).optional(),
+      processingMs: z.number().int().min(0).optional(),
+    })
+  ).max(20).default([]),
 });
 
 const addTurnSchema = z.object({
@@ -114,6 +123,22 @@ threadRouter.post(
         },
       });
 
+      if (data.previousTurns.length > 0) {
+        await prisma.threadTurn.createMany({
+          data: data.previousTurns.map((turn, index) => ({
+            threadId: thread.id,
+            turnIndex: index,
+            originalPrompt: turn.originalPrompt,
+            enhancedPrompt: turn.enhancedPrompt,
+            model: turn.model ?? 'guest-preview',
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: turn.totalTokens ?? 0,
+            processingMs: turn.processingMs ?? 0,
+          })),
+        });
+      }
+
       await enhancePromptInThreadStream(
         {
           prompt: data.prompt,
@@ -123,7 +148,7 @@ threadRouter.post(
           modality: data.modality,
           subModality: data.subModality,
           customInstructions: data.customInstructions,
-          previousTurns: [],
+          previousTurns: data.previousTurns,
         },
         {
           onToken: (token) => {
@@ -134,7 +159,7 @@ threadRouter.post(
             const turn = await prisma.threadTurn.create({
               data: {
                 threadId: thread.id,
-                turnIndex: 0,
+                turnIndex: data.previousTurns.length,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
                 model: result.model,
@@ -184,7 +209,7 @@ threadRouter.post(
                 type: 'complete',
                 threadId: thread.id,
                 turnId: turn.id,
-                turnIndex: 0,
+                turnIndex: data.previousTurns.length,
                 usage: {
                   inputTokens: result.inputTokens,
                   outputTokens: result.outputTokens,

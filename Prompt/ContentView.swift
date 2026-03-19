@@ -12,6 +12,7 @@ import StoreKit
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
+    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(StoreKitManager.self) private var storeKit
 
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
@@ -22,7 +23,6 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showProfile = false
     @State private var showPaywall = false
-    @State private var showThreads = false
     @State private var showWhatsNew = false
     @State private var didHydrateHomeThread = false
     @State private var lastObservedTurnCount = 0
@@ -40,7 +40,7 @@ struct ContentView: View {
                 ThreadView(
                     viewModel: homeThreadViewModel,
                     presentationStyle: .home,
-                    onOpenThreads: { showThreads = true },
+                    onOpenThreads: { showHistory = true },
                     onOpenProfile: { showProfile = true },
                     onOpenHistory: { showHistory = true },
                     onOpenSettings: { showSettings = true },
@@ -75,12 +75,6 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)
             }
-            .sheet(isPresented: $showThreads) {
-                ThreadListView()
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(24)
-            }
             .sheet(isPresented: $showWhatsNew) {
                 WhatsNewView {
                     lastSeenWhatsNewVersion = currentAppVersion
@@ -89,6 +83,18 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(24)
+            }
+            .fullScreenCover(
+                isPresented: Binding(
+                    get: { guestSession.shouldPresentAuthenticationGate },
+                    set: { guestSession.shouldPresentAuthenticationGate = $0 }
+                )
+            ) {
+                AuthView(mode: .guestUnlock) {
+                    guestSession.completeAuthenticationFlow()
+                    presentOnboardingPaywallIfNeeded()
+                }
+                .interactiveDismissDisabled(true)
             }
             .overlay(alignment: .top) {
                 OfflineBanner()
@@ -106,6 +112,10 @@ struct ContentView: View {
             if newPhase == .active {
                 checkDailyPaywallReminder()
             }
+        }
+        .onChange(of: authManager.currentUser?.id) { _, newId in
+            guard newId != nil else { return }
+            guestSession.completeAuthenticationFlow()
         }
         .onChange(of: homeThreadViewModel.currentThread?.id) { _, newId in
             homeThreadId = newId ?? ""
@@ -199,15 +209,12 @@ struct ContentView: View {
 
     private func checkPaywallReminder() {
         if !hasSeenOnboardingPaywall && authManager.isAuthenticated {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                showPaywall = true
-                hasSeenOnboardingPaywall = true
-                updateLastPaywallShownDate()
-            }
+            presentOnboardingPaywallIfNeeded(delay: 0.8)
         }
     }
 
     private func checkDailyPaywallReminder() {
+        guard authManager.isAuthenticated else { return }
         guard storeKit.currentTier == .free else { return }
         let today = formattedDate(Date())
         guard lastPaywallShownDateString != today else { return }
@@ -222,6 +229,17 @@ struct ContentView: View {
 
     private func updateLastPaywallShownDate() {
         lastPaywallShownDateString = formattedDate(Date())
+    }
+
+    private func presentOnboardingPaywallIfNeeded(delay: TimeInterval = 0.45) {
+        guard !hasSeenOnboardingPaywall else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard !hasSeenOnboardingPaywall else { return }
+            showPaywall = true
+            hasSeenOnboardingPaywall = true
+            updateLastPaywallShownDate()
+        }
     }
 
     private func formattedDate(_ date: Date) -> String {

@@ -478,6 +478,53 @@ struct LiquidGlassSectionHeader: View {
     }
 }
 
+// MARK: - Brand Mark
+
+struct AppBrandMark: View {
+    let size: CGFloat
+    var showsGlassBackdrop: Bool = true
+
+    init(size: CGFloat = 36, showsGlassBackdrop: Bool = true) {
+        self.size = size
+        self.showsGlassBackdrop = showsGlassBackdrop
+    }
+
+    var body: some View {
+        ZStack {
+            if showsGlassBackdrop {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    )
+            }
+
+            Group {
+                if UIImage(named: "AppLogo") != nil {
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: size * 0.42, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.brandPurple, Color.brandCyan],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            }
+            .frame(width: size * 0.68, height: size * 0.68)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Prompt Page Header
 
 struct PromptPageHeader<Trailing: View>: View {
@@ -520,23 +567,27 @@ struct PromptPageHeader<Trailing: View>: View {
             }
             .buttonStyle(GlassIconButtonStyle(size: 40))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [accentStart, accentEnd],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+            HStack(alignment: .top, spacing: 12) {
+                AppBrandMark(size: 40)
 
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(Color.adaptiveTextSecondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [accentStart, accentEnd],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(Color.adaptiveTextSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 

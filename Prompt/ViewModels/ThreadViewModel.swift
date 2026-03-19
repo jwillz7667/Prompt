@@ -95,10 +95,18 @@ final class ThreadViewModel {
     // MARK: - Private
 
     private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+    private let guestSession = GuestSessionManager.shared
 
     // MARK: - Thread CRUD
 
     func fetchThreads(refresh: Bool = false) async {
+        guard await APIClient.shared.isAuthenticated else {
+            threads = []
+            totalPages = 1
+            isLoadingThreads = false
+            return
+        }
+
         if refresh { currentPage = 1 }
         isLoadingThreads = true
 
@@ -125,6 +133,13 @@ final class ThreadViewModel {
     }
 
     func loadThread(id: String) async {
+        guard await APIClient.shared.isAuthenticated else {
+            currentThread = nil
+            turns = []
+            isLoadingDetail = false
+            return
+        }
+
         isLoadingDetail = true
 
         do {
@@ -150,6 +165,14 @@ final class ThreadViewModel {
     }
 
     func deleteThread(id: String) async {
+        guard await APIClient.shared.isAuthenticated else {
+            threads.removeAll { $0.id == id }
+            if currentThread?.id == id {
+                resetThread()
+            }
+            return
+        }
+
         do {
             try await APIClient.shared.requestVoid(
                 "/threads/\(id)",
@@ -169,6 +192,7 @@ final class ThreadViewModel {
 
     func updateThreadTitle(_ title: String) async {
         guard let threadId = currentThread?.id else { return }
+        guard await APIClient.shared.isAuthenticated else { return }
 
         do {
             let body = UpdateThreadRequest(
@@ -206,10 +230,17 @@ final class ThreadViewModel {
     ) async {
         let promptToSend = (initialPrompt ?? userPrompt).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !promptToSend.isEmpty else { return }
-        guard await APIClient.shared.isAuthenticated else {
-            errorMessage = "Please sign in to continue"
-            showError = true
-            return
+        let isAuthenticated = await APIClient.shared.isAuthenticated
+
+        if !isAuthenticated {
+            switch guestSession.submissionDecision(for: settings.promptMode) {
+            case .allowed:
+                break
+            case .blocked(let message), .requiresAuthentication(let message):
+                errorMessage = message
+                showError = true
+                return
+            }
         }
 
         isStreaming = true
@@ -226,21 +257,24 @@ final class ThreadViewModel {
             modality: settings.selectedModality.apiModality,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
-            customInstructions: sanitizedCustomInstructions(from: settings)
+            customInstructions: sanitizedCustomInstructions(from: settings),
+            previousTurns: seededTurnsForRequest
         )
 
         let sentPrompt = promptToSend
         pendingUserPrompt = sentPrompt
         userPrompt = ""
 
-        let stream = await APIClient.shared.requestStream(
-            "/threads",
-            method: .post,
-            body: request
+        let stream = await streamForNewConversation(
+            request: request,
+            prompt: sentPrompt,
+            settings: settings
         )
 
         do {
             for try await event in stream {
+                guestSession.synchronize(with: event.guestQuota)
+
                 switch event.type {
                 case .token:
                     if let content = event.content {
@@ -278,11 +312,14 @@ final class ThreadViewModel {
                     )
 
                     // Load the full thread detail
-                    if let completedThreadId = completedThreadId {
+                    if isAuthenticated, let completedThreadId = completedThreadId {
                         await loadThread(id: completedThreadId)
                     }
                     pendingUserPrompt = nil
                 case .error:
+                    if event.guestQuota?.isExhausted == true {
+                        guestSession.presentAuthenticationGate()
+                    }
                     errorMessage = event.message ?? "Enhancement failed"
                     showError = true
                     userPrompt = sentPrompt
@@ -317,9 +354,10 @@ final class ThreadViewModel {
             return
         }
         guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        guard await APIClient.shared.isAuthenticated else {
-            errorMessage = "Please sign in to continue"
-            showError = true
+        let isAuthenticated = await APIClient.shared.isAuthenticated
+
+        if !isAuthenticated {
+            await startNewThread(settings: settings, historyManager: historyManager)
             return
         }
 
@@ -350,6 +388,8 @@ final class ThreadViewModel {
 
         do {
             for try await event in stream {
+                guestSession.synchronize(with: event.guestQuota)
+
                 switch event.type {
                 case .token:
                     if let content = event.content {
@@ -385,6 +425,9 @@ final class ThreadViewModel {
                     )
                     pendingUserPrompt = nil
                 case .error:
+                    if event.guestQuota?.isExhausted == true {
+                        guestSession.presentAuthenticationGate()
+                    }
                     errorMessage = event.message ?? "Enhancement failed"
                     showError = true
                     userPrompt = sentPrompt
@@ -458,6 +501,50 @@ final class ThreadViewModel {
         let trimmed = settings.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return String(trimmed.prefix(2_000))
+    }
+
+    private var seededTurnsForRequest: [SeedThreadTurnRequest]? {
+        guard !turns.isEmpty else { return nil }
+
+        return turns.map { turn in
+            SeedThreadTurnRequest(
+                originalPrompt: turn.originalPrompt,
+                enhancedPrompt: turn.enhancedPrompt,
+                model: turn.model,
+                totalTokens: turn.totalTokens,
+                processingMs: turn.processingMs
+            )
+        }
+    }
+
+    private func streamForNewConversation(
+        request: CreateThreadRequest,
+        prompt: String,
+        settings: SettingsManager
+    ) async -> AsyncThrowingStream<StreamEvent, Error> {
+        if await APIClient.shared.isAuthenticated {
+            return await APIClient.shared.requestStream(
+                "/threads",
+                method: .post,
+                body: request
+            )
+        }
+
+        let guestRequest = GuestEnhanceRequest(
+            prompt: prompt,
+            modality: settings.selectedModality.apiModality,
+            subModality: settings.effectiveSubModality,
+            mode: settings.promptMode.rawValue,
+            customInstructions: sanitizedCustomInstructions(from: settings),
+            previousTurns: seededTurnsForRequest ?? []
+        )
+
+        return await APIClient.shared.requestStream(
+            "/prompts/guest/enhance/stream",
+            method: .post,
+            body: guestRequest,
+            requiresAuth: false
+        )
     }
 }
 

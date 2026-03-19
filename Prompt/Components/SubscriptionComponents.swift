@@ -156,13 +156,18 @@ struct UpgradePromptCard: View {
 
                 Spacer()
 
-                Image(systemName: "arrow.up.circle.fill")
+                Image(systemName: actionSystemImage)
                     .font(.title)
                     .foregroundStyle(accentColor)
             }
 
             Button(action: onUpgrade) {
-                Text("Upgrade Now")
+                HStack(spacing: 8) {
+                    Image(systemName: actionSystemImage)
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(actionTitle)
+                        .font(.subheadline.bold())
+                }
                     .font(.subheadline.bold())
                     .foregroundStyle(Color.adaptiveTextOnAccent)
                     .frame(maxWidth: .infinity)
@@ -177,22 +182,42 @@ struct UpgradePromptCard: View {
     private var upgradeTitle: String {
         switch currentTier {
         case .free:
-            return "Upgrade to Pro or Premium"
+            return "Upgrade to Premium"
         case .pro:
             return "Upgrade to Premium"
         case .premium:
-            return "You're on Premium"
+            return "Manage Premium"
         }
     }
 
     private var upgradeSubtitle: String {
         switch currentTier {
         case .free:
-            return "Get better prompts and more daily uses"
+            return "Unlock MAX mode, more daily usage, and advanced power tools"
         case .pro:
             return "Unlock unlimited prompts and advanced features"
         case .premium:
-            return "Enjoying all premium features"
+            return "Review billing, renewal, and App Store subscription settings"
+        }
+    }
+
+    private var actionTitle: String {
+        switch currentTier {
+        case .free:
+            return "See Premium Plans"
+        case .pro:
+            return "Upgrade to Premium"
+        case .premium:
+            return "Manage Subscription"
+        }
+    }
+
+    private var actionSystemImage: String {
+        switch currentTier {
+        case .free, .pro:
+            return "crown.fill"
+        case .premium:
+            return "slider.horizontal.3"
         }
     }
 }

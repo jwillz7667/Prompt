@@ -51,6 +51,7 @@ struct PromptApp: App {
     @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
     @State private var complianceManager = AppStoreComplianceManager.shared
+    @State private var guestSessionManager = GuestSessionManager.shared
 
     init() {
         // Configure Firebase Analytics and Crashlytics
@@ -77,6 +78,7 @@ struct PromptApp: App {
                 .environment(storeKitManager)
                 .environment(syncManager)
                 .environment(complianceManager)
+                .environment(guestSessionManager)
                 .modelContainer(modelContainer)
                 .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
                 .task {
@@ -92,6 +94,7 @@ struct PromptApp: App {
                 .environment(storeKitManager)
                 .environment(syncManager)
                 .environment(complianceManager)
+                .environment(guestSessionManager)
                 .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
                 .task {
                     // Load subscription data when app starts
@@ -107,6 +110,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
     @State private var showSupportTicket: String?
+    @State private var splashMinimumDurationElapsed = false
 
     // Check if running in UI test / screenshot mode
     private var isUITesting: Bool {
@@ -119,17 +123,20 @@ struct RootView: View {
             if isUITesting {
                 // Bypass auth for UI testing/screenshots
                 ContentView()
-            } else if authManager.isCheckingSession {
+            } else if authManager.isCheckingSession || !splashMinimumDurationElapsed {
                 SplashView()
-            } else if authManager.isAuthenticated {
-                ContentView()
             } else {
-                AuthView()
+                ContentView()
             }
         }
         .animation(.easeInOut(duration: 0.3), value: authManager.isAuthenticated)
         .animation(.easeInOut(duration: 0.3), value: authManager.isCheckingSession)
         .task {
+            if !splashMinimumDurationElapsed {
+                try? await Task.sleep(for: .seconds(1.15))
+                splashMinimumDurationElapsed = true
+            }
+
             await VariationsService.shared.bootstrap()
             // Request notification permissions when authenticated
             if authManager.isAuthenticated {
@@ -176,7 +183,11 @@ struct RootView: View {
 
 struct SplashView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isAnimating = false
+    @State private var logoScale = 0.84
+    @State private var logoRotation = -14.0
+    @State private var wordmarkOpacity = 0.0
+    @State private var wordmarkOffset = 22.0
+    @State private var haloOpacity = 0.18
 
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -187,34 +198,51 @@ struct SplashView: View {
             LiquidGlassBackground()
 
             VStack(spacing: 24) {
-                // App Logo (no glow)
-                Group {
-                    if UIImage(named: "AppLogo") != nil {
-                        Image("AppLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 120, height: 120)
-                    } else {
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 80, weight: .light))
-                            .foregroundStyle(textPrimary)
-                    }
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    (colorScheme == .dark ? Color.brandCyan : Color.brandPurple).opacity(0.28),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 8,
+                                endRadius: 140
+                            )
+                        )
+                        .frame(width: 200, height: 200)
+                        .opacity(haloOpacity)
+                        .blur(radius: 18)
+
+                    AppBrandMark(size: 132, showsGlassBackdrop: true)
+                        .scaleEffect(logoScale)
+                        .rotationEffect(.degrees(logoRotation))
                 }
-                .scaleEffect(isAnimating ? 1.05 : 1.0)
 
-                Text("Promptomize")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundStyle(textPrimary)
+                VStack(spacing: 8) {
+                    Text("Promptomize")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(textPrimary)
 
-                ProgressView()
-                    .tint(colorScheme == .light ? Color.brandPurple : Color.brandCyan)
-                    .scaleEffect(1.8)
-                    .padding(.top, 20)
+                    Text("Refine prompts in one polished chat flow")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(Color.adaptiveTextSecondary)
+                }
+                .opacity(wordmarkOpacity)
+                .offset(y: wordmarkOffset)
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                isAnimating = true
+            withAnimation(.spring(response: 0.78, dampingFraction: 0.8)) {
+                logoScale = 1.0
+                logoRotation = 0
+                haloOpacity = 1
+            }
+
+            withAnimation(.easeOut(duration: 0.52).delay(0.12)) {
+                wordmarkOpacity = 1
+                wordmarkOffset = 0
             }
         }
     }

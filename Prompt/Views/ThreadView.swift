@@ -17,6 +17,7 @@ struct ThreadView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SettingsManager.self) private var settings
     @Environment(StoreKitManager.self) private var storeKit
+    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(PromptHistoryManager.self) private var historyManager
     @Environment(AuthManager.self) private var authManager
 
@@ -36,6 +37,7 @@ struct ThreadView: View {
     @State private var showWorkflows = false
     @State private var showPaywallSheet = false
     @State private var showWorkspaceActions = false
+    @State private var showMaxModeToast = false
     @FocusState private var isInputFocused: Bool
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -47,6 +49,10 @@ struct ThreadView: View {
     private var brandSecondaryAccent: Color { colorScheme == .dark ? Color.brandPurple : Color.brandPurpleDark }
 
     private var canUseMaxMode: Bool {
+        guard authManager.isAuthenticated else {
+            return guestSession.quota.maxRemaining > 0
+        }
+
         guard let remaining = storeKit.usageInfo?.maxModeRemaining else { return true }
         return remaining != 0
     }
@@ -60,29 +66,8 @@ struct ThreadView: View {
         presentationStyle == .home && !viewModel.hasConversation
     }
 
-    private var workspaceSubtitle: String {
-        if viewModel.hasConversation {
-            return "Refine the same prompt thread without leaving the workspace"
-        }
-
-        if settings.maxModeEnabled {
-            return "A clean chat workspace for stronger prompt rewrites"
-        }
-
-        return "Send a rough prompt and keep refining it in one thread"
-    }
-
     private var modalitySummary: String {
         settings.selectedModality.displayName
-    }
-
-    private var usageSummary: String? {
-        guard let usage = storeKit.usageInfo else { return nil }
-        let remaining = max(usage.dailyPromptsLimit - usage.dailyPromptsUsed, 0)
-        if usage.dailyPromptsLimit == .max {
-            return "Unlimited"
-        }
-        return "\(remaining) left today"
     }
 
     private var inputPlaceholder: String {
@@ -101,6 +86,13 @@ struct ThreadView: View {
             }
         }
         .background { LiquidGlassBackground() }
+        .overlay(alignment: .top) {
+            if showMaxModeToast {
+                maxModeToast
+                    .padding(.top, presentationStyle == .home ? 92 : 18)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             composerInset
         }
@@ -142,7 +134,7 @@ struct ThreadView: View {
             }
 
             if let onOpenThreads {
-                Button("Threads") {
+                Button("History") {
                     triggerHaptic(.light)
                     onOpenThreads()
                 }
@@ -197,25 +189,27 @@ struct ThreadView: View {
                 onOpenThreads?()
             })
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Promptomize")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [brandSecondaryAccent, accentColor],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-
-                Text(workspaceSubtitle)
-                    .font(.system(.caption, design: .rounded, weight: .medium))
-                    .foregroundStyle(textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            AppBrandMark(size: 48, showsGlassBackdrop: false)
 
             Spacer(minLength: 0)
+
+            if storeKit.currentTier != .premium {
+                Button {
+                    triggerHaptic(.light)
+                    presentPaywall()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Premium")
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                    }
+                    .foregroundStyle(Color.adaptiveTextOnAccent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                }
+                .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor, intensity: .prominent))
+            }
 
             if let onStartNewConversation, viewModel.hasConversation {
                 iconButton(systemName: "square.and.pencil", action: {
@@ -225,7 +219,7 @@ struct ThreadView: View {
             }
 
             if let onOpenHistory {
-                iconButton(systemName: "bubble.left.and.text.bubble", action: {
+                iconButton(systemName: "clock.arrow.circlepath", action: {
                     triggerHaptic(.light)
                     onOpenHistory()
                 })
@@ -306,74 +300,10 @@ struct ThreadView: View {
     }
 
     private var welcomeState: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [brandSecondaryAccent.opacity(0.95), accentColor.opacity(0.9)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 52, height: 52)
-
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(Color.adaptiveTextOnAccent)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Start a new optimization")
-                                .font(.system(.title3, design: .rounded, weight: .bold))
-                                .foregroundStyle(textPrimary)
-
-                            Text("Drop a rough prompt into the composer and keep refining it in one focused chat workflow.")
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundStyle(textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Label(settings.maxModeEnabled ? "MAX ready" : "Standard ready", systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill")
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                            .foregroundStyle(textPrimary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .liquidGlassChip(isSelected: settings.maxModeEnabled, accentColor: settings.maxModeEnabled ? .orange : accentColor)
-
-                        Label(modalitySummary, systemImage: settings.selectedModality.icon)
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                            .foregroundStyle(textPrimary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .liquidGlassChip(isSelected: false, accentColor: brandSecondaryAccent)
-
-                        if let usageSummary {
-                            Label(usageSummary, systemImage: "chart.bar.fill")
-                                .font(.system(.caption, design: .rounded, weight: .semibold))
-                                .foregroundStyle(textPrimary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .liquidGlassChip(isSelected: false, accentColor: accentColor)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(20)
-                .liquidGlass(cornerRadius: 24, shadowIntensity: 0.72, borderGlow: true)
-
-                Spacer(minLength: 220)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 24)
+        VStack {
+            Spacer(minLength: 0)
         }
-        .scrollDismissesKeyboard(.interactively)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var conversationMessagesArea: some View {
@@ -547,7 +477,8 @@ struct ThreadView: View {
                             composerControlChip(
                                 title: settings.maxModeEnabled ? "MAX" : "Standard",
                                 systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill",
-                                tint: settings.maxModeEnabled ? .orange : accentColor
+                                tint: settings.maxModeEnabled ? .orange : accentColor,
+                                isSelected: settings.maxModeEnabled
                             )
                         }
                         .buttonStyle(.plain)
@@ -653,6 +584,17 @@ struct ThreadView: View {
     }
 
     private func toggleMaxMode() {
+        if !authManager.isAuthenticated && !settings.maxModeEnabled && guestSession.quota.maxRemaining == 0 {
+            if guestSession.quota.isExhausted {
+                guestSession.presentAuthenticationGate()
+                viewModel.errorMessage = "Sign in to keep using MAX mode and continue your chat."
+            } else {
+                viewModel.errorMessage = "Your guest MAX prompt is already used. Switch back to Standard or sign in to continue."
+            }
+            viewModel.showError = true
+            return
+        }
+
         if !settings.maxModeEnabled && !canUseMaxMode {
             presentPaywall()
             return
@@ -661,13 +603,32 @@ struct ThreadView: View {
         settings.maxModeEnabled.toggle()
         settings.savePreferences()
         triggerHaptic(.light)
+
+        if settings.maxModeEnabled {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                showMaxModeToast = true
+            }
+
+            Task {
+                try? await Task.sleep(for: .seconds(1.35))
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.26, dampingFraction: 0.9)) {
+                        showMaxModeToast = false
+                    }
+                }
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.18)) {
+                showMaxModeToast = false
+            }
+        }
     }
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
     }
 
-    private func composerControlChip(title: String, systemImage: String, tint: Color) -> some View {
+    private func composerControlChip(title: String, systemImage: String, tint: Color, isSelected: Bool = false) -> some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
                 .font(.system(size: 11, weight: .semibold))
@@ -678,6 +639,29 @@ struct ThreadView: View {
         .foregroundStyle(textPrimary)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .liquidGlassChip(isSelected: false, accentColor: tint)
+        .liquidGlassChip(isSelected: isSelected, accentColor: tint)
+    }
+
+    private var maxModeToast: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 12, weight: .bold))
+            Text("MAX mode on")
+                .font(.system(.caption, design: .rounded, weight: .bold))
+        }
+        .foregroundStyle(Color.adaptiveTextOnAccent)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.orange, Color.orange.opacity(0.82)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .shadow(color: Color.orange.opacity(0.28), radius: 14, y: 8)
     }
 }

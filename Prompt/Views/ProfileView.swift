@@ -10,7 +10,9 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
     @Environment(AuthManager.self) private var authManager
+    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(PromptHistoryManager.self) private var historyManager
     @Environment(StoreKitManager.self) private var storeKit
     @Environment(SettingsManager.self) private var settings
@@ -153,6 +155,85 @@ struct ProfileView: View {
                         .padding(.vertical, 8)
                         .listRowBackground(bgSecondary)
                     }
+                } else {
+                    Section {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(spacing: 14) {
+                                AppBrandMark(size: 54, showsGlassBackdrop: false)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Sign in to sync your account")
+                                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                                        .foregroundStyle(textPrimary)
+
+                                    Text("Save chat threads, restore purchases, and unlock the 7-day Premium trial offer.")
+                                        .font(.system(.subheadline, design: .rounded))
+                                        .foregroundStyle(textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+
+                            Button {
+                                guestSession.presentAuthenticationGate()
+                                dismiss()
+                            } label: {
+                                Label("Sign In with Apple", systemImage: "apple.logo")
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                            }
+                            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: accentColor, intensity: .prominent))
+                        }
+                        .padding(.vertical, 4)
+                        .listRowBackground(bgSecondary)
+                    }
+                }
+
+                Section {
+                    VStack(alignment: .leading, spacing: 16) {
+                        SubscriptionStatusCard()
+
+                        UpgradePromptCard(currentTier: storeKit.currentTier) {
+                            handlePlanAction()
+                        }
+
+                        if storeKit.isTrialing, let remaining = storeKit.subscriptionInfo?.trialDaysRemaining {
+                            TrialBanner(daysRemaining: remaining) {
+                                handlePlanAction()
+                            }
+                        }
+
+                        if storeKit.currentTier != .free {
+                            Button {
+                                openAppStoreSubscriptions()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "creditcard.fill")
+                                        .foregroundStyle(accentColor)
+                                        .frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Manage Billing in App Store")
+                                            .foregroundStyle(textPrimary)
+                                        Text("Update renewal settings or cancel from Apple subscriptions")
+                                            .font(.caption)
+                                            .foregroundStyle(textSecondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right.square")
+                                        .font(.caption)
+                                        .foregroundStyle(textTertiary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(bgSecondary)
+                } header: {
+                    Text("Plan & Billing")
+                        .foregroundStyle(textSecondary)
+                } footer: {
+                    Text("Upgrade, review plan status, or manage your active App Store subscription.")
+                        .foregroundStyle(textTertiary)
                 }
 
                 // Custom Instructions section (editable)
@@ -355,40 +436,6 @@ struct ProfileView: View {
                 } footer: {
                     Text("Open support chat or review tickets without leaving your account workspace.")
                         .foregroundStyle(textTertiary)
-                }
-
-                // Subscription section
-                Section {
-                    VStack(spacing: 16) {
-                        SubscriptionStatusCard()
-
-                        if storeKit.currentTier != .premium {
-                            Button {
-                                showPaywall = true
-                            } label: {
-                                HStack {
-                                    Image(systemName: storeKit.currentTier == .free ? "crown.fill" : "arrow.up.circle.fill")
-                                        .foregroundStyle(accentColor)
-                                    Text(storeKit.currentTier == .free ? "Upgrade to Premium" : "Upgrade Plan")
-                                        .foregroundStyle(textPrimary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundStyle(textTertiary)
-                                }
-                            }
-                        }
-
-                        if storeKit.isTrialing, let remaining = storeKit.subscriptionInfo?.trialDaysRemaining {
-                            TrialBanner(daysRemaining: remaining) {
-                                showPaywall = true
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    .listRowBackground(bgSecondary)
-                } header: {
-                    Text("Subscription")
-                        .foregroundStyle(textSecondary)
                 }
 
                 // Stats section
@@ -614,6 +661,19 @@ struct ProfileView: View {
         authManager.currentUser = nil
         historyManager.clearLocalData()
         dismiss()
+    }
+
+    private func handlePlanAction() {
+        if storeKit.currentTier == .premium {
+            openAppStoreSubscriptions()
+        } else {
+            showPaywall = true
+        }
+    }
+
+    private func openAppStoreSubscriptions() {
+        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
+        openURL(url)
     }
 
     private func formatTokens(_ tokens: String) -> String {

@@ -12,20 +12,28 @@ import UIKit
 struct HistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AppStoreComplianceManager.self) private var complianceManager
+    @Environment(AuthManager.self) private var authManager
+    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(PromptHistoryManager.self) private var historyManager
+    @Environment(SettingsManager.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var selectedPrompt: PromptRecord?
+    @State private var selectedThreadId: String?
     @State private var showDeleteConfirmation = false
     @State private var promptToDelete: PromptRecord?
-    @State private var selectedTab: HistoryTab = .all
+    @State private var showDeleteThreadConfirmation = false
+    @State private var threadToDelete: ThreadRecord?
+    @State private var selectedTab: HistoryTab = .prompts
+    @State private var threadViewModel = ThreadViewModel()
 
     /// Callback to re-run a prompt from history
     var onRerunPrompt: ((String) -> Void)?
 
     enum HistoryTab: String, CaseIterable {
-        case all = "All"
-        case starred = "★"
+        case prompts = "Prompts"
+        case chats = "Chats"
+        case starred = "Starred"
     }
 
     // AAA Compliant Colors
@@ -35,6 +43,15 @@ struct HistoryView: View {
     private var bgPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+    private var filteredThreads: [ThreadRecord] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return threadViewModel.threads }
+        let query = trimmed.localizedLowercase
+        return threadViewModel.threads.filter { thread in
+            thread.title.localizedLowercase.contains(query) ||
+            (thread.lastPreview?.localizedLowercase.contains(query) ?? false)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -44,7 +61,7 @@ struct HistoryView: View {
                 VStack(spacing: 0) {
                     PromptPageHeader(
                         title: "History",
-                        subtitle: "Your optimized prompts in one searchable archive",
+                        subtitle: "Prompts and chat threads in one shared archive",
                         onLeadingTap: { dismiss() }
                     )
                     .padding(.horizontal, 16)
@@ -63,7 +80,17 @@ struct HistoryView: View {
                     .padding(.bottom, 12)
 
                     Group {
-                        if historyManager.isLoading && historyManager.prompts.isEmpty {
+                        if selectedTab == .chats {
+                            if !authManager.isAuthenticated {
+                                signInRequiredState
+                            } else if threadViewModel.isLoadingThreads && threadViewModel.threads.isEmpty {
+                                loadingView
+                            } else if filteredThreads.isEmpty {
+                                emptyStateView
+                            } else {
+                                threadList
+                            }
+                        } else if historyManager.isLoading && historyManager.prompts.isEmpty {
                             loadingView
                         } else if historyManager.prompts.isEmpty {
                             emptyStateView
@@ -74,23 +101,41 @@ struct HistoryView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .searchable(text: $searchText, prompt: "Search prompts...")
+            .navigationDestination(item: $selectedThreadId) { threadId in
+                ThreadView(viewModel: threadViewModel, threadId: threadId)
+            }
+            .searchable(
+                text: $searchText,
+                prompt: selectedTab == .chats ? "Search history..." : "Search prompts..."
+            )
             .onChange(of: searchText) { _, newValue in
+                guard selectedTab != .chats else { return }
                 historyManager.searchQuery = newValue
                 Task {
                     await historyManager.fetchPrompts(refresh: true)
                 }
             }
             .onChange(of: selectedTab) { _, newTab in
-                historyManager.showFavoritesOnly = (newTab == .starred)
                 Task {
-                    await historyManager.fetchPrompts(refresh: true)
+                    switch newTab {
+                    case .prompts:
+                        historyManager.showFavoritesOnly = false
+                        await historyManager.fetchPrompts(refresh: true)
+                    case .starred:
+                        historyManager.showFavoritesOnly = true
+                        await historyManager.fetchPrompts(refresh: true)
+                    case .chats:
+                        if authManager.isAuthenticated {
+                            await threadViewModel.fetchThreads(refresh: true)
+                        }
+                    }
                 }
             }
             .task {
-                // Sync tab state with manager state
-                selectedTab = historyManager.showFavoritesOnly ? .starred : .all
                 await historyManager.fetchPrompts(refresh: true)
+                if authManager.isAuthenticated {
+                    await threadViewModel.fetchThreads(refresh: true)
+                }
             }
             .sheet(item: $selectedPrompt) { prompt in
                 PromptDetailView(prompt: prompt) {
@@ -111,6 +156,18 @@ struct HistoryView: View {
                 }
             } message: {
                 Text("Are you sure you want to delete this prompt? This action cannot be undone.")
+            }
+            .alert("Delete Chat", isPresented: $showDeleteThreadConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    if let thread = threadToDelete {
+                        Task {
+                            await threadViewModel.deleteThread(id: thread.id)
+                        }
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to delete this chat thread? This action cannot be undone.")
             }
         }
     }
@@ -138,25 +195,94 @@ struct HistoryView: View {
                     .fill(accentColor.opacity(0.15))
                     .frame(width: 100, height: 100)
 
-                Image(systemName: selectedTab == .starred ? "star.fill" : "doc.text.fill")
+                Image(systemName: emptyStateIcon)
                     .font(.system(size: 44, weight: .light))
                     .foregroundStyle(accentColor)
             }
 
             VStack(spacing: 8) {
-                Text(selectedTab == .starred ? "No Starred Prompts" : "No Prompts Yet")
+                Text(emptyStateTitle)
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .foregroundStyle(textPrimary)
 
-                Text(selectedTab == .starred
-                     ? "Tap the star on any prompt to add it here"
-                     : "Your enhanced prompts will appear here")
+                Text(emptyStateSubtitle)
                     .font(.subheadline)
                     .foregroundStyle(textSecondary)
                     .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var signInRequiredState: some View {
+        VStack(spacing: 22) {
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.14))
+                    .frame(width: 96, height: 96)
+
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.system(size: 40, weight: .regular))
+                    .foregroundStyle(accentColor)
+            }
+
+            VStack(spacing: 8) {
+                Text("Sign in to sync chats")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text("Guest prompt history stays on this device. Sign in to save chat threads, sync them, and unlock the 7-day Premium trial offer.")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+            }
+
+            Button {
+                guestSession.presentAuthenticationGate()
+                dismiss()
+            } label: {
+                Label("Sign In with Apple", systemImage: "apple.logo")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: accentColor, intensity: .prominent))
+            .padding(.horizontal, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateIcon: String {
+        switch selectedTab {
+        case .prompts:
+            return "doc.text.fill"
+        case .starred:
+            return "star.fill"
+        case .chats:
+            return "bubble.left.and.bubble.right"
+        }
+    }
+
+    private var emptyStateTitle: String {
+        switch selectedTab {
+        case .prompts:
+            return "No Prompts Yet"
+        case .starred:
+            return "No Starred Prompts"
+        case .chats:
+            return "No Chats Yet"
+        }
+    }
+
+    private var emptyStateSubtitle: String {
+        switch selectedTab {
+        case .prompts:
+            return "Your enhanced prompts will appear here"
+        case .starred:
+            return "Tap the star on any prompt to add it here"
+        case .chats:
+            return "Your optimization threads will appear here once you start chatting"
+        }
     }
 
     // MARK: - Prompts List
@@ -215,6 +341,133 @@ struct HistoryView: View {
         .background(bgPrimary)
         .refreshable {
             await historyManager.fetchPrompts(refresh: true)
+        }
+    }
+
+    // MARK: - Thread List
+
+    private var threadList: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(filteredThreads) { thread in
+                    threadRow(thread)
+                        .onTapGesture {
+                            selectedThreadId = thread.id
+                        }
+                }
+
+                if threadViewModel.hasMorePages && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ProgressView()
+                        .tint(accentColor)
+                        .padding()
+                        .task {
+                            threadViewModel.currentPage += 1
+                            await threadViewModel.fetchThreads()
+                        }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .refreshable {
+            await threadViewModel.fetchThreads(refresh: true)
+        }
+    }
+
+    private func threadRow(_ thread: ThreadRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: modalityIcon(thread.modality))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(modalityColor(thread.modality))
+                    .frame(width: 28, height: 28)
+                    .background {
+                        Circle()
+                            .fill(modalityColor(thread.modality).opacity(0.15))
+                    }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(thread.title)
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(textPrimary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Text("\(thread.turnCount) turn\(thread.turnCount == 1 ? "" : "s")")
+                            .font(.system(.caption2, design: .rounded, weight: .medium))
+                            .foregroundStyle(textSecondary)
+
+                        Text("·")
+                            .foregroundStyle(textTertiary)
+
+                        Text(thread.updatedAt, style: .relative)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(textTertiary)
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    threadToDelete = thread
+                    showDeleteThreadConfirmation = true
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(textTertiary)
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let preview = thread.lastPreview, !preview.isEmpty {
+                Text(preview)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(textSecondary)
+                    .lineLimit(2)
+                    .padding(.leading, 36)
+            }
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: colorScheme == .dark
+                                    ? [Color.white.opacity(0.1), Color.white.opacity(0.03)]
+                                    : [Color.white.opacity(0.8), Color.adaptiveButtonPrimary.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.06), radius: 8, y: 4)
+    }
+
+    private func modalityIcon(_ modality: String) -> String {
+        switch modality {
+        case "image": return "photo"
+        case "video": return "video"
+        case "audio": return "music.note"
+        case "code": return "chevron.left.forwardslash.chevron.right"
+        case "3d": return "cube"
+        default: return "text.alignleft"
+        }
+    }
+
+    private func modalityColor(_ modality: String) -> Color {
+        switch modality {
+        case "image": return .pink
+        case "video": return .red
+        case "audio": return .teal
+        case "code": return .green
+        case "3d": return .blue
+        default: return .purple
         }
     }
 }

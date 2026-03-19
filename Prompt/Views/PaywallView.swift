@@ -11,6 +11,7 @@ import StoreKit
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
     @Environment(StoreKitManager.self) private var storeKit
 
     @State private var selectedProduct: Product?
@@ -20,12 +21,46 @@ struct PaywallView: View {
     @State private var showSuccess = false
     @State private var trialEligible = false
 
-    // Brand colors
-    private var accentColor: Color { Color.brandCyan }
-    private var brandPurple: Color { Color.brandPurple }
-
-    private var theme: AppTheme {
-        colorScheme == .dark ? .dark : .light
+    private var textPrimary: Color { Color.adaptiveTextPrimary }
+    private var textSecondary: Color { Color.adaptiveTextSecondary }
+    private var textTertiary: Color { Color.adaptiveTextTertiary }
+    private var accentColor: Color { Color.adaptiveButtonPrimary }
+    private var brandPurple: Color { colorScheme == .dark ? Color.brandPurple : Color.brandPurpleDark }
+    private var successColor: Color {
+        colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)
+    }
+    private var warningColor: Color {
+        colorScheme == .dark ? Color(red: 255/255, green: 159/255, blue: 10/255) : Color(red: 0.9, green: 0.6, blue: 0.1)
+    }
+    private var currentPlanTitle: String {
+        switch storeKit.currentTier {
+        case .free:
+            return "Unlock premium prompt workflows"
+        case .pro:
+            return "Upgrade from Pro to Premium"
+        case .premium:
+            return "Manage your Premium membership"
+        }
+    }
+    private var currentPlanSubtitle: String {
+        switch storeKit.currentTier {
+        case .free:
+            return "Stronger prompt rewrites, higher limits, and better tools in the same polished workflow."
+        case .pro:
+            return "Move into unlimited usage, MAX access, and the full production toolset."
+        case .premium:
+            return "Review your active plan, switch billing options, or restore purchases without leaving the app."
+        }
+    }
+    private var selectedProductIsCurrent: Bool {
+        guard let selectedProduct else { return false }
+        return storeKit.purchasedProductIDs.contains(selectedProduct.id)
+    }
+    private var primaryActionTitle: String {
+        if selectedProductIsCurrent {
+            return "Manage in App Store"
+        }
+        return selectedProduct != nil ? "Continue with Selected Plan" : "Select a Plan"
     }
 
     var body: some View {
@@ -34,35 +69,27 @@ struct PaywallView: View {
                 LiquidGlassBackground()
 
                 ScrollView {
-                    VStack(spacing: 24) {
-                    PromptPageHeader(
-                        title: "Premium",
-                        subtitle: "Unlock stronger prompts, more usage, and advanced tools",
-                        onLeadingTap: { dismiss() }
-                    )
-                    .padding(.top, 12)
+                    VStack(spacing: 18) {
+                        PromptPageHeader(
+                            title: "Plans & Billing",
+                            subtitle: "Premium access, restore, and App Store subscription management",
+                            onLeadingTap: { dismiss() }
+                        ) {
+                            SubscriptionBadge(tier: storeKit.currentTier)
+                        }
+                        .padding(.top, 12)
 
-                    // Trial banner (if eligible)
-                    if trialEligible && storeKit.currentTier == .free {
-                        trialBanner
+                        heroCard
+
+                        if trialEligible && storeKit.currentTier == .free {
+                            trialBanner
+                        }
+
+                        tierComparisonSection
+                        productSelectionSection
+                        actionSection
                     }
-
-                    // Tier comparison
-                    tierComparisonSection
-
-                    // Product options
-                    productSelectionSection
-
-                    // Purchase button
-                    purchaseButton
-
-                    // Restore purchases
-                    restoreButton
-
-                    // Legal links
-                    legalSection
-                }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .padding(.bottom, 40)
                 }
             }
@@ -92,261 +119,243 @@ struct PaywallView: View {
         }
     }
 
-    // MARK: - Header Section
+    // MARK: - Hero
 
-    private var headerSection: some View {
-        VStack(spacing: 16) {
-            // Crown icon with glass effect
-            ZStack {
-                // Glass background
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 88, height: 88)
-
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.yellow.opacity(0.2),
-                                Color.orange.opacity(0.15)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [brandPurple.opacity(0.95), accentColor.opacity(0.9)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 88, height: 88)
+                        .frame(width: 58, height: 58)
 
-                // Highlight
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(colorScheme == .dark ? 0.15 : 0.6), Color.clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 88, height: 88)
-                    .opacity(0.5)
+                    Image(systemName: storeKit.currentTier == .premium ? "crown.fill" : "sparkles")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color.adaptiveTextOnAccent)
+                }
 
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.yellow, .orange],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(currentPlanTitle)
+                        .font(.system(.title3, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
+
+                    Text(currentPlanSubtitle)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .overlay {
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.yellow.opacity(0.5), Color.orange.opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-                    .frame(width: 88, height: 88)
+
+            HStack(spacing: 8) {
+                benefitChip(
+                    title: storeKit.currentTier == .free ? "MAX Mode" : "\(storeKit.currentTier.displayName) Active",
+                    systemImage: storeKit.currentTier == .free ? "flame.fill" : "checkmark.seal.fill",
+                    tint: storeKit.currentTier == .free ? warningColor : successColor
+                )
+
+                benefitChip(
+                    title: "Advanced prompts",
+                    systemImage: "wand.and.stars",
+                    tint: accentColor
+                )
+
+                benefitChip(
+                    title: "Power tools",
+                    systemImage: "square.grid.2x2.fill",
+                    tint: brandPurple
+                )
             }
-            .shadow(color: Color.yellow.opacity(0.3), radius: 12, y: 0)
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15), radius: 10, y: 5)
-            .padding(.top, 20)
 
-            Text("Unlock Premium Prompts")
-                .font(.title.bold())
-                .foregroundStyle(Color.adaptiveTextPrimary)
-                .multilineTextAlignment(.center)
-
-            Text("Get access to advanced prompt engineering techniques that deliver better AI results")
-                .font(.body)
-                .foregroundStyle(Color.adaptiveTextSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+            if let usage = storeKit.usageInfo, !usage.isUnlimited {
+                HStack(spacing: 10) {
+                    UsageIndicator(used: usage.dailyPromptsUsed, limit: usage.dailyPromptsLimit)
+                    Text("\(usage.remainingPrompts) prompts left today")
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .foregroundStyle(textSecondary)
+                    Spacer()
+                }
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 24, shadowIntensity: 0.74, borderGlow: true)
     }
 
     // MARK: - Trial Banner
 
     private var trialBanner: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "gift.fill")
-                .font(.title2)
-                .foregroundStyle(accentColor)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "gift.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(warningColor)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Try Premium Free for 7 Days")
-                    .font(.headline)
-                    .foregroundStyle(Color.adaptiveTextPrimary)
+                Text("Start a 7-day Premium trial")
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
 
-                Text("Cancel anytime during trial")
-                    .font(.caption)
-                    .foregroundStyle(Color.adaptiveTextSecondary)
+                Spacer()
             }
 
-            Spacer()
+            Text("Try the full premium prompt workflow before committing. Cancel anytime during the trial period in the App Store.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Button {
                 Task {
                     await startTrial()
                 }
             } label: {
-                Text("Start")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(Color.adaptiveTextOnAccent)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                    Text("Start Free Trial")
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
-            .buttonStyle(GlassCapsuleButtonStyle(tintColor: brandPurple, intensity: .prominent))
+            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: brandPurple, intensity: .prominent))
         }
-        .padding()
-        .liquidGlass(cornerRadius: 16, shadowIntensity: 0.8, borderGlow: false)
+        .padding(18)
+        .liquidGlass(cornerRadius: 22, shadowIntensity: 0.7, borderGlow: true)
     }
 
     // MARK: - Tier Comparison
 
     private var tierComparisonSection: some View {
-        VStack(spacing: 12) {
-            Text("Compare Plans")
-                .font(.headline)
-                .foregroundStyle(Color.adaptiveTextPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 14) {
+            LiquidGlassSectionHeader(title: "Why upgrade", icon: "chart.line.uptrend.xyaxis")
 
             VStack(spacing: 0) {
-                // Header row
-                HStack {
-                    Text("Feature")
-                        .font(.subheadline.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    ForEach([SubscriptionTier.free, .pro, .premium], id: \.self) { tier in
-                        Text(tier.displayName)
-                            .font(.subheadline.bold())
-                            .frame(width: 60)
-                    }
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(Color.adaptiveBackgroundTertiary.opacity(0.8))
-
+                comparisonRow(
+                    title: "Prompt quality",
+                    subtitle: "From basic cleanup to advanced prompt engineering",
+                    value: "Basic → Advanced",
+                    tint: accentColor
+                )
                 LiquidGlassDivider()
-
-                // Feature rows
-                featureRow("Daily Prompts", free: "10", pro: "100", premium: "Unlimited")
-                featureRow("Prompt Quality", free: "Basic", pro: "Standard", premium: "Advanced")
-                featureRow("Export Prompts", free: false, pro: true, premium: true)
+                comparisonRow(
+                    title: "Daily usage",
+                    subtitle: "More prompts for active building sessions",
+                    value: "10 → Unlimited",
+                    tint: brandPurple
+                )
+                LiquidGlassDivider()
+                comparisonRow(
+                    title: "Power tools",
+                    subtitle: "Unlock exports, workflows, sandboxing, and premium tools",
+                    value: "Paid plans only",
+                    tint: successColor
+                )
             }
-            .liquidGlass(cornerRadius: 12, shadowIntensity: 0.6, borderGlow: false)
+            .liquidGlass(cornerRadius: 22, shadowIntensity: 0.68)
         }
     }
 
-    private func featureRow(_ name: String, free: String, pro: String, premium: String) -> some View {
-        HStack {
-            Text(name)
-                .font(.subheadline)
-                .foregroundStyle(Color.adaptiveTextPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private func comparisonRow(title: String, subtitle: String, value: String, tint: Color) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(tint.opacity(0.14))
+                    .frame(width: 36, height: 36)
+                Circle()
+                    .stroke(tint.opacity(0.35), lineWidth: 1)
+                    .frame(width: 36, height: 36)
+                Circle()
+                    .fill(tint)
+                    .frame(width: 10, height: 10)
+            }
 
-            Text(free)
-                .font(.caption)
-                .foregroundStyle(Color.adaptiveTextSecondary)
-                .frame(width: 60)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
+                Text(subtitle)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-            Text(pro)
-                .font(.caption)
-                .foregroundStyle(Color.adaptiveTextPrimary)
-                .frame(width: 60)
+            Spacer()
 
-            Text(premium)
-                .font(.caption.bold())
-                .foregroundStyle(accentColor)
-                .frame(width: 60)
+            Text(value)
+                .font(.system(.caption, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .liquidGlassChip(isSelected: false, accentColor: tint)
         }
-        .padding(.vertical, 10)
         .padding(.horizontal, 16)
-    }
-
-    private func featureRow(_ name: String, free: Bool, pro: Bool, premium: Bool) -> some View {
-        HStack {
-            Text(name)
-                .font(.subheadline)
-                .foregroundStyle(Color.adaptiveTextPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            checkmark(free)
-                .frame(width: 60)
-
-            checkmark(pro)
-                .frame(width: 60)
-
-            checkmark(premium)
-                .frame(width: 60)
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 16)
-    }
-
-    private func checkmark(_ enabled: Bool) -> some View {
-        Image(systemName: enabled ? "checkmark.circle.fill" : "xmark.circle")
-            .foregroundStyle(enabled ? (colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)) : Color.adaptiveTextTertiary)
-            .font(.subheadline)
+        .padding(.vertical, 14)
     }
 
     // MARK: - Product Selection
 
     private var productSelectionSection: some View {
-        VStack(spacing: 12) {
-            Text("Choose Your Plan")
-                .font(.headline)
-                .foregroundStyle(Color.adaptiveTextPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 14) {
+            LiquidGlassSectionHeader(title: "Choose a plan", icon: "crown.fill")
 
-            if storeKit.isLoading && storeKit.products.isEmpty {
-                ProgressView()
-                    .padding()
-            } else if storeKit.products.isEmpty {
-                Text("Unable to load products. Please try again later.")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.adaptiveTextSecondary)
-                    .padding()
-            } else {
-                // Group products by tier
-                VStack(spacing: 12) {
-                    // Pro products
+            VStack(alignment: .leading, spacing: 14) {
+                if storeKit.isLoading && storeKit.products.isEmpty {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 12)
+                        Spacer()
+                    }
+                } else if storeKit.products.isEmpty {
+                    Text("Unable to load products. Please try again later.")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(textSecondary)
+                        .padding(.vertical, 4)
+                } else {
                     if !storeKit.proProducts.isEmpty {
                         tierProductGroup(tier: .pro, products: storeKit.proProducts)
                     }
 
-                    // Premium products
                     if !storeKit.premiumProducts.isEmpty {
                         tierProductGroup(tier: .premium, products: storeKit.premiumProducts)
                     }
                 }
             }
+            .padding(18)
+            .liquidGlass(cornerRadius: 22, shadowIntensity: 0.72, borderGlow: true)
         }
     }
 
     private func tierProductGroup(tier: SubscriptionTier, products: [Product]) -> some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(tier.displayName)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(tier == .premium ? brandPurple : Color.adaptiveTextPrimary)
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                    .foregroundStyle(tier == .premium ? brandPurple : textPrimary)
 
                 if tier == .premium {
-                    Text("BEST VALUE")
-                        .font(.caption2.bold())
+                    Text("Recommended")
+                        .font(.system(.caption2, design: .rounded, weight: .bold))
                         .foregroundStyle(Color.adaptiveTextOnAccent)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(brandPurple)
-                        .clipShape(Capsule())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [brandPurple, accentColor],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        )
                 }
 
                 Spacer()
             }
-            .padding(.horizontal, 4)
 
             ForEach(products, id: \.id) { product in
                 productCard(product, tier: tier)
@@ -366,25 +375,25 @@ struct PaywallView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(isAnnual ? "Annual" : "Monthly")
-                            .font(.headline)
-                            .foregroundStyle(Color.adaptiveTextPrimary)
+                            Text(isAnnual ? "Annual" : "Monthly")
+                            .font(.system(.headline, design: .rounded, weight: .bold))
+                            .foregroundStyle(textPrimary)
 
                         if isAnnual {
                             Text("Save 17%")
-                                .font(.caption.bold())
+                                .font(.system(.caption2, design: .rounded, weight: .bold))
                                 .foregroundStyle(Color.adaptiveTextOnAccent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4))
+                                .background(successColor)
                                 .clipShape(Capsule())
                         }
                     }
 
                     if isAnnual, let monthlyEquiv = storeKit.monthlyEquivalent(for: product) {
                         Text("\(monthlyEquiv)/month")
-                            .font(.caption)
-                            .foregroundStyle(Color.adaptiveTextSecondary)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(textSecondary)
                     }
                 }
 
@@ -392,13 +401,13 @@ struct PaywallView: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(product.displayPrice)
-                        .font(.title3.bold())
-                        .foregroundStyle(Color.adaptiveTextPrimary)
+                        .font(.system(.title3, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
 
                     Text(isAnnual ? "/year" : "/month")
-                        .font(.caption)
-                        .foregroundStyle(Color.adaptiveTextSecondary)
-                }
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(textSecondary)
+                    }
 
                 // Selection indicator with glass effect
                 ZStack {
@@ -438,44 +447,105 @@ struct PaywallView: View {
             .padding()
         }
         .buttonStyle(LiquidGlassButtonStyle(
-            cornerRadius: 12,
+            cornerRadius: 18,
             tintColor: isSelected ? selectionColor : nil,
             intensity: isSelected ? .standard : .subtle
         ))
+        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: isSelected)
     }
 
-    // MARK: - Purchase Button
+    // MARK: - Action Section
+
+    private var actionSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            LiquidGlassSectionHeader(title: "Complete purchase", icon: "creditcard.fill")
+
+            VStack(alignment: .leading, spacing: 14) {
+                if let selectedProduct {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Selected")
+                                .font(.system(.caption, design: .rounded, weight: .medium))
+                                .foregroundStyle(textTertiary)
+                            Text(productSummary(for: selectedProduct))
+                                .font(.system(.subheadline, design: .rounded, weight: .bold))
+                                .foregroundStyle(textPrimary)
+                        }
+
+                        Spacer()
+
+                        if selectedProductIsCurrent {
+                            Text("Current")
+                                .font(.system(.caption, design: .rounded, weight: .bold))
+                                .foregroundStyle(textPrimary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .liquidGlassChip(isSelected: false, accentColor: successColor)
+                        }
+                    }
+                }
+
+                purchaseButton
+
+                HStack(spacing: 12) {
+                    restoreButton
+
+                    if storeKit.hasActiveSubscription {
+                        Button {
+                            openManageSubscriptions()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "slider.horizontal.3")
+                                Text("Manage")
+                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 18))
+                        .disabled(isProcessing)
+                    }
+                }
+
+                legalSection
+            }
+            .padding(18)
+            .liquidGlass(cornerRadius: 22, shadowIntensity: 0.72)
+        }
+    }
 
     private var purchaseButton: some View {
         Button {
             Task {
-                await purchase()
+                if selectedProductIsCurrent {
+                    openManageSubscriptions()
+                } else {
+                    await purchase()
+                }
             }
         } label: {
-            HStack {
+            HStack(spacing: 8) {
                 if isProcessing {
                     ProgressView()
                         .tint(Color.adaptiveTextOnAccent)
                 } else {
-                    Text(selectedProduct != nil ? "Subscribe Now" : "Select a Plan")
-                        .font(.headline)
+                    Image(systemName: selectedProductIsCurrent ? "slider.horizontal.3" : "crown.fill")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(primaryActionTitle)
+                        .font(.system(.headline, design: .rounded, weight: .bold))
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .foregroundStyle(selectedProduct != nil
-                ? Color.adaptiveTextOnAccent
-                : Color.adaptiveTextTertiary)
+            .foregroundStyle(selectedProduct != nil ? Color.adaptiveTextOnAccent : textTertiary)
         }
         .buttonStyle(LiquidGlassButtonStyle(
-            cornerRadius: 14,
-            tintColor: selectedProduct != nil ? Color.adaptiveButtonPrimary : nil,
+            cornerRadius: 18,
+            tintColor: selectedProduct != nil ? accentColor : nil,
             intensity: selectedProduct != nil ? .prominent : .subtle
         ))
         .disabled(selectedProduct == nil || isProcessing)
     }
-
-    // MARK: - Restore Button
 
     private var restoreButton: some View {
         Button {
@@ -483,36 +553,35 @@ struct PaywallView: View {
                 await restorePurchases()
             }
         } label: {
-            Text("Restore Purchases")
-                .font(.subheadline)
-                .foregroundStyle(Color.adaptiveTextSecondary)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.clockwise")
+                Text("Restore")
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
-        .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 20))
+        .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 18))
         .disabled(isProcessing)
     }
 
-    // MARK: - Legal Section
-
     private var legalSection: some View {
-        VStack(spacing: 8) {
-            Text("Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period.")
-                .font(.caption2)
-                .foregroundStyle(Color.adaptiveTextTertiary)
-                .multilineTextAlignment(.center)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period. Renewal is charged within 24 hours of the next billing date.")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 16) {
                 Link("Terms of Service", destination: URL(string: "https://promptomizer.app/terms")!)
-                    .font(.caption)
-                    .foregroundStyle(Color.adaptiveTextSecondary)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textSecondary)
 
                 Link("Privacy Policy", destination: URL(string: "https://promptomizer.app/privacy")!)
-                    .font(.caption)
-                    .foregroundStyle(Color.adaptiveTextSecondary)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textSecondary)
             }
         }
-        .padding(.top)
     }
 
     // MARK: - Actions
@@ -574,6 +643,30 @@ struct PaywallView: View {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+
+    private func benefitChip(title: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+            Text(title)
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(textPrimary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .liquidGlassChip(isSelected: false, accentColor: tint)
+    }
+
+    private func productSummary(for product: Product) -> String {
+        let isAnnual = ProductID(rawValue: product.id)?.isAnnual ?? false
+        return "\(product.displayPrice) • \(isAnnual ? "Annual" : "Monthly")"
+    }
+
+    private func openManageSubscriptions() {
+        guard let url = URL(string: "https://apps.apple.com/account/subscriptions") else { return }
+        openURL(url)
     }
 }
 
