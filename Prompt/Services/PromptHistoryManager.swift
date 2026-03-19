@@ -192,12 +192,15 @@ final class PromptHistoryManager {
         guard await APIClient.shared.isAuthenticated else { return record }
 
         do {
+            let normalizedTemperature = min(max(temperature, 0), 2)
+            let normalizedMaxTokens = max(maxTokens, 1)
+
             let request = CreatePromptRequest(
                 originalPrompt: original,
                 enhancedPrompt: enhanced,
                 model: model,
-                temperature: temperature,
-                maxTokens: maxTokens,
+                temperature: normalizedTemperature,
+                maxTokens: normalizedMaxTokens,
                 inputTokens: inputTokens,
                 outputTokens: outputTokens,
                 totalTokens: totalTokens,

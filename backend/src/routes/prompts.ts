@@ -26,7 +26,15 @@ const createPromptSchema = z.object({
   enhancedPrompt: z.string().min(1).max(500000),
   model: z.string().default('deepseek-reasoner'),
   temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.number().int().min(1).max(100000).default(8192),
+  maxTokens: z.preprocess(
+    (value) => {
+      if (typeof value === 'number' && value < 1) {
+        return undefined;
+      }
+      return value;
+    },
+    z.number().int().min(1).max(100000).default(8192)
+  ),
   inputTokens: z.number().int().min(0).default(0),
   outputTokens: z.number().int().min(0).default(0),
   totalTokens: z.number().int().min(0).default(0),
@@ -56,7 +64,15 @@ const enhancePromptSchema = z.object({
   prompt: z.string().min(1).max(100000),
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().min(1).max(100000).optional(),
+  maxTokens: z.preprocess(
+    (value) => {
+      if (typeof value === 'number' && value < 1) {
+        return undefined;
+      }
+      return value;
+    },
+    z.number().int().min(1).max(100000).optional()
+  ),
   mode: z.enum(['standard', 'max']).default('standard'),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   customInstructions: z.string().max(2000).optional(),
