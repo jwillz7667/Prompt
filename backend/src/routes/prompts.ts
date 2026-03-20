@@ -26,6 +26,7 @@ import {
   recordGuestPromptUsage,
   type GuestQuotaSnapshot,
 } from '../services/guestQuotaService.js';
+import { supportsPromptImageAttachmentColumn } from '../services/schemaCompatibilityService.js';
 
 export const promptRouter = Router();
 
@@ -73,6 +74,23 @@ function toImageAttachmentJson(
     height: attachment.height,
     ...(attachment.analysis ? { analysis: attachment.analysis } : {}),
   } as Prisma.InputJsonValue;
+}
+
+function promptSelect(includeImageAttachment: boolean) {
+  return {
+    id: true,
+    originalPrompt: true,
+    enhancedPrompt: true,
+    model: true,
+    modality: true,
+    ...(includeImageAttachment ? { imageAttachment: true } : {}),
+    totalTokens: true,
+    title: true,
+    tags: true,
+    isFavorite: true,
+    isArchived: true,
+    createdAt: true,
+  } satisfies Prisma.PromptSelect;
 }
 
 // Validation schemas
@@ -316,6 +334,7 @@ promptRouter.post(
       }
 
       const data = enhancePromptSchema.parse(req.body);
+      const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
       // Get user's subscription to determine prompt quality tier
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
@@ -355,7 +374,7 @@ promptRouter.post(
           temperature: data.temperature || 0.7,
           maxTokens,
           modality: data.modality,
-          imageAttachment: toImageAttachmentJson(result.imageAttachment),
+          ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           totalTokens: result.totalTokens,
@@ -453,6 +472,7 @@ promptRouter.post(
       }
 
       const data = enhancePromptSchema.parse(req.body);
+      const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
       // Set up SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
@@ -504,7 +524,7 @@ promptRouter.post(
                 temperature: data.temperature || 0.7,
                 maxTokens,
                 modality: data.modality,
-                imageAttachment: toImageAttachmentJson(result.imageAttachment),
+                ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
@@ -600,6 +620,7 @@ promptRouter.post(
       }
 
       const data = createPromptSchema.parse(req.body);
+      const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
       const prompt = await prisma.prompt.create({
         data: {
@@ -610,7 +631,7 @@ promptRouter.post(
           temperature: data.temperature,
           maxTokens: data.maxTokens,
           modality: data.modality,
-          imageAttachment: toImageAttachmentJson(data.imageAttachment),
+          ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(data.imageAttachment) } : {}),
           inputTokens: data.inputTokens,
           outputTokens: data.outputTokens,
           totalTokens: data.totalTokens,
@@ -657,7 +678,10 @@ promptRouter.post(
 
       // Include subscription info in response for client-side prompt quality selection
       res.status(201).json({
-        prompt,
+        prompt: {
+          ...prompt,
+          imageAttachment: supportsImageAttachment ? ('imageAttachment' in prompt ? prompt.imageAttachment ?? null : null) : data.imageAttachment ?? null,
+        },
         subscription: req.subscription
           ? {
               tier: req.subscription.tier,
@@ -690,6 +714,7 @@ promptRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
     }
 
     const query = listQuerySchema.parse(req.query);
+    const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
     const skip = (query.page - 1) * query.limit;
 
     // Build where clause
@@ -722,26 +747,16 @@ promptRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
         orderBy: { [query.sortBy]: query.sortOrder },
         skip,
         take: query.limit,
-        select: {
-          id: true,
-          originalPrompt: true,
-          enhancedPrompt: true,
-          model: true,
-          modality: true,
-          imageAttachment: true,
-          totalTokens: true,
-          title: true,
-          tags: true,
-          isFavorite: true,
-          isArchived: true,
-          createdAt: true,
-        },
+        select: promptSelect(supportsImageAttachment),
       }),
       prisma.prompt.count({ where }),
     ]);
 
     res.json({
-      prompts,
+      prompts: prompts.map((prompt) => ({
+        ...prompt,
+        imageAttachment: 'imageAttachment' in prompt ? prompt.imageAttachment ?? null : null,
+      })),
       pagination: {
         page: query.page,
         limit: query.limit,
@@ -771,11 +786,13 @@ promptRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
     }
 
     const promptId = req.params.id as string;
+    const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
     const prompt = await prisma.prompt.findFirst({
       where: {
         id: promptId,
         userId: req.user.id,
       },
+      select: promptSelect(supportsImageAttachment),
     });
 
     if (!prompt) {
@@ -783,7 +800,12 @@ promptRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
-    res.json({ prompt });
+    res.json({
+      prompt: {
+        ...prompt,
+        imageAttachment: 'imageAttachment' in prompt ? prompt.imageAttachment ?? null : null,
+      },
+    });
   } catch (error) {
     console.error('Get prompt error:', error);
     res.status(500).json({ error: 'Failed to get prompt' });
@@ -803,6 +825,7 @@ promptRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
 
     const data = updatePromptSchema.parse(req.body);
     const promptId = req.params.id as string;
+    const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
     const prompt = await prisma.prompt.updateMany({
       where: {
@@ -819,9 +842,17 @@ promptRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
 
     const updated = await prisma.prompt.findUnique({
       where: { id: promptId },
+      select: promptSelect(supportsImageAttachment),
     });
 
-    res.json({ prompt: updated });
+    res.json({
+      prompt: updated
+        ? {
+            ...updated,
+            imageAttachment: 'imageAttachment' in updated ? updated.imageAttachment ?? null : null,
+          }
+        : null,
+    });
   } catch (error) {
     console.error('Update prompt error:', error);
     if (error instanceof z.ZodError) {

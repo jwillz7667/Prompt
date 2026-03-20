@@ -19,6 +19,7 @@ import {
   recordMaxModeUsage,
 } from '../services/maxModeQuotaService.js';
 import type { PromptImageAttachment } from '../services/imageAnalysisService.js';
+import { supportsThreadTurnImageAttachmentColumn } from '../services/schemaCompatibilityService.js';
 
 export const threadRouter = Router();
 
@@ -74,6 +75,23 @@ function fromImageAttachmentJson(value: Prisma.JsonValue | null): PromptImageAtt
 
   const parsed = imageAttachmentSchema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
+}
+
+function threadTurnSelect(includeImageAttachment: boolean) {
+  return {
+    id: true,
+    threadId: true,
+    turnIndex: true,
+    originalPrompt: true,
+    enhancedPrompt: true,
+    ...(includeImageAttachment ? { imageAttachment: true } : {}),
+    model: true,
+    inputTokens: true,
+    outputTokens: true,
+    totalTokens: true,
+    processingMs: true,
+    createdAt: true,
+  } satisfies Prisma.ThreadTurnSelect;
 }
 
 // All thread routes require authentication
@@ -154,6 +172,7 @@ threadRouter.post(
       }
 
       const data = createThreadSchema.parse(req.body);
+      const supportsImageAttachment = await supportsThreadTurnImageAttachmentColumn();
 
       // Set up SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
@@ -188,14 +207,14 @@ threadRouter.post(
       if (data.previousTurns.length > 0) {
         await prisma.threadTurn.createMany({
           data: data.previousTurns.map((turn, index) => ({
-            threadId: thread.id,
-            turnIndex: index,
-            originalPrompt: turn.originalPrompt,
-            enhancedPrompt: turn.enhancedPrompt,
-            imageAttachment: toImageAttachmentJson(turn.imageAttachment),
-            model: turn.model ?? 'guest-preview',
-            inputTokens: 0,
-            outputTokens: 0,
+              threadId: thread.id,
+              turnIndex: index,
+              originalPrompt: turn.originalPrompt,
+              enhancedPrompt: turn.enhancedPrompt,
+              ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(turn.imageAttachment) } : {}),
+              model: turn.model ?? 'guest-preview',
+              inputTokens: 0,
+              outputTokens: 0,
             totalTokens: turn.totalTokens ?? 0,
             processingMs: turn.processingMs ?? 0,
           })),
@@ -226,7 +245,7 @@ threadRouter.post(
                 turnIndex: data.previousTurns.length,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
-                imageAttachment: toImageAttachmentJson(result.imageAttachment),
+                ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
                 model: result.model,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
@@ -327,6 +346,7 @@ threadRouter.post(
 
       const threadId = req.params.id as string;
       const data = addTurnSchema.parse(req.body);
+      const supportsImageAttachment = await supportsThreadTurnImageAttachmentColumn();
 
       // Verify thread ownership and load existing turns
       const thread = await prisma.thread.findFirst({
@@ -337,7 +357,7 @@ threadRouter.post(
             select: {
               originalPrompt: true,
               enhancedPrompt: true,
-              imageAttachment: true,
+              ...(supportsImageAttachment ? { imageAttachment: true } : {}),
             },
           },
         },
@@ -367,7 +387,7 @@ threadRouter.post(
       const previousTurns: ThreadTurnContext[] = thread.turns.map((t) => ({
         originalPrompt: t.originalPrompt,
         enhancedPrompt: t.enhancedPrompt,
-        imageAttachment: fromImageAttachmentJson(t.imageAttachment),
+        imageAttachment: 'imageAttachment' in t ? fromImageAttachmentJson(t.imageAttachment as Prisma.JsonValue | null) : undefined,
       }));
 
       const nextTurnIndex = thread.turns.length;
@@ -396,7 +416,7 @@ threadRouter.post(
                 turnIndex: nextTurnIndex,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
-                imageAttachment: toImageAttachmentJson(result.imageAttachment),
+                ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
                 model: result.model,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
@@ -573,11 +593,13 @@ threadRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
     }
 
     const threadId = req.params.id as string;
+    const supportsImageAttachment = await supportsThreadTurnImageAttachmentColumn();
     const thread = await prisma.thread.findFirst({
       where: { id: threadId, userId: req.user.id },
       include: {
         turns: {
           orderBy: { turnIndex: 'asc' },
+          select: threadTurnSelect(supportsImageAttachment),
         },
       },
     });
@@ -595,7 +617,10 @@ threadRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
         isArchived: thread.isArchived,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
-        turns: thread.turns,
+        turns: thread.turns.map((turn) => ({
+          ...turn,
+          imageAttachment: 'imageAttachment' in turn ? turn.imageAttachment ?? null : null,
+        })),
       },
     });
   } catch (error) {

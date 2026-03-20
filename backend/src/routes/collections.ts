@@ -1,9 +1,28 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { prisma } from '../utils/prisma.js';
+import { supportsPromptImageAttachmentColumn } from '../services/schemaCompatibilityService.js';
 
 export const collectionRouter = Router();
+
+function promptSelect(includeImageAttachment: boolean) {
+  return {
+    id: true,
+    originalPrompt: true,
+    enhancedPrompt: true,
+    model: true,
+    modality: true,
+    ...(includeImageAttachment ? { imageAttachment: true } : {}),
+    totalTokens: true,
+    title: true,
+    tags: true,
+    isFavorite: true,
+    isArchived: true,
+    createdAt: true,
+  } satisfies Prisma.PromptSelect;
+}
 
 // All collection routes require authentication
 collectionRouter.use(authenticate);
@@ -95,25 +114,13 @@ collectionRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): P
 
     // Fetch full prompt details
     const promptIds = collection.prompts.map((p) => p.promptId);
+    const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
     const prompts = await prisma.prompt.findMany({
       where: {
         id: { in: promptIds },
         userId: req.user.id,
       },
-      select: {
-        id: true,
-        originalPrompt: true,
-        enhancedPrompt: true,
-        model: true,
-        modality: true,
-        imageAttachment: true,
-        totalTokens: true,
-        title: true,
-        tags: true,
-        isFavorite: true,
-        isArchived: true,
-        createdAt: true,
-      },
+      select: promptSelect(supportsImageAttachment),
     });
 
     res.json({
@@ -126,7 +133,10 @@ collectionRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): P
         promptCount: collection.promptCount,
         createdAt: collection.createdAt,
       },
-      prompts,
+      prompts: prompts.map((prompt) => ({
+        ...prompt,
+        imageAttachment: 'imageAttachment' in prompt ? prompt.imageAttachment ?? null : null,
+      })),
     });
   } catch (error) {
     console.error('Get collection error:', error);
