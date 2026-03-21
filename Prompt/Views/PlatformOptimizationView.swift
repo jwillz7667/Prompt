@@ -145,24 +145,22 @@ struct PlatformOptimizationView: View {
                 selectedPlatform = platform
             }
         } label: {
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: platform.color).opacity(0.2))
-                        .frame(width: 44, height: 44)
-
-                    Image(systemName: platform.icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color(hex: platform.color))
-                }
+            VStack(spacing: 12) {
+                Image(systemName: platform.icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(Color(hex: platform.color))
+                    .frame(width: 48, height: 32, alignment: .center)
+                    .symbolRenderingMode(.hierarchical)
 
                 Text(platform.displayName)
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(textPrimary)
                     .lineLimit(1)
+                    .multilineTextAlignment(.center)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, minHeight: 112, alignment: .center)
             .liquidGlass(
                 cornerRadius: 16,
                 borderGlow: selectedPlatform == platform

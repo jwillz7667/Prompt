@@ -481,6 +481,8 @@ struct LiquidGlassSectionHeader: View {
 // MARK: - Brand Mark
 
 struct AppBrandMark: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let size: CGFloat
     var showsGlassBackdrop: Bool = true
 
@@ -492,13 +494,18 @@ struct AppBrandMark: View {
     var body: some View {
         ZStack {
             if showsGlassBackdrop {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: size, height: size)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                    )
+                RadialGradient(
+                    colors: [
+                        (colorScheme == .dark ? Color.brandCyan : Color.brandPurple).opacity(colorScheme == .dark ? 0.22 : 0.14),
+                        Color.white.opacity(colorScheme == .dark ? 0.08 : 0.12),
+                        .clear
+                    ],
+                    center: .center,
+                    startRadius: size * 0.06,
+                    endRadius: size * 0.58
+                )
+                .frame(width: size * 1.08, height: size * 1.08)
+                .blur(radius: size * 0.07)
             }
 
             Group {
@@ -506,6 +513,7 @@ struct AppBrandMark: View {
                     Image("AppLogo")
                         .resizable()
                         .scaledToFit()
+                        .interpolation(.high)
                 } else {
                     Image(systemName: "sparkles")
                         .font(.system(size: size * 0.42, weight: .semibold))
@@ -515,10 +523,15 @@ struct AppBrandMark: View {
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
-                        )
+                    )
                 }
             }
-            .frame(width: size * 0.68, height: size * 0.68)
+            .frame(width: size * 0.82, height: size * 0.82)
+            .shadow(
+                color: (colorScheme == .dark ? Color.brandCyan : Color.brandPurple).opacity(showsGlassBackdrop ? 0.22 : 0.12),
+                radius: showsGlassBackdrop ? size * 0.09 : size * 0.05,
+                y: size * 0.025
+            )
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)

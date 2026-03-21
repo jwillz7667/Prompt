@@ -10,7 +10,6 @@
 import SwiftUI
 
 struct ModalitySelector: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedModality: ModalityType
     var onChange: (() -> Void)?
 
@@ -109,13 +108,11 @@ struct ModalityChip: View {
 // MARK: - Compact Modality Selector (for toolbar or inline use)
 
 struct CompactModalitySelector: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedModality: ModalityType
     var onChange: (() -> Void)?
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
     private var accentColor: Color {
         switch selectedModality {
@@ -162,8 +159,7 @@ struct CompactModalitySelector: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(bgSecondary)
-            .clipShape(Capsule())
+            .liquidGlassChip(isSelected: false, accentColor: nil)
         }
     }
 
@@ -176,7 +172,6 @@ struct CompactModalitySelector: View {
 // MARK: - Inline Modality Picker (single row with icons only)
 
 struct InlineModalityPicker: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedModality: ModalityType
     var onChange: (() -> Void)?
 
@@ -226,13 +221,11 @@ struct InlineModalityPicker: View {
 // MARK: - Compact Audio Sub-Modality Selector
 
 struct CompactAudioSubModalitySelector: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedSubModality: AudioSubModalityType
     var onChange: (() -> Void)?
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
-    private var bgSecondary: Color { Color.adaptiveBackgroundSecondary }
 
     var body: some View {
         Menu {
@@ -270,8 +263,7 @@ struct CompactAudioSubModalitySelector: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(bgSecondary)
-            .clipShape(Capsule())
+            .liquidGlassChip(isSelected: false, accentColor: nil)
         }
     }
 

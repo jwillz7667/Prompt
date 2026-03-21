@@ -568,8 +568,22 @@ struct ThreadView: View {
         .padding(.bottom, presentationStyle == .home ? 12 : 8)
         .background {
             Rectangle()
-                .fill(backgroundPrimary.opacity(colorScheme == .dark ? 0.92 : 0.85))
-                .background(.ultraThinMaterial)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    LinearGradient(
+                        colors: [
+                            backgroundPrimary.opacity(colorScheme == .dark ? 0.32 : 0.18),
+                            backgroundPrimary.opacity(colorScheme == .dark ? 0.08 : 0.04)
+                        ],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                }
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.38))
+                        .frame(height: 1)
+                }
                 .ignoresSafeArea(.container, edges: .bottom)
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: viewModel.canSend)

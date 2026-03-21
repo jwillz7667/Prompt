@@ -199,23 +199,20 @@ struct SplashView: View {
 
             VStack(spacing: 24) {
                 ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    (colorScheme == .dark ? Color.brandCyan : Color.brandPurple).opacity(0.28),
-                                    Color.clear
-                                ],
-                                center: .center,
-                                startRadius: 8,
-                                endRadius: 140
-                            )
-                        )
+                    RadialGradient(
+                        colors: [
+                            (colorScheme == .dark ? Color.brandCyan : Color.brandPurple).opacity(0.28),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 8,
+                        endRadius: 140
+                    )
                         .frame(width: 200, height: 200)
                         .opacity(haloOpacity)
                         .blur(radius: 18)
 
-                    AppBrandMark(size: 132, showsGlassBackdrop: true)
+                    AppBrandMark(size: 132, showsGlassBackdrop: false)
                         .scaleEffect(logoScale)
                         .rotationEffect(.degrees(logoRotation))
                 }

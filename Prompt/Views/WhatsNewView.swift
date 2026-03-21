@@ -108,20 +108,7 @@ struct WhatsNewView: View {
 
     private var headerSection: some View {
         VStack(spacing: 12) {
-            // App icon
-            if UIImage(named: "AppLogo") != nil {
-                Image("AppLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: Color.brandPurple.opacity(0.3), radius: 12, y: 6)
-            } else {
-                Image(systemName: "wand.and.stars.inverse")
-                    .font(.system(size: 40, weight: .light))
-                    .foregroundStyle(Color.brandPurple)
-                    .frame(width: 72, height: 72)
-            }
+            AppBrandMark(size: 72, showsGlassBackdrop: false)
 
             Text("What's New")
                 .font(.system(.title, design: .rounded, weight: .bold))
