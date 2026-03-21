@@ -252,6 +252,9 @@ threadRouter.post(
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
               },
+              select: {
+                id: true,
+              },
             });
 
             // Update user stats + usage in parallel
@@ -422,6 +425,9 @@ threadRouter.post(
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
+              },
+              select: {
+                id: true,
               },
             });
 
