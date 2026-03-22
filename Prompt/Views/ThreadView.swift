@@ -700,143 +700,55 @@ struct ThreadView: View {
     // MARK: - Composer
 
     private var composerInset: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            Button {
-                triggerHaptic(.light)
-                showAttachmentActions = true
-            } label: {
-                Image(systemName: viewModel.selectedImageAttachment == nil ? "plus" : "photo.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(textPrimary)
+        VStack(alignment: .leading, spacing: 10) {
+            if let attachment = viewModel.selectedImageAttachment {
+                VStack(alignment: .leading, spacing: 8) {
+                    PromptImageAttachmentCard(
+                        attachment: attachment,
+                        height: 134,
+                        showsAnalysisBadge: false,
+                        onRemove: removeSelectedImage
+                    )
+                    .frame(height: 134)
+
+                    Text(conversationMode == .chat
+                         ? "This image will be analyzed and used as shared context for the conversation."
+                         : "This image will be analyzed and turned into a stronger generation prompt.")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                }
             }
-            .buttonStyle(GlassIconButtonStyle(size: 56))
+
+            composerAccessoryDeck
 
             HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let attachment = viewModel.selectedImageAttachment {
-                        VStack(alignment: .leading, spacing: 8) {
-                            PromptImageAttachmentCard(
-                                attachment: attachment,
-                                height: 134,
-                                showsAnalysisBadge: false,
-                                onRemove: removeSelectedImage
-                            )
-                            .frame(height: 134)
+                attachmentButton
 
-                            Text(conversationMode == .chat
-                                 ? "This image will be analyzed and used as shared context for the conversation."
-                                 : "This image will be analyzed and turned into a stronger generation prompt.")
-                                .font(.system(.caption, design: .rounded, weight: .medium))
-                                .foregroundStyle(textSecondary)
-                        }
-                    }
-
-                    conversationModePicker
-
-                    ZStack(alignment: .leading) {
-                        if viewModel.userPrompt.isEmpty {
-                            Text(viewModel.selectedImageAttachment == nil ? inputPlaceholder : imagePromptPlaceholder)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(textTertiary)
-                                .allowsHitTesting(false)
-                        }
-
-                        TextField("", text: $viewModel.userPrompt, axis: .vertical)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(textPrimary)
-                            .lineLimit(1...5)
-                            .textFieldStyle(.plain)
-                            .focused($isInputFocused)
-                            .submitLabel(.send)
-                            .onSubmit {
-                                if viewModel.canSend {
-                                    submitPrompt()
-                                }
-                            }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        isInputFocused = true
-                    }
-
-                    HStack(spacing: 8) {
-                        Menu {
-                            ForEach(ModalityType.allCases) { modality in
-                                Button(modality.displayName) {
-                                    applyModality(modality)
-                                }
-                            }
-                        } label: {
-                            composerControlChip(
-                                title: modalitySummary,
-                                systemImage: settings.selectedModality.icon,
-                                tint: brandSecondaryAccent
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        if settings.selectedModality == .audio {
-                            Menu {
-                                ForEach(AudioSubModalityType.allCases) { subModality in
-                                    Button(subModality.displayName) {
-                                        applyAudioSubModality(subModality)
-                                    }
-                                }
-                            } label: {
-                                composerControlChip(
-                                    title: settings.selectedAudioSubModality.displayName,
-                                    systemImage: settings.selectedAudioSubModality.icon,
-                                    tint: accentColor
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        Button(action: toggleMaxMode) {
-                            composerControlChip(
-                                title: settings.maxModeEnabled ? "MAX" : "Standard",
-                                systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill",
-                                tint: settings.maxModeEnabled ? .orange : accentColor,
-                                isSelected: settings.maxModeEnabled
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer(minLength: 0)
-
-                        if !viewModel.userPrompt.isEmpty {
-                            Text("\(viewModel.userPrompt.count)")
-                                .font(.system(.caption, design: .rounded, weight: .medium))
-                                .foregroundStyle(textSecondary)
-                                .contentTransition(.numericText())
-                        }
-                    }
+                HStack(alignment: .bottom, spacing: 12) {
+                    composerTextField
+                    sendButton
                 }
-
-                Button(action: submitPrompt) {
-                    ZStack {
-                        Circle()
-                            .fill(viewModel.canSend ? accentColor : backgroundTertiary)
-
-                        if viewModel.isStreaming {
-                            ProgressView()
-                                .tint(viewModel.canSend ? Color.adaptiveTextOnAccent : textSecondary)
-                                .scaleEffect(0.85)
-                        } else {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(viewModel.canSend ? Color.adaptiveTextOnAccent : textSecondary)
-                        }
-                    }
-                    .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .disabled(!viewModel.canSend)
+                .frame(minHeight: 56)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .liquidGlassInput(cornerRadius: 28, isFocused: isInputFocused)
             }
-            .frame(minHeight: 56)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .liquidGlassInput(cornerRadius: 28, isFocused: isInputFocused)
+
+            if !viewModel.userPrompt.isEmpty {
+                HStack(spacing: 8) {
+                    Text(conversationMode == .chat ? "Direct reply mode" : "Prompt rewrite mode")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+
+                    Spacer(minLength: 0)
+
+                    Text("\(viewModel.userPrompt.count)")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .contentTransition(.numericText())
+                }
+                .padding(.horizontal, 4)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -862,6 +774,136 @@ struct ThreadView: View {
                 .ignoresSafeArea(.container, edges: .bottom)
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: viewModel.canSend)
+    }
+
+    private var composerAccessoryDeck: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                composerDeckLabel("Mode")
+                conversationModePicker
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                composerDeckLabel("Options")
+                composerControlsRail
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .modifier(LiquidGlassModifier(cornerRadius: 24, material: .thin, shadowIntensity: 0.35, borderGlow: false))
+    }
+
+    private var composerControlsRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(ModalityType.allCases) { modality in
+                        Button(modality.displayName) {
+                            applyModality(modality)
+                        }
+                    }
+                } label: {
+                    composerControlChip(
+                        title: modalitySummary,
+                        systemImage: settings.selectedModality.icon,
+                        tint: brandSecondaryAccent
+                    )
+                }
+                .buttonStyle(.plain)
+
+                if settings.selectedModality == .audio {
+                    Menu {
+                        ForEach(AudioSubModalityType.allCases) { subModality in
+                            Button(subModality.displayName) {
+                                applyAudioSubModality(subModality)
+                            }
+                        }
+                    } label: {
+                        composerControlChip(
+                            title: settings.selectedAudioSubModality.displayName,
+                            systemImage: settings.selectedAudioSubModality.icon,
+                            tint: accentColor
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button(action: toggleMaxMode) {
+                    composerControlChip(
+                        title: settings.maxModeEnabled ? "MAX" : "Standard",
+                        systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill",
+                        tint: settings.maxModeEnabled ? .orange : accentColor,
+                        isSelected: settings.maxModeEnabled
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 1)
+        }
+        .scrollClipDisabled()
+    }
+
+    private var attachmentButton: some View {
+        Button {
+            triggerHaptic(.light)
+            showAttachmentActions = true
+        } label: {
+            Image(systemName: viewModel.selectedImageAttachment == nil ? "plus" : "photo.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(textPrimary)
+        }
+        .buttonStyle(GlassIconButtonStyle(size: 56))
+    }
+
+    private var composerTextField: some View {
+        ZStack(alignment: .leading) {
+            if viewModel.userPrompt.isEmpty {
+                Text(viewModel.selectedImageAttachment == nil ? inputPlaceholder : imagePromptPlaceholder)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(textTertiary)
+                    .allowsHitTesting(false)
+            }
+
+            TextField("", text: $viewModel.userPrompt, axis: .vertical)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(textPrimary)
+                .lineLimit(1...5)
+                .textFieldStyle(.plain)
+                .focused($isInputFocused)
+                .submitLabel(.send)
+                .onSubmit {
+                    if viewModel.canSend {
+                        submitPrompt()
+                    }
+                }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isInputFocused = true
+        }
+    }
+
+    private var sendButton: some View {
+        Button(action: submitPrompt) {
+            ZStack {
+                Circle()
+                    .fill(viewModel.canSend ? accentColor : backgroundTertiary)
+
+                if viewModel.isStreaming {
+                    ProgressView()
+                        .tint(viewModel.canSend ? Color.adaptiveTextOnAccent : textSecondary)
+                        .scaleEffect(0.85)
+                } else {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(viewModel.canSend ? Color.adaptiveTextOnAccent : textSecondary)
+                }
+            }
+            .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewModel.canSend)
     }
 
     // MARK: - Actions
@@ -992,6 +1034,14 @@ struct ThreadView: View {
                 )
             }
         }
+    }
+
+    private func composerDeckLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(.caption2, design: .rounded, weight: .bold))
+            .foregroundStyle(textSecondary)
+            .textCase(.uppercase)
+            .tracking(0.6)
     }
 
     private func composerControlChip(title: String, systemImage: String, tint: Color, isSelected: Bool = false) -> some View {
