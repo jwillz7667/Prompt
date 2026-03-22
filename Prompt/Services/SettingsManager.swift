@@ -48,6 +48,36 @@ enum PromptGenerationMode: String, Codable, Sendable {
     case max = "max"
 }
 
+enum ThreadConversationMode: String, CaseIterable, Identifiable, Codable, Sendable {
+    case optimize = "optimize"
+    case chat = "chat"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .optimize: return "Optimize"
+        case .chat: return "Chat"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .optimize: return "wand.and.stars"
+        case .chat: return "bubble.left.and.bubble.right.fill"
+        }
+    }
+
+    var shortDescription: String {
+        switch self {
+        case .optimize:
+            return "Rewrite requests into stronger prompts"
+        case .chat:
+            return "Talk directly with the assistant"
+        }
+    }
+}
+
 // MARK: - Modality Type
 
 enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -166,6 +196,7 @@ final class SettingsManager {
     // Enhancement controls
     var selectedModality: ModalityType = .text
     var selectedAudioSubModality: AudioSubModalityType = .speech
+    var conversationMode: ThreadConversationMode = .optimize
     var customInstructions: String = ""
     var targetCharacterLength: Int? = nil  // Optional character length constraint
 
@@ -196,6 +227,7 @@ final class SettingsManager {
         static let appearanceMode = "appearanceMode"
         static let selectedModality = "selectedModality"
         static let selectedAudioSubModality = "selectedAudioSubModality"
+        static let conversationMode = "conversationMode"
         static let customInstructions = "customInstructions"
         static let targetCharacterLength = "targetCharacterLength"
         static let settingsMigrated = "settingsMigratedToAppGroup"
@@ -235,6 +267,9 @@ final class SettingsManager {
         }
         if let value = UserDefaults.standard.string(forKey: Keys.appearanceMode) {
             defaults.set(value, forKey: Keys.appearanceMode)
+        }
+        if let value = UserDefaults.standard.string(forKey: Keys.conversationMode) {
+            defaults.set(value, forKey: Keys.conversationMode)
         }
         if let value = UserDefaults.standard.string(forKey: Keys.customInstructions) {
             defaults.set(value, forKey: Keys.customInstructions)
@@ -277,6 +312,11 @@ final class SettingsManager {
             selectedModality = modality
         }
 
+        if let conversationModeRaw = defaults.string(forKey: Keys.conversationMode),
+           let mode = ThreadConversationMode(rawValue: conversationModeRaw) {
+            conversationMode = mode
+        }
+
         // Load audio sub-modality preference
         if let subModalityRaw = defaults.string(forKey: Keys.selectedAudioSubModality),
            let subModality = AudioSubModalityType(rawValue: subModalityRaw) {
@@ -317,6 +357,7 @@ final class SettingsManager {
         defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)
         defaults.set(selectedModality.rawValue, forKey: Keys.selectedModality)
         defaults.set(selectedAudioSubModality.rawValue, forKey: Keys.selectedAudioSubModality)
+        defaults.set(conversationMode.rawValue, forKey: Keys.conversationMode)
         defaults.set(customInstructions, forKey: Keys.customInstructions)
         
         // Save target character length

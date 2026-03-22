@@ -74,11 +74,101 @@ struct ThreadView: View {
         settings.selectedModality.displayName
     }
 
+    private var conversationMode: ThreadConversationMode {
+        settings.conversationMode
+    }
+
     private var inputPlaceholder: String {
-        viewModel.hasConversation ? "Reply with another optimization request" : "Ask Promptomize"
+        switch conversationMode {
+        case .optimize:
+            return viewModel.hasConversation
+                ? "Reply with another optimization request"
+                : "Ask Promptomize to rewrite your prompt"
+        case .chat:
+            return viewModel.hasConversation
+                ? "Continue the conversation"
+                : "Ask Promptomize anything"
+        }
+    }
+
+    private var imagePromptPlaceholder: String {
+        switch conversationMode {
+        case .optimize:
+            return "Describe the motion, camera, or style you want..."
+        case .chat:
+            return "Ask about the image or tell Promptomize how to help..."
+        }
+    }
+
+    private var starterCardTitle: String {
+        conversationMode == .chat ? "Conversation Starters" : "Prompt Starters"
+    }
+
+    private var starterCardIcon: String {
+        conversationMode == .chat ? "bubble.left.and.bubble.right.fill" : "sparkles"
+    }
+
+    private var heroTitle: String {
+        conversationMode == .chat ? "Talk it through first" : "Start with a rough idea"
+    }
+
+    private var heroSubtitle: String {
+        switch conversationMode {
+        case .optimize:
+            return "Promptomize turns loose requests into structured prompts with clearer roles, constraints, and outputs."
+        case .chat:
+            return "Use chat mode for direct back-and-forth. Switch back to optimize mode any time to turn the conversation into a stronger prompt."
+        }
     }
 
     private var starterPrompts: [String] {
+        if conversationMode == .chat {
+            switch settings.selectedModality {
+            case .text:
+                return [
+                    "Help me figure out the best way to ask an AI for a competitive analysis without making the prompt too long.",
+                    "I have a rough request for a strategy memo. What information is missing before I optimize it?",
+                    "Talk through how to make this support request sound more empathetic before rewriting it."
+                ]
+            case .image:
+                return [
+                    "Help me decide what visual references and style cues this image prompt still needs.",
+                    "What would make this product-shot concept feel more premium before we optimize it?",
+                    "Talk me through how to improve composition and lighting for this portrait idea."
+                ]
+            case .video:
+                return [
+                    "Help me figure out the right camera movement for this scene before we turn it into a video prompt.",
+                    "What continuity details should I lock down for this short cinematic clip?",
+                    "Talk through how to make this teaser concept feel more dynamic."
+                ]
+            case .music:
+                return [
+                    "Help me shape the mood, arrangement, and hook before we write a Suno prompt.",
+                    "What production details would make this alt-pop idea feel more specific?",
+                    "Talk through how to improve this chorus concept before generating lyrics."
+                ]
+            case .audio:
+                return [
+                    "Help me decide what pacing and pronunciation guidance this voiceover brief needs.",
+                    "What details would make this soundscape request feel more believable?",
+                    "Talk me through how to structure this narration request before optimizing it."
+                ]
+            case .code:
+                return [
+                    "Help me break down this bug report before we turn it into a coding prompt.",
+                    "What acceptance criteria should I add to this engineering request?",
+                    "Talk through the edge cases I should include before asking an AI to write the code."
+                ]
+            case .threeD:
+                return [
+                    "Help me define the topology and material constraints for this 3D asset request.",
+                    "What details would make this collectible concept more production-ready before optimization?",
+                    "Talk through the technical requirements I should lock in for this 3D model."
+                ]
+            }
+        }
+
         switch settings.selectedModality {
         case .text:
             return [
@@ -388,11 +478,11 @@ struct ThreadView: View {
                 AppBrandMark(size: 56, showsGlassBackdrop: false)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Start with a rough idea")
+                    Text(heroTitle)
                         .font(.system(.title3, design: .rounded, weight: .bold))
                         .foregroundStyle(textPrimary)
 
-                    Text("Promptomize turns loose requests into structured prompts with clearer roles, constraints, and outputs.")
+                    Text(heroSubtitle)
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
                         .foregroundStyle(textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -402,7 +492,7 @@ struct ThreadView: View {
             HStack(spacing: 8) {
                 welcomeChip(title: settings.selectedModality.displayName, systemImage: settings.selectedModality.icon, tint: accentColor)
                 welcomeChip(title: settings.maxModeEnabled ? "MAX enabled" : "Standard mode", systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill", tint: settings.maxModeEnabled ? .orange : brandSecondaryAccent)
-                welcomeChip(title: "Chat workflow", systemImage: "bubble.left.and.bubble.right.fill", tint: brandSecondaryAccent)
+                welcomeChip(title: conversationMode.displayName, systemImage: conversationMode.icon, tint: brandSecondaryAccent)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -481,7 +571,7 @@ struct ThreadView: View {
 
     private var starterPromptsCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            LiquidGlassSectionHeader(title: "Prompt Starters", icon: "sparkles")
+            LiquidGlassSectionHeader(title: starterCardTitle, icon: starterCardIcon)
 
             VStack(spacing: 10) {
                 ForEach(starterPrompts, id: \.self) { prompt in
@@ -564,7 +654,7 @@ struct ThreadView: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .scaleEffect(0.8)
-                Text("Optimizing...")
+                Text(conversationMode == .chat ? "Thinking..." : "Optimizing...")
                     .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(textSecondary)
             }
@@ -633,15 +723,19 @@ struct ThreadView: View {
                             )
                             .frame(height: 134)
 
-                            Text("This image will be analyzed and turned into a video-ready prompt.")
+                            Text(conversationMode == .chat
+                                 ? "This image will be analyzed and used as shared context for the conversation."
+                                 : "This image will be analyzed and turned into a stronger generation prompt.")
                                 .font(.system(.caption, design: .rounded, weight: .medium))
                                 .foregroundStyle(textSecondary)
                         }
                     }
 
+                    conversationModePicker
+
                     ZStack(alignment: .leading) {
                         if viewModel.userPrompt.isEmpty {
-                            Text(viewModel.selectedImageAttachment == nil ? inputPlaceholder : "Describe the motion, camera, or style you want...")
+                            Text(viewModel.selectedImageAttachment == nil ? inputPlaceholder : imagePromptPlaceholder)
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(textTertiary)
                                 .allowsHitTesting(false)
@@ -816,6 +910,13 @@ struct ThreadView: View {
         triggerHaptic(.light)
     }
 
+    private func applyConversationMode(_ mode: ThreadConversationMode) {
+        guard settings.conversationMode != mode else { return }
+        settings.conversationMode = mode
+        settings.savePreferences()
+        triggerHaptic(.light)
+    }
+
     private func applyAudioSubModality(_ subModality: AudioSubModalityType) {
         settings.selectedAudioSubModality = subModality
         settings.savePreferences()
@@ -865,6 +966,32 @@ struct ThreadView: View {
 
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
+    private var conversationModePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(ThreadConversationMode.allCases) { mode in
+                Button {
+                    applyConversationMode(mode)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: mode.icon)
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(mode.displayName)
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+                .liquidGlassChip(
+                    isSelected: settings.conversationMode == mode,
+                    accentColor: mode == .chat ? brandSecondaryAccent : accentColor
+                )
+            }
+        }
     }
 
     private func composerControlChip(title: String, systemImage: String, tint: Color, isSelected: Bool = false) -> some View {

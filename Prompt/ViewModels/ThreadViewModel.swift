@@ -28,6 +28,7 @@ final class ThreadViewModel {
     var errorMessage: String?
     var showError: Bool = false
     var showPaywall: Bool = false
+    var activeStreamResponseMode: ThreadConversationMode = .optimize
 
     // Pagination
     var currentPage = 1
@@ -45,6 +46,7 @@ final class ThreadViewModel {
                 id: "\(turn.id)-user",
                 role: .user,
                 content: turn.originalPrompt,
+                responseMode: nil,
                 imageAttachment: turn.imageAttachment,
                 turnIndex: turn.turnIndex,
                 tokens: nil
@@ -53,6 +55,7 @@ final class ThreadViewModel {
                 id: "\(turn.id)-assistant",
                 role: .assistant,
                 content: turn.enhancedPrompt,
+                responseMode: turn.responseMode,
                 imageAttachment: nil,
                 turnIndex: turn.turnIndex,
                 tokens: turn.totalTokens
@@ -63,6 +66,7 @@ final class ThreadViewModel {
                 id: "pending-user",
                 role: .user,
                 content: pendingUserPrompt ?? "",
+                responseMode: nil,
                 imageAttachment: pendingImageAttachment,
                 turnIndex: turns.count,
                 tokens: nil
@@ -74,6 +78,7 @@ final class ThreadViewModel {
                 id: "streaming",
                 role: .assistant,
                 content: streamingContent,
+                responseMode: activeStreamResponseMode,
                 imageAttachment: nil,
                 turnIndex: turns.count,
                 tokens: nil
@@ -91,7 +96,11 @@ final class ThreadViewModel {
     }
 
     var latestEnhancedPrompt: String? {
-        turns.last?.enhancedPrompt
+        guard let lastTurn = turns.last, lastTurn.responseMode == .optimize else {
+            return nil
+        }
+
+        return lastTurn.enhancedPrompt
     }
 
     var hasConversation: Bool {
@@ -232,10 +241,11 @@ final class ThreadViewModel {
     func startNewThread(
         settings: SettingsManager,
         historyManager: PromptHistoryManager? = nil,
-        initialPrompt: String? = nil
+        initialPrompt: String? = nil,
+        initialAttachment: PromptImageAttachment? = nil
     ) async {
         let promptToSend = (initialPrompt ?? userPrompt).trimmingCharacters(in: .whitespacesAndNewlines)
-        let sentAttachment = selectedImageAttachment
+        let sentAttachment = initialAttachment ?? selectedImageAttachment
         guard !promptToSend.isEmpty || sentAttachment != nil else { return }
         let isAuthenticated = await APIClient.shared.isAuthenticated
 
@@ -250,12 +260,13 @@ final class ThreadViewModel {
             }
         }
 
-        isStreaming = true
-        streamingContent = ""
-        beginBackgroundTask()
+        beginSubmission(
+            prompt: promptToSend,
+            attachment: sentAttachment,
+            responseMode: settings.conversationMode
+        )
         defer {
-            isStreaming = false
-            endBackgroundTask()
+            finishSubmission()
         }
 
         let request = CreateThreadRequest(
@@ -264,22 +275,22 @@ final class ThreadViewModel {
             modality: settings.selectedModality.apiModality,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
+            conversationMode: settings.conversationMode.rawValue,
             customInstructions: sanitizedCustomInstructions(from: settings),
             imageAttachment: sentAttachment,
             previousTurns: seededTurnsForRequest
         )
 
         let sentPrompt = promptToSend
-        pendingUserPrompt = sentPrompt
-        pendingImageAttachment = sentAttachment
-        userPrompt = ""
-        selectedImageAttachment = nil
+        let responseMode = settings.conversationMode
 
         let stream = await streamForNewConversation(
             request: request,
             prompt: sentPrompt,
             settings: settings
         )
+
+        var didReceiveCompletion = false
 
         do {
             for try await event in stream {
@@ -291,78 +302,81 @@ final class ThreadViewModel {
                         streamingContent += content
                     }
                 case .complete:
+                    didReceiveCompletion = true
                     let completedThreadId = event.threadId
-                    let turnIndex = event.turnIndex ?? turns.count
-
-                    // Create local turn record from streamed content
-                    let turnRecord = ThreadTurnRecord(
+                    let turnRecord = appendTurnRecord(
                         id: event.turnId ?? UUID().uuidString,
-                        turnIndex: turnIndex,
+                        turnIndex: event.turnIndex ?? turns.count,
                         originalPrompt: sentPrompt,
-                        enhancedPrompt: streamingContent,
+                        enhancedPrompt: resolvedStreamedResponse(fallback: event.content),
+                        responseMode: responseMode,
                         imageAttachment: event.imageAttachment ?? sentAttachment,
                         model: settings.effectiveModel.rawValue,
                         totalTokens: event.usage?.totalTokens ?? 0,
-                        processingMs: event.usage?.processingMs ?? 0,
-                        createdAt: Date()
-                    )
-                    turns.append(turnRecord)
-                    streamingContent = ""
-
-                    // Save to prompt history
-                    _ = await historyManager?.savePrompt(
-                        original: sentPrompt,
-                        enhanced: turnRecord.enhancedPrompt,
-                        model: turnRecord.model,
-                        modality: settings.selectedModality.apiModality,
-                        imageAttachment: turnRecord.imageAttachment,
-                        temperature: settings.temperature,
-                        maxTokens: settings.maxTokens,
-                        inputTokens: 0,
-                        outputTokens: 0,
-                        totalTokens: turnRecord.totalTokens,
-                        processingMs: turnRecord.processingMs
+                        processingMs: event.usage?.processingMs ?? 0
                     )
 
-                    // Load the full thread detail
-                    if isAuthenticated, let completedThreadId = completedThreadId {
-                        await loadThread(id: completedThreadId)
+                    if isAuthenticated, let completedThreadId {
+                        upsertCurrentThread(
+                            id: completedThreadId,
+                            title: derivedThreadTitle(prompt: sentPrompt, attachment: sentAttachment),
+                            modality: settings.selectedModality.apiModality
+                        )
                     }
-                    pendingUserPrompt = nil
-                    pendingImageAttachment = nil
+
+                    clearPendingSubmission()
+                    await persistTurnToHistory(
+                        turnRecord,
+                        originalPrompt: sentPrompt,
+                        modality: settings.selectedModality.apiModality,
+                        settings: settings,
+                        historyManager: historyManager
+                    )
                 case .error:
+                    didReceiveCompletion = true
                     if event.guestQuota?.isExhausted == true {
                         guestSession.presentAuthenticationGate()
                     }
-                    errorMessage = event.message ?? "Enhancement failed"
-                    showError = true
-                    userPrompt = sentPrompt
-                    selectedImageAttachment = sentAttachment
-                    pendingUserPrompt = nil
-                    pendingImageAttachment = nil
-                    streamingContent = ""
+                    restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
+                    presentError(event.message ?? failureMessage(for: responseMode))
                 }
+            }
+
+            if !didReceiveCompletion {
+                await recoverIncompleteStream(
+                    prompt: sentPrompt,
+                    attachment: sentAttachment,
+                    modality: settings.selectedModality.apiModality,
+                    settings: settings,
+                    historyManager: historyManager,
+                    responseMode: responseMode
+                )
             }
         } catch let error as APIError {
             if error.isQuotaExceeded {
+                restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
                 showPaywall = true
             } else {
-                errorMessage = error.localizedDescription
-                showError = true
+                await recoverInterruptedStream(
+                    prompt: sentPrompt,
+                    attachment: sentAttachment,
+                    modality: settings.selectedModality.apiModality,
+                    settings: settings,
+                    historyManager: historyManager,
+                    responseMode: responseMode,
+                    message: error.localizedDescription
+                )
             }
-            userPrompt = sentPrompt
-            selectedImageAttachment = sentAttachment
-            pendingUserPrompt = nil
-            pendingImageAttachment = nil
-            streamingContent = ""
         } catch {
-            errorMessage = "Stream connection failed"
-            showError = true
-            userPrompt = sentPrompt
-            selectedImageAttachment = sentAttachment
-            pendingUserPrompt = nil
-            pendingImageAttachment = nil
-            streamingContent = ""
+            await recoverInterruptedStream(
+                prompt: sentPrompt,
+                attachment: sentAttachment,
+                modality: settings.selectedModality.apiModality,
+                settings: settings,
+                historyManager: historyManager,
+                responseMode: responseMode,
+                message: "Stream connection failed"
+            )
         }
     }
 
@@ -373,8 +387,9 @@ final class ThreadViewModel {
             await startNewThread(settings: settings, historyManager: historyManager)
             return
         }
+        let sentPrompt = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let sentAttachment = selectedImageAttachment
-        guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sentAttachment != nil else { return }
+        guard !sentPrompt.isEmpty || sentAttachment != nil else { return }
         let isAuthenticated = await APIClient.shared.isAuthenticated
 
         if !isAuthenticated {
@@ -382,33 +397,32 @@ final class ThreadViewModel {
             return
         }
 
-        isStreaming = true
-        streamingContent = ""
-        beginBackgroundTask()
+        beginSubmission(
+            prompt: sentPrompt,
+            attachment: sentAttachment,
+            responseMode: settings.conversationMode
+        )
         defer {
-            isStreaming = false
-            endBackgroundTask()
+            finishSubmission()
         }
 
         let request = AddTurnRequest(
-            prompt: userPrompt,
+            prompt: sentPrompt,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
+            conversationMode: settings.conversationMode.rawValue,
             customInstructions: sanitizedCustomInstructions(from: settings),
             imageAttachment: sentAttachment
         )
-
-        let sentPrompt = userPrompt
-        pendingUserPrompt = sentPrompt
-        pendingImageAttachment = sentAttachment
-        userPrompt = ""
-        selectedImageAttachment = nil
+        let responseMode = settings.conversationMode
 
         let stream = await APIClient.shared.requestStream(
             "/threads/\(threadId)/turns/stream",
             method: .post,
             body: request
         )
+
+        var didReceiveCompletion = false
 
         do {
             for try await event in stream {
@@ -420,87 +434,85 @@ final class ThreadViewModel {
                         streamingContent += content
                     }
                 case .complete:
-                    let turnIndex = event.turnIndex ?? turns.count
-
-                    let turnRecord = ThreadTurnRecord(
+                    didReceiveCompletion = true
+                    let turnRecord = appendTurnRecord(
                         id: event.turnId ?? UUID().uuidString,
-                        turnIndex: turnIndex,
+                        turnIndex: event.turnIndex ?? turns.count,
                         originalPrompt: sentPrompt,
-                        enhancedPrompt: streamingContent,
+                        enhancedPrompt: resolvedStreamedResponse(fallback: event.content),
+                        responseMode: responseMode,
                         imageAttachment: event.imageAttachment ?? sentAttachment,
                         model: settings.effectiveModel.rawValue,
                         totalTokens: event.usage?.totalTokens ?? 0,
-                        processingMs: event.usage?.processingMs ?? 0,
-                        createdAt: Date()
+                        processingMs: event.usage?.processingMs ?? 0
                     )
-                    turns.append(turnRecord)
-                    streamingContent = ""
-
-                    // Save to prompt history
-                    _ = await historyManager?.savePrompt(
-                        original: sentPrompt,
-                        enhanced: turnRecord.enhancedPrompt,
-                        model: turnRecord.model,
+                    clearPendingSubmission()
+                    await persistTurnToHistory(
+                        turnRecord,
+                        originalPrompt: sentPrompt,
                         modality: currentThread?.modality ?? settings.selectedModality.apiModality,
-                        imageAttachment: turnRecord.imageAttachment,
-                        temperature: settings.temperature,
-                        maxTokens: settings.maxTokens,
-                        inputTokens: 0,
-                        outputTokens: 0,
-                        totalTokens: turnRecord.totalTokens,
-                        processingMs: turnRecord.processingMs
+                        settings: settings,
+                        historyManager: historyManager
                     )
-                    pendingUserPrompt = nil
-                    pendingImageAttachment = nil
                 case .error:
+                    didReceiveCompletion = true
                     if event.guestQuota?.isExhausted == true {
                         guestSession.presentAuthenticationGate()
                     }
-                    errorMessage = event.message ?? "Enhancement failed"
-                    showError = true
-                    userPrompt = sentPrompt
-                    selectedImageAttachment = sentAttachment
-                    pendingUserPrompt = nil
-                    pendingImageAttachment = nil
-                    streamingContent = ""
+                    restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
+                    presentError(event.message ?? failureMessage(for: responseMode))
                 }
+            }
+
+            if !didReceiveCompletion {
+                await recoverIncompleteStream(
+                    prompt: sentPrompt,
+                    attachment: sentAttachment,
+                    modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                    settings: settings,
+                    historyManager: historyManager,
+                    responseMode: responseMode
+                )
             }
         } catch let error as APIError {
             if case .notFound = error {
                 currentThread = nil
                 turns = []
-                pendingUserPrompt = nil
-                pendingImageAttachment = nil
-                streamingContent = ""
-                isStreaming = false
-                endBackgroundTask()
+                clearPendingSubmission()
+                finishSubmission()
                 await startNewThread(
                     settings: settings,
                     historyManager: historyManager,
-                    initialPrompt: sentPrompt
+                    initialPrompt: sentPrompt,
+                    initialAttachment: sentAttachment
                 )
                 return
             }
 
             if error.isQuotaExceeded {
+                restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
                 showPaywall = true
             } else {
-                errorMessage = error.localizedDescription
-                showError = true
+                await recoverInterruptedStream(
+                    prompt: sentPrompt,
+                    attachment: sentAttachment,
+                    modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                    settings: settings,
+                    historyManager: historyManager,
+                    responseMode: responseMode,
+                    message: error.localizedDescription
+                )
             }
-            userPrompt = sentPrompt
-            selectedImageAttachment = sentAttachment
-            pendingUserPrompt = nil
-            pendingImageAttachment = nil
-            streamingContent = ""
         } catch {
-            errorMessage = "Stream connection failed"
-            showError = true
-            userPrompt = sentPrompt
-            selectedImageAttachment = sentAttachment
-            pendingUserPrompt = nil
-            pendingImageAttachment = nil
-            streamingContent = ""
+            await recoverInterruptedStream(
+                prompt: sentPrompt,
+                attachment: sentAttachment,
+                modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                settings: settings,
+                historyManager: historyManager,
+                responseMode: responseMode,
+                message: "Stream connection failed"
+            )
         }
     }
 
@@ -515,6 +527,7 @@ final class ThreadViewModel {
         pendingImageAttachment = nil
         streamingContent = ""
         isStreaming = false
+        activeStreamResponseMode = .optimize
     }
 
     // MARK: - Background Task
@@ -532,6 +545,225 @@ final class ThreadViewModel {
         guard backgroundTaskId != .invalid else { return }
         UIApplication.shared.endBackgroundTask(backgroundTaskId)
         backgroundTaskId = .invalid
+    }
+
+    private func beginSubmission(
+        prompt: String,
+        attachment: PromptImageAttachment?,
+        responseMode: ThreadConversationMode
+    ) {
+        activeStreamResponseMode = responseMode
+        isStreaming = true
+        streamingContent = ""
+        pendingUserPrompt = prompt
+        pendingImageAttachment = attachment
+        userPrompt = ""
+        selectedImageAttachment = nil
+        beginBackgroundTask()
+    }
+
+    private func finishSubmission() {
+        isStreaming = false
+        endBackgroundTask()
+    }
+
+    private func clearPendingSubmission() {
+        pendingUserPrompt = nil
+        pendingImageAttachment = nil
+        streamingContent = ""
+    }
+
+    private func restoreComposer(prompt: String, attachment: PromptImageAttachment?) {
+        userPrompt = prompt
+        selectedImageAttachment = attachment
+        clearPendingSubmission()
+    }
+
+    private func resolvedStreamedResponse(fallback: String?) -> String {
+        let fallbackTrimmed = fallback?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !fallbackTrimmed.isEmpty {
+            return fallbackTrimmed
+        }
+
+        return streamingContent.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func appendTurnRecord(
+        id: String,
+        turnIndex: Int,
+        originalPrompt: String,
+        enhancedPrompt: String,
+        responseMode: ThreadConversationMode,
+        imageAttachment: PromptImageAttachment?,
+        model: String,
+        totalTokens: Int,
+        processingMs: Int
+    ) -> ThreadTurnRecord {
+        let turnRecord = ThreadTurnRecord(
+            id: id,
+            turnIndex: turnIndex,
+            originalPrompt: originalPrompt,
+            enhancedPrompt: enhancedPrompt,
+            responseMode: responseMode,
+            imageAttachment: imageAttachment,
+            model: model,
+            totalTokens: totalTokens,
+            processingMs: processingMs,
+            createdAt: Date()
+        )
+        turns.append(turnRecord)
+        return turnRecord
+    }
+
+    private func persistTurnToHistory(
+        _ turnRecord: ThreadTurnRecord,
+        originalPrompt: String,
+        modality: String,
+        settings: SettingsManager,
+        historyManager: PromptHistoryManager?
+    ) async {
+        _ = await historyManager?.savePrompt(
+            original: originalPrompt,
+            enhanced: turnRecord.enhancedPrompt,
+            model: turnRecord.model,
+            modality: modality,
+            imageAttachment: turnRecord.imageAttachment,
+            temperature: settings.temperature,
+            maxTokens: settings.maxTokens,
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: turnRecord.totalTokens,
+            processingMs: turnRecord.processingMs
+        )
+    }
+
+    private func recoverIncompleteStream(
+        prompt: String,
+        attachment: PromptImageAttachment?,
+        modality: String,
+        settings: SettingsManager,
+        historyManager: PromptHistoryManager?,
+        responseMode: ThreadConversationMode
+    ) async {
+        let recoveredContent = resolvedStreamedResponse(fallback: nil)
+        guard !recoveredContent.isEmpty else {
+            restoreComposer(prompt: prompt, attachment: attachment)
+            presentError("The response ended unexpectedly. Please try again.")
+            return
+        }
+
+        let recoveredTurn = appendTurnRecord(
+            id: UUID().uuidString,
+            turnIndex: turns.count,
+            originalPrompt: prompt,
+            enhancedPrompt: recoveredContent,
+            responseMode: responseMode,
+            imageAttachment: attachment,
+            model: settings.effectiveModel.rawValue,
+            totalTokens: 0,
+            processingMs: 0
+        )
+        clearPendingSubmission()
+        await persistTurnToHistory(
+            recoveredTurn,
+            originalPrompt: prompt,
+            modality: modality,
+            settings: settings,
+            historyManager: historyManager
+        )
+        presentError("The reply was kept locally because the stream closed before the server confirmed the turn.")
+    }
+
+    private func recoverInterruptedStream(
+        prompt: String,
+        attachment: PromptImageAttachment?,
+        modality: String,
+        settings: SettingsManager,
+        historyManager: PromptHistoryManager?,
+        responseMode: ThreadConversationMode,
+        message: String
+    ) async {
+        let recoveredContent = resolvedStreamedResponse(fallback: nil)
+        guard !recoveredContent.isEmpty else {
+            restoreComposer(prompt: prompt, attachment: attachment)
+            presentError(message)
+            return
+        }
+
+        let recoveredTurn = appendTurnRecord(
+            id: UUID().uuidString,
+            turnIndex: turns.count,
+            originalPrompt: prompt,
+            enhancedPrompt: recoveredContent,
+            responseMode: responseMode,
+            imageAttachment: attachment,
+            model: settings.effectiveModel.rawValue,
+            totalTokens: 0,
+            processingMs: 0
+        )
+        clearPendingSubmission()
+        await persistTurnToHistory(
+            recoveredTurn,
+            originalPrompt: prompt,
+            modality: modality,
+            settings: settings,
+            historyManager: historyManager
+        )
+        presentError("The connection dropped after a partial reply. The last turn was kept locally.")
+    }
+
+    private func presentError(_ message: String) {
+        errorMessage = message
+        showError = true
+    }
+
+    private func failureMessage(for responseMode: ThreadConversationMode) -> String {
+        switch responseMode {
+        case .optimize:
+            return "Optimization failed"
+        case .chat:
+            return "Reply failed"
+        }
+    }
+
+    private func derivedThreadTitle(prompt: String, attachment: PromptImageAttachment?) -> String {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedPrompt.isEmpty {
+            return trimmedPrompt.count > 80 ? String(trimmedPrompt.prefix(80)) + "..." : trimmedPrompt
+        }
+
+        if attachment != nil {
+            return "Image Conversation"
+        }
+
+        return "New Thread"
+    }
+
+    private func upsertCurrentThread(id: String, title: String, modality: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+
+        if let thread = currentThread, thread.id == id {
+            currentThread = ThreadDetailDTO(
+                id: thread.id,
+                title: thread.title ?? title,
+                modality: thread.modality,
+                isArchived: thread.isArchived,
+                createdAt: thread.createdAt,
+                updatedAt: timestamp,
+                turns: thread.turns
+            )
+            return
+        }
+
+        currentThread = ThreadDetailDTO(
+            id: id,
+            title: title,
+            modality: modality,
+            isArchived: false,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            turns: []
+        )
     }
 
     private func sanitizedCustomInstructions(from settings: SettingsManager) -> String? {
@@ -573,6 +805,7 @@ final class ThreadViewModel {
             modality: settings.selectedModality.apiModality,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
+            conversationMode: settings.conversationMode.rawValue,
             customInstructions: sanitizedCustomInstructions(from: settings),
             imageAttachment: request.imageAttachment,
             previousTurns: seededTurnsForRequest ?? []
@@ -590,11 +823,12 @@ final class ThreadViewModel {
 // MARK: - ThreadTurnRecord Convenience Init
 
 extension ThreadTurnRecord {
-    init(id: String, turnIndex: Int, originalPrompt: String, enhancedPrompt: String, imageAttachment: PromptImageAttachment?, model: String, totalTokens: Int, processingMs: Int, createdAt: Date) {
+    init(id: String, turnIndex: Int, originalPrompt: String, enhancedPrompt: String, responseMode: ThreadConversationMode = .optimize, imageAttachment: PromptImageAttachment?, model: String, totalTokens: Int, processingMs: Int, createdAt: Date) {
         self.id = id
         self.turnIndex = turnIndex
         self.originalPrompt = originalPrompt
         self.enhancedPrompt = enhancedPrompt
+        self.responseMode = responseMode
         self.imageAttachment = imageAttachment
         self.model = model
         self.totalTokens = totalTokens

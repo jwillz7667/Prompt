@@ -20,6 +20,22 @@ struct ThreadMessageBubble: View {
     /// Accent: cyan in dark mode, purple in light mode
     private var accentColor: Color { Color.adaptiveButtonPrimary }
 
+    private var assistantResponseMode: ThreadConversationMode {
+        message.responseMode ?? .optimize
+    }
+
+    private var assistantLabel: String {
+        assistantResponseMode == .chat ? "Assistant" : "Enhanced"
+    }
+
+    private var assistantIcon: String {
+        assistantResponseMode == .chat ? "bubble.left.and.bubble.right.fill" : "sparkles"
+    }
+
+    private var assistantCopyLabel: String {
+        assistantResponseMode == .chat ? "Copy Reply" : "Copy Prompt"
+    }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 0) {
             if message.role == .user {
@@ -30,11 +46,11 @@ struct ThreadMessageBubble: View {
                 // Role label
                 HStack(spacing: 4) {
                     if message.role == .assistant {
-                        Image(systemName: "sparkles")
+                        Image(systemName: assistantIcon)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(accentColor)
                     }
-                    Text(message.role == .user ? "You" : "Enhanced")
+                    Text(message.role == .user ? "You" : assistantLabel)
                         .font(.system(.caption2, design: .rounded, weight: .semibold))
                         .foregroundStyle(textSecondary)
                 }
@@ -51,7 +67,7 @@ struct ThreadMessageBubble: View {
                     HStack(spacing: 4) {
                         ProgressView()
                             .scaleEffect(0.6)
-                        Text("Enhancing...")
+                        Text(assistantResponseMode == .chat ? "Thinking..." : "Enhancing...")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(textSecondary)
                     }
@@ -97,7 +113,7 @@ struct ThreadMessageBubble: View {
     private var assistantBubble: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(message.content)
-                .font(.system(.body, design: .monospaced))
+                .font(assistantResponseMode == .chat ? .system(.body, design: .rounded) : .system(.body, design: .monospaced))
                 .foregroundStyle(textPrimary)
                 .textSelection(.enabled)
 
@@ -132,7 +148,7 @@ struct ThreadMessageBubble: View {
                     HStack(spacing: 4) {
                         Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 10, weight: .medium))
-                        Text(showCopied ? "Copied" : "Copy All")
+                        Text(showCopied ? "Copied" : assistantCopyLabel)
                             .font(.system(.caption2, design: .rounded, weight: .medium))
                     }
                     .foregroundStyle(showCopied ? accentColor : textSecondary)

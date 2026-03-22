@@ -3,6 +3,7 @@ import { imageAnalysisService, type PromptImageAttachment } from './imageAnalysi
 import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
+export type ConversationMode = 'optimize' | 'chat';
 export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
 export type EnhancementTier = 'basic' | 'standard' | 'advanced';
 
@@ -13,6 +14,7 @@ export interface EnhancePromptRequest {
   temperature?: number;
   maxTokens?: number;
   mode?: PromptMode;
+  conversationMode?: ConversationMode;
   modality?: PromptModality;
   subModality?: string;
   customInstructions?: string;
@@ -41,9 +43,9 @@ export interface EnhancePromptInThreadRequest extends EnhancePromptRequest {
 }
 
 export interface StreamCallbacks {
-  onToken: (token: string) => void;
-  onComplete: (result: EnhancePromptResult) => void;
-  onError: (error: Error) => void;
+  onToken: (token: string) => void | Promise<void>;
+  onComplete: (result: EnhancePromptResult) => void | Promise<void>;
+  onError: (error: Error) => void | Promise<void>;
 }
 
 interface DeepSeekMessage {
@@ -94,6 +96,15 @@ const QUALITY_PROFILES: Record<EnhancementTier, string> = {
     '- maximize robustness with explicit success criteria, failure-avoidance guidance, and verification checkpoints',
     '- prefer precise constraints and evaluation rubrics over generic flourishes',
   ].join('\n'),
+};
+
+const CHAT_MODALITY_GUIDANCE: Record<PromptModality, string> = {
+  text: '- answer clearly and directly; use structure only when it improves comprehension',
+  image: '- help the user iterate on visual direction, prompt wording, composition, and generation tradeoffs',
+  video: '- speak concretely about scene progression, motion, camera language, and continuity',
+  audio: '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
+  code: '- give production-minded technical help, explain tradeoffs precisely, and include code only when useful',
+  '3d': '- respond with concrete guidance on form, materials, topology, technical constraints, and downstream use',
 };
 
 const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string }> = {
@@ -173,6 +184,7 @@ const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string 
 
 function normalizeRequest(request: EnhancePromptRequest) {
   const mode: PromptMode = request.mode ?? 'standard';
+  const conversationMode: ConversationMode = request.conversationMode ?? 'optimize';
   const modality = request.modality ?? detectModality(request.prompt);
   const model = request.model ?? (mode === 'max' ? MAX_MODEL : STANDARD_MODEL);
   const temperature = request.temperature ?? (mode === 'max' ? MAX_TEMPERATURE : STANDARD_TEMPERATURE);
@@ -183,8 +195,9 @@ function normalizeRequest(request: EnhancePromptRequest) {
 
   return {
     ...request,
-    prompt: normalizePromptText(request.prompt, modality, request.imageAttachment),
+    prompt: normalizePromptText(request.prompt, modality, request.imageAttachment, conversationMode),
     mode,
+    conversationMode,
     modality,
     model,
     temperature,
@@ -195,7 +208,8 @@ function normalizeRequest(request: EnhancePromptRequest) {
 function normalizePromptText(
   prompt: string,
   modality: PromptModality,
-  imageAttachment?: PromptImageAttachment
+  imageAttachment: PromptImageAttachment | undefined,
+  conversationMode: ConversationMode
 ): string {
   const trimmed = prompt.trim();
   if (trimmed) {
@@ -204,6 +218,17 @@ function normalizePromptText(
 
   if (!imageAttachment) {
     return trimmed;
+  }
+
+  if (conversationMode === 'chat') {
+    switch (modality) {
+      case 'video':
+        return 'Use the uploaded image as context and help the user discuss how to turn it into a stronger video concept.';
+      case 'image':
+        return 'Use the uploaded image as context and help the user improve or discuss the prompt for it.';
+      default:
+        return 'Use the uploaded image as the main context for the conversation and help the user move the work forward.';
+    }
   }
 
   switch (modality) {
@@ -216,7 +241,7 @@ function normalizePromptText(
   }
 }
 
-function buildSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
+function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
   const modeGuidance = request.mode === 'max'
     ? [
         'MAX mode objective:',
@@ -271,6 +296,62 @@ function buildSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadA
   ].join('\n');
 }
 
+function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
+  const modeGuidance = request.mode === 'max'
+    ? [
+        'MAX mode objective:',
+        '- provide a materially stronger answer by reasoning carefully, tightening structure, and surfacing tradeoffs explicitly',
+        '- stay concise unless the user asks for more depth',
+      ].join('\n')
+    : [
+        'Standard mode objective:',
+        '- provide a direct, helpful answer quickly',
+        '- stay clear, concrete, and easy to use',
+      ].join('\n');
+
+  const threadGuidance = threadAware
+    ? [
+        'Thread handling:',
+        '- continue the conversation naturally from prior turns',
+        '- treat the latest assistant reply as part of the active working context',
+        '- do not restart from scratch unless the user clearly changes direction',
+      ].join('\n')
+    : '';
+
+  const subModalityGuidance = buildSubModalityGuidance(request.modality, request.subModality);
+
+  return [
+    'You are Promptomize\'s collaborative AI assistant inside a prompt-building workspace.',
+    'Answer the user directly and help them continue the conversation.',
+    '',
+    'Core rules:',
+    '- answer the user instead of rewriting their request into a prompt unless they explicitly ask for a rewrite',
+    '- keep the reply actionable and grounded in the user\'s latest message',
+    '- when the user asks to improve or rewrite a prompt, provide the improved prompt directly and keep commentary minimal unless asked',
+    '- respect explicit constraints, tone, length, and formatting requirements',
+    ...(request.imageAttachment
+      ? [
+          '- when a source image is present, treat the image analysis as canonical visual context unless the user asks to transform it',
+        ]
+      : []),
+    '',
+    modeGuidance,
+    '',
+    `Modality guidance for ${request.modality}:`,
+    CHAT_MODALITY_GUIDANCE[request.modality],
+    ...(subModalityGuidance ? ['', 'Sub-modality guidance:', subModalityGuidance] : []),
+    ...(threadGuidance ? ['', threadGuidance] : []),
+  ].join('\n');
+}
+
+function buildSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
+  if (request.conversationMode === 'chat') {
+    return buildChatSystemPrompt(request, threadAware);
+  }
+
+  return buildOptimizeSystemPrompt(request, threadAware);
+}
+
 function buildSubModalityGuidance(modality: PromptModality, subModality?: string): string {
   if (!subModality) return '';
 
@@ -296,7 +377,7 @@ function buildSubModalityGuidance(modality: PromptModality, subModality?: string
 
 function buildLengthConstraint(prompt: string, customInstructions?: string, targetCharacterLength?: number): string | null {
   if (targetCharacterLength && targetCharacterLength > 0) {
-    return `The rewritten prompt must be exactly ${targetCharacterLength} characters long, including spaces and punctuation.`;
+    return `The response must be exactly ${targetCharacterLength} characters long, including spaces and punctuation.`;
   }
 
   const combined = `${prompt} ${customInstructions ?? ''}`;
@@ -331,9 +412,10 @@ function buildLengthConstraint(prompt: string, customInstructions?: string, targ
   return [...new Set(matches)].join(' ');
 }
 
-function buildUserMessage(request: ReturnType<typeof normalizeRequest>): string {
+function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>): string {
   const sections = [
     '<prompt_transformation_request>',
+    `<conversation_mode>${request.conversationMode}</conversation_mode>`,
     `<mode>${request.mode}</mode>`,
     `<modality>${request.modality}</modality>`,
     `<quality_profile>${request.tier}</quality_profile>`,
@@ -384,7 +466,53 @@ function buildUserMessage(request: ReturnType<typeof normalizeRequest>): string 
   return sections.join('\n');
 }
 
-function sanitizeEnhancedPrompt(content: string): string {
+function buildChatUserMessage(request: ReturnType<typeof normalizeRequest>): string {
+  const sections: string[] = [];
+
+  if (request.imageAttachment) {
+    sections.push('Source image context:');
+    sections.push(`- MIME type: ${request.imageAttachment.mimeType}`);
+    sections.push(`- Dimensions: ${request.imageAttachment.width}x${request.imageAttachment.height}`);
+    if (request.imageAttachment.analysis?.trim()) {
+      sections.push(`- Visual analysis: ${request.imageAttachment.analysis.trim()}`);
+    }
+    sections.push('');
+  }
+
+  if (request.customInstructions?.trim()) {
+    sections.push('Additional instructions:');
+    sections.push(request.customInstructions.trim());
+    sections.push('');
+  }
+
+  const lengthConstraint = buildLengthConstraint(
+    request.prompt,
+    request.customInstructions,
+    request.targetCharacterLength
+  );
+
+  if (lengthConstraint) {
+    sections.push(`Length constraint: ${lengthConstraint}`);
+    sections.push('');
+  }
+
+  sections.push(request.prompt);
+  return sections.join('\n');
+}
+
+function buildUserMessage(request: ReturnType<typeof normalizeRequest>): string {
+  if (request.conversationMode === 'chat') {
+    return buildChatUserMessage(request);
+  }
+
+  return buildOptimizeUserMessage(request);
+}
+
+function sanitizeModelOutput(content: string, conversationMode: ConversationMode): string {
+  if (conversationMode === 'chat') {
+    return content.trim();
+  }
+
   return content
     .trim()
     .replace(/^```(?:markdown|md|text)?\s*/i, '')
@@ -395,7 +523,8 @@ function sanitizeEnhancedPrompt(content: string): string {
 
 async function requestCompletion(
   request: DeepSeekRequest,
-  apiKey: string
+  apiKey: string,
+  conversationMode: ConversationMode
 ): Promise<EnhancePromptResult> {
   const startedAt = Date.now();
   const response = await fetch(DEEPSEEK_API_URL, {
@@ -416,7 +545,7 @@ async function requestCompletion(
   }
 
   const parsed = (await response.json()) as DeepSeekResponse;
-  const content = sanitizeEnhancedPrompt(parsed.choices?.[0]?.message?.content ?? '');
+  const content = sanitizeModelOutput(parsed.choices?.[0]?.message?.content ?? '', conversationMode);
 
   if (!content) {
     throw new Error('DeepSeek returned an empty enhancement');
@@ -435,6 +564,7 @@ async function requestCompletion(
 async function streamCompletion(
   request: DeepSeekRequest,
   apiKey: string,
+  conversationMode: ConversationMode,
   callbacks: StreamCallbacks
 ): Promise<void> {
   const startedAt = Date.now();
@@ -454,13 +584,13 @@ async function streamCompletion(
   if (!response.ok) {
     const body = await response.text();
     promptLogger.error({ status: response.status, body }, 'DeepSeek streaming request failed');
-    callbacks.onError(new Error(`DeepSeek API error: ${response.status}`));
+    await callbacks.onError(new Error(`DeepSeek API error: ${response.status}`));
     return;
   }
 
   const reader = response.body?.getReader();
   if (!reader) {
-    callbacks.onError(new Error('DeepSeek stream body unavailable'));
+    await callbacks.onError(new Error('DeepSeek stream body unavailable'));
     return;
   }
 
@@ -494,7 +624,7 @@ async function streamCompletion(
           const delta = parsed.choices?.[0]?.delta?.content;
           if (delta) {
             collected += delta;
-            callbacks.onToken(delta);
+            await callbacks.onToken(delta);
           }
 
           if (parsed.usage) {
@@ -507,8 +637,8 @@ async function streamCompletion(
       }
     }
 
-    callbacks.onComplete({
-      enhancedPrompt: sanitizeEnhancedPrompt(collected),
+    await callbacks.onComplete({
+      enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
       model: request.model,
       inputTokens,
       outputTokens,
@@ -516,7 +646,7 @@ async function streamCompletion(
       processingMs: Date.now() - startedAt,
     });
   } catch (error) {
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -528,6 +658,14 @@ function buildMessages(request: ReturnType<typeof normalizeRequest>, threadAware
 }
 
 function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+  if (request.conversationMode === 'chat') {
+    return buildChatThreadMessages(request);
+  }
+
+  return buildOptimizeThreadMessages(request);
+}
+
+function buildOptimizeThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
   const messages: DeepSeekMessage[] = [
     { role: 'system', content: buildSystemPrompt(request, true) },
   ];
@@ -555,6 +693,45 @@ function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { pr
     messages.push({
       role: 'assistant',
       content: `Previous rewritten prompt:\n${turn.enhancedPrompt}`,
+    });
+  }
+
+  messages.push({
+    role: 'user',
+    content: buildUserMessage(request),
+  });
+
+  return messages;
+}
+
+function buildChatThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+  const messages: DeepSeekMessage[] = [
+    { role: 'system', content: buildSystemPrompt(request, true) },
+  ];
+
+  let usedChars = messages[0]?.content.length ?? 0;
+  const turnsToInclude: ThreadTurnContext[] = [];
+
+  for (let index = request.previousTurns.length - 1; index >= 0; index -= 1) {
+    const turn = request.previousTurns[index];
+    if (!turn) continue;
+    const turnChars = turn.originalPrompt.length + turn.enhancedPrompt.length + 32;
+    if (usedChars + turnChars > THREAD_CONTEXT_CHAR_BUDGET) {
+      break;
+    }
+
+    turnsToInclude.unshift(turn);
+    usedChars += turnChars;
+  }
+
+  for (const turn of turnsToInclude) {
+    messages.push({
+      role: 'user',
+      content: buildPreviousTurnRequest(turn),
+    });
+    messages.push({
+      role: 'assistant',
+      content: turn.enhancedPrompt,
     });
   }
 
@@ -620,7 +797,8 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
       max_tokens: normalized.maxTokens,
       stream: false,
     },
-    apiKey
+    apiKey,
+    normalized.conversationMode
   );
 
   return {
@@ -647,6 +825,7 @@ export async function enhancePromptStream(
         stream: true,
       },
       apiKey,
+      normalized.conversationMode,
       {
         ...callbacks,
         onComplete: (result) => {
@@ -683,6 +862,7 @@ export async function enhancePromptInThreadStream(
         stream: true,
       },
       apiKey,
+      normalized.conversationMode,
       {
         ...callbacks,
         onComplete: (result) => {

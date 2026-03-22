@@ -75,6 +75,7 @@ struct CreateThreadRequest: Encodable, Sendable {
     let modality: String
     let subModality: String?
     let mode: String?
+    let conversationMode: String?
     let customInstructions: String?
     let imageAttachment: PromptImageAttachment?
     let previousTurns: [SeedThreadTurnRequest]?
@@ -84,6 +85,7 @@ struct AddTurnRequest: Encodable, Sendable {
     let prompt: String
     let subModality: String?
     let mode: String?
+    let conversationMode: String?
     let customInstructions: String?
     let imageAttachment: PromptImageAttachment?
 }
@@ -107,6 +109,7 @@ struct GuestEnhanceRequest: Encodable, Sendable {
     let modality: String
     let subModality: String?
     let mode: String?
+    let conversationMode: String?
     let customInstructions: String?
     let imageAttachment: PromptImageAttachment?
     let previousTurns: [SeedThreadTurnRequest]
@@ -172,6 +175,7 @@ struct ThreadTurnRecord: Identifiable, Sendable {
     let turnIndex: Int
     let originalPrompt: String
     let enhancedPrompt: String
+    let responseMode: ThreadConversationMode
     let imageAttachment: PromptImageAttachment?
     let model: String
     let totalTokens: Int
@@ -183,6 +187,7 @@ struct ThreadTurnRecord: Identifiable, Sendable {
         self.turnIndex = dto.turnIndex
         self.originalPrompt = dto.originalPrompt
         self.enhancedPrompt = dto.enhancedPrompt
+        self.responseMode = .optimize
         self.imageAttachment = dto.imageAttachment
         self.model = dto.model
         self.totalTokens = dto.totalTokens
@@ -196,6 +201,7 @@ struct ThreadMessage: Identifiable, Sendable {
     let id: String
     let role: Role
     let content: String
+    let responseMode: ThreadConversationMode?
     let imageAttachment: PromptImageAttachment?
     let turnIndex: Int
     let tokens: Int?
