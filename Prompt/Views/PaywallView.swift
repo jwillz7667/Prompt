@@ -11,6 +11,7 @@ import StoreKit
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AuthManager.self) private var authManager
     @Environment(StoreKitManager.self) private var storeKit
 
     @State private var selectedProduct: Product?
@@ -18,6 +19,7 @@ struct PaywallView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showSuccess = false
+    @State private var showAuthGate = false
     @State private var trialEligible = false
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -42,6 +44,10 @@ struct PaywallView: View {
         }
     }
     private var currentPlanSubtitle: String {
+        if !authManager.isAuthenticated && storeKit.currentTier == .free {
+            return "Sign in to load live pricing, restore purchases, and unlock the Premium trial flow."
+        }
+
         switch storeKit.currentTier {
         case .free:
             return "Stronger prompt rewrites, higher limits, and better tools in the same polished workflow."
@@ -55,6 +61,10 @@ struct PaywallView: View {
         storeKit.currentTier == .premium ? "Premium" : "Unlock Premium"
     }
     private var headerSubtitle: String {
+        if !authManager.isAuthenticated && storeKit.currentTier == .free {
+            return "Browse the plans, then sign in to purchase, restore, or start the Premium trial."
+        }
+
         switch storeKit.currentTier {
         case .free:
             return "Choose a plan and unlock stronger prompts, MAX mode, and the full toolset."
@@ -68,7 +78,16 @@ struct PaywallView: View {
         guard let selectedProduct else { return false }
         return storeKit.purchasedProductIDs.contains(selectedProduct.id)
     }
+
+    private var requiresAuthentication: Bool {
+        !authManager.isAuthenticated
+    }
+
     private var primaryActionTitle: String {
+        if requiresAuthentication {
+            return "Sign in to unlock plans"
+        }
+
         if selectedProductIsCurrent {
             return "Current plan active"
         }
@@ -97,6 +116,10 @@ struct PaywallView: View {
                         .padding(.top, 12)
 
                         heroCard
+
+                        if requiresAuthentication {
+                            authenticationRequiredCard
+                        }
 
                         if trialEligible && storeKit.currentTier == .free {
                             trialBanner
@@ -132,6 +155,13 @@ struct PaywallView: View {
                 }
             } message: {
                 Text("Premium is now unlocked on this account.")
+            }
+            .fullScreenCover(isPresented: $showAuthGate) {
+                AuthView(mode: .standard) {
+                    Task {
+                        await loadData()
+                    }
+                }
             }
         }
     }
@@ -230,6 +260,40 @@ struct PaywallView: View {
         .liquidGlass(cornerRadius: 22, shadowIntensity: 0.7, borderGlow: true)
     }
 
+    private var authenticationRequiredCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.badge.key.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(accentColor)
+
+                Text("Sign in before purchase")
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
+            }
+
+            Text("Purchases, restores, and the Premium trial sync through your Promptomize account. Sign in first so the subscription actually lands on your profile and other devices.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                showAuthGate = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "apple.logo")
+                    Text("Sign In to Continue")
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: accentColor, intensity: .prominent))
+        }
+        .padding(18)
+        .liquidGlass(cornerRadius: 22, shadowIntensity: 0.7, borderGlow: true)
+    }
+
     // MARK: - Tier Comparison
 
     private var tierComparisonSection: some View {
@@ -314,10 +378,7 @@ struct PaywallView: View {
                         Spacer()
                     }
                 } else if storeKit.products.isEmpty {
-                    Text("Unable to load products. Please try again later.")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(textSecondary)
-                        .padding(.vertical, 4)
+                    fallbackPlansSection
                 } else {
                     if !storeKit.proProducts.isEmpty {
                         tierProductGroup(tier: .pro, products: storeKit.proProducts)
@@ -331,6 +392,58 @@ struct PaywallView: View {
             .padding(18)
             .liquidGlass(cornerRadius: 22, shadowIntensity: 0.72, borderGlow: true)
         }
+    }
+
+    private var fallbackPlansSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(requiresAuthentication
+                 ? "Live App Store pricing appears after sign-in. These cards keep the upgrade path visible while account access is locked."
+                 : "App Store products are temporarily unavailable. These cards show what each tier unlocks while pricing reloads.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            fallbackPlanCard(
+                tier: .pro,
+                highlight: "Higher daily limits",
+                details: "Standard-quality prompt engineering, more prompt volume, and access to starter premium tools."
+            )
+
+            fallbackPlanCard(
+                tier: .premium,
+                highlight: "Unlimited workflow",
+                details: "Unlimited prompts, MAX mode access, variations, sandbox, workflows, and the strongest prompt quality."
+            )
+        }
+    }
+
+    private func fallbackPlanCard(tier: SubscriptionTier, highlight: String, details: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(tier.displayName)
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(tier == .premium ? brandPurple : textPrimary)
+
+                Spacer()
+
+                Text(highlight)
+                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .liquidGlassChip(
+                        isSelected: false,
+                        accentColor: tier == .premium ? brandPurple : accentColor
+                    )
+            }
+
+            Text(details)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .liquidGlass(cornerRadius: 18, shadowIntensity: 0.48)
     }
 
     private func tierProductGroup(tier: SubscriptionTier, products: [Product]) -> some View {
@@ -518,14 +631,14 @@ struct PaywallView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .foregroundStyle(selectedProduct != nil ? Color.adaptiveTextOnAccent : textTertiary)
+            .foregroundStyle((selectedProduct != nil || requiresAuthentication) ? Color.adaptiveTextOnAccent : textTertiary)
         }
         .buttonStyle(LiquidGlassButtonStyle(
             cornerRadius: 18,
-            tintColor: selectedProduct != nil ? accentColor : nil,
-            intensity: selectedProduct != nil ? .prominent : .subtle
+            tintColor: (selectedProduct != nil || requiresAuthentication) ? accentColor : nil,
+            intensity: (selectedProduct != nil || requiresAuthentication) ? .prominent : .subtle
         ))
-        .disabled(selectedProduct == nil || isProcessing || selectedProductIsCurrent)
+        .disabled(((selectedProduct == nil) && !requiresAuthentication) || isProcessing || selectedProductIsCurrent)
     }
 
     private var restoreButton: some View {
@@ -554,11 +667,11 @@ struct PaywallView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 16) {
-                Link("Terms of Service", destination: URL(string: "https://promptomizer.app/terms")!)
+                Link("Terms of Service", destination: URL(string: "https://promptomize.app/terms")!)
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(textSecondary)
 
-                Link("Privacy Policy", destination: URL(string: "https://promptomizer.app/privacy")!)
+                Link("Privacy Policy", destination: URL(string: "https://promptomize.app/privacy")!)
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(textSecondary)
             }
@@ -569,7 +682,11 @@ struct PaywallView: View {
 
     private func loadData() async {
         await storeKit.loadProducts()
-        trialEligible = await storeKit.checkTrialEligibility()
+        if authManager.isAuthenticated {
+            trialEligible = await storeKit.checkTrialEligibility()
+        } else {
+            trialEligible = false
+        }
 
         // Auto-select premium monthly
         if let premiumMonthly = storeKit.products.first(where: { $0.id == ProductID.premiumMonthly.rawValue }) {
@@ -580,6 +697,11 @@ struct PaywallView: View {
     }
 
     private func purchase() async {
+        guard authManager.isAuthenticated else {
+            showAuthGate = true
+            return
+        }
+
         guard let product = selectedProduct else { return }
 
         isProcessing = true
@@ -596,6 +718,11 @@ struct PaywallView: View {
     }
 
     private func startTrial() async {
+        guard authManager.isAuthenticated else {
+            showAuthGate = true
+            return
+        }
+
         isProcessing = true
         defer { isProcessing = false }
 
@@ -609,6 +736,11 @@ struct PaywallView: View {
     }
 
     private func restorePurchases() async {
+        guard authManager.isAuthenticated else {
+            showAuthGate = true
+            return
+        }
+
         isProcessing = true
         defer { isProcessing = false }
 
@@ -649,5 +781,6 @@ struct PaywallView: View {
 
 #Preview {
     PaywallView()
+        .environment(AuthManager.shared)
         .environment(StoreKitManager.shared)
 }

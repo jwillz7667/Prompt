@@ -513,7 +513,6 @@ struct AppBrandMark: View {
                     Image("AppLogo")
                         .resizable()
                         .scaledToFit()
-                        .interpolation(.high)
                 } else {
                     Image(systemName: "sparkles")
                         .font(.system(size: size * 0.42, weight: .semibold))
@@ -580,8 +579,8 @@ struct PromptPageHeader<Trailing: View>: View {
             }
             .buttonStyle(GlassIconButtonStyle(size: 40))
 
-            HStack(alignment: .top, spacing: 12) {
-                AppBrandMark(size: 40)
+            HStack(alignment: .center, spacing: 12) {
+                AppBrandMark(size: 40, showsGlassBackdrop: false)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)

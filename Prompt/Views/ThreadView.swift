@@ -78,6 +78,53 @@ struct ThreadView: View {
         viewModel.hasConversation ? "Reply with another optimization request" : "Ask Promptomize"
     }
 
+    private var starterPrompts: [String] {
+        switch settings.selectedModality {
+        case .text:
+            return [
+                "Rewrite this rough brief into a production-ready prompt with role, constraints, and output format.",
+                "Turn my idea into a prompt that asks for a concise strategy memo with risks and next steps.",
+                "Improve this support prompt so the response sounds calm, clear, and specific."
+            ]
+        case .image:
+            return [
+                "Create a cinematic editorial image prompt for a premium skincare product on wet glass.",
+                "Turn this concept into a Midjourney-ready portrait prompt with lens, lighting, and texture cues.",
+                "Write a product-shot prompt with negative prompts and clean studio composition."
+            ]
+        case .video:
+            return [
+                "Transform this scene idea into a video prompt with camera motion, pacing, and environmental detail.",
+                "Write a polished Runway-style prompt for a slow dolly shot through a futuristic market at dusk.",
+                "Turn this static image concept into a cinematic teaser prompt with motion beats and atmosphere."
+            ]
+        case .music:
+            return [
+                "Create a Suno-ready prompt for a moody alt-pop track with tactile production detail.",
+                "Turn this lyric hook into a song-generation prompt with structure, instrumentation, and vocal tone.",
+                "Write a prompt for a cinematic ambient cue with evolving tension and organic percussion."
+            ]
+        case .audio:
+            return [
+                "Write a polished voiceover prompt for a luxury product launch with pacing and emphasis notes.",
+                "Create a sound-design prompt for a dense cyberpunk alley with layered ambience and foley.",
+                "Turn this narration brief into a natural spoken-word prompt with timing and pronunciation guidance."
+            ]
+        case .code:
+            return [
+                "Rewrite this coding request into a prompt with acceptance criteria, edge cases, and testing expectations.",
+                "Turn this vague bug report into an actionable prompt for a senior Swift engineer.",
+                "Create a code-generation prompt that asks for architecture notes, implementation, and verification steps."
+            ]
+        case .threeD:
+            return [
+                "Write a 3D generation prompt for a collectible sci-fi helmet with materials and topology guidance.",
+                "Turn this creature concept into a Meshy-ready prompt with silhouette, texture, and render cues.",
+                "Create a stylized environment asset prompt with scale, materials, and modularity constraints."
+            ]
+        }
+    }
+
     var body: some View {
         Group {
             if presentationStyle == .detail {
@@ -137,17 +184,10 @@ struct ThreadView: View {
                 }
             }
 
-            if let onOpenThreads {
+            if let historyAction = onOpenHistory ?? onOpenThreads {
                 Button("History") {
                     triggerHaptic(.light)
-                    onOpenThreads()
-                }
-            }
-
-            if let onOpenHistory {
-                Button("History") {
-                    triggerHaptic(.light)
-                    onOpenHistory()
+                    historyAction()
                 }
             }
 
@@ -214,10 +254,10 @@ struct ThreadView: View {
         HStack(spacing: 12) {
             iconButton(systemName: "line.3.horizontal", action: {
                 triggerHaptic(.light)
-                onOpenThreads?()
+                showWorkspaceActions = true
             })
 
-            AppBrandMark(size: 48, showsGlassBackdrop: false)
+            AppBrandMark(size: 40, showsGlassBackdrop: false)
 
             Spacer(minLength: 0)
 
@@ -328,10 +368,151 @@ struct ThreadView: View {
     }
 
     private var welcomeState: some View {
-        VStack {
-            Spacer(minLength: 0)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 18) {
+                welcomeHeroCard
+                usageAndPlanCard
+                starterPromptsCard
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 148)
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var welcomeHeroCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center, spacing: 14) {
+                AppBrandMark(size: 56, showsGlassBackdrop: false)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Start with a rough idea")
+                        .font(.system(.title3, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
+
+                    Text("Promptomize turns loose requests into structured prompts with clearer roles, constraints, and outputs.")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 8) {
+                welcomeChip(title: settings.selectedModality.displayName, systemImage: settings.selectedModality.icon, tint: accentColor)
+                welcomeChip(title: settings.maxModeEnabled ? "MAX enabled" : "Standard mode", systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill", tint: settings.maxModeEnabled ? .orange : brandSecondaryAccent)
+                welcomeChip(title: "Chat workflow", systemImage: "bubble.left.and.bubble.right.fill", tint: brandSecondaryAccent)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 26, shadowIntensity: 0.72, borderGlow: true)
+    }
+
+    private var usageAndPlanCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                if authManager.isAuthenticated {
+                    SubscriptionBadge(tier: storeKit.currentTier)
+                } else {
+                    SubscriptionBadge(tier: .free)
+                }
+
+                Spacer()
+
+                if storeKit.currentTier != .premium {
+                    Button("View Plans") {
+                        triggerHaptic(.light)
+                        presentPaywall()
+                    }
+                    .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor, intensity: .prominent))
+                }
+            }
+
+            if authManager.isAuthenticated, let usage = storeKit.usageInfo {
+                HStack(spacing: 12) {
+                    UsageIndicator(used: usage.dailyPromptsUsed, limit: usage.dailyPromptsLimit)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(usage.isUnlimited ? "Unlimited daily prompts" : "\(usage.remainingPrompts) prompts left today")
+                            .font(.system(.subheadline, design: .rounded, weight: .bold))
+                            .foregroundStyle(textPrimary)
+
+                        Text(storeKit.currentTier == .premium
+                             ? "Premium tools, MAX mode, and the full workflow are unlocked."
+                             : "Upgrade to unlock MAX access, more usage, and the paid power tools.")
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Guest access includes 5 Standard prompts and 1 MAX prompt before sign-in.")
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        welcomeChip(
+                            title: "\(guestSession.quota.standardRemaining)/\(guestSession.quota.standardLimit) Standard",
+                            systemImage: "text.bubble.fill",
+                            tint: accentColor
+                        )
+                        welcomeChip(
+                            title: "\(guestSession.quota.maxRemaining)/\(guestSession.quota.maxLimit) MAX",
+                            systemImage: "flame.fill",
+                            tint: .orange
+                        )
+                    }
+
+                    Text("Sign in to save threads, restore purchases, and unlock the Premium trial flow.")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 24, shadowIntensity: 0.68)
+    }
+
+    private var starterPromptsCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            LiquidGlassSectionHeader(title: "Prompt Starters", icon: "sparkles")
+
+            VStack(spacing: 10) {
+                ForEach(starterPrompts, id: \.self) { prompt in
+                    Button {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                            viewModel.userPrompt = prompt
+                        }
+                        isInputFocused = true
+                        triggerHaptic(.light)
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "arrow.up.right.circle.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(accentColor)
+                                .padding(.top, 1)
+
+                            Text(prompt)
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                                .foregroundStyle(textPrimary)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                    }
+                    .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 18, tintColor: nil, intensity: .subtle))
+                }
+            }
+        }
     }
 
     private var conversationMessagesArea: some View {
@@ -698,6 +879,20 @@ struct ThreadView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .liquidGlassChip(isSelected: isSelected, accentColor: tint)
+    }
+
+    private func welcomeChip(title: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+            Text(title)
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(textPrimary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .liquidGlassChip(isSelected: false, accentColor: tint)
     }
 
     private var maxModeToast: some View {

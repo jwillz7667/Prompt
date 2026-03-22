@@ -86,7 +86,7 @@ struct ContentView: View {
                 )
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showSettings, content: profileSheet)
+            .sheet(isPresented: $showSettings, content: settingsSheet)
             .sheet(isPresented: $showHistory, content: historySheet)
             .sheet(isPresented: $showProfile, content: profileSheet)
             .sheet(isPresented: $showPaywall, content: paywallSheet)
@@ -196,6 +196,14 @@ struct ContentView: View {
     private func profileSheet() -> some View {
         ProfileView()
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(24)
+    }
+
+    @ViewBuilder
+    private func settingsSheet() -> some View {
+        SettingsView()
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(24)
     }

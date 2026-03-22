@@ -609,20 +609,43 @@ extension View {
 // MARK: - Offline Banner View
 
 struct OfflineBanner: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var networkMonitor: NetworkMonitor = .shared
 
     var body: some View {
         if !networkMonitor.isConnected {
             HStack {
                 Image(systemName: "wifi.slash")
-                Text("No Internet Connection")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.system(size: 12, weight: .bold))
+
+                Text("Offline. Some actions will resume when the connection returns.")
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .lineLimit(2)
             }
-            .foregroundStyle(.white)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
-            .background(Color.red.opacity(0.9))
+            .foregroundStyle(Color.adaptiveTextPrimary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 360)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule()
+                            .stroke(
+                                colorScheme == .dark
+                                    ? Color.red.opacity(0.35)
+                                    : Color.red.opacity(0.2),
+                                lineWidth: 1
+                            )
+                    }
+            }
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.08),
+                radius: 16,
+                y: 8
+            )
+            .padding(.top, 10)
+            .padding(.horizontal, 16)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
