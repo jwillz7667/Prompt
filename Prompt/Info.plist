@@ -23,6 +23,8 @@
 	<false/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Promptomize uses the camera so you can attach a photo as reference for your chat or prompt.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

@@ -20,7 +20,6 @@ struct ContentView: View {
     @State private var deeplinkManager = DeeplinkManager.shared
     @State private var homeThreadViewModel = ThreadViewModel()
 
-    @State private var showSettings = false
     @State private var showHistory = false
     @State private var showProfile = false
     @State private var showPaywall = false
@@ -80,13 +79,11 @@ struct ContentView: View {
                     onOpenThreads: { showHistory = true },
                     onOpenProfile: { showProfile = true },
                     onOpenHistory: { showHistory = true },
-                    onOpenSettings: { showSettings = true },
                     onOpenPaywall: { showPaywall = true },
                     onStartNewConversation: newConversation
                 )
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showSettings, content: settingsSheet)
             .sheet(isPresented: $showHistory, content: historySheet)
             .sheet(isPresented: $showProfile, content: profileSheet)
             .sheet(isPresented: $showPaywall, content: paywallSheet)
@@ -170,7 +167,7 @@ struct ContentView: View {
 
     private func handleSettingsDeeplink(_ shouldOpen: Bool) {
         guard shouldOpen else { return }
-        showSettings = true
+        showProfile = true
         deeplinkManager.clearSettingsTrigger()
     }
 
@@ -195,14 +192,6 @@ struct ContentView: View {
     @ViewBuilder
     private func profileSheet() -> some View {
         ProfileView()
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(24)
-    }
-
-    @ViewBuilder
-    private func settingsSheet() -> some View {
-        SettingsView()
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(24)

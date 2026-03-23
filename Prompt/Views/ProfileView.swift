@@ -58,8 +58,8 @@ struct ProfileView: View {
 
                 VStack(spacing: 0) {
                     PromptPageHeader(
-                        title: "Profile",
-                        subtitle: "Account details, Premium access, and app settings",
+                        title: "Account",
+                        subtitle: "Profile details, Premium access, and app settings",
                         onLeadingTap: {
                             if isEditingProfile {
                                 isEditingProfile = false

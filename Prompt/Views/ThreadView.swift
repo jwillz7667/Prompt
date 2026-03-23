@@ -8,11 +8,17 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct ThreadView: View {
     enum PresentationStyle {
         case home
         case detail
+    }
+
+    private enum ComposerDrawer {
+        case modalities
+        case attachments
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -28,26 +34,23 @@ struct ThreadView: View {
     var onOpenThreads: (() -> Void)? = nil
     var onOpenProfile: (() -> Void)? = nil
     var onOpenHistory: (() -> Void)? = nil
-    var onOpenSettings: (() -> Void)? = nil
     var onOpenPaywall: (() -> Void)? = nil
     var onStartNewConversation: (() -> Void)? = nil
 
-    @State private var expandedPowerTool: PowerToolsSection.PowerTool?
-    @State private var showFullVariations = false
-    @State private var showSandbox = false
-    @State private var showWorkflows = false
     @State private var showPaywallSheet = false
     @State private var showWorkspaceActions = false
-    @State private var showAttachmentActions = false
     @State private var showPhotoPicker = false
+    @State private var showTextFileImporter = false
+    @State private var showCameraCapture = false
     @State private var showMaxModeToast = false
+    @State private var activeComposerDrawer: ComposerDrawer?
+    @State private var composerOverlayHeight: CGFloat = 164
     @State private var selectedPhotoItem: PhotosPickerItem?
     @FocusState private var isInputFocused: Bool
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
-    private var backgroundPrimary: Color { Color.adaptiveBackgroundPrimary }
     private var backgroundTertiary: Color { Color.adaptiveBackgroundTertiary }
     private var accentColor: Color { Color.adaptiveButtonPrimary }
     private var brandSecondaryAccent: Color { colorScheme == .dark ? Color.brandPurple : Color.brandPurpleDark }
@@ -61,21 +64,33 @@ struct ThreadView: View {
         return remaining != 0
     }
 
-    private var latestPromptForTools: String? {
-        guard !viewModel.isStreaming else { return nil }
-        return viewModel.latestEnhancedPrompt
-    }
-
-    private var isHomeWelcomeState: Bool {
-        presentationStyle == .home && !viewModel.hasConversation
-    }
-
-    private var modalitySummary: String {
-        settings.selectedModality.displayName
-    }
-
     private var conversationMode: ThreadConversationMode {
         settings.conversationMode
+    }
+
+    private var floatingControlSize: CGFloat { 44 }
+
+    private var topMessageInset: CGFloat {
+        presentationStyle == .home ? 82 : 16
+    }
+
+    private var bottomMessageInset: CGFloat {
+        max(composerOverlayHeight + 8, 156)
+    }
+
+    private var hasActiveComposerOptions: Bool {
+        settings.conversationMode != .optimize ||
+        settings.selectedModality != .text ||
+        settings.maxModeEnabled ||
+        (settings.selectedModality == .audio && settings.selectedAudioSubModality != .speech)
+    }
+
+    private var isComposerExpanded: Bool {
+        isInputFocused || !viewModel.userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var shouldShowSendButton: Bool {
+        viewModel.canSend
     }
 
     private var inputPlaceholder: String {
@@ -100,121 +115,6 @@ struct ThreadView: View {
         }
     }
 
-    private var starterCardTitle: String {
-        conversationMode == .chat ? "Conversation Starters" : "Prompt Starters"
-    }
-
-    private var starterCardIcon: String {
-        conversationMode == .chat ? "bubble.left.and.bubble.right.fill" : "sparkles"
-    }
-
-    private var heroTitle: String {
-        conversationMode == .chat ? "Talk it through first" : "Start with a rough idea"
-    }
-
-    private var heroSubtitle: String {
-        switch conversationMode {
-        case .optimize:
-            return "Promptomize turns loose requests into structured prompts with clearer roles, constraints, and outputs."
-        case .chat:
-            return "Use chat mode for direct back-and-forth. Switch back to optimize mode any time to turn the conversation into a stronger prompt."
-        }
-    }
-
-    private var starterPrompts: [String] {
-        if conversationMode == .chat {
-            switch settings.selectedModality {
-            case .text:
-                return [
-                    "Help me figure out the best way to ask an AI for a competitive analysis without making the prompt too long.",
-                    "I have a rough request for a strategy memo. What information is missing before I optimize it?",
-                    "Talk through how to make this support request sound more empathetic before rewriting it."
-                ]
-            case .image:
-                return [
-                    "Help me decide what visual references and style cues this image prompt still needs.",
-                    "What would make this product-shot concept feel more premium before we optimize it?",
-                    "Talk me through how to improve composition and lighting for this portrait idea."
-                ]
-            case .video:
-                return [
-                    "Help me figure out the right camera movement for this scene before we turn it into a video prompt.",
-                    "What continuity details should I lock down for this short cinematic clip?",
-                    "Talk through how to make this teaser concept feel more dynamic."
-                ]
-            case .music:
-                return [
-                    "Help me shape the mood, arrangement, and hook before we write a Suno prompt.",
-                    "What production details would make this alt-pop idea feel more specific?",
-                    "Talk through how to improve this chorus concept before generating lyrics."
-                ]
-            case .audio:
-                return [
-                    "Help me decide what pacing and pronunciation guidance this voiceover brief needs.",
-                    "What details would make this soundscape request feel more believable?",
-                    "Talk me through how to structure this narration request before optimizing it."
-                ]
-            case .code:
-                return [
-                    "Help me break down this bug report before we turn it into a coding prompt.",
-                    "What acceptance criteria should I add to this engineering request?",
-                    "Talk through the edge cases I should include before asking an AI to write the code."
-                ]
-            case .threeD:
-                return [
-                    "Help me define the topology and material constraints for this 3D asset request.",
-                    "What details would make this collectible concept more production-ready before optimization?",
-                    "Talk through the technical requirements I should lock in for this 3D model."
-                ]
-            }
-        }
-
-        switch settings.selectedModality {
-        case .text:
-            return [
-                "Rewrite this rough brief into a production-ready prompt with role, constraints, and output format.",
-                "Turn my idea into a prompt that asks for a concise strategy memo with risks and next steps.",
-                "Improve this support prompt so the response sounds calm, clear, and specific."
-            ]
-        case .image:
-            return [
-                "Create a cinematic editorial image prompt for a premium skincare product on wet glass.",
-                "Turn this concept into a Midjourney-ready portrait prompt with lens, lighting, and texture cues.",
-                "Write a product-shot prompt with negative prompts and clean studio composition."
-            ]
-        case .video:
-            return [
-                "Transform this scene idea into a video prompt with camera motion, pacing, and environmental detail.",
-                "Write a polished Runway-style prompt for a slow dolly shot through a futuristic market at dusk.",
-                "Turn this static image concept into a cinematic teaser prompt with motion beats and atmosphere."
-            ]
-        case .music:
-            return [
-                "Create a Suno-ready prompt for a moody alt-pop track with tactile production detail.",
-                "Turn this lyric hook into a song-generation prompt with structure, instrumentation, and vocal tone.",
-                "Write a prompt for a cinematic ambient cue with evolving tension and organic percussion."
-            ]
-        case .audio:
-            return [
-                "Write a polished voiceover prompt for a luxury product launch with pacing and emphasis notes.",
-                "Create a sound-design prompt for a dense cyberpunk alley with layered ambience and foley.",
-                "Turn this narration brief into a natural spoken-word prompt with timing and pronunciation guidance."
-            ]
-        case .code:
-            return [
-                "Rewrite this coding request into a prompt with acceptance criteria, edge cases, and testing expectations.",
-                "Turn this vague bug report into an actionable prompt for a senior Swift engineer.",
-                "Create a code-generation prompt that asks for architecture notes, implementation, and verification steps."
-            ]
-        case .threeD:
-            return [
-                "Write a 3D generation prompt for a collectible sci-fi helmet with materials and topology guidance.",
-                "Turn this creature concept into a Meshy-ready prompt with silhouette, texture, and render cues.",
-                "Create a stylized environment asset prompt with scale, materials, and modularity constraints."
-            ]
-        }
-    }
-
     var body: some View {
         Group {
             if presentationStyle == .detail {
@@ -230,12 +130,9 @@ struct ThreadView: View {
         .overlay(alignment: .top) {
             if showMaxModeToast {
                 maxModeToast
-                    .padding(.top, presentationStyle == .home ? 92 : 18)
+                    .padding(.top, presentationStyle == .home ? 104 : 18)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            composerInset
         }
         .task {
             if let threadId {
@@ -244,24 +141,6 @@ struct ThreadView: View {
         }
         .sheet(isPresented: $showPaywallSheet) {
             PaywallView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-        }
-        .sheet(isPresented: $showSandbox) {
-            SandboxView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-        }
-        .sheet(isPresented: $showWorkflows) {
-            WorkflowsView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-        }
-        .sheet(isPresented: $showFullVariations) {
-            VariationsView(promptText: latestPromptForTools ?? viewModel.userPrompt)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(24)
@@ -281,26 +160,15 @@ struct ThreadView: View {
                 }
             }
 
-            if let onOpenSettings {
+            if let onOpenProfile {
                 Button("Profile & Settings") {
                     triggerHaptic(.light)
-                    onOpenSettings()
+                    onOpenProfile()
                 }
             }
 
             Button("Plans & Usage") {
                 presentPaywall()
-            }
-        }
-        .confirmationDialog("Image Reference", isPresented: $showAttachmentActions, titleVisibility: .visible) {
-            Button(viewModel.selectedImageAttachment == nil ? "Choose Image" : "Replace Image") {
-                showPhotoPicker = true
-            }
-
-            if viewModel.selectedImageAttachment != nil {
-                Button("Remove Image", role: .destructive) {
-                    removeSelectedImage()
-                }
             }
         }
         .photosPicker(
@@ -309,6 +177,18 @@ struct ThreadView: View {
             matching: .images,
             preferredItemEncoding: .compatible
         )
+        .fileImporter(
+            isPresented: $showTextFileImporter,
+            allowedContentTypes: [.text, .plainText, .utf8PlainText, .sourceCode, .json]
+        ) { result in
+            handleImportedTextFile(result)
+        }
+        .sheet(isPresented: $showCameraCapture) {
+            CameraImagePicker(sourceType: .camera) { image in
+                handleCapturedImage(image)
+            }
+            .ignoresSafeArea()
+        }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -326,48 +206,42 @@ struct ThreadView: View {
             presentPaywall()
             viewModel.showPaywall = false
         }
+        .onChange(of: viewModel.hasConversation) { _, hasConversation in
+            guard !hasConversation else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                activeComposerDrawer = nil
+            }
+        }
+        .onPreferenceChange(ThreadComposerOverlayHeightPreferenceKey.self) { newHeight in
+            guard newHeight > 0 else { return }
+            composerOverlayHeight = newHeight
+        }
     }
 
     private var threadSurface: some View {
-        VStack(spacing: 0) {
-            if presentationStyle == .home {
-                workspaceHeader
+        messagesArea
+            .overlay(alignment: .top) {
+                if presentationStyle == .home {
+                    floatingWorkspaceHeader
+                }
             }
-
-            messagesArea
-        }
+            .overlay(alignment: .bottom) {
+                floatingComposerOverlay
+            }
     }
 
     // MARK: - Header
 
     private var workspaceHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             iconButton(systemName: "line.3.horizontal", action: {
                 triggerHaptic(.light)
                 showWorkspaceActions = true
             })
 
-            AppBrandMark(size: 40, showsGlassBackdrop: false)
+            AppBrandMark(size: 28, showsGlassBackdrop: false)
 
             Spacer(minLength: 0)
-
-            if storeKit.currentTier != .premium {
-                Button {
-                    triggerHaptic(.light)
-                    presentPaywall()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Premium")
-                            .font(.system(.caption, design: .rounded, weight: .bold))
-                    }
-                    .foregroundStyle(Color.adaptiveTextOnAccent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                }
-                .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor, intensity: .prominent))
-            }
 
             if let onStartNewConversation, viewModel.hasConversation {
                 iconButton(systemName: "square.and.pencil", action: {
@@ -385,27 +259,20 @@ struct ThreadView: View {
 
             profileButton
         }
-        .padding(16)
-        .liquidGlass(cornerRadius: 28, shadowIntensity: 0.65, borderGlow: true)
         .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
     }
 
-    private func statusChip(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
-                Text(title)
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(textPrimary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+    private var floatingWorkspaceHeader: some View {
+        VStack(spacing: 0) {
+            workspaceHeader
+
+            FloatingChromeFade(edge: .top)
+                .frame(height: 58)
+                .padding(.horizontal, 18)
+                .allowsHitTesting(false)
         }
-        .buttonStyle(GlassCapsuleButtonStyle(tintColor: tint.opacity(0.9), intensity: .subtle))
     }
 
     private func iconButton(systemName: String, action: @escaping () -> Void) -> some View {
@@ -414,7 +281,7 @@ struct ThreadView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(textPrimary)
         }
-        .buttonStyle(GlassIconButtonStyle(size: 40))
+        .buttonStyle(GlassIconButtonStyle(size: floatingControlSize))
     }
 
     private var profileButton: some View {
@@ -436,174 +303,19 @@ struct ThreadView: View {
                     }
                 } else {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: 19, weight: .medium))
                         .foregroundStyle(textPrimary)
                 }
             }
-            .frame(width: 40, height: 40)
+            .frame(width: floatingControlSize, height: floatingControlSize)
             .clipShape(Circle())
         }
-        .buttonStyle(GlassIconButtonStyle(size: 40))
+        .buttonStyle(GlassIconButtonStyle(size: floatingControlSize))
     }
 
     // MARK: - Messages
 
-    @ViewBuilder
-    private var messagesArea: some View {
-        if isHomeWelcomeState {
-            welcomeState
-        } else {
-            conversationMessagesArea
-        }
-    }
-
-    private var welcomeState: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 18) {
-                welcomeHeroCard
-                usageAndPlanCard
-                starterPromptsCard
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 148)
-            .frame(maxWidth: .infinity)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var welcomeHeroCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center, spacing: 14) {
-                AppBrandMark(size: 56, showsGlassBackdrop: false)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(heroTitle)
-                        .font(.system(.title3, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
-
-                    Text(heroSubtitle)
-                        .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            HStack(spacing: 8) {
-                welcomeChip(title: settings.selectedModality.displayName, systemImage: settings.selectedModality.icon, tint: accentColor)
-                welcomeChip(title: settings.maxModeEnabled ? "MAX enabled" : "Standard mode", systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill", tint: settings.maxModeEnabled ? .orange : brandSecondaryAccent)
-                welcomeChip(title: conversationMode.displayName, systemImage: conversationMode.icon, tint: brandSecondaryAccent)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .liquidGlass(cornerRadius: 26, shadowIntensity: 0.72, borderGlow: true)
-    }
-
-    private var usageAndPlanCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                if authManager.isAuthenticated {
-                    SubscriptionBadge(tier: storeKit.currentTier)
-                } else {
-                    SubscriptionBadge(tier: .free)
-                }
-
-                Spacer()
-
-                if storeKit.currentTier != .premium {
-                    Button("View Plans") {
-                        triggerHaptic(.light)
-                        presentPaywall()
-                    }
-                    .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor, intensity: .prominent))
-                }
-            }
-
-            if authManager.isAuthenticated, let usage = storeKit.usageInfo {
-                HStack(spacing: 12) {
-                    UsageIndicator(used: usage.dailyPromptsUsed, limit: usage.dailyPromptsLimit)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(usage.isUnlimited ? "Unlimited daily prompts" : "\(usage.remainingPrompts) prompts left today")
-                            .font(.system(.subheadline, design: .rounded, weight: .bold))
-                            .foregroundStyle(textPrimary)
-
-                        Text(storeKit.currentTier == .premium
-                             ? "Premium tools, MAX mode, and the full workflow are unlocked."
-                             : "Upgrade to unlock MAX access, more usage, and the paid power tools.")
-                            .font(.system(.caption, design: .rounded, weight: .medium))
-                            .foregroundStyle(textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Guest access includes 5 Standard prompts and 1 MAX prompt before sign-in.")
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                        .foregroundStyle(textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 8) {
-                        welcomeChip(
-                            title: "\(guestSession.quota.standardRemaining)/\(guestSession.quota.standardLimit) Standard",
-                            systemImage: "text.bubble.fill",
-                            tint: accentColor
-                        )
-                        welcomeChip(
-                            title: "\(guestSession.quota.maxRemaining)/\(guestSession.quota.maxLimit) MAX",
-                            systemImage: "flame.fill",
-                            tint: .orange
-                        )
-                    }
-
-                    Text("Sign in to save threads, restore purchases, and unlock the Premium trial flow.")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .liquidGlass(cornerRadius: 24, shadowIntensity: 0.68)
-    }
-
-    private var starterPromptsCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            LiquidGlassSectionHeader(title: starterCardTitle, icon: starterCardIcon)
-
-            VStack(spacing: 10) {
-                ForEach(starterPrompts, id: \.self) { prompt in
-                    Button {
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                            viewModel.userPrompt = prompt
-                        }
-                        isInputFocused = true
-                        triggerHaptic(.light)
-                    } label: {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "arrow.up.right.circle.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(accentColor)
-                                .padding(.top, 1)
-
-                            Text(prompt)
-                                .font(.system(.subheadline, design: .rounded, weight: .medium))
-                                .foregroundStyle(textPrimary)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            Spacer(minLength: 0)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                    }
-                    .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 18, tintColor: nil, intensity: .subtle))
-                }
-            }
-        }
-    }
+    private var messagesArea: some View { conversationMessagesArea }
 
     private var conversationMessagesArea: some View {
         ScrollViewReader { proxy in
@@ -618,17 +330,13 @@ struct ThreadView: View {
                             .id("processing")
                     }
 
-                    if let prompt = latestPromptForTools {
-                        powerToolsRow(prompt)
-                    }
-
                     Color.clear
                         .frame(height: 4)
                         .id("thread-bottom")
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, presentationStyle == .home ? 8 : 16)
-                .padding(.bottom, 16)
+                .padding(.top, topMessageInset)
+                .padding(.bottom, bottomMessageInset)
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: viewModel.turnMessages.count) { _, _ in
@@ -639,11 +347,6 @@ struct ThreadView: View {
             .onChange(of: viewModel.streamingContent) { _, _ in
                 withAnimation(.easeOut(duration: 0.2)) {
                     proxy.scrollTo("thread-bottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: latestPromptForTools) { _, _ in
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.84)) {
-                    proxy.scrollTo("power-tools", anchor: .bottom)
                 }
             }
         }
@@ -675,28 +378,6 @@ struct ThreadView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private func powerToolsRow(_ prompt: String) -> some View {
-        PowerToolsSection(
-            expandedTool: $expandedPowerTool,
-            enhancedPrompt: prompt,
-            onApplyPrompt: { newPrompt in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                    viewModel.userPrompt = newPrompt
-                }
-                isInputFocused = true
-                triggerHaptic(.medium)
-            },
-            onShowPaywall: {
-                presentPaywall()
-            },
-            onOpenSheet: { tool in
-                handlePowerToolSheet(tool)
-            }
-        )
-        .id("power-tools")
-        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-    }
-
     // MARK: - Composer
 
     private var composerInset: some View {
@@ -719,155 +400,209 @@ struct ThreadView: View {
                 }
             }
 
-            composerAccessoryDeck
+            VStack(alignment: .leading, spacing: isComposerExpanded ? 14 : 10) {
+                composerTextField
 
-            HStack(alignment: .bottom, spacing: 12) {
-                attachmentButton
-
-                HStack(alignment: .bottom, spacing: 12) {
-                    composerTextField
-                    sendButton
-                }
-                .frame(minHeight: 56)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .liquidGlassInput(cornerRadius: 28, isFocused: isInputFocused)
-            }
-
-            if !viewModel.userPrompt.isEmpty {
-                HStack(spacing: 8) {
-                    Text(conversationMode == .chat ? "Direct reply mode" : "Prompt rewrite mode")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
+                HStack(spacing: 10) {
+                    modalitiesInlineButton
 
                     Spacer(minLength: 0)
 
-                    Text("\(viewModel.userPrompt.count)")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
-                        .contentTransition(.numericText())
+                    if shouldShowSendButton {
+                        sendButton
+                    }
+
+                    attachmentInlineButton
                 }
-                .padding(.horizontal, 4)
+            }
+            .frame(maxWidth: .infinity, minHeight: isComposerExpanded ? 108 : 78, alignment: .topLeading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .liquidGlassInput(cornerRadius: 30, isFocused: isInputFocused)
+
+            if let activeComposerDrawer {
+                composerDrawer(for: activeComposerDrawer)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        .padding(.bottom, presentationStyle == .home ? 12 : 8)
-        .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    LinearGradient(
-                        colors: [
-                            backgroundPrimary.opacity(colorScheme == .dark ? 0.32 : 0.18),
-                            backgroundPrimary.opacity(colorScheme == .dark ? 0.08 : 0.04)
-                        ],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    )
-                }
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.38))
-                        .frame(height: 1)
-                }
-                .ignoresSafeArea(.container, edges: .bottom)
-        }
+        .padding(.bottom, presentationStyle == .home ? 14 : 10)
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: viewModel.canSend)
+        .animation(.spring(response: 0.28, dampingFraction: 0.84), value: isComposerExpanded)
+        .animation(.spring(response: 0.3, dampingFraction: 0.84), value: activeComposerDrawer != nil)
     }
 
-    private var composerAccessoryDeck: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                composerDeckLabel("Mode")
-                conversationModePicker
-            }
+    private var floatingComposerOverlay: some View {
+        VStack(spacing: 0) {
+            FloatingChromeFade(edge: .bottom)
+                .frame(height: 86)
+                .padding(.horizontal, 16)
+                .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 8) {
-                composerDeckLabel("Options")
-                composerControlsRail
+            composerInset
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: ThreadComposerOverlayHeightPreferenceKey.self, value: proxy.size.height)
             }
         }
-        .padding(.horizontal, 14)
+    }
+
+    @ViewBuilder
+    private func composerDrawer(for drawer: ComposerDrawer) -> some View {
+        ScrollView(showsIndicators: false) {
+            switch drawer {
+            case .modalities:
+                modalityDrawerContent
+            case .attachments:
+                attachmentDrawerContent
+            }
+        }
+        .frame(maxHeight: drawer == .modalities ? 372 : 268)
+        .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .modifier(LiquidGlassModifier(cornerRadius: 24, material: .thin, shadowIntensity: 0.35, borderGlow: false))
+        .modifier(LiquidGlassModifier(cornerRadius: 26, material: .thin, shadowIntensity: 0.28, borderGlow: false))
     }
 
-    private var composerControlsRail: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Menu {
-                    ForEach(ModalityType.allCases) { modality in
-                        Button(modality.displayName) {
-                            applyModality(modality)
-                        }
-                    }
-                } label: {
-                    composerControlChip(
-                        title: modalitySummary,
-                        systemImage: settings.selectedModality.icon,
-                        tint: brandSecondaryAccent
-                    )
-                }
-                .buttonStyle(.plain)
+    private var attachmentDrawerColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+    }
 
-                if settings.selectedModality == .audio {
-                    Menu {
-                        ForEach(AudioSubModalityType.allCases) { subModality in
-                            Button(subModality.displayName) {
-                                applyAudioSubModality(subModality)
-                            }
-                        }
-                    } label: {
-                        composerControlChip(
-                            title: settings.selectedAudioSubModality.displayName,
-                            systemImage: settings.selectedAudioSubModality.icon,
-                            tint: accentColor
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
+    private var modalityDrawerContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            drawerSectionHeader(
+                title: "Response style",
+                subtitle: "First choose how Promptomize should respond."
+            )
 
-                Button(action: toggleMaxMode) {
-                    composerControlChip(
-                        title: settings.maxModeEnabled ? "MAX" : "Standard",
-                        systemImage: settings.maxModeEnabled ? "flame.fill" : "bolt.fill",
-                        tint: settings.maxModeEnabled ? .orange : accentColor,
-                        isSelected: settings.maxModeEnabled
-                    )
-                }
-                .buttonStyle(.plain)
+            HStack(spacing: 10) {
+                responseModeCard(.optimize, tint: accentColor)
+                responseModeCard(.chat, tint: brandSecondaryAccent)
             }
-            .padding(.horizontal, 1)
+
+            maxModeCard
+
+            drawerSectionHeader(
+                title: "Target output",
+                subtitle: "Then choose what kind of prompt you want to generate."
+            )
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                ForEach(ModalityType.allCases) { modality in
+                    modalityTargetCard(modality)
+                }
+            }
+
+            if settings.selectedModality == .audio {
+                drawerSectionHeader(
+                    title: "Audio focus",
+                    subtitle: "Refine the audio prompt for the exact output you need."
+                )
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                    ForEach(AudioSubModalityType.allCases) { subModality in
+                        audioSubModalityCard(subModality)
+                    }
+                }
+            }
         }
-        .scrollClipDisabled()
     }
 
-    private var attachmentButton: some View {
+    private var attachmentDrawerContent: some View {
+        LazyVGrid(columns: attachmentDrawerColumns, spacing: 10) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                drawerActionTile(title: "Camera", systemImage: "camera") {
+                    activeComposerDrawer = nil
+                    showCameraCapture = true
+                }
+            }
+
+            drawerActionTile(
+                title: viewModel.selectedImageAttachment == nil ? "Photos" : "Replace",
+                systemImage: "photo.on.rectangle"
+            ) {
+                activeComposerDrawer = nil
+                showPhotoPicker = true
+            }
+
+            drawerActionTile(title: "Files", systemImage: "folder.badge.plus") {
+                activeComposerDrawer = nil
+                showTextFileImporter = true
+            }
+
+            if UIPasteboard.general.hasStrings {
+                drawerActionTile(title: "Paste Text", systemImage: "doc.on.clipboard") {
+                    activeComposerDrawer = nil
+                    pasteClipboardText()
+                }
+            }
+
+            if UIPasteboard.general.hasImages {
+                drawerActionTile(title: "Paste Image", systemImage: "photo.badge.plus") {
+                    activeComposerDrawer = nil
+                    pasteClipboardImage()
+                }
+            }
+
+            if viewModel.selectedImageAttachment != nil {
+                drawerActionTile(title: "Remove", systemImage: "trash", tint: .red) {
+                    activeComposerDrawer = nil
+                    removeSelectedImage()
+                }
+            }
+        }
+    }
+
+    private var modalitiesInlineButton: some View {
         Button {
             triggerHaptic(.light)
-            showAttachmentActions = true
+            toggleComposerDrawer(.modalities)
         } label: {
-            Image(systemName: viewModel.selectedImageAttachment == nil ? "plus" : "photo.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(textPrimary)
+            ZStack(alignment: .topTrailing) {
+                composerInlineButton(
+                    systemImage: settings.selectedModality.icon,
+                    tint: activeComposerDrawer == .modalities ? accentColor : textPrimary
+                )
+
+                if hasActiveComposerOptions {
+                    Circle()
+                        .fill(accentColor)
+                        .frame(width: 7, height: 7)
+                        .offset(x: 1, y: -1)
+                }
+            }
         }
-        .buttonStyle(GlassIconButtonStyle(size: 56))
+        .buttonStyle(.plain)
+    }
+
+    private var attachmentInlineButton: some View {
+        Button {
+            triggerHaptic(.light)
+            toggleComposerDrawer(.attachments)
+        } label: {
+            composerInlineButton(
+                systemImage: viewModel.selectedImageAttachment == nil ? "plus" : "photo.fill",
+                tint: viewModel.selectedImageAttachment == nil ? textPrimary : accentColor
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var composerTextField: some View {
         ZStack(alignment: .leading) {
             if viewModel.userPrompt.isEmpty {
                 Text(viewModel.selectedImageAttachment == nil ? inputPlaceholder : imagePromptPlaceholder)
-                    .font(.system(.body, design: .rounded))
+                    .font(.system(.body, design: .rounded, weight: .medium))
                     .foregroundStyle(textTertiary)
                     .allowsHitTesting(false)
             }
 
             TextField("", text: $viewModel.userPrompt, axis: .vertical)
-                .font(.system(.body, design: .rounded))
+                .font(.system(.body, design: .rounded, weight: .medium))
                 .foregroundStyle(textPrimary)
-                .lineLimit(1...5)
+                .lineLimit(1...4)
                 .textFieldStyle(.plain)
                 .focused($isInputFocused)
                 .submitLabel(.send)
@@ -877,9 +612,10 @@ struct ThreadView: View {
                     }
                 }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: isComposerExpanded ? 40 : 24, alignment: .topLeading)
         .contentShape(Rectangle())
         .onTapGesture {
+            activeComposerDrawer = nil
             isInputFocused = true
         }
     }
@@ -900,7 +636,7 @@ struct ThreadView: View {
                         .foregroundStyle(viewModel.canSend ? Color.adaptiveTextOnAccent : textSecondary)
                 }
             }
-            .frame(width: 44, height: 44)
+            .frame(width: floatingControlSize, height: floatingControlSize)
         }
         .buttonStyle(.plain)
         .disabled(!viewModel.canSend)
@@ -916,22 +652,14 @@ struct ThreadView: View {
         }
     }
 
-    private func handlePowerToolSheet(_ tool: PowerToolsSection.PowerTool) {
-        switch tool {
-        case .variations:
-            showFullVariations = true
-        case .sandbox:
-            showSandbox = true
-        case .workflows:
-            showWorkflows = true
-        }
-    }
-
     private func submitPrompt() {
         guard viewModel.canSend else { return }
 
         triggerHaptic(.medium)
         isInputFocused = false
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            activeComposerDrawer = nil
+        }
 
         if settings.maxModeEnabled && !canUseMaxMode {
             settings.maxModeEnabled = false
@@ -949,6 +677,9 @@ struct ThreadView: View {
     private func applyModality(_ modality: ModalityType) {
         settings.selectedModality = modality
         settings.savePreferences()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            activeComposerDrawer = nil
+        }
         triggerHaptic(.light)
     }
 
@@ -956,12 +687,18 @@ struct ThreadView: View {
         guard settings.conversationMode != mode else { return }
         settings.conversationMode = mode
         settings.savePreferences()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            activeComposerDrawer = nil
+        }
         triggerHaptic(.light)
     }
 
     private func applyAudioSubModality(_ subModality: AudioSubModalityType) {
         settings.selectedAudioSubModality = subModality
         settings.savePreferences()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            activeComposerDrawer = nil
+        }
         triggerHaptic(.light)
     }
 
@@ -984,6 +721,9 @@ struct ThreadView: View {
 
         settings.maxModeEnabled.toggle()
         settings.savePreferences()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            activeComposerDrawer = nil
+        }
         triggerHaptic(.light)
 
         if settings.maxModeEnabled {
@@ -1010,66 +750,350 @@ struct ThreadView: View {
         UIImpactFeedbackGenerator(style: style).impactOccurred()
     }
 
-    private var conversationModePicker: some View {
-        HStack(spacing: 8) {
-            ForEach(ThreadConversationMode.allCases) { mode in
-                Button {
-                    applyConversationMode(mode)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: mode.icon)
-                            .font(.system(size: 11, weight: .semibold))
-                        Text(mode.displayName)
-                            .font(.system(.caption, design: .rounded, weight: .bold))
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+    private func toggleComposerDrawer(_ drawer: ComposerDrawer) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+            activeComposerDrawer = activeComposerDrawer == drawer ? nil : drawer
+        }
+    }
+
+    private func drawerSectionHeader(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(.caption, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+                .textCase(.uppercase)
+                .tracking(0.7)
+
+            Text(subtitle)
+                .font(.system(.caption, design: .rounded, weight: .medium))
+                .foregroundStyle(textSecondary)
+        }
+    }
+
+    private func responseModeCard(_ mode: ThreadConversationMode, tint: Color) -> some View {
+        let isSelected = settings.conversationMode == mode
+
+        return Button {
+            applyConversationMode(mode)
+        } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(isSelected ? tint : textPrimary)
+
+                    Spacer(minLength: 8)
+
+                    Text(mode == .optimize ? "Rewrite" : "Direct")
+                        .font(.system(.caption2, design: .rounded, weight: .bold))
+                        .foregroundStyle(isSelected ? tint : textTertiary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background {
+                            Capsule()
+                                .fill(isSelected ? tint.opacity(colorScheme == .dark ? 0.18 : 0.14) : Color.white.opacity(colorScheme == .dark ? 0.06 : 0.4))
+                        }
                 }
-                .buttonStyle(.plain)
-                .liquidGlassChip(
-                    isSelected: settings.conversationMode == mode,
-                    accentColor: mode == .chat ? brandSecondaryAccent : accentColor
-                )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mode.displayName)
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
+
+                    Text(mode.shortDescription)
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(isSelected ? tint.opacity(colorScheme == .dark ? 0.16 : 0.10) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.22))
+                    }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? tint.opacity(colorScheme == .dark ? 0.82 : 0.42)
+                            : Color.white.opacity(colorScheme == .dark ? 0.12 : 0.28),
+                        lineWidth: isSelected ? 1.6 : 1
+                    )
             }
         }
+        .buttonStyle(.plain)
     }
 
-    private func composerDeckLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.system(.caption2, design: .rounded, weight: .bold))
-            .foregroundStyle(textSecondary)
-            .textCase(.uppercase)
-            .tracking(0.6)
-    }
+    private var maxModeCard: some View {
+        Button {
+            toggleMaxMode()
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill((settings.maxModeEnabled ? Color.orange : accentColor).opacity(colorScheme == .dark ? 0.18 : 0.12))
 
-    private func composerControlChip(title: String, systemImage: String, tint: Color, isSelected: Bool = false) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
-            Text(title)
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .lineLimit(1)
+                    Image(systemName: settings.maxModeEnabled ? "flame.fill" : "bolt.fill")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(settings.maxModeEnabled ? Color.orange : accentColor)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(settings.maxModeEnabled ? "MAX quality" : "Standard quality")
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
+
+                    Text(maxModeSupportingCopy)
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(settings.maxModeEnabled ? "On" : "Off")
+                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .foregroundStyle(settings.maxModeEnabled ? Color.adaptiveTextOnAccent : textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background {
+                        Capsule()
+                            .fill(settings.maxModeEnabled ? Color.orange : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.46))
+                    }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(settings.maxModeEnabled ? Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.08) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.22))
+                    }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(
+                        (settings.maxModeEnabled ? Color.orange : accentColor).opacity(colorScheme == .dark ? 0.48 : 0.26),
+                        lineWidth: settings.maxModeEnabled ? 1.4 : 1
+                    )
+            }
         }
-        .foregroundStyle(textPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .liquidGlassChip(isSelected: isSelected, accentColor: tint)
+        .buttonStyle(.plain)
     }
 
-    private func welcomeChip(title: String, systemImage: String, tint: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
-            Text(title)
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .lineLimit(1)
+    private var maxModeSupportingCopy: String {
+        if settings.maxModeEnabled {
+            return "Deeper reasoning for harder rewrites and more complex prompts."
         }
-        .foregroundStyle(textPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .liquidGlassChip(isSelected: false, accentColor: tint)
+
+        if !authManager.isAuthenticated {
+            let remaining = guestSession.quota.maxRemaining
+            return remaining > 0
+                ? "\(remaining) guest MAX turn\(remaining == 1 ? "" : "s") left."
+                : "Sign in or upgrade to unlock more MAX turns."
+        }
+
+        if let remaining = storeKit.usageInfo?.maxModeRemaining, remaining > 0 {
+            return "\(remaining) MAX turn\(remaining == 1 ? "" : "s") remaining in your current allowance."
+        }
+
+        return "Use MAX when you need stronger reasoning and tighter prompt structure."
+    }
+
+    private func modalityTargetCard(_ modality: ModalityType) -> some View {
+        let tint = modalityAccentColor(for: modality)
+        let isSelected = settings.selectedModality == modality
+
+        return Button {
+            applyModality(modality)
+        } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(tint.opacity(colorScheme == .dark ? 0.18 : 0.12))
+
+                    Image(systemName: modality.icon)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(isSelected ? tint : textPrimary)
+                }
+                .frame(width: 40, height: 40)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(modality.displayName)
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
+
+                    Text(modality.description)
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(isSelected ? tint.opacity(colorScheme == .dark ? 0.14 : 0.10) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.18))
+                    }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? tint.opacity(colorScheme == .dark ? 0.78 : 0.42)
+                            : Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func audioSubModalityCard(_ subModality: AudioSubModalityType) -> some View {
+        let isSelected = settings.selectedAudioSubModality == subModality
+
+        return Button {
+            applyAudioSubModality(subModality)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: subModality.icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? brandSecondaryAccent : textPrimary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(subModality.displayName)
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
+
+                    Text(subModality.description)
+                        .font(.system(.caption2, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(isSelected ? brandSecondaryAccent.opacity(colorScheme == .dark ? 0.12 : 0.08) : Color.white.opacity(colorScheme == .dark ? 0.02 : 0.16))
+                    }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? brandSecondaryAccent.opacity(colorScheme == .dark ? 0.68 : 0.34)
+                            : Color.white.opacity(colorScheme == .dark ? 0.10 : 0.22),
+                        lineWidth: isSelected ? 1.4 : 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func drawerActionTile(
+        title: String,
+        systemImage: String,
+        tint: Color = .white,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            drawerTileContent(
+                title: title,
+                systemImage: systemImage,
+                tint: tint,
+                isSelected: false
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func drawerTileContent(
+        title: String,
+        systemImage: String,
+        tint: Color,
+        isSelected: Bool
+    ) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(isSelected ? tint : textPrimary)
+
+            Text(title)
+                .font(.system(.subheadline, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 92)
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(isSelected ? tint.opacity(colorScheme == .dark ? 0.14 : 0.10) : Color.white.opacity(colorScheme == .dark ? 0.02 : 0.16))
+                }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(
+                    isSelected
+                        ? tint.opacity(colorScheme == .dark ? 0.8 : 0.45)
+                        : Color.white.opacity(colorScheme == .dark ? 0.10 : 0.28),
+                    lineWidth: isSelected ? 1.5 : 1
+                )
+        }
+    }
+
+    private func modalityAccentColor(for modality: ModalityType) -> Color {
+        switch modality {
+        case .text:
+            return accentColor
+        case .image:
+            return .pink
+        case .video:
+            return .red
+        case .music:
+            return .orange
+        case .audio:
+            return .teal
+        case .code:
+            return .green
+        case .threeD:
+            return .blue
+        }
+    }
+
+    private func composerInlineButton(systemImage: String, tint: Color) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: floatingControlSize, height: floatingControlSize)
+            .background {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Circle()
+                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.12 : 0.28), lineWidth: 1)
+                    }
+            }
     }
 
     private var maxModeToast: some View {
@@ -1103,13 +1127,7 @@ struct ThreadView: View {
 
             let attachment = try ImageAttachmentProcessor.process(data: data)
             await MainActor.run {
-                viewModel.selectedImageAttachment = attachment
-                if settings.selectedModality != .video {
-                    settings.selectedModality = .video
-                    settings.savePreferences()
-                }
-                triggerHaptic(.light)
-                isInputFocused = true
+                applyImageAttachment(attachment)
             }
         } catch {
             await MainActor.run {
@@ -1119,8 +1137,215 @@ struct ThreadView: View {
         }
     }
 
+    private func handleCapturedImage(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.9) ?? image.pngData() else {
+            viewModel.errorMessage = "Unable to process the captured image."
+            viewModel.showError = true
+            return
+        }
+
+        do {
+            let attachment = try ImageAttachmentProcessor.process(data: data)
+            applyImageAttachment(attachment)
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+            viewModel.showError = true
+        }
+    }
+
+    private func handleImportedTextFile(_ result: Result<URL, Error>) {
+        switch result {
+        case .success(let url):
+            Task {
+                await importTextFile(from: url)
+            }
+        case .failure(let error):
+            viewModel.errorMessage = error.localizedDescription
+            viewModel.showError = true
+        }
+    }
+
+    private func importTextFile(from url: URL) async {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let rawText = String(decoding: data.prefix(48_000), as: UTF8.self)
+            let trimmedText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !trimmedText.isEmpty else {
+                await MainActor.run {
+                    viewModel.errorMessage = "The selected file does not contain readable text."
+                    viewModel.showError = true
+                }
+                return
+            }
+
+            let importedText: String
+            if trimmedText.count > 10_000 {
+                importedText = String(trimmedText.prefix(10_000)) + "\n\n[Imported text truncated]"
+            } else {
+                importedText = trimmedText
+            }
+
+            await MainActor.run {
+                insertTextIntoComposer(importedText)
+            }
+        } catch {
+            await MainActor.run {
+                viewModel.errorMessage = "Unable to import that file."
+                viewModel.showError = true
+            }
+        }
+    }
+
+    private func pasteClipboardText() {
+        guard let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            viewModel.errorMessage = "There is no text on the clipboard."
+            viewModel.showError = true
+            return
+        }
+
+        insertTextIntoComposer(text)
+    }
+
+    private func pasteClipboardImage() {
+        guard let image = UIPasteboard.general.image,
+              let data = image.jpegData(compressionQuality: 0.9) ?? image.pngData() else {
+            viewModel.errorMessage = "There is no image on the clipboard."
+            viewModel.showError = true
+            return
+        }
+
+        do {
+            let attachment = try ImageAttachmentProcessor.process(data: data)
+            applyImageAttachment(attachment)
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+            viewModel.showError = true
+        }
+    }
+
+    private func insertTextIntoComposer(_ text: String) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        if viewModel.userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            viewModel.userPrompt = trimmedText
+        } else {
+            viewModel.userPrompt += "\n\n" + trimmedText
+        }
+
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            activeComposerDrawer = nil
+        }
+        triggerHaptic(.light)
+        isInputFocused = true
+    }
+
+    private func applyImageAttachment(_ attachment: PromptImageAttachment) {
+        viewModel.selectedImageAttachment = attachment
+        if settings.selectedModality != .video {
+            settings.selectedModality = .video
+            settings.savePreferences()
+        }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            activeComposerDrawer = nil
+        }
+        triggerHaptic(.light)
+        isInputFocused = true
+    }
+
     private func removeSelectedImage() {
         viewModel.selectedImageAttachment = nil
+        activeComposerDrawer = nil
         triggerHaptic(.light)
+    }
+}
+
+private struct ThreadComposerOverlayHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct FloatingChromeFade: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let edge: VerticalEdge
+
+    private var maskGradient: LinearGradient {
+        LinearGradient(
+            colors: edge == .top
+                ? [Color.white, Color.white.opacity(0.74), Color.clear]
+                : [Color.clear, Color.white.opacity(0.74), Color.white],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 34, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .fill(
+                        colorScheme == .dark
+                            ? Color.white.opacity(0.04)
+                            : Color.white.opacity(0.22)
+                    )
+            }
+            .mask(maskGradient)
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.06),
+                radius: 16,
+                y: edge == .top ? 10 : -8
+            )
+    }
+}
+
+private struct CameraImagePicker: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onImagePicked: (UIImage) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImagePicked: onImagePicked)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let controller = UIImagePickerController()
+        controller.sourceType = sourceType
+        controller.delegate = context.coordinator
+        controller.allowsEditing = false
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        private let onImagePicked: (UIImage) -> Void
+
+        init(onImagePicked: @escaping (UIImage) -> Void) {
+            self.onImagePicked = onImagePicked
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                onImagePicked(image)
+            }
+            picker.dismiss(animated: true)
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
+        }
     }
 }

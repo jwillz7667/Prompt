@@ -343,20 +343,17 @@ struct LiquidGlassChipModifier: ViewModifier {
     }
 
     private var shadowColor: Color {
-        if isSelected, let accent = accentColor {
-            return accent.opacity(colorScheme == .dark ? 0.5 : 0.4)
-        }
-        return colorScheme == .dark
-            ? Color.black.opacity(0.4)
-            : Color.brandPurple.opacity(0.15)
+        colorScheme == .dark
+            ? Color.black.opacity(0.32)
+            : Color.black.opacity(0.08)
     }
 
     private var shadowRadius: CGFloat {
-        isSelected ? 10 : 5
+        4
     }
 
     private var shadowY: CGFloat {
-        isSelected ? 5 : 2
+        2
     }
 
     @ViewBuilder

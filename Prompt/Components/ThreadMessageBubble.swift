@@ -11,7 +11,6 @@ struct ThreadMessageBubble: View {
     let message: ThreadMessage
     let isStreaming: Bool
 
-    @Environment(\.colorScheme) private var colorScheme
     @State private var showCopied = false
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -95,7 +94,7 @@ struct ThreadMessageBubble: View {
 
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
-                    .font(.system(.body))
+                    .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.adaptiveTextOnAccent)
                     .textSelection(.enabled)
                     .padding(.horizontal, 16)
@@ -113,7 +112,7 @@ struct ThreadMessageBubble: View {
     private var assistantBubble: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(message.content)
-                .font(assistantResponseMode == .chat ? .system(.body, design: .rounded) : .system(.body, design: .monospaced))
+                .font(.system(.body, design: .rounded))
                 .foregroundStyle(textPrimary)
                 .textSelection(.enabled)
 
@@ -159,27 +158,6 @@ struct ThreadMessageBubble: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(accentColor.opacity(colorScheme == .dark ? 0.08 : 0.05))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    accentColor.opacity(0.4),
-                                    accentColor.opacity(0.15)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                }
-        }
+        .liquidGlassInput(cornerRadius: 20, isFocused: false)
     }
 }

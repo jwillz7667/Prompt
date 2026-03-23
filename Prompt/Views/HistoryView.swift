@@ -11,11 +11,9 @@ import UIKit
 
 struct HistoryView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(AppStoreComplianceManager.self) private var complianceManager
     @Environment(AuthManager.self) private var authManager
     @Environment(GuestSessionManager.self) private var guestSession
     @Environment(PromptHistoryManager.self) private var historyManager
-    @Environment(SettingsManager.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var selectedPrompt: PromptRecord?
@@ -24,14 +22,13 @@ struct HistoryView: View {
     @State private var promptToDelete: PromptRecord?
     @State private var showDeleteThreadConfirmation = false
     @State private var threadToDelete: ThreadRecord?
-    @State private var selectedTab: HistoryTab = .prompts
+    @State private var selectedTab: HistoryTab = .chats
     @State private var threadViewModel = ThreadViewModel()
 
     /// Callback to re-run a prompt from history
     var onRerunPrompt: ((PromptRecord) -> Void)?
 
     enum HistoryTab: String, CaseIterable {
-        case prompts = "Prompts"
         case chats = "Chats"
         case starred = "Starred"
     }
@@ -61,7 +58,7 @@ struct HistoryView: View {
                 VStack(spacing: 0) {
                     PromptPageHeader(
                         title: "History",
-                        subtitle: "Prompts and chat threads in one shared archive",
+                        subtitle: "Chats and starred prompts in one shared archive",
                         onLeadingTap: { dismiss() }
                     )
                     .padding(.horizontal, 16)
@@ -106,7 +103,7 @@ struct HistoryView: View {
             }
             .searchable(
                 text: $searchText,
-                prompt: selectedTab == .chats ? "Search history..." : "Search prompts..."
+                prompt: selectedTab == .chats ? "Search chats..." : "Search starred..."
             )
             .onChange(of: searchText) { _, newValue in
                 guard selectedTab != .chats else { return }
@@ -118,20 +115,18 @@ struct HistoryView: View {
             .onChange(of: selectedTab) { _, newTab in
                 Task {
                     switch newTab {
-                    case .prompts:
-                        historyManager.showFavoritesOnly = false
-                        await historyManager.fetchPrompts(refresh: true)
-                    case .starred:
-                        historyManager.showFavoritesOnly = true
-                        await historyManager.fetchPrompts(refresh: true)
                     case .chats:
                         if authManager.isAuthenticated {
                             await threadViewModel.fetchThreads(refresh: true)
                         }
+                    case .starred:
+                        historyManager.showFavoritesOnly = true
+                        await historyManager.fetchPrompts(refresh: true)
                     }
                 }
             }
             .task {
+                historyManager.showFavoritesOnly = true
                 await historyManager.fetchPrompts(refresh: true)
                 if authManager.isAuthenticated {
                     await threadViewModel.fetchThreads(refresh: true)
@@ -254,34 +249,28 @@ struct HistoryView: View {
 
     private var emptyStateIcon: String {
         switch selectedTab {
-        case .prompts:
-            return "doc.text.fill"
-        case .starred:
-            return "star.fill"
         case .chats:
             return "bubble.left.and.bubble.right"
+        case .starred:
+            return "star.fill"
         }
     }
 
     private var emptyStateTitle: String {
         switch selectedTab {
-        case .prompts:
-            return "No Prompts Yet"
-        case .starred:
-            return "No Starred Prompts"
         case .chats:
             return "No Chats Yet"
+        case .starred:
+            return "No Starred Prompts"
         }
     }
 
     private var emptyStateSubtitle: String {
         switch selectedTab {
-        case .prompts:
-            return "Your enhanced prompts will appear here"
-        case .starred:
-            return "Tap the star on any prompt to add it here"
         case .chats:
             return "Your optimization threads will appear here once you start chatting"
+        case .starred:
+            return "Tap the star on any prompt to keep it in this saved list"
         }
     }
 
