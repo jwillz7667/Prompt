@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: Promptomize GPT Actions
+  description: Minimal action schema for the public Promptomize GPT in ChatGPT.
+  version: 1.0.0
+servers:
+  - url: https://api.promptomize.app/api/v1
+    description: Production server
+security:
+  - PromptomizeApiKey: []
+paths:
+  /public/enhance:
+    post:
+      operationId: enhancePrompt
+      summary: Enhance a prompt
+      description: Rewrite and optimize a user prompt for a specific modality. Returns a single enhanced prompt plus token and quota metadata.
+      security:
+        - PromptomizeApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnhancePromptRequest"
+            examples:
+              text:
+                summary: Text prompt enhancement
+                value:
+                  prompt: Write a persuasive launch email for a new iOS productivity app.
+                  modality: text
+                  mode: max
+                  maxTokens: 2500
+                  customInstructions: Preserve a confident but not hype-heavy tone.
+              image:
+                summary: Image prompt enhancement
+                value:
+                  prompt: A cinematic portrait of a founder working late at a desk.
+                  modality: image
+                  mode: standard
+                  subModality: midjourney
+              code:
+                summary: Code prompt enhancement
+                value:
+                  prompt: Build a SwiftUI settings screen with account, billing, and notifications sections.
+                  modality: code
+                  mode: max
+                  customInstructions: Target iOS 17+, MVVM, and production-quality structure.
+      responses:
+        "200":
+          description: Prompt enhanced successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnhancePromptResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Authentication error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthError"
+        "429":
+          description: Rate limit or quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitError"
+        "500":
+          description: Enhancement failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerError"
+components:
+  securitySchemes:
+    PromptomizeApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Production API key created in the Promptomize developer portal. Use a dedicated key with only the enhance permission for GPT Store publishing.
+  schemas:
+    EnhancePromptRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 100000
+          description: The user prompt to enhance.
+        modality:
+          type: string
+          enum:
+            - text
+            - image
+            - video
+            - audio
+            - code
+            - 3d
+          default: text
+          description: Target prompt modality.
+        mode:
+          type: string
+          enum:
+            - standard
+            - max
+          default: standard
+          description: Enhancement depth. Use standard for straightforward rewrites and max for higher-complexity prompts that benefit from deeper planning.
+        maxTokens:
+          type: integer
+          minimum: 1
+          maximum: 8192
+          description: Upper bound for the enhancement output length.
+        customInstructions:
+          type: string
+          maxLength: 2000
+          description: Extra transformation guidance synthesized from the user request, such as audience, tone, structure, or output constraints.
+        subModality:
+          type: string
+          description: Optional platform or engine hint, such as midjourney, dalle, stable-diffusion, runway, sora, suno, udio, or swiftui.
+    EnhancePromptResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - enhancedPrompt
+        - usage
+        - quota
+      properties:
+        enhancedPrompt:
+          type: string
+          description: The optimized prompt returned by Promptomize.
+        usage:
+          $ref: "#/components/schemas/TokenUsage"
+        quota:
+          $ref: "#/components/schemas/QuotaInfo"
+    TokenUsage:
+      type: object
+      additionalProperties: false
+      required:
+        - inputTokens
+        - outputTokens
+        - totalTokens
+        - processingMs
+      properties:
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        totalTokens:
+          type: integer
+        processingMs:
+          type: integer
+    QuotaInfo:
+      type: object
+      additionalProperties: false
+      required:
+        - used
+        - limit
+        - remaining
+        - periodStart
+        - periodEnd
+      properties:
+        used:
+          type: integer
+        limit:
+          oneOf:
+            - type: integer
+            - type: string
+              enum:
+                - unlimited
+        remaining:
+          oneOf:
+            - type: integer
+            - type: string
+              enum:
+                - unlimited
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+    ValidationError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - code
+        - details
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - field
+              - message
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+    AuthError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - code
+        - message
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum:
+            - MISSING_API_KEY
+            - INVALID_API_KEY
+        message:
+          type: string
+    RateLimitError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - code
+        - message
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum:
+            - RATE_LIMIT_EXCEEDED
+            - QUOTA_EXCEEDED
+        message:
+          type: string
+        retryAfter:
+          type: integer
+    ServerError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - code
+        - message
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        message:
+          type: string

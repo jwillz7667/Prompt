@@ -226,7 +226,15 @@ struct ThreadView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                floatingComposerOverlay
+                VStack(spacing: 0) {
+                    // Suggestion chips when no conversation
+                    if !viewModel.hasConversation && !isInputFocused {
+                        suggestionChips
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+
+                    floatingComposerOverlay
+                }
             }
     }
 
@@ -234,12 +242,15 @@ struct ThreadView: View {
 
     private var workspaceHeader: some View {
         HStack(spacing: 10) {
+            // Hamburger menu - opens sidebar
             iconButton(systemName: "line.3.horizontal", action: {
                 triggerHaptic(.light)
-                showWorkspaceActions = true
+                if let onOpenHistory {
+                    onOpenHistory()
+                } else {
+                    showWorkspaceActions = true
+                }
             })
-
-            AppBrandMark(size: 28, showsGlassBackdrop: false)
 
             Spacer(minLength: 0)
 
@@ -247,13 +258,6 @@ struct ThreadView: View {
                 iconButton(systemName: "square.and.pencil", action: {
                     triggerHaptic(.light)
                     onStartNewConversation()
-                })
-            }
-
-            if let onOpenHistory {
-                iconButton(systemName: "clock.arrow.circlepath", action: {
-                    triggerHaptic(.light)
-                    onOpenHistory()
                 })
             }
 
@@ -265,14 +269,7 @@ struct ThreadView: View {
     }
 
     private var floatingWorkspaceHeader: some View {
-        VStack(spacing: 0) {
-            workspaceHeader
-
-            FloatingChromeFade(edge: .top)
-                .frame(height: 58)
-                .padding(.horizontal, 18)
-                .allowsHitTesting(false)
-        }
+        workspaceHeader
     }
 
     private func iconButton(systemName: String, action: @escaping () -> Void) -> some View {
@@ -311,6 +308,81 @@ struct ThreadView: View {
             .clipShape(Circle())
         }
         .buttonStyle(GlassIconButtonStyle(size: floatingControlSize))
+    }
+
+    // MARK: - Suggestion Chips
+
+    private var suggestionChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                suggestionChip(
+                    title: "Create an image",
+                    subtitle: "for my presentation"
+                ) {
+                    viewModel.userPrompt = "Create an image for my presentation"
+                    settings.selectedModality = .image
+                    settings.savePreferences()
+                    isInputFocused = true
+                }
+
+                suggestionChip(
+                    title: "Write code",
+                    subtitle: "to solve a problem"
+                ) {
+                    viewModel.userPrompt = "Write code to solve a problem"
+                    settings.selectedModality = .code
+                    settings.savePreferences()
+                    isInputFocused = true
+                }
+
+                suggestionChip(
+                    title: "Create a video prompt",
+                    subtitle: "for a product showcase"
+                ) {
+                    viewModel.userPrompt = "Create a video prompt for a product showcase"
+                    settings.selectedModality = .video
+                    settings.savePreferences()
+                    isInputFocused = true
+                }
+
+                suggestionChip(
+                    title: "Compose audio",
+                    subtitle: "for a short film"
+                ) {
+                    viewModel.userPrompt = "Compose audio for a short film"
+                    settings.selectedModality = .audio
+                    settings.savePreferences()
+                    isInputFocused = true
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func suggestionChip(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            triggerHaptic(.light)
+            action()
+        }) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
+
+                Text(subtitle)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textSecondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(minWidth: 170, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.adaptiveBackgroundTertiary)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Messages
@@ -380,46 +452,92 @@ struct ThreadView: View {
 
     // MARK: - Composer
 
+    @State private var showOptionsSheet = false
+
     private var composerInset: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Image attachment preview (when present)
             if let attachment = viewModel.selectedImageAttachment {
-                VStack(alignment: .leading, spacing: 8) {
+                HStack {
                     PromptImageAttachmentCard(
                         attachment: attachment,
-                        height: 134,
+                        height: 80,
                         showsAnalysisBadge: false,
                         onRemove: removeSelectedImage
                     )
-                    .frame(height: 134)
-
-                    Text(conversationMode == .chat
-                         ? "This image will be analyzed and used as shared context for the conversation."
-                         : "This image will be analyzed and turned into a stronger generation prompt.")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
+                    .frame(width: 80, height: 80)
+                    Spacer()
                 }
+                .padding(.horizontal, 16)
             }
 
-            VStack(alignment: .leading, spacing: isComposerExpanded ? 14 : 10) {
-                composerTextField
+            // ChatGPT-style input row: [+] [text field] [modality] [send]
+            HStack(spacing: 10) {
+                // Plus button - opens options sheet
+                Button {
+                    triggerHaptic(.light)
+                    toggleComposerDrawer(.attachments)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(textPrimary)
+                        .frame(width: floatingControlSize, height: floatingControlSize)
+                        .background {
+                            Circle()
+                                .fill(Color.adaptiveBackgroundTertiary)
+                        }
+                }
+                .buttonStyle(.plain)
 
-                HStack(spacing: 10) {
-                    modalitiesInlineButton
+                // Text input field
+                HStack(spacing: 8) {
+                    composerTextField
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color.adaptiveBackgroundTertiary)
+                }
+                .onTapGesture {
+                    activeComposerDrawer = nil
+                    isInputFocused = true
+                }
 
-                    Spacer(minLength: 0)
+                // Modality selector button
+                Button {
+                    triggerHaptic(.light)
+                    toggleComposerDrawer(.modalities)
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: settings.selectedModality.icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(activeComposerDrawer == .modalities ? accentColor : textSecondary)
+                            .frame(width: floatingControlSize, height: floatingControlSize)
+                            .background {
+                                Circle()
+                                    .fill(Color.adaptiveBackgroundTertiary)
+                            }
 
-                    if shouldShowSendButton {
-                        sendButton
+                        if hasActiveComposerOptions {
+                            Circle()
+                                .fill(accentColor)
+                                .frame(width: 7, height: 7)
+                                .offset(x: -2, y: 2)
+                        }
                     }
+                }
+                .buttonStyle(.plain)
 
-                    attachmentInlineButton
+                // Send / enhance button
+                if shouldShowSendButton {
+                    sendButton
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: isComposerExpanded ? 108 : 78, alignment: .topLeading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .liquidGlassInput(cornerRadius: 30, isFocused: isInputFocused)
 
+            // Drawer content (modalities or attachments)
             if let activeComposerDrawer {
                 composerDrawer(for: activeComposerDrawer)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -434,20 +552,13 @@ struct ThreadView: View {
     }
 
     private var floatingComposerOverlay: some View {
-        VStack(spacing: 0) {
-            FloatingChromeFade(edge: .bottom)
-                .frame(height: 86)
-                .padding(.horizontal, 16)
-                .allowsHitTesting(false)
-
-            composerInset
-        }
-        .background {
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: ThreadComposerOverlayHeightPreferenceKey.self, value: proxy.size.height)
+        composerInset
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: ThreadComposerOverlayHeightPreferenceKey.self, value: proxy.size.height)
+                }
             }
-        }
     }
 
     @ViewBuilder
@@ -555,41 +666,6 @@ struct ThreadView: View {
         }
     }
 
-    private var modalitiesInlineButton: some View {
-        Button {
-            triggerHaptic(.light)
-            toggleComposerDrawer(.modalities)
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                composerInlineButton(
-                    systemImage: settings.selectedModality.icon,
-                    tint: activeComposerDrawer == .modalities ? accentColor : textPrimary
-                )
-
-                if hasActiveComposerOptions {
-                    Circle()
-                        .fill(accentColor)
-                        .frame(width: 7, height: 7)
-                        .offset(x: 1, y: -1)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var attachmentInlineButton: some View {
-        Button {
-            triggerHaptic(.light)
-            toggleComposerDrawer(.attachments)
-        } label: {
-            composerInlineButton(
-                systemImage: viewModel.selectedImageAttachment == nil ? "plus" : "photo.fill",
-                tint: viewModel.selectedImageAttachment == nil ? textPrimary : accentColor
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
     private var composerTextField: some View {
         ZStack(alignment: .leading) {
             if viewModel.userPrompt.isEmpty {
@@ -612,12 +688,7 @@ struct ThreadView: View {
                     }
                 }
         }
-        .frame(maxWidth: .infinity, minHeight: isComposerExpanded ? 40 : 24, alignment: .topLeading)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            activeComposerDrawer = nil
-            isInputFocused = true
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var sendButton: some View {

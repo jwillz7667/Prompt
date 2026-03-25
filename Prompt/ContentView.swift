@@ -20,7 +20,6 @@ struct ContentView: View {
     @State private var deeplinkManager = DeeplinkManager.shared
     @State private var homeThreadViewModel = ThreadViewModel()
 
-    @State private var showHistory = false
     @State private var showProfile = false
     @State private var showPaywall = false
     @State private var showWhatsNew = false
@@ -70,21 +69,60 @@ struct ContentView: View {
         }
     }
 
+    @State private var showSidebar = false
+    @State private var sidebarThreadViewModel = ThreadViewModel()
+
+    private let sidebarWidth: CGFloat = UIScreen.main.bounds.width * 0.82
+
     private var navigationContent: some View {
         NavigationStack {
             ZStack {
-                ThreadView(
-                    viewModel: homeThreadViewModel,
-                    presentationStyle: .home,
-                    onOpenThreads: { showHistory = true },
-                    onOpenProfile: { showProfile = true },
-                    onOpenHistory: { showHistory = true },
-                    onOpenPaywall: { showPaywall = true },
-                    onStartNewConversation: newConversation
-                )
+                // Main content - shifts right when sidebar is open
+                mainThreadContent
+                    .offset(x: showSidebar ? sidebarWidth : 0)
+                    .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showSidebar)
+
+                // Dimming overlay when sidebar is open
+                if showSidebar {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                        .offset(x: showSidebar ? sidebarWidth : 0)
+                        .onTapGesture { closeSidebar() }
+                        .transition(.opacity)
+                        .animation(.easeOut(duration: 0.2), value: showSidebar)
+                }
+
+                // Sidebar drawer from left
+                HStack(spacing: 0) {
+                    ChatSidebarView(
+                        threadViewModel: sidebarThreadViewModel,
+                        onSelectThread: { threadId in
+                            closeSidebar()
+                            Task {
+                                await homeThreadViewModel.loadThread(id: threadId)
+                            }
+                        },
+                        onNewChat: {
+                            closeSidebar()
+                            newConversation()
+                        },
+                        onOpenSettings: {
+                            closeSidebar()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showProfile = true
+                            }
+                        },
+                        onDismiss: { closeSidebar() }
+                    )
+                    .frame(width: sidebarWidth)
+
+                    Spacer(minLength: 0)
+                }
+                .offset(x: showSidebar ? 0 : -sidebarWidth)
+                .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showSidebar)
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showHistory, content: historySheet)
+            .gesture(sidebarDragGesture)
             .sheet(isPresented: $showProfile, content: profileSheet)
             .sheet(isPresented: $showPaywall, content: paywallSheet)
             .sheet(isPresented: $showWhatsNew, content: whatsNewSheet)
@@ -94,6 +132,42 @@ struct ContentView: View {
                     .animation(.spring(response: 0.3), value: networkMonitor.isConnected)
             }
         }
+    }
+
+    private var mainThreadContent: some View {
+        ThreadView(
+            viewModel: homeThreadViewModel,
+            presentationStyle: .home,
+            onOpenThreads: { openSidebar() },
+            onOpenProfile: { showProfile = true },
+            onOpenHistory: { openSidebar() },
+            onOpenPaywall: { showPaywall = true },
+            onStartNewConversation: newConversation
+        )
+    }
+
+    private func openSidebar() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            showSidebar = true
+        }
+    }
+
+    private func closeSidebar() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            showSidebar = false
+        }
+    }
+
+    private var sidebarDragGesture: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .global)
+            .onEnded { value in
+                let horizontalAmount = value.translation.width
+                if horizontalAmount > 60 && !showSidebar {
+                    openSidebar()
+                } else if horizontalAmount < -60 && showSidebar {
+                    closeSidebar()
+                }
+            }
     }
 
     // MARK: - Home Thread
@@ -127,7 +201,7 @@ struct ContentView: View {
             settings.selectedModality = modality
             settings.savePreferences()
         }
-        showHistory = false
+        closeSidebar()
     }
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
@@ -161,7 +235,7 @@ struct ContentView: View {
 
     private func handleHistoryDeeplink(_ shouldOpen: Bool) {
         guard shouldOpen else { return }
-        showHistory = true
+        openSidebar()
         deeplinkManager.clearHistoryTrigger()
     }
 
@@ -192,14 +266,6 @@ struct ContentView: View {
     @ViewBuilder
     private func profileSheet() -> some View {
         ProfileView()
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(24)
-    }
-
-    @ViewBuilder
-    private func historySheet() -> some View {
-        HistoryView(onRerunPrompt: applyHistoryPrompt)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(24)

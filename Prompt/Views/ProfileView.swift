@@ -57,20 +57,82 @@ struct ProfileView: View {
                 LiquidGlassBackground()
 
                 VStack(spacing: 0) {
-                    PromptPageHeader(
-                        title: "Account",
-                        subtitle: "Profile details, Premium access, and app settings",
-                        onLeadingTap: {
+                    // Settings header: title centered, X close button top-right
+                    HStack {
+                        Spacer()
+
+                        Text("Settings")
+                            .font(.system(.headline, design: .rounded, weight: .bold))
+                            .foregroundStyle(textPrimary)
+
+                        Spacer()
+                    }
+                    .overlay(alignment: .trailing) {
+                        Button {
                             if isEditingProfile {
                                 isEditingProfile = false
                                 profileSaveError = nil
                             } else {
                                 dismiss()
                             }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(textSecondary)
+                                .frame(width: 32, height: 32)
+                                .background {
+                                    Circle()
+                                        .fill(Color.adaptiveBackgroundTertiary)
+                                }
                         }
-                    ) {
-                        Group {
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+
+                    List {
+                // Centered profile header
+                Section {
+                    VStack(spacing: 12) {
+                        // Large centered avatar
+                        settingsAvatar
+                            .frame(width: 90, height: 90)
+
+                        if let user = authManager.currentUser {
                             if isEditingProfile {
+                                TextField("Name", text: $editName)
+                                    .font(.system(.title2, design: .rounded, weight: .bold))
+                                    .foregroundStyle(textPrimary)
+                                    .multilineTextAlignment(.center)
+                                    .textFieldStyle(.plain)
+                            } else {
+                                Text(user.name ?? user.email)
+                                    .font(.system(.title2, design: .rounded, weight: .bold))
+                                    .foregroundStyle(textPrimary)
+
+                                Text(user.email)
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .foregroundStyle(textSecondary)
+                            }
+
+                            // Edit profile button
+                            if !isEditingProfile {
+                                Button {
+                                    startEditing()
+                                } label: {
+                                    Text("Edit profile")
+                                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                                        .foregroundStyle(textPrimary)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 8)
+                                        .background {
+                                            Capsule()
+                                                .stroke(Color.adaptiveBorder, lineWidth: 1)
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                            } else {
                                 Button {
                                     Task { await saveProfile() }
                                 } label: {
@@ -80,162 +142,38 @@ struct ProfileView: View {
                                     } else {
                                         Text("Save")
                                             .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                                            .foregroundStyle(textPrimary)
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 9)
+                                            .foregroundStyle(Color.adaptiveTextOnAccent)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 8)
+                                            .background {
+                                                Capsule()
+                                                    .fill(accentColor)
+                                            }
                                     }
                                 }
-                                .buttonStyle(GlassCapsuleButtonStyle(tintColor: accentColor))
+                                .buttonStyle(.plain)
                                 .disabled(isSavingProfile)
-                            } else {
-                                Menu {
-                                    Button {
-                                        startEditing()
-                                    } label: {
-                                        Label("Edit Profile", systemImage: "pencil")
-                                    }
-                                    Button("Close") {
-                                        dismiss()
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis")
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundStyle(textPrimary)
-                                }
-                                .buttonStyle(GlassIconButtonStyle(size: 40))
                             }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-
-                    List {
-                // User info section
-                if let user = authManager.currentUser {
-                    Section {
-                        HStack(spacing: 16) {
-                            // Avatar
-                            if let avatarUrl = user.avatarUrl, let url = URL(string: avatarUrl) {
-                                AsyncImage(url: url) { image in
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                } placeholder: {
-                                    avatarPlaceholder
-                                }
-                                .frame(width: 60, height: 60)
-                                .clipShape(Circle())
-                            } else {
-                                avatarPlaceholder
-                            }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                if isEditingProfile {
-                                    TextField("Name", text: $editName)
-                                        .font(.headline)
-                                        .foregroundStyle(textPrimary)
-                                        .textFieldStyle(.plain)
-                                } else {
-                                    Text(user.name ?? "User")
-                                        .font(.headline)
-                                        .foregroundStyle(textPrimary)
-                                }
-                                Text(user.email)
-                                    .font(.subheadline)
-                                    .foregroundStyle(textSecondary)
-
-                                if user.isPremium {
-                                    Label("Premium", systemImage: "crown.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(accentColor)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .listRowBackground(bgSecondary)
-                    }
-                } else {
-                    Section {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack(spacing: 14) {
-                                AppBrandMark(size: 54, showsGlassBackdrop: false)
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Sign in to sync your account")
-                                        .font(.system(.headline, design: .rounded, weight: .semibold))
-                                        .foregroundStyle(textPrimary)
-
-                                    Text("Save chat threads, restore purchases, and unlock the 7-day Premium trial offer.")
-                                        .font(.system(.subheadline, design: .rounded))
-                                        .foregroundStyle(textSecondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
+                        } else {
+                            Text("Guest")
+                                .font(.system(.title2, design: .rounded, weight: .bold))
+                                .foregroundStyle(textPrimary)
 
                             Button {
                                 guestSession.presentAuthenticationGate()
                                 dismiss()
                             } label: {
                                 Label("Sign In with Apple", systemImage: "apple.logo")
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
+                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                                    .foregroundStyle(Color.adaptiveTextOnAccent)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 10)
+                                    .background {
+                                        Capsule()
+                                            .fill(accentColor)
+                                    }
                             }
-                            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: accentColor, intensity: .prominent))
-                        }
-                        .padding(.vertical, 4)
-                        .listRowBackground(bgSecondary)
-                    }
-                }
-
-                Section {
-                    VStack(alignment: .leading, spacing: 16) {
-                        SubscriptionStatusCard()
-
-                        UpgradePromptCard(currentTier: storeKit.currentTier) {
-                            handlePlanAction()
-                        }
-
-                        if storeKit.isTrialing, let remaining = storeKit.subscriptionInfo?.trialDaysRemaining {
-                            TrialBanner(daysRemaining: remaining) {
-                                handlePlanAction()
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    .listRowBackground(bgSecondary)
-                } header: {
-                    Text("Premium")
-                        .foregroundStyle(textSecondary)
-                } footer: {
-                    Text("Start the trial, unlock Premium, or restore a past purchase.")
-                        .foregroundStyle(textTertiary)
-                }
-
-                // Custom Instructions section (editable)
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Label("Custom Instructions", systemImage: "text.bubble.fill")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(textPrimary)
-                            Spacer()
-                        }
-
-                        if isEditingProfile {
-                            TextEditor(text: $editCustomInstructions)
-                                .frame(minHeight: 80)
-                                .font(.body)
-                                .foregroundStyle(textPrimary)
-                                .scrollContentBackground(.hidden)
-                                .padding(8)
-                                .liquidGlassInput(cornerRadius: 10, isFocused: true)
-                        } else {
-                            let instructions = settings.customInstructions
-                            Text(instructions.isEmpty ? "No custom instructions set" : instructions)
-                                .font(.subheadline)
-                                .foregroundStyle(instructions.isEmpty ? textTertiary : textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            .buttonStyle(.plain)
                         }
 
                         if let error = profileSaveError {
@@ -244,16 +182,71 @@ struct ProfileView: View {
                                 .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
                         }
                     }
-                    .listRowBackground(bgSecondary)
-                } header: {
-                    Text("Personalization")
-                        .foregroundStyle(textSecondary)
-                } footer: {
-                    Text("Instructions included with every prompt enhancement.")
-                        .foregroundStyle(textTertiary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
 
+                // Account section - ChatGPT-style rows
                 Section {
+                    if let user = authManager.currentUser {
+                        settingsRow(icon: "envelope.fill", iconColor: accentColor, title: "Email", value: user.email)
+                    }
+
+                    settingsRow(
+                        icon: "plus.rectangle.on.rectangle",
+                        iconColor: accentColor,
+                        title: "Subscription",
+                        value: storeKit.currentTier.displayName
+                    )
+
+                    Button {
+                        handlePlanAction()
+                    } label: {
+                        settingsRowContent(
+                            icon: "diamond.fill",
+                            iconColor: accentColor,
+                            title: "Upgrade to Premium",
+                            showChevron: false
+                        )
+                    }
+                    .listRowBackground(bgSecondary)
+
+                    Button {
+                        Task { try? await storeKit.restorePurchases() }
+                    } label: {
+                        settingsRowContent(
+                            icon: "arrow.clockwise",
+                            iconColor: textSecondary,
+                            title: "Restore purchases",
+                            showChevron: false
+                        )
+                    }
+                    .listRowBackground(bgSecondary)
+
+                    if storeKit.isTrialing, let remaining = storeKit.subscriptionInfo?.trialDaysRemaining {
+                        settingsRow(icon: "clock.fill", iconColor: .orange, title: "Trial", value: "\(remaining) days left")
+                    }
+                } header: {
+                    Text("Account")
+                        .foregroundStyle(textSecondary)
+                }
+
+                // Personalization section
+                Section {
+                    NavigationLink {
+                        customInstructionsEditor
+                    } label: {
+                        settingsRowContent(
+                            icon: "person.text.rectangle.fill",
+                            iconColor: accentColor,
+                            title: "Personalization",
+                            showChevron: true
+                        )
+                    }
+                    .listRowBackground(bgSecondary)
+
                     Picker(selection: $bindableSettings.appearanceMode) {
                         ForEach(AppearanceMode.allCases) { mode in
                             HStack {
@@ -274,11 +267,8 @@ struct ProfileView: View {
                     .pickerStyle(.menu)
                     .listRowBackground(bgSecondary)
                 } header: {
-                    Text("Appearance")
+                    Text("Preferences")
                         .foregroundStyle(textSecondary)
-                } footer: {
-                    Text("Choose your preferred color scheme. System follows your device settings.")
-                        .foregroundStyle(textTertiary)
                 }
 
                 Section {
@@ -331,28 +321,20 @@ struct ProfileView: View {
                     }
                     .listRowBackground(bgSecondary)
                 } header: {
-                    Text("Generation Settings")
+                    Text("Generation")
                         .foregroundStyle(textSecondary)
-                } footer: {
-                    Text("Higher temperature increases exploration. Max tokens and target length shape how much the optimizer can return.")
-                        .foregroundStyle(textTertiary)
                 }
 
                 Section {
                     NavigationLink {
                         AnalyticsView()
                     } label: {
-                        HStack {
-                            Image(systemName: "chart.bar.fill")
-                                .foregroundStyle(accentColor)
-                                .frame(width: 28)
-                            Text("Analytics")
-                                .foregroundStyle(textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(textTertiary)
-                        }
+                        settingsRowContent(
+                            icon: "chart.bar.fill",
+                            iconColor: accentColor,
+                            title: "Analytics",
+                            showChevron: true
+                        )
                     }
                     .listRowBackground(bgSecondary)
                 } header: {
@@ -365,37 +347,23 @@ struct ProfileView: View {
                         showSupport = true
                         unreadManager.markAllAsRead()
                     } label: {
-                        HStack {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "bubble.left.and.bubble.right.fill")
-                                    .foregroundStyle(accentColor)
-                                    .frame(width: 28)
-
-                                if unreadManager.hasUnreadMessages {
-                                    Circle()
-                                        .fill(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
-                                        .frame(width: 12, height: 12)
-                                        .overlay(
-                                            Text(unreadManager.unreadCount > 9 ? "9+" : "\(unreadManager.unreadCount)")
-                                                .font(.system(size: 8, weight: .bold))
-                                                .foregroundStyle(Color.white)
-                                        )
-                                        .offset(x: 6, y: -4)
-                                }
-                            }
+                        HStack(spacing: 14) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .foregroundStyle(accentColor)
+                                .frame(width: 28)
 
                             Text("Contact Support")
                                 .foregroundStyle(textPrimary)
+
                             Spacer()
 
                             if unreadManager.hasUnreadMessages {
                                 Text("New")
-                                    .font(.caption2)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(Color.white)
+                                    .font(.system(.caption2, weight: .semibold))
+                                    .foregroundStyle(.white)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
+                                    .background(Color(red: 255/255, green: 69/255, blue: 58/255))
                                     .clipShape(Capsule())
                             }
 
@@ -408,9 +376,6 @@ struct ProfileView: View {
                 } header: {
                     Text("Help")
                         .foregroundStyle(textSecondary)
-                } footer: {
-                    Text("Open support chat or review tickets without leaving your account workspace.")
-                        .foregroundStyle(textTertiary)
                 }
 
                 // Stats section
@@ -424,34 +389,43 @@ struct ProfileView: View {
                         }
                         .listRowBackground(bgSecondary)
                     } else if let stats = stats {
-                        statsRow(label: "Total Prompts", value: "\(stats.totalPrompts)")
-                        statsRow(label: "Starred Prompts", value: "\(stats.favoritePrompts)")
-                        statsRow(label: "Total Tokens Used", value: formatTokens(stats.totalTokens))
-                        statsRow(label: "Member Since", value: stats.memberSince.formatted(.dateTime.month().year()))
+                        settingsRow(icon: "text.bubble.fill", iconColor: accentColor, title: "Total Prompts", value: "\(stats.totalPrompts)")
+                        settingsRow(icon: "star.fill", iconColor: .orange, title: "Starred", value: "\(stats.favoritePrompts)")
+                        settingsRow(icon: "number", iconColor: .green, title: "Tokens Used", value: formatTokens(stats.totalTokens))
+                        settingsRow(icon: "calendar", iconColor: .blue, title: "Member Since", value: stats.memberSince.formatted(.dateTime.month().year()))
                     }
                 } header: {
                     Text("Statistics")
                         .foregroundStyle(textSecondary)
                 }
 
-                // Account section
+                // Sign out / danger
                 Section {
                     Button(role: .destructive) {
                         showSignOutAlert = true
                     } label: {
-                        Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        settingsRowContent(
+                            icon: "rectangle.portrait.and.arrow.right",
+                            iconColor: textSecondary,
+                            title: "Sign Out",
+                            showChevron: false
+                        )
                     }
                     .listRowBackground(bgSecondary)
 
                     Button(role: .destructive) {
                         showDeleteAccountAlert = true
                     } label: {
-                        Label("Delete Account", systemImage: "trash.fill")
-                            .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
+                        settingsRowContent(
+                            icon: "trash.fill",
+                            iconColor: colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25),
+                            title: "Delete Account",
+                            showChevron: false
+                        )
                     }
                     .listRowBackground(bgSecondary)
                 } header: {
-                    Text("Account")
+                    Text("Account Actions")
                         .foregroundStyle(textSecondary)
                 }
 
@@ -556,15 +530,110 @@ struct ProfileView: View {
         }
     }
 
-    private var avatarPlaceholder: some View {
-        Circle()
-            .fill(bgSecondary)
-            .frame(width: 60, height: 60)
-            .overlay {
-                Image(systemName: "person.fill")
-                    .font(.title)
-                    .foregroundStyle(textSecondary)
+    // MARK: - Settings Avatar (centered, large, with initials)
+
+    private var settingsAvatar: some View {
+        Group {
+            if let avatarUrl = authManager.currentUser?.avatarUrl,
+               let url = URL(string: avatarUrl) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    initialsCircle
+                }
+                .clipShape(Circle())
+            } else {
+                initialsCircle
             }
+        }
+    }
+
+    private var initialsCircle: some View {
+        let name = authManager.currentUser?.name ?? authManager.currentUser?.email ?? "G"
+        let initials = String(name.prefix(2)).uppercased()
+
+        return Circle()
+            .fill(Color(red: 0.35, green: 0.55, blue: 0.82))
+            .overlay {
+                Text(initials)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+    }
+
+    // MARK: - Settings Row Helpers
+
+    private func settingsRow(icon: String, iconColor: Color, title: String, value: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .foregroundStyle(iconColor)
+                .frame(width: 28)
+
+            Text(title)
+                .foregroundStyle(textPrimary)
+
+            Spacer()
+
+            Text(value)
+                .foregroundStyle(textSecondary)
+        }
+        .listRowBackground(bgSecondary)
+    }
+
+    private func settingsRowContent(icon: String, iconColor: Color, title: String, showChevron: Bool) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .foregroundStyle(iconColor)
+                .frame(width: 28)
+
+            Text(title)
+                .foregroundStyle(textPrimary)
+
+            Spacer()
+
+            if showChevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(textTertiary)
+            }
+        }
+    }
+
+    // MARK: - Custom Instructions Editor
+
+    private var customInstructionsEditor: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Custom Instructions")
+                .font(.system(.title3, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+
+            Text("These instructions are included with every prompt enhancement.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+
+            TextEditor(text: Binding(
+                get: { settings.customInstructions },
+                set: { newValue in
+                    settings.customInstructions = newValue
+                    settings.savePreferences()
+                }
+            ))
+            .font(.body)
+            .foregroundStyle(textPrimary)
+            .scrollContentBackground(.hidden)
+            .padding(12)
+            .frame(minHeight: 200)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.adaptiveBackgroundTertiary)
+            }
+
+            Spacer()
+        }
+        .padding(20)
+        .background { LiquidGlassBackground() }
+        .navigationTitle("Personalization")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder

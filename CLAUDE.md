@@ -14,15 +14,17 @@ Promptomize is a full-stack prompt enhancement app with four components:
 
 ### Backend (in `backend/`)
 ```bash
-npm run dev                # Development server with hot-reload (port 3000)
+npm run dev                # tsx watch with hot-reload (port 3000)
 npm run build && npm start # Production build (tsc → node dist/index.js)
 
 # Database
 npm run db:generate        # Generate Prisma client after schema changes
-npm run db:push            # Push schema to database (dev only)
-npm run db:migrate         # Run migrations (production)
+npm run db:push            # Push schema to database (dev only, NEVER production)
+npm run db:migrate         # prisma migrate deploy (production)
 npm run db:studio          # Open Prisma Studio GUI
 npx prisma migrate dev --name description  # Create new migration (dev)
+
+# Note: postinstall hook auto-runs prisma generate on npm install
 ```
 
 ### Web (in `web/`)
@@ -38,19 +40,34 @@ xcodebuild -scheme Prompt -destination 'platform=iOS Simulator,name=iPhone 17 Pr
 open Prompt.xcodeproj
 ```
 
+### Local Dev Prerequisites
+No docker-compose exists. You need local PostgreSQL and optionally Redis running:
+- PostgreSQL for `DATABASE_URL`
+- Redis for caching/queues/rate-limiting (optional in dev, required at scale)
+
 ## Architecture
 
 ### Multi-Provider AI Enhancement Pipeline
 The core enhancement flow goes through `promptEnhancementEngine.ts`, which orchestrates:
 - **DeepSeek** (`deepseekService.ts`) - Primary enhancement provider
 - **Anthropic** (`@anthropic-ai/sdk`), **OpenAI** (`openai`), **Google Gemini** (`@google/generative-ai`) - Additional providers
-- **Meta-prompt system** (`services/metaPrompts/`) - Modality-specific prompt builders (text, image, video, audio, code, 3d) with platform-specific optimizations (Midjourney, DALL-E, Stable Diffusion, etc.)
+- **Meta-prompt system** (`services/metaPrompts/`) - 7 modality-specific builders (text, image, video, audio, code, 3d) with platform-specific optimizations (Midjourney, DALL-E, Stable Diffusion, etc.)
 
 ### Key Data Flow: Prompt Enhancement
 1. iOS `PromptViewModel.enhance()` → `APIClient.request("/prompts/enhance")`
 2. Backend `promptRouter` → `quotaEnforcement` middleware → `promptEnhancementEngine`
 3. Engine selects modality builder → calls AI provider → response stored in `Prompt` table
 4. iOS updates UI, saves to history via `PromptHistoryManager`
+
+### Backend Middleware Chain (order matters)
+1. `helmet()` - Security headers
+2. `cors()` - CORS with credential support
+3. `rateLimit()` - Global rate limiting
+4. `compression()` - gzip
+5. `express.json({ limit: '10mb' })` - JSON parsing (raw body captured for Stripe webhooks)
+6. `requestLogger()` - Structured logging with request ID (X-Request-ID) and timing
+7. Route handlers (with per-route middleware: `authenticate`, `enforceQuota`, `apiKeyAuth`, `idempotency`)
+8. `errorHandler` - Centralized error handling
 
 ### API Routes
 
@@ -87,7 +104,9 @@ All routes are mounted under `/api/v1/` in `backend/src/index.ts`:
 3. iOS stores tokens in shared Keychain (`SharedKeychainHelper`) for widget access
 4. `APIClient` (actor-based) auto-refreshes expired tokens
 
-### Subscription Tiers (App)
+### Two Separate Subscription Systems
+**App subscriptions** (iOS StoreKit 2 + web Stripe → `Subscription` model):
+
 | Tier | Daily Prompts | Max Tokens | Quality |
 |------|--------------|------------|---------|
 | FREE | 10 | 4k | basic |
@@ -96,38 +115,34 @@ All routes are mounted under `/api/v1/` in `backend/src/index.ts`:
 
 Enforced via `quotaEnforcement.ts` middleware using `DailyUsage` table.
 
-### Enterprise API Tiers (separate from app)
-API_FREE (100 req/mo) → API_STARTER (1k) → API_PRO (10k) → API_ENTERPRISE (unlimited). Managed via `ApiSubscription` model with Stripe billing.
+**Enterprise API subscriptions** (Stripe only → `ApiSubscription` model with `Developer` accounts):
+API_FREE (100 req/mo) → API_STARTER (1k) → API_PRO (10k) → API_ENTERPRISE (unlimited)
 
-### Background Processing
+These are completely separate systems with different models, routes, and billing.
+
+### Background Processing & Real-Time
 - **BullMQ** (`utils/queue.ts`) for background job processing (enhancement jobs, notifications)
 - **Redis** (`utils/redis.ts`) for caching, rate limiting, pub/sub for Socket.IO scaling
+- **Socket.IO** (`utils/socket.ts`) for real-time support chat (polling + websocket, 25s ping, 60s timeout)
 - **Idempotency cleanup** scheduler runs hourly for webhook deduplication
 
-### Web Structure
-```
-web/app/
-├── (marketing)/      # Public pages (landing, pricing)
-├── (dashboard)/      # Authenticated user pages
-├── (auth)/           # Login flow
-├── admin/            # Admin panel
-├── developers/
-│   ├── (auth)/       # Developer login/register
-│   └── (portal)/     # API key management, usage dashboard
-├── docs/             # API documentation
-└── offline/          # PWA offline page
-```
-State management: React Query (server state) + Zustand (client state) + `jose` (JWT client-side)
+### Web State Management
+- React Query (`@tanstack/react-query`) for server state
+- Zustand stores for client state: `authStore`, `subscriptionStore`, `settingsStore`, `developerAuthStore`, `uiStore`
+- `jose` for JWT handling client-side
+- API client layer in `web/lib/api/` with auto token refresh
+- React Query hooks in `web/lib/hooks/` (useAuth, usePrompts, useEnhance, useSubscription, etc.)
 
 ## Code Patterns
 
 ### Backend
 - ESM modules (`"type": "module"` in package.json)
 - **TypeScript imports must use `.js` extensions** (NodeNext module resolution): `import { foo } from './bar.js'`
-- TypeScript strict mode with `noUncheckedIndexedAccess`
+- Target: ES2022, strict mode with `noUncheckedIndexedAccess`
 - Zod for request validation in routes
-- Pino for structured JSON logging
+- Pino for structured JSON logging (pino-pretty in dev)
 - Env vars accessed via bracket notation: `process.env['VAR_NAME']`
+- Multiple logger instances: `logger`, `promptLogger`, `subscriptionLogger`, `webhookLogger`, `createRequestLogger(requestId)`
 
 ### iOS
 - MVVM with `@Observable` macro (iOS 17+)
@@ -136,31 +151,51 @@ State management: React Query (server state) + Zustand (client state) + `jose` (
 - Shared Keychain access group for widget extension
 - StoreKit 2 for subscriptions
 - Bundle ID: `com.res.promptomizer`
+- URL scheme: `promptomize://`
 - Backend URL hardcoded in `APIClient.swift`
+- Firebase Analytics + Crashlytics, SwiftData for local persistence
 
 ### Web
 - Next.js 14 App Router with route groups
-- React Query for server state, Zustand for client state
-- PWA support via `next-pwa`
+- Path alias: `@/*` maps to project root
+- PWA via `next-pwa` with 11 runtime caching strategies
 - Framer Motion for animations
+- Security headers configured in both `next.config.js` and `vercel.json`
 
 ## Environment Variables
 
 ### Backend (see `backend/.env.example`)
 Required: `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `APPLE_ISSUER_ID`, `APPLE_BUNDLE_ID`, `DEEPSEEK_API_KEY`
 
-Optional: `REDIS_URL`, `RESEND_API_KEY`, `SENTRY_DSN`, `CORS_ORIGIN` (comma-separated)
+Optional: `DATABASE_DIRECT_URL` (for migrations, bypasses connection pooler), `REDIS_URL`, `RESEND_API_KEY`, `SENTRY_DSN`, `CORS_ORIGIN` (comma-separated), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_API_KEY`, `STRIPE_API_SECRET_KEY`, `LOG_LEVEL`
 
 ### Web (see `web/.env.example`)
-`NEXT_PUBLIC_API_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PRICE_*`, `BACKEND_WEBHOOK_SECRET`
+`NEXT_PUBLIC_API_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PRICE_*`, `BACKEND_WEBHOOK_SECRET`, `NEXT_PUBLIC_APPLE_CLIENT_ID`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
 
-## Deployment
-- **Backend**: Railway (Docker) - auto-deploys from main
-- **Web**: Vercel - auto-deploys from main
-- **iOS**: App Store via Xcode Archive + `ExportOptions.plist`
+## CI/CD & Deployment
+
+### Backend
+- **Railway** (Docker) - auto-deploys from main via `.github/workflows/backend.yml`
+- Multi-stage Dockerfile: `node:20-slim`, OpenSSL for Prisma, non-root user `expressjs:1001`
+- CI: npm ci → prisma generate → db push → tsc check → build (PostgreSQL 16 service in CI)
+- Config: `backend/railway.json` (restart on failure, max 10 retries)
+
+### Web
+- **Vercel** - auto-deploys from main via `.github/workflows/web.yml`
+- Region: `iad1` (N. Virginia)
+- CI: lint → build → deploy via Vercel CLI
+- Config: `web/vercel.json` (security headers, `/app` → App Store redirect)
+
+### iOS
+- CI via `.github/workflows/ios.yml` on `macos-14`, Xcode 15.2
+- Build: iPhone 15 Pro simulator (iOS 17.2, debug)
+- Archive: Generic iOS + `ExportOptions.plist`
+- Release: App Store via Xcode Archive
+
+## Testing
+No test framework is currently configured (no Jest/Vitest/Playwright setup). iOS CI has test step with `continue-on-error: true`.
 
 ## Critical Notes
 - Always use `prisma migrate dev` in development and `npm run db:migrate` in production. Never `db:push` in production.
-- Two separate subscription systems: app subscriptions (iOS StoreKit 2 + web Stripe → `Subscription` model) and enterprise API subscriptions (Stripe only → `ApiSubscription` model with `Developer` accounts)
-- Socket.IO initialized in `backend/src/utils/socket.ts` for real-time support chat
-- Webhook idempotency via `WebhookIdempotencyKey` table prevents duplicate App Store notification processing
+- The Prisma schema has ~34 models. Key distinction: `Subscription` (app users) vs `ApiSubscription` (enterprise developers) are entirely separate systems.
+- Webhook idempotency via `WebhookIdempotencyKey` table prevents duplicate App Store notification processing (SHA-256 key hashing, 24-hour TTL).
