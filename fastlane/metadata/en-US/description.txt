@@ -1,4 +1,4 @@
-Promptomize transforms your ideas into powerful, optimized prompts for any AI platform. Whether you're using ChatGPT, Claude, Midjourney, DALL-E, Stable Diffusion, or 13 other platforms, Promptomize ensures your prompts deliver the best possible results.
+Promptomize transforms your ideas into powerful, optimized prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver the best possible results across 18+ platforms.
 
 HOW IT WORKS
 Type what you want to achieve, select your target modality (text, image, video, audio, code, 3D), and tap Enhance. Our advanced AI engine rewrites your prompt using proven prompt engineering techniques tailored to your chosen platform.
@@ -7,7 +7,7 @@ POWER TOOLS
 After enhancing, access Platform Optimize, Variations, Sandbox, and Workflows from an inline Power Tools grid. Validate prompts against platform-specific requirements, generate alternative versions, test across multiple AI services, and automate multi-step workflows.
 
 PLATFORM OPTIMIZATION
-Optimize prompts specifically for ChatGPT, Claude, Gemini, Midjourney, DALL-E, Stable Diffusion, Flux, Sora, Runway, Pika, Kling, Suno, Udio, MusicGen, GitHub Copilot, Meshy, Tripo3D, and more. Each platform has unique requirements — Promptomize handles them automatically.
+Optimize prompts for leading text, image, video, music, code, and 3D platforms. Each platform has unique requirements — Promptomize handles them automatically.
 
 CONVERSATION THREADS
 Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
@@ -23,7 +23,7 @@ KEY FEATURES
 - Deep Think for advanced reasoning
 - Prompt history with favorites
 - Templates for quick starts
-- Copy to clipboard or open directly in Claude/ChatGPT
+- Copy to clipboard or open in your preferred AI assistant
 - iOS Widget for instant access
 - Offline queue with automatic sync
 

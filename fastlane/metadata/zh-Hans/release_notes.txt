@@ -15,9 +15,9 @@ POWER TOOLS
 重新设计的提示词页面
 - 更清晰的渐进式界面，相关功能在合适的时机出现
 - 工具栏进一步精简，仅保留核心操作
-- 新增 “Start from Template” 与 “Continue Thread” 快捷入口
+- 新增 "Start from Template" 与 "Continue Thread" 快捷入口
 
 问题修复
 - 修复 StoreKit JWS 校验问题
 - 修复平台标签在滚动视图中发光效果被裁切的问题
-- 补充 Flux、Pika、Kling、MusicGen、Meshy、Tripo3D 等平台配置
+- 补充多种图像、视频、音乐与 3D 平台配置

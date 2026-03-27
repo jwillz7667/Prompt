@@ -20,4 +20,4 @@ REDESIGNED PROMPT SCREEN
 BUG FIXES
 - Fixed StoreKit JWS verification issue
 - Fixed platform chip glow being clipped in scroll views
-- Added missing platform configurations for Flux, Pika, Kling, MusicGen, Meshy, and Tripo3D
+- Added missing platform configurations for additional image, video, music, and 3D workflows

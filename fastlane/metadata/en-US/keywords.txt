@@ -1,1 +1,1 @@
-prompt,AI,ChatGPT,Claude,Midjourney,DALL-E,optimize,enhance,writing,image,video,music,code
+prompt,AI,optimize,enhance,writing,image,video,music,code,workflow,templates,sandbox

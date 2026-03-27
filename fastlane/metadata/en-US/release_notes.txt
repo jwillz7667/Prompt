@@ -5,7 +5,7 @@ POWER TOOLS
 - Expand any tool inline to use it without leaving the screen
 
 INLINE PLATFORM OPTIMIZATION
-- Validate and optimize prompts for 18 platforms including ChatGPT, Claude, Midjourney, DALL-E, Stable Diffusion, Flux, and more
+- Validate and optimize prompts for 18 platforms across text, image, video, music, code, and 3D workflows
 - See improvement stats and apply optimized prompts with one tap
 
 INLINE VARIATIONS
@@ -20,4 +20,4 @@ REDESIGNED PROMPT SCREEN
 BUG FIXES
 - Fixed StoreKit JWS verification issue
 - Fixed platform chip glow being clipped in scroll views
-- Added missing platform configurations for Flux, Pika, Kling, MusicGen, Meshy, and Tripo3D
+- Added missing platform configurations for additional image, video, music, and 3D workflows
