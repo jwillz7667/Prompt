@@ -45,6 +45,7 @@ struct ThreadView: View {
     @State private var showMaxModeToast = false
     @State private var activeComposerDrawer: ComposerDrawer?
     @State private var composerOverlayHeight: CGFloat = 164
+    @State private var drawerDragOffset: CGFloat = 0
     @State private var selectedPhotoItem: PhotosPickerItem?
     @FocusState private var isInputFocused: Bool
 
@@ -744,18 +745,46 @@ struct ThreadView: View {
 
     @ViewBuilder
     private func composerDrawer(for drawer: ComposerDrawer) -> some View {
-        ScrollView(showsIndicators: false) {
-            switch drawer {
-            case .modalities:
-                modalityDrawerContent
-            case .attachments:
-                attachmentDrawerContent
+        VStack(spacing: 0) {
+            // Drag handle
+            Capsule()
+                .fill(Color.adaptiveTextTertiary.opacity(0.4))
+                .frame(width: 36, height: 4)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+            ScrollView(showsIndicators: false) {
+                switch drawer {
+                case .modalities:
+                    modalityDrawerContent
+                case .attachments:
+                    attachmentDrawerContent
+                }
             }
+            .frame(maxHeight: drawer == .modalities ? 372 : 268)
         }
-        .frame(maxHeight: drawer == .modalities ? 372 : 268)
         .padding(.horizontal, 12)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .modifier(LiquidGlassModifier(cornerRadius: 26, material: .thin, shadowIntensity: 0.28, borderGlow: false))
+        .offset(y: max(0, drawerDragOffset))
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    drawerDragOffset = value.translation.height
+                }
+                .onEnded { value in
+                    if value.translation.height > 80 || value.predictedEndTranslation.height > 160 {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                            activeComposerDrawer = nil
+                            drawerDragOffset = 0
+                        }
+                    } else {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                            drawerDragOffset = 0
+                        }
+                    }
+                }
+        )
     }
 
     private var attachmentDrawerColumns: [GridItem] {
@@ -929,9 +958,6 @@ struct ThreadView: View {
     private func applyModality(_ modality: ModalityType) {
         settings.selectedModality = modality
         settings.savePreferences()
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-            activeComposerDrawer = nil
-        }
         triggerHaptic(.light)
     }
 
@@ -939,18 +965,12 @@ struct ThreadView: View {
         guard settings.conversationMode != mode else { return }
         settings.conversationMode = mode
         settings.savePreferences()
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-            activeComposerDrawer = nil
-        }
         triggerHaptic(.light)
     }
 
     private func applyAudioSubModality(_ subModality: AudioSubModalityType) {
         settings.selectedAudioSubModality = subModality
         settings.savePreferences()
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-            activeComposerDrawer = nil
-        }
         triggerHaptic(.light)
     }
 

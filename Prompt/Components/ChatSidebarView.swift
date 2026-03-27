@@ -12,6 +12,7 @@ struct ChatSidebarView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthManager.self) private var authManager
     @Environment(GuestSessionManager.self) private var guestSession
+    @Environment(StoreKitManager.self) private var storeKit
 
     @Bindable var threadViewModel: ThreadViewModel
     let onSelectThread: (String) -> Void
@@ -166,10 +167,16 @@ struct ChatSidebarView: View {
                 userAvatar
                     .frame(width: 36, height: 36)
 
-                Text(authManager.currentUser?.name ?? authManager.currentUser?.email ?? "Guest")
-                    .font(.system(.body, design: .rounded, weight: .medium))
-                    .foregroundStyle(textPrimary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(authManager.currentUser?.email ?? "Guest")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(textPrimary)
+                        .lineLimit(1)
+
+                    Text(subscriptionLabel)
+                        .font(.system(.caption2, design: .rounded, weight: .semibold))
+                        .foregroundStyle(subscriptionColor)
+                }
 
                 Spacer()
             }
@@ -181,6 +188,18 @@ struct ChatSidebarView: View {
             Rectangle()
                 .fill(Color.adaptiveBorder.opacity(0.3))
                 .frame(height: 0.5)
+        }
+    }
+
+    private var subscriptionLabel: String {
+        storeKit.currentTier.displayName
+    }
+
+    private var subscriptionColor: Color {
+        switch storeKit.currentTier {
+        case .premium: return .orange
+        case .pro: return accentColor
+        case .free: return textTertiary
         }
     }
 
@@ -202,13 +221,13 @@ struct ChatSidebarView: View {
 
     private var initialsAvatar: some View {
         let name = authManager.currentUser?.name ?? authManager.currentUser?.email ?? "G"
-        let initials = String(name.prefix(2)).uppercased()
+        let initial = String(name.prefix(1)).uppercased()
 
         return Circle()
             .fill(Color(red: 0.35, green: 0.55, blue: 0.82))
             .overlay {
-                Text(initials)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                Text(initial)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
             }
     }

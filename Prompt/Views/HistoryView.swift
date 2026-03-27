@@ -284,7 +284,7 @@ struct HistoryView: View {
                     .onTapGesture {
                         selectedPrompt = prompt
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             promptToDelete = prompt
                             showDeleteConfirmation = true
@@ -304,6 +304,33 @@ struct HistoryView: View {
                             )
                         }
                         .tint(accentColor)
+                    }
+                    .contextMenu {
+                        Button {
+                            UIPasteboard.general.string = prompt.enhancedPrompt
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+
+                        Button {
+                            Task {
+                                await historyManager.toggleFavorite(prompt)
+                            }
+                        } label: {
+                            Label(
+                                prompt.isFavorite ? "Unstar" : "Star",
+                                systemImage: prompt.isFavorite ? "star.slash" : "star.fill"
+                            )
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            promptToDelete = prompt
+                            showDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                     .listRowBackground(bgSecondary)
             }
@@ -555,11 +582,14 @@ struct PromptRowView: View {
 
 struct PromptDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(PromptHistoryManager.self) private var historyManager
     let prompt: PromptRecord
     var onRerun: (() -> Void)?
+    var onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var showCopiedToast = false
     @State private var showExportSheet = false
+    @State private var showDeleteConfirmation = false
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
@@ -697,6 +727,18 @@ struct PromptDetailView: View {
                         .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
                     }
 
+                    // Delete
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Label("Delete Prompt", systemImage: "trash")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 10))
+
                     // Metadata
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Details", systemImage: "info.circle")
@@ -824,6 +866,18 @@ struct PromptDetailView: View {
                 }
             }
             .animation(.spring(), value: showCopiedToast)
+            .alert("Delete Prompt", isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task {
+                        await historyManager.deletePrompt(prompt)
+                    }
+                    onDelete?()
+                    dismiss()
+                }
+            } message: {
+                Text("Are you sure you want to delete this prompt? This action cannot be undone.")
+            }
         }
     }
 
