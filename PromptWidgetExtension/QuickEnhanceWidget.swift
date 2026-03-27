@@ -20,7 +20,9 @@ struct QuickEnhanceProvider: TimelineProvider {
             ],
             quotaRemaining: 7,
             quotaLimit: 10,
-            tier: "FREE"
+            tier: "FREE",
+            userName: nil,
+            userEmail: nil
         )
     }
 
@@ -45,6 +47,8 @@ struct QuickEnhanceProvider: TimelineProvider {
         let used = defaults?.integer(forKey: "dailyPromptsUsed") ?? 0
         let limit = defaults?.integer(forKey: "dailyPromptsLimit") ?? 10
         let tier = defaults?.string(forKey: "subscriptionTier") ?? "FREE"
+        let userName = defaults?.string(forKey: "userName")
+        let userEmail = defaults?.string(forKey: "userEmail")
 
         // Load recent prompts
         var recentPrompts: [RecentPromptData] = []
@@ -58,7 +62,9 @@ struct QuickEnhanceProvider: TimelineProvider {
             recentPrompts: recentPrompts,
             quotaRemaining: limit == -1 ? Int.max : max(0, limit - used),
             quotaLimit: limit,
-            tier: tier
+            tier: tier,
+            userName: userName,
+            userEmail: userEmail
         )
     }
 }
@@ -80,17 +86,32 @@ struct QuickEnhanceEntry: TimelineEntry {
     let quotaRemaining: Int
     let quotaLimit: Int
     let tier: String
+    let userName: String?
+    let userEmail: String?
 
     var isUnlimited: Bool {
         quotaLimit == -1
     }
 }
 
+// MARK: - Brand Colors
+
+private extension Color {
+    static let brandPurple = Color(red: 91/255, green: 76/255, blue: 219/255)
+    static let brandCyan = Color(red: 0/255, green: 230/255, blue: 230/255)
+    static let brandPurpleDark = Color(red: 61/255, green: 50/255, blue: 176/255)
+}
+
 // MARK: - Widget Views
 
 struct QuickEnhanceWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
+    @Environment(\.colorScheme) var colorScheme
     var entry: QuickEnhanceEntry
+
+    private var accentColor: Color {
+        colorScheme == .dark ? .brandCyan : .brandPurple
+    }
 
     var body: some View {
         Group {
@@ -103,23 +124,35 @@ struct QuickEnhanceWidgetEntryView: View {
                 MediumView(entry: entry)
             }
         }
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(for: .widget) {
+            colorScheme == .dark
+                ? Color.black
+                : Color(red: 250/255, green: 249/255, blue: 255/255)
+        }
     }
 }
 
 // MARK: - Medium Widget
 
 struct MediumView: View {
+    @Environment(\.colorScheme) var colorScheme
     let entry: QuickEnhanceEntry
 
+    private var accentColor: Color {
+        colorScheme == .dark ? .brandCyan : .brandPurple
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             // Header
             HStack {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.blue)
-                Text("Promptomize")
-                    .font(.headline)
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                    Text("Promptomize")
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                }
                 Spacer()
                 QuotaBadge(remaining: entry.quotaRemaining, limit: entry.quotaLimit, tier: entry.tier)
             }
@@ -133,17 +166,19 @@ struct MediumView: View {
 
             // Quick action button
             Link(destination: URL(string: "promptomize://enhance")!) {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
                     Text("Enhance New Prompt")
-                        .fontWeight(.medium)
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
                 }
-                .font(.subheadline)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(.blue)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(accentColor)
+                )
+                .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
         }
         .padding()
@@ -153,31 +188,73 @@ struct MediumView: View {
 // MARK: - Large Widget
 
 struct LargeView: View {
+    @Environment(\.colorScheme) var colorScheme
     let entry: QuickEnhanceEntry
+
+    private var accentColor: Color {
+        colorScheme == .dark ? .brandCyan : .brandPurple
+    }
+
+    private var textSecondary: Color {
+        colorScheme == .dark
+            ? Color(red: 142/255, green: 142/255, blue: 147/255)
+            : Color(red: 61/255, green: 52/255, blue: 117/255)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.blue)
-                Text("Promptomize")
-                    .font(.headline)
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                    Text("Promptomize")
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                }
                 Spacer()
                 QuotaBadge(remaining: entry.quotaRemaining, limit: entry.quotaLimit, tier: entry.tier)
             }
 
-            Divider()
+            // User info row
+            if let email = entry.userEmail {
+                HStack(spacing: 8) {
+                    // Avatar circle
+                    let initial = String((entry.userName ?? email).prefix(1)).uppercased()
+                    Circle()
+                        .fill(Color(red: 0.35, green: 0.55, blue: 0.82))
+                        .frame(width: 24, height: 24)
+                        .overlay {
+                            Text(initial)
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                        }
+                    Text(email)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(textSecondary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(entry.tier)
+                        .font(.system(.caption2, design: .rounded, weight: .semibold))
+                        .foregroundStyle(tierColor(entry.tier))
+                }
+            }
+
+            Rectangle()
+                .fill(colorScheme == .dark
+                    ? Color.white.opacity(0.1)
+                    : Color.brandPurple.opacity(0.1))
+                .frame(height: 1)
 
             // Recent prompts
             if entry.recentPrompts.isEmpty {
                 EmptyStateView(compact: false)
                     .frame(maxHeight: .infinity)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Recent")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
 
                     ForEach(entry.recentPrompts.prefix(3)) { prompt in
                         RecentPromptRow(prompt: prompt, compact: false)
@@ -189,50 +266,66 @@ struct LargeView: View {
 
             // Quick action button
             Link(destination: URL(string: "promptomize://enhance")!) {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
                     Text("Enhance New Prompt")
-                        .fontWeight(.medium)
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
                 }
-                .font(.subheadline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(.blue)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(accentColor)
+                )
+                .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
         }
         .padding()
+    }
+
+    private func tierColor(_ tier: String) -> Color {
+        switch tier {
+        case "PREMIUM": return .orange
+        case "PRO": return accentColor
+        default: return textSecondary
+        }
     }
 }
 
 // MARK: - Supporting Views
 
 struct QuotaBadge: View {
+    @Environment(\.colorScheme) var colorScheme
     let remaining: Int
     let limit: Int
     let tier: String
+
+    private var accentColor: Color {
+        colorScheme == .dark ? .brandCyan : .brandPurple
+    }
 
     var body: some View {
         HStack(spacing: 4) {
             if limit == -1 {
                 Image(systemName: "infinity")
-                    .font(.caption2)
+                    .font(.system(.caption2, design: .rounded, weight: .bold))
             } else {
                 Text("\(remaining)")
-                    .font(.caption)
-                    .fontWeight(.bold)
+                    .font(.system(.caption, design: .rounded, weight: .bold))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(badgeColor.opacity(0.15))
+        .background(
+            Capsule()
+                .fill(badgeColor.opacity(0.15))
+        )
         .foregroundStyle(badgeColor)
-        .clipShape(Capsule())
     }
 
     var badgeColor: Color {
-        if limit == -1 { return .purple }
+        if limit == -1 { return .orange }
         if remaining == 0 { return .red }
         if remaining <= 3 { return .orange }
         return .green
@@ -240,56 +333,75 @@ struct QuotaBadge: View {
 }
 
 struct RecentPromptRow: View {
+    @Environment(\.colorScheme) var colorScheme
     let prompt: RecentPromptData
     let compact: Bool
+
+    private var accentColor: Color {
+        colorScheme == .dark ? .brandCyan : .brandPurple
+    }
+
+    private var textSecondary: Color {
+        colorScheme == .dark
+            ? Color(red: 142/255, green: 142/255, blue: 147/255)
+            : Color(red: 61/255, green: 52/255, blue: 117/255)
+    }
 
     var body: some View {
         Link(destination: URL(string: "promptomize://prompt/\(prompt.id)")!) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(prompt.original)
-                    .font(.subheadline)
+                    .font(.system(.subheadline, design: .rounded))
                     .lineLimit(compact ? 1 : 2)
                     .foregroundStyle(.primary)
 
-                HStack {
+                HStack(spacing: 4) {
                     Image(systemName: "arrow.right")
-                        .font(.caption2)
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(accentColor)
                     Text(prompt.enhanced)
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .lineLimit(1)
+                        .foregroundStyle(textSecondary)
                 }
-                .foregroundStyle(.secondary)
 
                 if !compact {
                     Text(prompt.date, style: .relative)
-                        .font(.caption2)
+                        .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.tertiary)
                 }
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white)
+            )
         }
     }
 }
 
 struct EmptyStateView: View {
+    @Environment(\.colorScheme) var colorScheme
     let compact: Bool
+
+    private var accentColor: Color {
+        colorScheme == .dark ? .brandCyan : .brandPurple
+    }
 
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "text.bubble")
-                .font(compact ? .title3 : .title)
-                .foregroundStyle(.secondary)
+                .font(.system(compact ? .title3 : .title, design: .rounded, weight: .light))
+                .foregroundStyle(accentColor.opacity(0.6))
 
             Text("No recent prompts")
-                .font(compact ? .caption : .subheadline)
+                .font(.system(compact ? .caption : .subheadline, design: .rounded, weight: .medium))
                 .foregroundStyle(.secondary)
 
             if !compact {
                 Text("Tap below to enhance your first prompt")
-                    .font(.caption)
+                    .font(.system(.caption, design: .rounded))
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
             }
@@ -327,7 +439,9 @@ struct QuickEnhanceWidget: Widget {
         ],
         quotaRemaining: 7,
         quotaLimit: 10,
-        tier: "FREE"
+        tier: "FREE",
+        userName: nil,
+        userEmail: nil
     )
 }
 
@@ -343,6 +457,8 @@ struct QuickEnhanceWidget: Widget {
         ],
         quotaRemaining: 5,
         quotaLimit: 10,
-        tier: "PRO"
+        tier: "PRO",
+        userName: "Will",
+        userEmail: "will@example.com"
     )
 }

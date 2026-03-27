@@ -9,31 +9,38 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 
+// MARK: - Brand Colors (Live Activity)
+
+private extension Color {
+    static let brandPurple = Color(red: 91/255, green: 76/255, blue: 219/255)
+    static let brandCyan = Color(red: 0/255, green: 230/255, blue: 230/255)
+}
+
 struct EnhancementLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: EnhancementActivityAttributes.self) { context in
             // Lock Screen / Banner UI
             LockScreenView(context: context)
-                .activityBackgroundTint(.black.opacity(0.8))
+                .activityBackgroundTint(.black.opacity(0.85))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 // Expanded UI
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: context.state.stage.icon)
-                        .font(.title2)
+                        .font(.system(.title2, design: .rounded))
                         .foregroundStyle(stageColor(for: context.state.stage))
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
                     Text("\(Int(context.state.progress * 100))%")
-                        .font(.title3.monospacedDigit())
+                        .font(.system(.title3, design: .rounded).monospacedDigit())
                         .fontWeight(.bold)
                 }
 
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.stage.displayName)
-                        .font(.headline)
+                        .font(.system(.headline, design: .rounded))
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
@@ -43,13 +50,13 @@ struct EnhancementLiveActivity: Widget {
                             .tint(stageColor(for: context.state.stage))
 
                         Text(context.state.statusMessage)
-                            .font(.caption)
+                            .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
 
                         if let preview = context.state.enhancedPreview {
                             Text(preview)
-                                .font(.caption2)
+                                .font(.system(.caption2, design: .rounded))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                                 .padding(.top, 4)
@@ -58,7 +65,7 @@ struct EnhancementLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.brandCyan)
             } compactTrailing: {
                 if context.state.stage == .completed {
                     Image(systemName: "checkmark.circle.fill")
@@ -73,7 +80,7 @@ struct EnhancementLiveActivity: Widget {
                 }
             } minimal: {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.brandCyan)
             }
         }
     }
@@ -81,9 +88,9 @@ struct EnhancementLiveActivity: Widget {
     private func stageColor(for stage: EnhancementStage) -> Color {
         switch stage {
         case .analyzing:
-            return .blue
+            return .brandPurple
         case .enhancing:
-            return .purple
+            return .brandCyan
         case .optimizing:
             return .orange
         case .completed:
@@ -104,14 +111,14 @@ struct LockScreenView: View {
             // Header
             HStack {
                 Image(systemName: "sparkles")
-                    .font(.title2)
-                    .foregroundStyle(.blue)
+                    .font(.system(.title2, design: .rounded, weight: .semibold))
+                    .foregroundStyle(Color.brandCyan)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Enhancing Prompt")
-                        .font(.headline)
+                        .font(.system(.headline, design: .rounded))
                     Text(context.attributes.promptPreview)
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -129,14 +136,14 @@ struct LockScreenView: View {
 
                 HStack {
                     Text(context.state.statusMessage)
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
 
                     Spacer()
 
                     if context.state.stage.isInProgress {
                         Text(context.attributes.startTime, style: .timer)
-                            .font(.caption.monospacedDigit())
+                            .font(.system(.caption, design: .rounded).monospacedDigit())
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -144,12 +151,12 @@ struct LockScreenView: View {
 
             // Enhanced preview (if complete)
             if let preview = context.state.enhancedPreview {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "arrow.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .foregroundStyle(Color.brandCyan)
                     Text(preview)
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
@@ -161,8 +168,8 @@ struct LockScreenView: View {
 
     private func stageColor(for stage: EnhancementStage) -> Color {
         switch stage {
-        case .analyzing: return .blue
-        case .enhancing: return .purple
+        case .analyzing: return .brandPurple
+        case .enhancing: return .brandCyan
         case .optimizing: return .orange
         case .completed: return .green
         case .failed: return .red
@@ -187,19 +194,20 @@ struct StageIndicator: View {
                 Text("\(Int(stage.progress * 100))%")
             }
         }
-        .font(.caption)
-        .fontWeight(.semibold)
+        .font(.system(.caption, design: .rounded, weight: .semibold))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(stageColor.opacity(0.2))
+        .background(
+            Capsule()
+                .fill(stageColor.opacity(0.2))
+        )
         .foregroundStyle(stageColor)
-        .clipShape(Capsule())
     }
 
     var stageColor: Color {
         switch stage {
-        case .analyzing: return .blue
-        case .enhancing: return .purple
+        case .analyzing: return .brandPurple
+        case .enhancing: return .brandCyan
         case .optimizing: return .orange
         case .completed: return .green
         case .failed: return .red

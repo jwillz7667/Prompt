@@ -95,13 +95,13 @@ struct ThreadMessageBubble: View {
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
                     .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.adaptiveTextOnAccent)
+                    .foregroundStyle(Color.black)
                     .textSelection(.enabled)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(accentColor)
+                            .fill(Color.white)
                     )
             }
         }

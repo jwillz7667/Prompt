@@ -8,6 +8,13 @@
 import WidgetKit
 import SwiftUI
 
+// MARK: - Brand Colors (Widget)
+
+private extension Color {
+    static let brandPurple = Color(red: 91/255, green: 76/255, blue: 219/255)
+    static let brandCyan = Color(red: 0/255, green: 230/255, blue: 230/255)
+}
+
 // MARK: - Timeline Provider
 
 struct QuotaProvider: TimelineProvider {
@@ -72,6 +79,7 @@ struct QuotaEntry: TimelineEntry {
 
 struct QuotaWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
+    @Environment(\.colorScheme) var colorScheme
     var entry: QuotaEntry
 
     var body: some View {
@@ -89,7 +97,17 @@ struct QuotaWidgetEntryView: View {
                 SmallView(entry: entry)
             }
         }
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(for: .widget) {
+            if family == .systemSmall {
+                AnyView(
+                    colorScheme == .dark
+                        ? Color.black
+                        : Color(red: 250/255, green: 249/255, blue: 255/255)
+                )
+            } else {
+                AnyView(Color.clear.background(.fill.tertiary))
+            }
+        }
     }
 }
 
@@ -104,10 +122,9 @@ struct CircularView: View {
                 AccessoryWidgetBackground()
                 VStack(spacing: 0) {
                     Image(systemName: "infinity")
-                        .font(.title2)
+                        .font(.system(.title2, design: .rounded))
                     Text("PRO")
-                        .font(.caption2)
-                        .fontWeight(.medium)
+                        .font(.system(.caption2, design: .rounded, weight: .bold))
                 }
             }
         } else {
@@ -131,21 +148,21 @@ struct RectangularView: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "sparkles")
-                .font(.title2)
+                .font(.system(.title2, design: .rounded))
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
                 if entry.isUnlimited {
                     Text("Unlimited")
-                        .font(.headline)
+                        .font(.system(.headline, design: .rounded))
                     Text("Premium Active")
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                 } else {
                     Text("\(entry.remaining) left")
-                        .font(.headline)
+                        .font(.system(.headline, design: .rounded))
                     Text("\(entry.used)/\(entry.limit) prompts today")
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -172,15 +189,18 @@ struct InlineView: View {
 // MARK: - Home Screen Small
 
 struct SmallView: View {
+    @Environment(\.colorScheme) var colorScheme
     let entry: QuotaEntry
+
+    private var accentColor: Color {
+        colorScheme == .dark ? .brandCyan : .brandPurple
+    }
 
     /// Deeplink destination based on quota status
     private var destination: URL {
         if entry.remaining == 0 && !entry.isUnlimited {
-            // Out of quota - open paywall
             return URL(string: "promptomize://paywall")!
         } else {
-            // Has quota - open enhance
             return URL(string: "promptomize://enhance")!
         }
     }
@@ -190,42 +210,43 @@ struct SmallView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: "sparkles")
-                        .font(.title2)
-                        .foregroundStyle(.blue)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundStyle(accentColor)
                     Spacer()
                     Text(entry.tier)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(tierColor.opacity(0.2))
+                        .font(.system(.caption2, design: .rounded, weight: .bold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(tierColor.opacity(0.15))
+                        )
                         .foregroundStyle(tierColor)
-                        .clipShape(Capsule())
                 }
 
                 Spacer()
 
                 if entry.isUnlimited {
                     Text("Unlimited")
-                        .font(.system(.title, design: .rounded))
-                        .fontWeight(.bold)
+                        .font(.system(.title, design: .rounded, weight: .bold))
                     Text("prompts available")
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                 } else {
                     Text("\(entry.remaining)")
-                        .font(.system(.largeTitle, design: .rounded))
-                        .fontWeight(.bold)
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
                         .foregroundStyle(entry.remaining == 0 ? .red : .primary)
                     Text(entry.remaining == 0 ? "Tap to upgrade" : "prompts left today")
-                        .font(.caption)
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
 
                     // Progress bar
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(.gray.opacity(0.2))
+                                .fill(colorScheme == .dark
+                                    ? Color.white.opacity(0.1)
+                                    : Color.brandPurple.opacity(0.1))
                                 .frame(height: 4)
 
                             RoundedRectangle(cornerRadius: 2)
@@ -242,9 +263,11 @@ struct SmallView: View {
 
     var tierColor: Color {
         switch entry.tier {
-        case "PREMIUM": return .purple
-        case "PRO": return .blue
-        default: return .gray
+        case "PREMIUM": return .orange
+        case "PRO": return accentColor
+        default: return colorScheme == .dark
+            ? Color(red: 142/255, green: 142/255, blue: 147/255)
+            : Color(red: 92/255, green: 82/255, blue: 150/255)
         }
     }
 
@@ -254,7 +277,7 @@ struct SmallView: View {
         } else if entry.progress > 0.7 {
             return .orange
         } else {
-            return .green
+            return accentColor
         }
     }
 }
