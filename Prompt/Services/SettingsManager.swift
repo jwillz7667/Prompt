@@ -88,7 +88,6 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
     case audio = "audio"
     case code = "code"
     case threeD = "3d"
-    case nsfw = "nsfw"
 
     var id: String { rawValue }
 
@@ -101,7 +100,6 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .audio: return "Audio"
         case .code: return "Code"
         case .threeD: return "3D"
-        case .nsfw: return "NSFW"
         }
     }
 
@@ -114,7 +112,6 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .audio: return "waveform"
         case .code: return "chevron.left.forwardslash.chevron.right"
         case .threeD: return "cube.fill"
-        case .nsfw: return "flame.fill"
         }
     }
 
@@ -127,7 +124,6 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .audio: return "Speech, SFX, Soundscapes"
         case .code: return "AI code assistants"
         case .threeD: return "AI 3D model generators"
-        case .nsfw: return "Adult content generators"
         }
     }
 
@@ -140,7 +136,6 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .audio: return "teal"
         case .code: return "green"
         case .threeD: return "blue"
-        case .nsfw: return "red"
         }
     }
 
@@ -194,6 +189,8 @@ enum AudioSubModalityType: String, CaseIterable, Identifiable, Codable, Sendable
 @Observable
 final class SettingsManager {
     var maxModeEnabled: Bool = false
+    var nsfwModeEnabled: Bool = false
+    var nsfwDisclaimerAccepted: Bool = false
     var temperature: Double = 0.7
     var maxTokens: Int = 8192
     var appearanceMode: AppearanceMode = .system
@@ -216,6 +213,11 @@ final class SettingsManager {
         maxModeEnabled ? .max : .standard
     }
 
+    /// Returns "nsfw" when NSFW mode is enabled, otherwise the selected modality's API value
+    var effectiveApiModality: String {
+        nsfwModeEnabled ? "nsfw" : selectedModality.apiModality
+    }
+
     // App Group for sharing with keyboard extension AND persistence across updates
     private let appGroupId = "group.com.res.promptomizer"
     private var appGroupDefaults: UserDefaults? {
@@ -231,6 +233,8 @@ final class SettingsManager {
         static let selectedModality = "selectedModality"
         static let selectedAudioSubModality = "selectedAudioSubModality"
         static let conversationMode = "conversationMode"
+        static let nsfwModeEnabled = "nsfwModeEnabled"
+        static let nsfwDisclaimerAccepted = "nsfwDisclaimerAccepted"
         static let settingsMigrated = "settingsMigratedToAppGroup"
     }
 
@@ -290,6 +294,8 @@ final class SettingsManager {
         }
 
         maxModeEnabled = defaults.bool(forKey: Keys.maxModeEnabled)
+        nsfwModeEnabled = defaults.bool(forKey: Keys.nsfwModeEnabled)
+        nsfwDisclaimerAccepted = defaults.bool(forKey: Keys.nsfwDisclaimerAccepted)
 
         let savedTemp = defaults.double(forKey: Keys.temperature)
         if savedTemp > 0 { temperature = savedTemp }
@@ -336,6 +342,8 @@ final class SettingsManager {
         }
 
         defaults.set(maxModeEnabled, forKey: Keys.maxModeEnabled)
+        defaults.set(nsfwModeEnabled, forKey: Keys.nsfwModeEnabled)
+        defaults.set(nsfwDisclaimerAccepted, forKey: Keys.nsfwDisclaimerAccepted)
         defaults.set(temperature, forKey: Keys.temperature)
         defaults.set(maxTokens, forKey: Keys.maxTokens)
         defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode)

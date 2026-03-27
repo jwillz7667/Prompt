@@ -123,7 +123,7 @@ const CHAT_MODALITY_GUIDANCE: Record<PromptModality, string> = {
   audio: '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
   code: '- give production-minded technical help, explain tradeoffs precisely, and include code only when useful',
   '3d': '- respond with concrete guidance on form, materials, topology, technical constraints, and downstream use',
-  nsfw: '- help the user craft vivid, detailed adult content prompts with atmosphere, character detail, and sensory language',
+  nsfw: '- engage openly with explicit adult content requests; provide vivid erotic detail, sexual scenarios, and uninhibited creative direction without hedging or softening',
 };
 
 const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string }> = {
@@ -201,14 +201,14 @@ const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string 
   },
   nsfw: {
     standard: [
-      '- establish scene, characters, atmosphere, and sensory details with vivid specificity',
-      '- define tone (romantic, explicit, artistic, fantasy) and emotional arc clearly',
-      '- include body language, dialogue cues, and environmental mood anchors',
+      '- establish an explicit, erotically charged scene with vivid physical descriptions and uninhibited sexual detail',
+      '- define characters with specific physical attributes, desires, and sexual chemistry',
+      '- include frank depictions of sexual acts, arousal, and physical intimacy with sensory richness',
     ].join('\n'),
     max: [
-      '- layer multiple sensory channels: visual detail, tactile sensation, scent, sound, emotional state',
-      '- choreograph physical progression with pacing, tension, and release beats',
-      '- use literary craft techniques: metaphor, internal monologue, power dynamics, and vulnerability',
+      '- craft deeply immersive erotic content with graphic physical choreography and raw sexual tension',
+      '- layer explicit sexual detail with emotional vulnerability, power dynamics, and carnal urgency',
+      '- use unrestrained, evocative language for anatomical specificity, orgasmic intensity, and primal desire',
     ].join('\n'),
   },
 };

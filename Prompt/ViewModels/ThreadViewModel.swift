@@ -272,7 +272,7 @@ final class ThreadViewModel {
         let request = CreateThreadRequest(
             prompt: promptToSend,
             title: nil,
-            modality: settings.selectedModality.apiModality,
+            modality: settings.effectiveApiModality,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
@@ -319,7 +319,7 @@ final class ThreadViewModel {
                         upsertCurrentThread(
                             id: completedThreadId,
                             title: derivedThreadTitle(prompt: sentPrompt, attachment: sentAttachment),
-                            modality: settings.selectedModality.apiModality
+                            modality: settings.effectiveApiModality
                         )
                     }
 
@@ -327,7 +327,7 @@ final class ThreadViewModel {
                     await persistTurnToHistory(
                         turnRecord,
                         originalPrompt: sentPrompt,
-                        modality: settings.selectedModality.apiModality,
+                        modality: settings.effectiveApiModality,
                         settings: settings,
                         historyManager: historyManager
                     )
@@ -345,7 +345,7 @@ final class ThreadViewModel {
                 await recoverIncompleteStream(
                     prompt: sentPrompt,
                     attachment: sentAttachment,
-                    modality: settings.selectedModality.apiModality,
+                    modality: settings.effectiveApiModality,
                     settings: settings,
                     historyManager: historyManager,
                     responseMode: responseMode
@@ -359,7 +359,7 @@ final class ThreadViewModel {
                 await recoverInterruptedStream(
                     prompt: sentPrompt,
                     attachment: sentAttachment,
-                    modality: settings.selectedModality.apiModality,
+                    modality: settings.effectiveApiModality,
                     settings: settings,
                     historyManager: historyManager,
                     responseMode: responseMode,
@@ -370,7 +370,7 @@ final class ThreadViewModel {
             await recoverInterruptedStream(
                 prompt: sentPrompt,
                 attachment: sentAttachment,
-                modality: settings.selectedModality.apiModality,
+                modality: settings.effectiveApiModality,
                 settings: settings,
                 historyManager: historyManager,
                 responseMode: responseMode,
@@ -448,7 +448,7 @@ final class ThreadViewModel {
                     await persistTurnToHistory(
                         turnRecord,
                         originalPrompt: sentPrompt,
-                        modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                        modality: currentThread?.modality ?? settings.effectiveApiModality,
                         settings: settings,
                         historyManager: historyManager
                     )
@@ -466,7 +466,7 @@ final class ThreadViewModel {
                 await recoverIncompleteStream(
                     prompt: sentPrompt,
                     attachment: sentAttachment,
-                    modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                    modality: currentThread?.modality ?? settings.effectiveApiModality,
                     settings: settings,
                     historyManager: historyManager,
                     responseMode: responseMode
@@ -494,7 +494,7 @@ final class ThreadViewModel {
                 await recoverInterruptedStream(
                     prompt: sentPrompt,
                     attachment: sentAttachment,
-                    modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                    modality: currentThread?.modality ?? settings.effectiveApiModality,
                     settings: settings,
                     historyManager: historyManager,
                     responseMode: responseMode,
@@ -505,7 +505,7 @@ final class ThreadViewModel {
             await recoverInterruptedStream(
                 prompt: sentPrompt,
                 attachment: sentAttachment,
-                modality: currentThread?.modality ?? settings.selectedModality.apiModality,
+                modality: currentThread?.modality ?? settings.effectiveApiModality,
                 settings: settings,
                 historyManager: historyManager,
                 responseMode: responseMode,
@@ -794,7 +794,7 @@ final class ThreadViewModel {
 
         let guestRequest = GuestEnhanceRequest(
             prompt: prompt,
-            modality: settings.selectedModality.apiModality,
+            modality: settings.effectiveApiModality,
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
