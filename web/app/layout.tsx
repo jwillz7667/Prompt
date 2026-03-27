@@ -12,7 +12,7 @@ import './globals.css'
 
 const siteUrl = 'https://promptomize.app'
 const siteName = 'Promptomize'
-const siteDescription = 'Transform your prompts into powerful, optimized instructions for AI. Get better results from ChatGPT, Claude, and other AI models with advanced prompt engineering.'
+const siteDescription = 'Transform your prompts into powerful, optimized instructions for any AI platform with advanced prompt engineering.'
 
 export const metadata: Metadata = {
   // Basic metadata
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
   keywords: [
     'AI prompt enhancement',
     'prompt engineering',
-    'ChatGPT prompts',
-    'Claude prompts',
+    'AI prompts',
+    'prompt optimization',
     'AI assistant prompts',
     'AI optimization',
     'prompt optimizer',

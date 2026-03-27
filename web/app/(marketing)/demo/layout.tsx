@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     'Promptomize demo',
     'AI prompt demo video',
     'prompt engineering walkthrough',
-    'ChatGPT prompt optimizer demo',
+    'AI prompt optimizer demo',
     'Promptomize app demo',
   ],
   openGraph: {

@@ -104,15 +104,15 @@ struct AuthView: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(accentColor)
 
-                Text("What you unlock after sign-in")
+                Text("What you get")
                     .font(.system(.headline, design: .rounded, weight: .bold))
                     .foregroundStyle(textPrimary)
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                benefitRow(systemImage: "checkmark.circle.fill", text: "Keep this chat and continue refining without losing your work")
-                benefitRow(systemImage: "flame.fill", text: "Claim the 7-day Premium trial right after sign-in")
-                benefitRow(systemImage: "lock.shield.fill", text: "Save your history, sync your account, and unlock paid tools")
+                benefitRow(systemImage: "wand.and.stars", text: "AI-powered prompt enhancement across all modalities")
+                benefitRow(systemImage: "gift.fill", text: "7-day Premium trial with unlimited prompts and MAX mode")
+                benefitRow(systemImage: "clock.arrow.circlepath", text: "Save history, sync across devices, and unlock all tools")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -198,7 +198,7 @@ struct AuthView: View {
         case .standard:
             return "Promptomize"
         case .guestUnlock:
-            return "Keep the workflow moving"
+            return "Sign in to get started"
         }
     }
 
@@ -207,7 +207,7 @@ struct AuthView: View {
         case .standard:
             return "Upgrade weak prompts into production-ready instructions with a cleaner, faster chat workflow."
         case .guestUnlock:
-            return "Your guest prompts are used up. Sign in to keep this thread, save your work, and unlock the Premium trial offer."
+            return "Sign in with Apple to start enhancing prompts, save your history, and claim your 7-day Premium trial."
         }
     }
 

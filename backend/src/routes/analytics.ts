@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { prisma } from '../utils/prisma.js';
+import { logger } from '../utils/logger.js';
 
 export const analyticsRouter = Router();
 
@@ -168,7 +169,7 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promi
       },
     });
   } catch (error) {
-    console.error('Get analytics error:', error);
+    logger.error({ err: error }, 'Get analytics error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
       return;
@@ -252,7 +253,7 @@ analyticsRouter.get('/streak', async (req: AuthenticatedRequest, res: Response):
       totalActiveDays: activityDates.size,
     });
   } catch (error) {
-    console.error('Get streak error:', error);
+    logger.error({ err: error }, 'Get streak error');
     res.status(500).json({ error: 'Failed to get streak info' });
   }
 });

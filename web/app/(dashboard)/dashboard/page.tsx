@@ -23,7 +23,6 @@ import {
   Crown,
   AlertCircle,
   Flame,
-  ExternalLink,
   FileText,
   ImageIcon,
   Video,
@@ -32,7 +31,6 @@ import {
   Box,
 } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 
 const toneOptions: SelectOption[] = [
   { value: 'professional', label: 'Professional', description: 'Clear and business-appropriate' },
@@ -132,7 +130,7 @@ const modalityDetails: Record<
     title: 'Image prompts',
     description: 'Optimize prompts for image generators with stronger subject, composition, style, lighting, and camera detail.',
     placeholder: "Describe the scene you want improved. Example: 'A luxury perfume bottle on black marble with water droplets and dramatic lighting.'",
-    helper: 'Best for Midjourney, DALL-E, Flux, and other image-generation workflows.',
+    helper: 'Best for image-generation tools and workflows.',
     outputLabel: 'image',
   },
   video: {
@@ -515,47 +513,6 @@ export default function DashboardPage() {
                           >
                             Clear
                           </Button>
-                        </div>
-
-                        {/* Try it out row */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-[var(--text-tertiary)] mr-1">Try it in:</span>
-                          <button
-                            onClick={() => {
-                              const text = result?.enhancedPrompt || streamedContent
-                              if (text) {
-                                window.open(`https://claude.ai/new?q=${encodeURIComponent(text)}`, '_blank')
-                              }
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D97706]/30 hover:bg-[#D97706]/10 transition-colors"
-                          >
-                            <Image
-                              src="/logos/claude-logo.png"
-                              alt="Claude"
-                              width={20}
-                              height={20}
-                              className="object-contain"
-                            />
-                            <ExternalLink className="h-3 w-3 text-[#D97706]" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              const text = result?.enhancedPrompt || streamedContent
-                              if (text) {
-                                window.open(`https://chatgpt.com/?q=${encodeURIComponent(text)}`, '_blank')
-                              }
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#10A37F]/30 hover:bg-[#10A37F]/10 transition-colors"
-                          >
-                            <Image
-                              src="/logos/chatgpt-logo.png"
-                              alt="ChatGPT"
-                              width={20}
-                              height={20}
-                              className="object-contain"
-                            />
-                            <ExternalLink className="h-3 w-3 text-[#10A37F]" />
-                          </button>
                         </div>
 
                         {/* Stats row */}

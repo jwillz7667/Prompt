@@ -1,7 +1,7 @@
 /**
  * 3D Modality Configuration
  *
- * Optimized for 3D model generation: Meshy, Tripo3D, Point-E, Shap-E
+ * Optimized for 3D model generation: AI 3D generation models
  * Implements purpose-driven specs, topology requirements, and PBR materials
  */
 
@@ -429,7 +429,7 @@ function buildSystemPrompt(tier: EnhancementTier, subModality?: ThreeDSubModalit
   const subModalityGuidance = getSubModalityGuidance(subModality || 'game-asset');
 
   const baseKnowledge = `<system>
-You are SCULPTOR, a mesh engineer specializing in AI 3D generation for Meshy, Tripo3D, Point-E, Shap-E, and traditional 3D workflows.
+You are SCULPTOR, a mesh engineer specializing in AI 3D generation and traditional 3D workflows.
 
 <research_foundation>
 3D model generation requires purpose-driven specifications:
@@ -554,18 +554,52 @@ function getTierGuidance(tier: EnhancementTier): string {
 <output_length>Detailed prompt (200-400 words)</output_length>`;
 
     case 'advanced':
-      return `<enhancement_level>ADVANCED</enhancement_level>
+      return `<enhancement_level>ADVANCED — PREMIUM TIER</enhancement_level>
 <techniques_to_apply>
-- Comprehensive design document format
-- Full technical specifications with tolerances
-- Detailed design breakdown by component
-- Complete PBR material table
-- Animation/rigging requirements if applicable
-- LOD specifications for game assets
-- Structural considerations for printing
-- Export requirements with formats
+Apply every cutting-edge 3D prompt engineering technique relevant to this specific generation task:
+
+TOPOLOGY & MESH ENGINEERING:
+- Edge flow optimization: specify loop placement for clean deformation at joints, creases, and tension points
+- Pole management: define acceptable pole locations (flat surfaces only, never on deformation zones)
+- Subdivision readiness: all-quad mesh with holding edges for crease control, support loops for hard edges
+- LOD chain specification: triangle budgets per LOD level (LOD0→LOD3) with silhouette preservation priorities
+- Mesh density distribution: concentrate polygons where visual detail matters most, reduce in occluded areas
+
+MATERIAL & SURFACE SCIENCE:
+- Multi-layer PBR specification: base layer + clear coat + subsurface for complex materials (car paint, skin, wet surfaces)
+- Procedural detail description: noise type (Perlin, Voronoi, Musgrave), scale, and purpose for each material channel
+- Weathering and wear maps: specify edge wear patterns, dirt accumulation zones, oxidation gradients
+- Texel density standardization: pixels-per-meter targets for consistent visual quality across the model
+- Material ID assignment: organized by render pass requirements and LOD level texture atlas efficiency
+
+DESIGN SPECIFICATION:
+- Component-by-component breakdown with precise dimensions, proportions, and silhouette descriptions
+- Reference sheet layout: front, side, 3/4, top-down, plus detail callouts for complex areas
+- Style guide anchoring: reference specific art directors, studios, or existing IPs for design language
+- Functional design considerations: how does this object work, move, or interact physically
+- Silhouette test: describe how the model reads at distance (recognizable shape in shadow)
+
+ANIMATION & RIGGING READINESS:
+- Skeleton hierarchy with joint placement, orientation, and naming convention
+- IK/FK chain specification: which limbs use IK, which use FK, switch mechanism requirements
+- Deformation zones: weight painting priority areas, corrective blend shapes for extreme poses
+- Secondary motion elements: cloth sim regions, hair guide curves, jiggle bone candidates, spring dynamics
+- Facial rig requirements: blend shape library or bone-based, expression range, phoneme shapes
+
+PRODUCTION PIPELINE INTEGRATION:
+- DCC tool chain: specify primary modeling tool (Blender, Maya, ZBrush) and target engine (Unity, Unreal, Godot)
+- Naming conventions: mesh naming, material naming, texture naming following studio standards
+- Scene organization: hierarchy structure, collection/layer organization, pivot point placement
+- Collision mesh specification: simplified collision geometry, physics material assignments
+- Cross-engine compatibility: include both FBX and glTF exports, embedded vs referenced textures
+
+STRUCTURAL & PRINT ENGINEERING (when applicable):
+- Stress analysis: identify load-bearing areas, specify reinforcement thickness
+- Support-free design: orient overhangs under 45°, bridge length limits, print orientation strategy
+- Assembly specification: tolerance for snap-fit (0.2mm), press-fit (0.1mm), sliding (0.3mm) joints
+- Material-specific constraints: minimum feature size for FDM (0.8mm), SLA (0.3mm), SLS (0.5mm)
 </techniques_to_apply>
-<output_length>Comprehensive prompt (400-600 words)</output_length>`;
+<output_length>Comprehensive, production-grade prompt (500-800 words of dense 3D specification)</output_length>`;
   }
 }
 
@@ -588,8 +622,8 @@ Format requirements:
 export const threeDModalityConfig: ModalityConfig = {
   modality: '3d',
   displayName: '3D Model Generation',
-  description: 'Optimized for 3D generation (Meshy, Tripo3D, Point-E, Shap-E)',
-  targetPlatforms: ['meshy', 'tripo3d', 'general'],
+  description: 'Optimized for AI 3D generation',
+  targetPlatforms: ['general'],
   subModalities: ['game-asset', 'print-ready', 'visualization', 'animation'],
   defaultSubModality: 'game-asset',
   coreStructure: [

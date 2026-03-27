@@ -184,7 +184,7 @@ const udioAdapter: PlatformAdapter = {
     'Clean genre and style descriptions',
     'Artist references effective',
     'Mood and energy descriptors',
-    'Less structure-tag dependent than Suno',
+    'Less structure-tag dependent than other music generators',
   ],
   formatHints: [
     'Focus on sonic characteristics',
@@ -366,7 +366,7 @@ ${adapter.formatHints.map((hint) => `- ${hint}`).join('\n')}
 }
 
 /**
- * Apply platform-specific parameters to a prompt (e.g., Midjourney --ar)
+ * Apply platform-specific parameters to a prompt (e.g., image generator --ar)
  */
 export function applyPlatformParameters(
   prompt: string,

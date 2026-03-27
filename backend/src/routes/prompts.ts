@@ -8,6 +8,7 @@ import {
   type RequestWithSubscription,
 } from '../middleware/quotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
+import { promptLogger } from '../utils/logger.js';
 import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
 import {
   enhancePrompt,
@@ -17,6 +18,7 @@ import {
 } from '../services/deepseekService.js';
 import {
   ensureMaxModeAvailable,
+  ensureModalityAvailable,
   getMaxModeQuota,
   recordMaxModeUsage,
 } from '../services/maxModeQuotaService.js';
@@ -112,7 +114,7 @@ const createPromptSchema = z.object({
   outputTokens: z.number().int().min(0).default(0),
   totalTokens: z.number().int().min(0).default(0),
   processingMs: z.number().int().min(0).default(0),
-  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw']).default('text'),
   imageAttachment: imageAttachmentSchema.optional(),
   title: z.string().max(200).optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
@@ -150,9 +152,8 @@ const enhancePromptSchemaBase = z.object({
   ),
   mode: z.enum(['standard', 'max']).default('standard'),
   conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
-  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw']).default('text'),
   customInstructions: z.string().max(2000).optional(),
-  targetCharacterLength: z.number().int().min(1).max(100000).optional(),
   subModality: z.string().optional(),
   imageAttachment: imageAttachmentSchema.optional(),
 });
@@ -230,7 +231,6 @@ promptRouter.post(
           modality: data.modality,
           subModality: data.subModality,
           customInstructions: data.customInstructions,
-          targetCharacterLength: data.targetCharacterLength,
           previousTurns: data.previousTurns,
           imageAttachment: data.imageAttachment,
         },
@@ -341,6 +341,8 @@ promptRouter.post(
       // Get user's subscription to determine prompt quality tier
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+      // Enforce subscription gates: MAX mode and non-text modalities require a subscription
+      ensureModalityAvailable(data.modality, subscriptionInfo.tier);
       const maxModeQuotaBeforeUse = data.mode === 'max'
         ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
         : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
@@ -362,7 +364,6 @@ promptRouter.post(
         conversationMode: data.conversationMode,
         modality: data.modality,
         customInstructions: data.customInstructions,
-        targetCharacterLength: data.targetCharacterLength,
         subModality: data.subModality,
         imageAttachment: data.imageAttachment,
       });
@@ -437,17 +438,25 @@ promptRouter.post(
         subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
       });
     } catch (error) {
-      console.error('Enhance prompt error:', error);
+      promptLogger.error({ err: error }, 'Enhance prompt error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.errors });
         return;
       }
       if (error instanceof Error) {
+        if (error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
+          res.status(403).json({
+            error: 'Subscription required',
+            code: 'MODALITY_REQUIRES_SUBSCRIPTION',
+            message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.',
+          });
+          return;
+        }
         if (error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
           res.status(403).json({
-            error: 'Quota exceeded',
-            code: 'QUOTA_EXCEEDED',
-            message: 'Free users can use MAX mode up to 5 times per day.',
+            error: 'Subscription required',
+            code: 'MAX_MODE_REQUIRES_SUBSCRIPTION',
+            message: 'Upgrade to Pro or Premium to use MAX mode.',
             remainingQuota: 0,
           });
           return;
@@ -487,6 +496,9 @@ promptRouter.post(
       // Get user's subscription to determine prompt quality tier
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+
+      // Enforce subscription gates: MAX mode and non-text modalities require a subscription
+      ensureModalityAvailable(data.modality, subscriptionInfo.tier);
       const maxModeQuotaBeforeUse = data.mode === 'max'
         ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
         : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
@@ -509,7 +521,6 @@ promptRouter.post(
           conversationMode: data.conversationMode,
           modality: data.modality,
           customInstructions: data.customInstructions,
-          targetCharacterLength: data.targetCharacterLength,
           subModality: data.subModality,
           imageAttachment: data.imageAttachment,
         },
@@ -589,18 +600,20 @@ promptRouter.post(
             res.end();
           },
           onError: (error) => {
-            console.error('Stream error:', error);
+            promptLogger.error({ err: error }, 'Stream error');
             res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
             res.end();
           },
         }
       );
     } catch (error) {
-      console.error('Stream enhance error:', error);
+      promptLogger.error({ err: error }, 'Stream enhance error');
       if (error instanceof z.ZodError) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+      } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
+        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`);
       } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Free users can use MAX mode up to 5 times per day.' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to enhance prompt' })}\n\n`);
       }
@@ -696,7 +709,7 @@ promptRouter.post(
           : undefined,
       });
     } catch (error) {
-      console.error('Create prompt error:', error);
+      promptLogger.error({ err: error }, 'Create prompt error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.errors });
         return;
@@ -769,7 +782,7 @@ promptRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
       },
     });
   } catch (error) {
-    console.error('List prompts error:', error);
+    promptLogger.error({ err: error }, 'List prompts error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
       return;
@@ -811,7 +824,7 @@ promptRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
       },
     });
   } catch (error) {
-    console.error('Get prompt error:', error);
+    promptLogger.error({ err: error }, 'Get prompt error');
     res.status(500).json({ error: 'Failed to get prompt' });
   }
 });
@@ -858,7 +871,7 @@ promptRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
         : null,
     });
   } catch (error) {
-    console.error('Update prompt error:', error);
+    promptLogger.error({ err: error }, 'Update prompt error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -893,7 +906,7 @@ promptRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pr
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete prompt error:', error);
+    promptLogger.error({ err: error }, 'Delete prompt error');
     res.status(500).json({ error: 'Failed to delete prompt' });
   }
 });
@@ -926,7 +939,7 @@ promptRouter.post('/bulk/favorite', async (req: AuthenticatedRequest, res: Respo
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Bulk favorite error:', error);
+    promptLogger.error({ err: error }, 'Bulk favorite error');
     res.status(500).json({ error: 'Failed to update prompts' });
   }
 });
@@ -953,7 +966,7 @@ promptRouter.post('/bulk/delete', async (req: AuthenticatedRequest, res: Respons
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Bulk delete error:', error);
+    promptLogger.error({ err: error }, 'Bulk delete error');
     res.status(500).json({ error: 'Failed to delete prompts' });
   }
 });

@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     'promptomize pricing',
     'AI prompt subscription',
     'prompt enhancement plans',
-    'ChatGPT prompt tools pricing',
+    'AI prompt tools pricing',
     'AI writing assistant cost',
   ],
   openGraph: {

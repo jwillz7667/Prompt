@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 import {
   chatWithSupport,
   getTicket,
@@ -57,7 +58,7 @@ supportRouter.post('/chat', async (req: AuthenticatedRequest, res: Response): Pr
       res.status(400).json({ error: 'Invalid request', details: error.errors });
       return;
     }
-    console.error('Support chat error:', error);
+    logger.error({ err: error }, 'Support chat error');
     res.status(500).json({ error: 'Failed to process support request' });
   }
 });
@@ -77,7 +78,7 @@ supportRouter.get('/tickets', async (req: AuthenticatedRequest, res: Response): 
 
     res.json({ tickets });
   } catch (error) {
-    console.error('Get tickets error:', error);
+    logger.error({ err: error }, 'Get tickets error');
     res.status(500).json({ error: 'Failed to get tickets' });
   }
 });
@@ -108,7 +109,7 @@ supportRouter.get('/tickets/:ticketId', async (req: AuthenticatedRequest, res: R
 
     res.json({ ticket });
   } catch (error) {
-    console.error('Get ticket error:', error);
+    logger.error({ err: error }, 'Get ticket error');
     res.status(500).json({ error: 'Failed to get ticket' });
   }
 });
@@ -155,7 +156,7 @@ supportRouter.post('/tickets/:ticketId/chat', async (req: AuthenticatedRequest, 
       res.status(400).json({ error: 'This ticket has been closed' });
       return;
     }
-    console.error('Ticket chat error:', error);
+    logger.error({ err: error }, 'Ticket chat error');
     res.status(500).json({ error: 'Failed to process message' });
   }
 });

@@ -7,6 +7,7 @@ import {
   type RequestWithSubscription,
 } from '../middleware/quotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
+import { logger } from '../utils/logger.js';
 import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
 import {
   enhancePromptInThreadStream,
@@ -15,6 +16,7 @@ import {
 } from '../services/deepseekService.js';
 import {
   ensureMaxModeAvailable,
+  ensureModalityAvailable,
   getMaxModeQuota,
   recordMaxModeUsage,
 } from '../services/maxModeQuotaService.js';
@@ -104,7 +106,7 @@ threadRouter.use(authenticate);
 const createThreadSchema = z.object({
   prompt: z.string().max(100000).default(''),
   title: z.string().max(200).optional(),
-  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw']).default('text'),
   subModality: z.string().max(50).optional(),
   mode: z.enum(['standard', 'max']).default('standard'),
   conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
@@ -187,6 +189,9 @@ threadRouter.post(
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       const maxTokens = subscriptionInfo.features.maxTokensPerPrompt;
+
+      // Enforce subscription gates: MAX mode and non-text modalities require a subscription
+      ensureModalityAvailable(data.modality, subscriptionInfo.tier);
       const maxModeQuotaBeforeUse = data.mode === 'max'
         ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
         : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
@@ -314,7 +319,7 @@ threadRouter.post(
             res.end();
           },
           onError: (error) => {
-            console.error('Thread create stream error:', error);
+            logger.error({ err: error }, 'Thread create stream error');
             // Clean up the empty thread on error
             prisma.thread.delete({ where: { id: thread.id } }).catch(() => {});
             res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
@@ -323,11 +328,13 @@ threadRouter.post(
         }
       );
     } catch (error) {
-      console.error('Create thread error:', error);
+      logger.error({ err: error }, 'Create thread error');
       if (error instanceof z.ZodError) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+      } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
+        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`);
       } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Free users can use MAX mode up to 5 times per day.' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to create thread' })}\n\n`);
       }
@@ -385,6 +392,9 @@ threadRouter.post(
       const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       const maxTokens = subscriptionInfo.features.maxTokensPerPrompt;
+
+      // Enforce subscription gates: MAX mode and non-text modalities require a subscription
+      ensureModalityAvailable(thread.modality ?? undefined, subscriptionInfo.tier);
       const maxModeQuotaBeforeUse = data.mode === 'max'
         ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
         : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
@@ -405,7 +415,7 @@ threadRouter.post(
           maxTokens,
           mode: data.mode,
           conversationMode: data.conversationMode,
-          modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d',
+          modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw',
           subModality: data.subModality,
           customInstructions: data.customInstructions,
           previousTurns,
@@ -493,18 +503,20 @@ threadRouter.post(
             res.end();
           },
           onError: (error) => {
-            console.error('Thread turn stream error:', error);
+            logger.error({ err: error }, 'Thread turn stream error');
             res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
             res.end();
           },
         }
       );
     } catch (error) {
-      console.error('Add turn error:', error);
+      logger.error({ err: error }, 'Add turn error');
       if (error instanceof z.ZodError) {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+      } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
+        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`);
       } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Free users can use MAX mode up to 5 times per day.' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`);
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to add turn' })}\n\n`);
       }
@@ -582,7 +594,7 @@ threadRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
       },
     });
   } catch (error) {
-    console.error('List threads error:', error);
+    logger.error({ err: error }, 'List threads error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
       return;
@@ -634,7 +646,7 @@ threadRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
       },
     });
   } catch (error) {
-    console.error('Get thread error:', error);
+    logger.error({ err: error }, 'Get thread error');
     res.status(500).json({ error: 'Failed to get thread' });
   }
 });
@@ -699,7 +711,7 @@ threadRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
         : null,
     });
   } catch (error) {
-    console.error('Update thread error:', error);
+    logger.error({ err: error }, 'Update thread error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -731,7 +743,7 @@ threadRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pr
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete thread error:', error);
+    logger.error({ err: error }, 'Delete thread error');
     res.status(500).json({ error: 'Failed to delete thread' });
   }
 });

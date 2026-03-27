@@ -81,6 +81,7 @@ struct ModalityChip: View {
         case .audio: return .teal
         case .code: return .green
         case .threeD: return .blue
+        case .nsfw: return .red
         }
     }
 
@@ -123,6 +124,7 @@ struct CompactModalitySelector: View {
         case .audio: return .teal
         case .code: return .green
         case .threeD: return .blue
+        case .nsfw: return .red
         }
     }
 
@@ -187,6 +189,7 @@ struct InlineModalityPicker: View {
         case .audio: return .teal
         case .code: return .green
         case .threeD: return .blue
+        case .nsfw: return .red
         }
     }
 

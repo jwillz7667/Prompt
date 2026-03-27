@@ -62,9 +62,9 @@ export default function ModelsEndpointPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[
             { id: 'text', name: 'Text', desc: 'General writing, emails, articles' },
-            { id: 'image', name: 'Image', desc: 'DALL-E, Midjourney, Stable Diffusion' },
-            { id: 'video', name: 'Video', desc: 'Sora, Runway, Pika' },
-            { id: 'audio', name: 'Audio', desc: 'Suno, Udio, music prompts' },
+            { id: 'image', name: 'Image', desc: 'Image generation platforms' },
+            { id: 'video', name: 'Video', desc: 'Video generation platforms' },
+            { id: 'audio', name: 'Audio', desc: 'Music generation platforms' },
             { id: 'code', name: 'Code', desc: 'Programming and development' },
             { id: '3d', name: '3D', desc: '3D model generation' },
           ].map((m) => (

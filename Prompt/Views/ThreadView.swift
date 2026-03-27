@@ -94,24 +94,68 @@ struct ThreadView: View {
     }
 
     private var inputPlaceholder: String {
+        let modality = settings.selectedModality
+        if viewModel.hasConversation {
+            switch conversationMode {
+            case .optimize:
+                return "Follow up or refine..."
+            case .chat:
+                return chatFollowUpPlaceholder(for: modality)
+            }
+        }
         switch conversationMode {
         case .optimize:
-            return viewModel.hasConversation
-                ? "Reply with another optimization request"
-                : "Ask Promptomize to rewrite your prompt"
+            return optimizePlaceholder(for: modality)
         case .chat:
-            return viewModel.hasConversation
-                ? "Continue the conversation"
-                : "Ask Promptomize anything"
+            return chatPlaceholder(for: modality)
+        }
+    }
+
+    private func optimizePlaceholder(for modality: ModalityType) -> String {
+        switch modality {
+        case .image: return "Describe your image..."
+        case .video: return "Describe your video..."
+        case .code: return "Describe what to build..."
+        case .audio: return "Describe your audio..."
+        case .music: return "Describe your music..."
+        case .threeD: return "Describe your 3D model..."
+        case .nsfw: return "Describe your scene..."
+        case .text: return "Paste a prompt to optimize..."
+        }
+    }
+
+    private func chatPlaceholder(for modality: ModalityType) -> String {
+        switch modality {
+        case .image: return "Ask about images..."
+        case .video: return "Ask about video..."
+        case .code: return "Ask about code..."
+        case .audio: return "Ask about audio..."
+        case .music: return "Ask about music..."
+        case .threeD: return "Ask about 3D..."
+        case .nsfw: return "Ask about NSFW..."
+        case .text: return "Ask anything..."
+        }
+    }
+
+    private func chatFollowUpPlaceholder(for modality: ModalityType) -> String {
+        switch modality {
+        case .image: return "Refine style or details..."
+        case .video: return "Refine scene or pacing..."
+        case .code: return "Modify or extend..."
+        case .audio: return "Adjust mood or layers..."
+        case .music: return "Tweak genre or tempo..."
+        case .threeD: return "Adjust details..."
+        case .nsfw: return "Refine your scene..."
+        case .text: return "Continue chatting..."
         }
     }
 
     private var imagePromptPlaceholder: String {
         switch conversationMode {
         case .optimize:
-            return "Describe the motion, camera, or style you want..."
+            return "Describe motion or style..."
         case .chat:
-            return "Ask about the image or tell Promptomize how to help..."
+            return "Ask about this image..."
         }
     }
 
@@ -312,52 +356,169 @@ struct ThreadView: View {
 
     // MARK: - Suggestion Chips
 
+    private struct SuggestionItem: Identifiable {
+        let id = UUID()
+        let title: String
+        let subtitle: String
+        let prompt: String
+        /// If set, selecting this chip also switches the modality
+        var switchModality: ModalityType?
+    }
+
+    private var currentSuggestions: [SuggestionItem] {
+        let modality = settings.selectedModality
+        switch conversationMode {
+        case .optimize:
+            return optimizeSuggestions(for: modality)
+        case .chat:
+            return chatSuggestions(for: modality)
+        }
+    }
+
+    private func optimizeSuggestions(for modality: ModalityType) -> [SuggestionItem] {
+        switch modality {
+        case .text:
+            return [
+                SuggestionItem(title: "Create an image", subtitle: "for my presentation", prompt: "Create an image for my presentation", switchModality: .image),
+                SuggestionItem(title: "Write code", subtitle: "to solve a problem", prompt: "Write code to solve a problem", switchModality: .code),
+                SuggestionItem(title: "Create a video", subtitle: "product showcase", prompt: "Create a video prompt for a product showcase", switchModality: .video),
+                SuggestionItem(title: "Compose audio", subtitle: "for a short film", prompt: "Compose audio for a short film", switchModality: .audio),
+            ]
+        case .image:
+            return [
+                SuggestionItem(title: "Futuristic cityscape", subtitle: "at golden hour sunset", prompt: "A futuristic cityscape at golden hour with neon reflections"),
+                SuggestionItem(title: "Portrait photo", subtitle: "dramatic studio lighting", prompt: "A cinematic portrait with dramatic studio lighting and shallow depth of field"),
+                SuggestionItem(title: "Product shot", subtitle: "clean minimal background", prompt: "A sleek product shot on white marble with soft studio lighting"),
+                SuggestionItem(title: "Abstract art", subtitle: "fluid colors and motion", prompt: "Abstract fluid art with vibrant flowing colors and organic motion"),
+            ]
+        case .video:
+            return [
+                SuggestionItem(title: "Drone flyover", subtitle: "cinematic mountain reveal", prompt: "Cinematic drone shot slowly revealing mountain peaks through morning clouds"),
+                SuggestionItem(title: "Product reveal", subtitle: "smooth 360° rotation", prompt: "A smooth 360° product reveal with dramatic lighting on a dark background"),
+                SuggestionItem(title: "Time-lapse", subtitle: "city day to night", prompt: "Time-lapse of a city skyline transitioning from golden hour to night"),
+                SuggestionItem(title: "Slow motion", subtitle: "water splash close-up", prompt: "Extreme slow-motion close-up of a water splash with backlit droplets"),
+            ]
+        case .code:
+            return [
+                SuggestionItem(title: "REST API", subtitle: "with authentication", prompt: "Build a REST API endpoint with JWT authentication and input validation"),
+                SuggestionItem(title: "React component", subtitle: "interactive data table", prompt: "Create a React component for a sortable, filterable data table"),
+                SuggestionItem(title: "Algorithm", subtitle: "optimized search", prompt: "Write an efficient search algorithm with O(log n) complexity"),
+                SuggestionItem(title: "Database query", subtitle: "complex aggregation", prompt: "Write a SQL query for aggregating user activity data with window functions"),
+            ]
+        case .audio:
+            return [
+                SuggestionItem(title: "Forest ambience", subtitle: "birds and gentle wind", prompt: "Ambient forest soundscape with birdsong, gentle wind, and a distant stream"),
+                SuggestionItem(title: "Podcast intro", subtitle: "professional and warm", prompt: "A warm professional podcast intro with subtle music bed and voice-over cue"),
+                SuggestionItem(title: "Cinematic score", subtitle: "epic orchestral swell", prompt: "An epic orchestral score building from quiet strings to a powerful brass climax"),
+                SuggestionItem(title: "Sound effect", subtitle: "sci-fi UI interactions", prompt: "Futuristic sci-fi UI sound effects for button clicks, transitions, and notifications"),
+            ]
+        case .music:
+            return [
+                SuggestionItem(title: "Lo-fi chill", subtitle: "study beats with vinyl", prompt: "Lo-fi chill hip hop beat with vinyl crackle, mellow keys, and a relaxed groove"),
+                SuggestionItem(title: "Epic soundtrack", subtitle: "cinematic orchestra", prompt: "Epic cinematic soundtrack with sweeping strings, choir, and thunderous percussion"),
+                SuggestionItem(title: "Acoustic ballad", subtitle: "fingerpicked guitar", prompt: "Acoustic guitar ballad with warm fingerpicking and soft vocal harmonies"),
+                SuggestionItem(title: "Electronic drop", subtitle: "energetic dance beat", prompt: "High-energy electronic dance track with a massive synth drop and driving bass"),
+            ]
+        case .threeD:
+            return [
+                SuggestionItem(title: "Character model", subtitle: "stylized low-poly", prompt: "A stylized low-poly character model with clean topology for game animation"),
+                SuggestionItem(title: "Interior scene", subtitle: "realistic living room", prompt: "A photorealistic modern living room interior with natural lighting and PBR materials"),
+                SuggestionItem(title: "Sci-fi weapon", subtitle: "hard-surface concept", prompt: "A detailed hard-surface sci-fi weapon concept with metallic and emissive materials"),
+                SuggestionItem(title: "Architecture", subtitle: "modern building exterior", prompt: "Architectural visualization of a modern glass building with landscape and sky dome"),
+            ]
+        case .nsfw:
+            return [
+                SuggestionItem(title: "Romance scene", subtitle: "sensual and intimate", prompt: "An intimate romantic scene with soft lighting and sensual atmosphere"),
+                SuggestionItem(title: "Fantasy encounter", subtitle: "mythical setting", prompt: "A fantasy encounter in an enchanted moonlit forest clearing"),
+                SuggestionItem(title: "Character portrait", subtitle: "alluring and detailed", prompt: "A detailed character portrait with alluring pose and dramatic lighting"),
+                SuggestionItem(title: "Artistic nude", subtitle: "classical painting style", prompt: "An artistic nude study inspired by classical Renaissance painting techniques"),
+            ]
+        }
+    }
+
+    private func chatSuggestions(for modality: ModalityType) -> [SuggestionItem] {
+        switch modality {
+        case .text:
+            return [
+                SuggestionItem(title: "Help me write", subtitle: "a compelling blog post", prompt: "Help me write a compelling blog post about an interesting topic"),
+                SuggestionItem(title: "Brainstorm ideas", subtitle: "for a project", prompt: "Help me brainstorm creative ideas for my project"),
+                SuggestionItem(title: "Improve my writing", subtitle: "make it more engaging", prompt: "How can I make my writing more engaging and persuasive?"),
+                SuggestionItem(title: "Prompt tips", subtitle: "write better prompts", prompt: "What are the best techniques for writing effective AI prompts?"),
+            ]
+        case .image:
+            return [
+                SuggestionItem(title: "Style guide", subtitle: "what makes great prompts", prompt: "What makes a great image prompt? Teach me the key elements"),
+                SuggestionItem(title: "Describe a scene", subtitle: "help me visualize it", prompt: "Help me describe a scene I'm imagining so I can turn it into an image prompt"),
+                SuggestionItem(title: "Prompt techniques", subtitle: "parameters and styles", prompt: "What are the best parameters and style keywords for image prompts?"),
+                SuggestionItem(title: "Style exploration", subtitle: "art styles and mediums", prompt: "What art styles, mediums, and techniques can I use in image prompts?"),
+            ]
+        case .video:
+            return [
+                SuggestionItem(title: "Camera movements", subtitle: "how to describe them", prompt: "Teach me how to describe camera movements and angles for video prompts"),
+                SuggestionItem(title: "Plan a scene", subtitle: "help me storyboard", prompt: "Help me plan and storyboard a video scene for my project"),
+                SuggestionItem(title: "Video tips", subtitle: "get the best results", prompt: "What are the best tips for writing effective AI video generation prompts?"),
+                SuggestionItem(title: "Transitions", subtitle: "smooth scene changes", prompt: "Suggest creative transition techniques between video scenes"),
+            ]
+        case .code:
+            return [
+                SuggestionItem(title: "Debug this", subtitle: "help me find the bug", prompt: "Help me debug an issue I'm having with my code"),
+                SuggestionItem(title: "Explain a pattern", subtitle: "architecture help", prompt: "Explain common code architecture patterns and when to use them"),
+                SuggestionItem(title: "Tech stack advice", subtitle: "pick the right tools", prompt: "Help me choose the right tech stack for my project"),
+                SuggestionItem(title: "Best practices", subtitle: "error handling tips", prompt: "What are best practices for error handling and resilient code?"),
+            ]
+        case .audio:
+            return [
+                SuggestionItem(title: "Describe a sound", subtitle: "help me capture it", prompt: "Help me describe a specific sound I'm imagining for an audio prompt"),
+                SuggestionItem(title: "Sound design tips", subtitle: "layering and mixing", prompt: "Teach me about sound design — layering, mixing, and spatial audio"),
+                SuggestionItem(title: "Music for video", subtitle: "suggest styles", prompt: "Suggest music and audio styles that would work well for my video project"),
+                SuggestionItem(title: "Audio techniques", subtitle: "layering and effects", prompt: "What techniques work best for different types of AI audio generation?"),
+            ]
+        case .music:
+            return [
+                SuggestionItem(title: "Write lyrics", subtitle: "for a song idea", prompt: "Help me write lyrics for a song I'm working on"),
+                SuggestionItem(title: "Genre guide", subtitle: "find the right style", prompt: "Help me find the right music genre and style for the mood I want"),
+                SuggestionItem(title: "Music tips", subtitle: "get better results", prompt: "What are the best tips and techniques for writing AI music prompts?"),
+                SuggestionItem(title: "Song structure", subtitle: "verses and hooks", prompt: "Teach me about song structure — how to build verses, choruses, and hooks"),
+            ]
+        case .threeD:
+            return [
+                SuggestionItem(title: "Describe a model", subtitle: "help me specify it", prompt: "Help me describe a 3D model I want to create with proper detail"),
+                SuggestionItem(title: "Materials guide", subtitle: "PBR and textures", prompt: "Teach me about PBR materials and textures for realistic 3D rendering"),
+                SuggestionItem(title: "3D tips", subtitle: "get better results", prompt: "What are the best tips for writing effective AI 3D model generation prompts?"),
+                SuggestionItem(title: "Topology advice", subtitle: "clean mesh structure", prompt: "Explain clean topology and mesh structure for 3D models"),
+            ]
+        case .nsfw:
+            return [
+                SuggestionItem(title: "Scene building", subtitle: "craft a vivid scene", prompt: "Help me craft a vivid, detailed NSFW scene with strong atmosphere"),
+                SuggestionItem(title: "Character design", subtitle: "alluring descriptions", prompt: "Help me describe an alluring character with detailed physical attributes"),
+                SuggestionItem(title: "Writing tips", subtitle: "sensual prose style", prompt: "What techniques make NSFW creative writing more vivid and engaging?"),
+                SuggestionItem(title: "Prompt structure", subtitle: "effective adult prompts", prompt: "What's the best structure for writing effective adult content prompts?"),
+            ]
+        }
+    }
+
     private var suggestionChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                suggestionChip(
-                    title: "Create an image",
-                    subtitle: "for my presentation"
-                ) {
-                    viewModel.userPrompt = "Create an image for my presentation"
-                    settings.selectedModality = .image
-                    settings.savePreferences()
-                    isInputFocused = true
-                }
-
-                suggestionChip(
-                    title: "Write code",
-                    subtitle: "to solve a problem"
-                ) {
-                    viewModel.userPrompt = "Write code to solve a problem"
-                    settings.selectedModality = .code
-                    settings.savePreferences()
-                    isInputFocused = true
-                }
-
-                suggestionChip(
-                    title: "Create a video prompt",
-                    subtitle: "for a product showcase"
-                ) {
-                    viewModel.userPrompt = "Create a video prompt for a product showcase"
-                    settings.selectedModality = .video
-                    settings.savePreferences()
-                    isInputFocused = true
-                }
-
-                suggestionChip(
-                    title: "Compose audio",
-                    subtitle: "for a short film"
-                ) {
-                    viewModel.userPrompt = "Compose audio for a short film"
-                    settings.selectedModality = .audio
-                    settings.savePreferences()
-                    isInputFocused = true
+                ForEach(currentSuggestions) { suggestion in
+                    suggestionChip(
+                        title: suggestion.title,
+                        subtitle: suggestion.subtitle
+                    ) {
+                        viewModel.userPrompt = suggestion.prompt
+                        if let switchTo = suggestion.switchModality {
+                            settings.selectedModality = switchTo
+                            settings.savePreferences()
+                        }
+                        isInputFocused = true
+                    }
                 }
             }
             .padding(.horizontal, 16)
         }
         .padding(.bottom, 4)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: settings.selectedModality)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: conversationMode)
     }
 
     private func suggestionChip(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
@@ -471,7 +632,7 @@ struct ThreadView: View {
                 .padding(.horizontal, 16)
             }
 
-            // ChatGPT-style input row: [+] [text field] [modality] [send]
+            // Input row: [+] [text field] [modality] [send]
             HStack(spacing: 10) {
                 // Plus button - opens options sheet
                 Button {
@@ -510,17 +671,37 @@ struct ThreadView: View {
                     triggerHaptic(.light)
                     toggleComposerDrawer(.modalities)
                 } label: {
+                    let hasNonTextModality = settings.selectedModality != .text
+                    let isMaxOn = settings.maxModeEnabled && storeKit.hasActiveSubscription
+                    let buttonIcon = hasNonTextModality ? settings.selectedModality.icon : "slider.horizontal.3"
+                    let buttonTint: Color = hasNonTextModality ? modalityAccentColor(for: settings.selectedModality) : textSecondary
+                    let activeTint: Color = activeComposerDrawer == .modalities ? accentColor : buttonTint
+
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: settings.selectedModality.icon)
+                        Image(systemName: buttonIcon)
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(activeComposerDrawer == .modalities ? accentColor : textSecondary)
+                            .foregroundStyle(activeTint)
                             .frame(width: floatingControlSize, height: floatingControlSize)
                             .background {
                                 Circle()
-                                    .fill(Color.adaptiveBackgroundTertiary)
+                                    .fill(hasNonTextModality ? buttonTint.opacity(colorScheme == .dark ? 0.15 : 0.10) : Color.adaptiveBackgroundTertiary)
                             }
 
-                        if hasActiveComposerOptions {
+                        if isMaxOn {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 18, height: 18)
+                                .background {
+                                    Circle()
+                                        .fill(Color.orange)
+                                }
+                                .overlay {
+                                    Circle()
+                                        .stroke(Color.adaptiveBackgroundSecondary, lineWidth: 2)
+                                }
+                                .offset(x: 2, y: -2)
+                        } else if hasActiveComposerOptions {
                             Circle()
                                 .fill(accentColor)
                                 .frame(width: 7, height: 7)
@@ -901,42 +1082,76 @@ struct ThreadView: View {
     }
 
     private var maxModeCard: some View {
-        Button {
-            toggleMaxMode()
+        let isMaxLocked = !storeKit.hasActiveSubscription
+        let isMaxActive = settings.maxModeEnabled && !isMaxLocked
+        let maxFillColor: Color = isMaxActive ? Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.08) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.22)
+        let maxStrokeColor: Color = (isMaxActive ? Color.orange : accentColor).opacity(colorScheme == .dark ? 0.48 : 0.26)
+        let maxStrokeWidth: CGFloat = isMaxActive ? 1.4 : 1
+
+        return Button {
+            if isMaxLocked {
+                showPaywallSheet = true
+            } else {
+                toggleMaxMode()
+            }
         } label: {
             HStack(alignment: .center, spacing: 14) {
                 ZStack {
                     Circle()
-                        .fill((settings.maxModeEnabled ? Color.orange : accentColor).opacity(colorScheme == .dark ? 0.18 : 0.12))
+                        .fill((isMaxActive ? Color.orange : accentColor).opacity(colorScheme == .dark ? 0.18 : 0.12))
 
-                    Image(systemName: settings.maxModeEnabled ? "flame.fill" : "bolt.fill")
+                    Image(systemName: isMaxActive ? "flame.fill" : "bolt.fill")
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(settings.maxModeEnabled ? Color.orange : accentColor)
+                        .foregroundStyle(isMaxLocked ? textTertiary : (isMaxActive ? Color.orange : accentColor))
                 }
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(settings.maxModeEnabled ? "MAX quality" : "Standard quality")
-                        .font(.system(.headline, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
+                    HStack(spacing: 6) {
+                        Text(isMaxLocked ? "MAX quality" : (isMaxActive ? "MAX quality" : "Standard quality"))
+                            .font(.system(.headline, design: .rounded, weight: .bold))
+                            .foregroundStyle(isMaxLocked ? textSecondary : textPrimary)
+
+                        if isMaxLocked {
+                            Text("PRO")
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background {
+                                    Capsule()
+                                        .fill(LinearGradient(
+                                            colors: [Color.brandPurple, Color.brandCyan],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ))
+                                }
+                        }
+                    }
 
                     Text(maxModeSupportingCopy)
                         .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
+                        .foregroundStyle(isMaxLocked ? textTertiary : textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 8)
 
-                Text(settings.maxModeEnabled ? "On" : "Off")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .foregroundStyle(settings.maxModeEnabled ? Color.adaptiveTextOnAccent : textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background {
-                        Capsule()
-                            .fill(settings.maxModeEnabled ? Color.orange : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.46))
-                    }
+                if isMaxLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(textTertiary)
+                } else {
+                    Text(isMaxActive ? "On" : "Off")
+                        .font(.system(.caption, design: .rounded, weight: .bold))
+                        .foregroundStyle(isMaxActive ? Color.adaptiveTextOnAccent : textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background {
+                            Capsule()
+                                .fill(isMaxActive ? Color.orange : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.46))
+                        }
+                }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -945,14 +1160,14 @@ struct ThreadView: View {
                     .fill(.ultraThinMaterial)
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(settings.maxModeEnabled ? Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.08) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.22))
+                            .fill(maxFillColor)
                     }
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .stroke(
-                        (settings.maxModeEnabled ? Color.orange : accentColor).opacity(colorScheme == .dark ? 0.48 : 0.26),
-                        lineWidth: settings.maxModeEnabled ? 1.4 : 1
+                        maxStrokeColor,
+                        lineWidth: maxStrokeWidth
                     )
             }
         }
@@ -960,19 +1175,12 @@ struct ThreadView: View {
     }
 
     private var maxModeSupportingCopy: String {
+        if !storeKit.hasActiveSubscription {
+            return "Upgrade to Pro or Premium to unlock deeper reasoning with MAX mode."
+        }
+
         if settings.maxModeEnabled {
             return "Deeper reasoning for harder rewrites and more complex prompts."
-        }
-
-        if !authManager.isAuthenticated {
-            let remaining = guestSession.quota.maxRemaining
-            return remaining > 0
-                ? "\(remaining) guest MAX turn\(remaining == 1 ? "" : "s") left."
-                : "Sign in or upgrade to unlock more MAX turns."
-        }
-
-        if let remaining = storeKit.usageInfo?.maxModeRemaining, remaining > 0 {
-            return "\(remaining) MAX turn\(remaining == 1 ? "" : "s") remaining in your current allowance."
         }
 
         return "Use MAX when you need stronger reasoning and tighter prompt structure."
@@ -981,29 +1189,59 @@ struct ThreadView: View {
     private func modalityTargetCard(_ modality: ModalityType) -> some View {
         let tint = modalityAccentColor(for: modality)
         let isSelected = settings.selectedModality == modality
+        let isPremiumModality = modality != .text
+        let isLocked = isPremiumModality && !storeKit.hasActiveSubscription
+        let isActiveSelection = isSelected && !isLocked
+        let cardFillColor: Color = isActiveSelection ? tint.opacity(colorScheme == .dark ? 0.14 : 0.10) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.18)
+        let cardStrokeColor: Color = isActiveSelection ? tint.opacity(colorScheme == .dark ? 0.78 : 0.42) : Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24)
+        let cardStrokeWidth: CGFloat = isActiveSelection ? 1.5 : 1
 
         return Button {
-            applyModality(modality)
+            if isLocked {
+                showPaywallSheet = true
+            } else {
+                applyModality(modality)
+            }
         } label: {
             VStack(alignment: .leading, spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(tint.opacity(colorScheme == .dark ? 0.18 : 0.12))
+                HStack {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(tint.opacity(colorScheme == .dark ? 0.18 : 0.12))
 
-                    Image(systemName: modality.icon)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(isSelected ? tint : textPrimary)
+                        Image(systemName: modality.icon)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(isLocked ? textTertiary : (isSelected ? tint : textPrimary))
+                    }
+                    .frame(width: 40, height: 40)
+
+                    Spacer()
+
+                    if isLocked {
+                        Text("PRO")
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background {
+                                Capsule()
+                                    .fill(LinearGradient(
+                                        colors: [Color.brandPurple, Color.brandCyan],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ))
+                            }
+                    }
                 }
-                .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(modality.displayName)
                         .font(.system(.subheadline, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
+                        .foregroundStyle(isLocked ? textSecondary : textPrimary)
 
                     Text(modality.description)
                         .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
+                        .foregroundStyle(isLocked ? textTertiary : textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -1014,16 +1252,14 @@ struct ThreadView: View {
                     .fill(.ultraThinMaterial)
                     .overlay {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(isSelected ? tint.opacity(colorScheme == .dark ? 0.14 : 0.10) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.18))
+                            .fill(cardFillColor)
                     }
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .stroke(
-                        isSelected
-                            ? tint.opacity(colorScheme == .dark ? 0.78 : 0.42)
-                            : Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24),
-                        lineWidth: isSelected ? 1.5 : 1
+                        cardStrokeColor,
+                        lineWidth: cardStrokeWidth
                     )
             }
         }
@@ -1149,6 +1385,8 @@ struct ThreadView: View {
             return .green
         case .threeD:
             return .blue
+        case .nsfw:
+            return .red
         }
     }
 

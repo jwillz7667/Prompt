@@ -17,9 +17,8 @@ final class AppStoreComplianceManager {
         storefrontCountryCode == "CHN"
     }
 
-    var allowsChatGPTFeatures: Bool {
-        !isChinaMainlandStorefront
-    }
+    /// All platform features are available globally (no third-party brand names exposed).
+    var allowsAllFeatures: Bool { true }
 
     private init() {
         storefrontCountryCode = Self.resolveInitialStorefrontCountryCode()
@@ -32,7 +31,7 @@ final class AppStoreComplianceManager {
     }
 
     func isPlatformAvailable(_ platform: PlatformType) -> Bool {
-        allowsChatGPTFeatures || platform != .chatGPT
+        true
     }
 
     func visiblePlatforms(includeCustom: Bool = true) -> [PlatformType] {

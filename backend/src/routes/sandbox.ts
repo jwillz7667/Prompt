@@ -190,31 +190,31 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
     if (process.env.OPENAI_API_KEY) {
       availablePlatforms.push({
         platform: PlatformType.CHATGPT,
-        name: 'ChatGPT',
+        name: 'AI Chat',
         models: ['gpt-4-turbo-preview', 'gpt-4', 'gpt-3.5-turbo']
       });
     }
-    
+
     if (process.env.ANTHROPIC_API_KEY) {
       availablePlatforms.push({
         platform: PlatformType.CLAUDE,
-        name: 'Claude',
+        name: 'AI Assistant',
         models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
       });
     }
-    
+
     if (process.env.GOOGLE_AI_API_KEY) {
       availablePlatforms.push({
         platform: PlatformType.GEMINI,
-        name: 'Gemini',
+        name: 'AI Search',
         models: ['gemini-pro', 'gemini-pro-vision']
       });
     }
-    
+
     if (process.env.PERPLEXITY_API_KEY) {
       availablePlatforms.push({
         platform: PlatformType.PERPLEXITY,
-        name: 'Perplexity',
+        name: 'AI Research',
         models: ['pplx-70b-online', 'pplx-7b-online']
       });
     }
@@ -223,25 +223,25 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
     availablePlatforms.push(
       {
         platform: PlatformType.MIDJOURNEY,
-        name: 'Midjourney',
+        name: 'Image Generator',
         models: ['v6'],
         simulated: true
       },
       {
         platform: PlatformType.DALLE,
-        name: 'DALL-E',
+        name: 'Image Creator',
         models: ['dall-e-3'],
         simulated: true
       },
       {
         platform: PlatformType.STABLE_DIFFUSION,
-        name: 'Stable Diffusion',
+        name: 'Diffusion Model',
         models: ['sdxl'],
         simulated: true
       },
       {
         platform: PlatformType.GITHUB_COPILOT,
-        name: 'GitHub Copilot',
+        name: 'Code Assistant',
         models: ['copilot'],
         simulated: true
       }

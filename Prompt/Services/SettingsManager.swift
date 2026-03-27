@@ -88,6 +88,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
     case audio = "audio"
     case code = "code"
     case threeD = "3d"
+    case nsfw = "nsfw"
 
     var id: String { rawValue }
 
@@ -100,6 +101,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .audio: return "Audio"
         case .code: return "Code"
         case .threeD: return "3D"
+        case .nsfw: return "NSFW"
         }
     }
 
@@ -112,18 +114,20 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .audio: return "waveform"
         case .code: return "chevron.left.forwardslash.chevron.right"
         case .threeD: return "cube.fill"
+        case .nsfw: return "flame.fill"
         }
     }
 
     var description: String {
         switch self {
-        case .text: return "Leading AI assistants and more"
-        case .image: return "Midjourney, DALL-E, Flux"
-        case .video: return "Sora, Runway, Pika"
-        case .music: return "Suno, Udio, MusicGen"
+        case .text: return "AI text assistants"
+        case .image: return "AI image generators"
+        case .video: return "AI video generators"
+        case .music: return "AI music generators"
         case .audio: return "Speech, SFX, Soundscapes"
-        case .code: return "Copilot, Cursor, Claude"
-        case .threeD: return "Meshy, Tripo3D"
+        case .code: return "AI code assistants"
+        case .threeD: return "AI 3D model generators"
+        case .nsfw: return "Adult content generators"
         }
     }
 
@@ -136,6 +140,7 @@ enum ModalityType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .audio: return "teal"
         case .code: return "green"
         case .threeD: return "blue"
+        case .nsfw: return "red"
         }
     }
 
@@ -181,7 +186,7 @@ enum AudioSubModalityType: String, CaseIterable, Identifiable, Codable, Sendable
         case .speech: return "Voice synthesis, narration"
         case .soundscape: return "Ambient, environmental"
         case .voiceover: return "Professional VO, podcasts"
-        case .lyrics: return "Song lyrics for Suno, Udio"
+        case .lyrics: return "Song lyrics for AI music"
         }
     }
 }
@@ -197,8 +202,6 @@ final class SettingsManager {
     var selectedModality: ModalityType = .text
     var selectedAudioSubModality: AudioSubModalityType = .speech
     var conversationMode: ThreadConversationMode = .optimize
-    var customInstructions: String = ""
-    var targetCharacterLength: Int? = nil  // Optional character length constraint
 
     /// Returns the effective sub-modality string for the current modality, or nil if not applicable
     var effectiveSubModality: String? {
@@ -228,8 +231,6 @@ final class SettingsManager {
         static let selectedModality = "selectedModality"
         static let selectedAudioSubModality = "selectedAudioSubModality"
         static let conversationMode = "conversationMode"
-        static let customInstructions = "customInstructions"
-        static let targetCharacterLength = "targetCharacterLength"
         static let settingsMigrated = "settingsMigratedToAppGroup"
     }
 
@@ -271,10 +272,6 @@ final class SettingsManager {
         if let value = UserDefaults.standard.string(forKey: Keys.conversationMode) {
             defaults.set(value, forKey: Keys.conversationMode)
         }
-        if let value = UserDefaults.standard.string(forKey: Keys.customInstructions) {
-            defaults.set(value, forKey: Keys.customInstructions)
-        }
-
         // Mark as migrated
         defaults.set(true, forKey: Keys.settingsMigrated)
         #if DEBUG
@@ -323,19 +320,6 @@ final class SettingsManager {
             selectedAudioSubModality = subModality
         }
 
-        // Load custom instructions
-        if let instructions = defaults.string(forKey: Keys.customInstructions) {
-            customInstructions = instructions
-        }
-        
-        // Load target character length
-        let savedLength = defaults.integer(forKey: Keys.targetCharacterLength)
-        if savedLength > 0 {
-            targetCharacterLength = savedLength
-        } else {
-            targetCharacterLength = nil
-        }
-
         #if DEBUG
         print("[Settings] Loaded preferences from App Group")
         #endif
@@ -358,14 +342,6 @@ final class SettingsManager {
         defaults.set(selectedModality.rawValue, forKey: Keys.selectedModality)
         defaults.set(selectedAudioSubModality.rawValue, forKey: Keys.selectedAudioSubModality)
         defaults.set(conversationMode.rawValue, forKey: Keys.conversationMode)
-        defaults.set(customInstructions, forKey: Keys.customInstructions)
-        
-        // Save target character length
-        if let length = targetCharacterLength {
-            defaults.set(length, forKey: Keys.targetCharacterLength)
-        } else {
-            defaults.removeObject(forKey: Keys.targetCharacterLength)
-        }
 
         #if DEBUG
         print("[Settings] Saved preferences to App Group")

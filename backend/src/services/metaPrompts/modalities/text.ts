@@ -1,7 +1,7 @@
 /**
  * Text Modality Configuration
  *
- * Optimized for text-based AI assistants: Claude, GPT, Gemini, Llama
+ * Optimized for text-based AI assistants
  * Implements RISEN+ framework, Chain-of-Thought, and structured prompting
  */
 
@@ -183,7 +183,7 @@ Avoid:
     id: 'text-technical-1',
     input: 'write API documentation for a user authentication endpoint',
     output: `<task>
-Create comprehensive API documentation for a user authentication endpoint that developers can immediately use for integration. Follow best practices from Stripe, Twilio, and OpenAI documentation standards.
+Create comprehensive API documentation for a user authentication endpoint that developers can immediately use for integration. Follow best practices from Stripe and Twilio documentation standards.
 </task>
 
 <documentation_structure>
@@ -313,7 +313,7 @@ function buildSystemPrompt(tier: EnhancementTier, subModality?: TextSubModality)
   const subModalityGuidance = getSubModalityGuidance(subModality || 'general');
 
   const baseKnowledge = `<system>
-You are an expert prompt engineer specializing in text-based AI systems. Your task is to transform user prompts into highly effective versions optimized for language models like Claude, GPT-4, and Gemini.
+You are an expert prompt engineer specializing in text-based AI systems. Your task is to transform user prompts into highly effective versions optimized for language models.
 
 <research_foundation>
 Your enhancement techniques are based on peer-reviewed research:
@@ -414,19 +414,30 @@ function getTierGuidance(tier: EnhancementTier): string {
 <output_length>Balanced enhancement (200-400 words)</output_length>`;
 
     case 'advanced':
-      return `<enhancement_level>ADVANCED</enhancement_level>
+      return `<enhancement_level>ADVANCED — PREMIUM TIER</enhancement_level>
 <techniques_to_apply>
-- Provide comprehensive context with all relevant background
-- Define precise task objective with measurable success criteria
-- Embed Chain-of-Thought reasoning triggers throughout
-- Include 2-3 diverse few-shot examples
-- Add comprehensive NEVER/ALWAYS constraint lists
-- Include edge case handling instructions
-- Add verification and self-checking hooks
-- Use structured XML tags for semantic organization
-- Specify quality criteria and success metrics
+Apply every cutting-edge prompt engineering technique relevant to this specific task:
+
+STRUCTURAL TECHNIQUES:
+- Use semantic XML tags throughout (<task>, <context>, <approach>, <constraints>, <output_contract>, <verification>) for 15-20% parsing improvement (arXiv:2511.20836)
+- Recursive task decomposition: break complex objectives into ordered sub-tasks with dependency chains and intermediate checkpoints
+- Output contract specification: define exact deliverable shape, acceptance criteria, required sections, and quality rubric
+
+REASONING TECHNIQUES:
+- Meta Chain-of-Thought: embed explicit reasoning scaffolds that guide the target model through multi-step deliberation before producing output
+- Self-Refine hooks: instruct the model to draft → critique against success criteria → revise before returning final output (Madaan et al., 2023)
+- Calibrated confidence prompting: require the model to distinguish established facts from inferences and flag uncertainty levels
+- Multi-perspective simulation: for analytical tasks, instruct evaluation from multiple stakeholder or methodological viewpoints before synthesis
+
+QUALITY ENGINEERING:
+- Persona-calibrated framing: assign a precise expert identity with domain depth, reasoning style, and epistemic standards
+- Comprehensive NEVER/ALWAYS constraint lists that preempt the most likely failure modes for this task type
+- Few-shot reasoning traces: include the reasoning path (not just input→output) so the model learns the thought process
+- Edge case handling with explicit fallback instructions
+- Verification checkpoints with self-checking hooks after each major section
+- Evaluation rubric embedded in the prompt so the model self-scores before finalizing
 </techniques_to_apply>
-<output_length>Comprehensive enhancement (400-800 words)</output_length>`;
+<output_length>Comprehensive, production-grade enhancement (400-800 words)</output_length>`;
   }
 }
 
@@ -448,8 +459,8 @@ The enhanced prompt should be:
 export const textModalityConfig: ModalityConfig = {
   modality: 'text',
   displayName: 'Text Generation',
-  description: 'Optimized for text-based AI assistants (Claude, GPT, Gemini)',
-  targetPlatforms: ['claude', 'gpt', 'gemini', 'general'],
+  description: 'Optimized for AI text assistants',
+  targetPlatforms: ['general'],
   subModalities: ['general', 'reasoning', 'creative', 'technical'],
   defaultSubModality: 'general',
   coreStructure: [

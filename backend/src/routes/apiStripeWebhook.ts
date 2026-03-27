@@ -14,6 +14,7 @@ import {
   addPurchasedCredits,
   ApiTier,
 } from '../services/apiSubscriptionService.js';
+import { sendApiPaymentFailed } from '../services/emailService.js';
 import { ApiSubscriptionStatus, IdempotencyStatus, Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma.js';
 
@@ -473,7 +474,19 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
       'API subscription payment failed'
     );
 
-    // TODO: Send payment failed email notification
+    // Send payment failed email notification
+    const developer = await prisma.developer.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    });
+
+    if (developer) {
+      sendApiPaymentFailed(
+        developer.email,
+        developer.name,
+        getTierFromPriceId(subscription.items.data[0]?.price.id || '')
+      ).catch((err) => logger.error({ err }, 'Failed to send payment failed email'));
+    }
   } catch (error) {
     logger.error({ error, subscriptionId }, 'Error handling payment failed');
   }

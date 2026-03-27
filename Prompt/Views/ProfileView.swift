@@ -28,7 +28,6 @@ struct ProfileView: View {
     // Profile editing
     @State private var isEditingProfile = false
     @State private var editName: String = ""
-    @State private var editCustomInstructions: String = ""
     @State private var isSavingProfile = false
     @State private var profileSaveError: String?
 
@@ -188,7 +187,7 @@ struct ProfileView: View {
                     .listRowSeparator(.hidden)
                 }
 
-                // Account section - ChatGPT-style rows
+                // Account section
                 Section {
                     if let user = authManager.currentUser {
                         settingsRow(icon: "envelope.fill", iconColor: accentColor, title: "Email", value: user.email)
@@ -233,20 +232,8 @@ struct ProfileView: View {
                         .foregroundStyle(textSecondary)
                 }
 
-                // Personalization section
+                // Preferences section
                 Section {
-                    NavigationLink {
-                        customInstructionsEditor
-                    } label: {
-                        settingsRowContent(
-                            icon: "person.text.rectangle.fill",
-                            iconColor: accentColor,
-                            title: "Personalization",
-                            showChevron: true
-                        )
-                    }
-                    .listRowBackground(bgSecondary)
-
                     Picker(selection: $bindableSettings.appearanceMode) {
                         ForEach(AppearanceMode.allCases) { mode in
                             HStack {
@@ -299,27 +286,6 @@ struct ProfileView: View {
                     }
                     .listRowBackground(bgSecondary)
 
-                    HStack {
-                        Image(systemName: "character.cursor.ibeam")
-                            .foregroundStyle(accentColor)
-                            .frame(width: 28)
-                        Text("Target Length")
-                            .foregroundStyle(textPrimary)
-                        Spacer()
-
-                        if let targetLength = settings.targetCharacterLength {
-                            Text("\(targetLength) chars")
-                                .font(.caption)
-                                .foregroundStyle(textSecondary)
-                        }
-
-                        TextField("Optional", value: $bindableSettings.targetCharacterLength, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 100)
-                            .multilineTextAlignment(.trailing)
-                            .keyboardType(.numberPad)
-                    }
-                    .listRowBackground(bgSecondary)
                 } header: {
                     Text("Generation")
                         .foregroundStyle(textSecondary)
@@ -486,9 +452,6 @@ struct ProfileView: View {
             .onChange(of: settings.maxTokens) { _, _ in
                 settings.savePreferences()
             }
-            .onChange(of: settings.targetCharacterLength) { _, _ in
-                settings.savePreferences()
-            }
             .preferredColorScheme(settings.appearanceMode.colorScheme)
             .task {
                 await loadStats()
@@ -599,43 +562,6 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Custom Instructions Editor
-
-    private var customInstructionsEditor: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Custom Instructions")
-                .font(.system(.title3, design: .rounded, weight: .bold))
-                .foregroundStyle(textPrimary)
-
-            Text("These instructions are included with every prompt enhancement.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(textSecondary)
-
-            TextEditor(text: Binding(
-                get: { settings.customInstructions },
-                set: { newValue in
-                    settings.customInstructions = newValue
-                    settings.savePreferences()
-                }
-            ))
-            .font(.body)
-            .foregroundStyle(textPrimary)
-            .scrollContentBackground(.hidden)
-            .padding(12)
-            .frame(minHeight: 200)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.adaptiveBackgroundTertiary)
-            }
-
-            Spacer()
-        }
-        .padding(20)
-        .background { LiquidGlassBackground() }
-        .navigationTitle("Personalization")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
     @ViewBuilder
     private func statsRow(label: String, value: String) -> some View {
         HStack {
@@ -652,7 +578,6 @@ struct ProfileView: View {
 
     private func startEditing() {
         editName = authManager.currentUser?.name ?? ""
-        editCustomInstructions = settings.customInstructions
         profileSaveError = nil
         isEditingProfile = true
     }
@@ -664,16 +589,10 @@ struct ProfileView: View {
         do {
             // Save to backend
             let nameToSave = editName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let instructionsToSave = editCustomInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
 
             try await authManager.updateProfile(
-                name: nameToSave.isEmpty ? nil : nameToSave,
-                customInstructions: instructionsToSave.isEmpty ? nil : instructionsToSave
+                name: nameToSave.isEmpty ? nil : nameToSave
             )
-
-            // Sync custom instructions to local settings
-            settings.customInstructions = instructionsToSave
-            settings.savePreferences()
 
             isEditingProfile = false
         } catch {

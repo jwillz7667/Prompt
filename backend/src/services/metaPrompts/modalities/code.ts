@@ -1,7 +1,7 @@
 /**
  * Code Modality Configuration
  *
- * Optimized for code generation: GitHub Copilot, Cursor, Claude, GPT
+ * Optimized for code generation: AI code assistants
  * Implements PCTF framework, single-task focus, and typed I/O specifications
  */
 
@@ -427,7 +427,7 @@ function buildSystemPrompt(tier: EnhancementTier, subModality?: CodeSubModality)
   const subModalityGuidance = getSubModalityGuidance(subModality || 'function');
 
   const baseKnowledge = `<system>
-You are ARCHITECT, an elite software engineer specializing in AI code generation prompts for GitHub Copilot, Cursor, Claude, and ChatGPT.
+You are ARCHITECT, an elite software engineer specializing in AI code generation prompts for AI code assistants.
 
 <research_foundation>
 Code generation models produce better results with:
@@ -542,18 +542,58 @@ function getTierGuidance(tier: EnhancementTier): string {
 <output_length>Detailed prompt (200-400 words)</output_length>`;
 
     case 'advanced':
-      return `<enhancement_level>ADVANCED</enhancement_level>
+      return `<enhancement_level>ADVANCED — PREMIUM TIER</enhancement_level>
 <techniques_to_apply>
-- Comprehensive context including codebase patterns
-- Precise task with explicit success criteria
-- Full type definitions with generics where applicable
-- Extensive examples covering happy path and edge cases
-- Comprehensive edge case enumeration
-- Quality criteria: testing, documentation, style
-- Performance and security considerations
-- Error handling patterns specified
+Apply every cutting-edge code prompt engineering technique relevant to this specific generation task:
+
+ARCHITECTURE-AWARE CONTEXT:
+- Specify design patterns the code must follow (Repository, Strategy, Observer, Dependency Injection)
+- Define SOLID principle requirements: single responsibility scope, interface contracts, dependency direction
+- Include framework-specific conventions: hooks patterns (React), middleware chains (Express), decorators (NestJS/Python)
+- Codebase integration notes: existing abstractions to extend, naming conventions, module boundaries
+
+EXECUTABLE SPECIFICATION PATTERN:
+- Define the interface/contract FIRST, then describe the implementation requirements
+- Include typed test cases as executable specifications: input → expected output with assertion-style formatting
+- Property-based testing hints: define invariants that must hold for all valid inputs
+- Contract programming: specify preconditions, postconditions, and class invariants
+
+TYPE SYSTEM MASTERY:
+- Full generic signatures with bounded type parameters and conditional types where applicable
+- Discriminated unions for state machines and error types
+- Utility type usage: Pick, Omit, Partial, Required, Record with domain-specific combinations
+- Type guards and assertion functions for runtime type narrowing
+
+SECURITY-FIRST CONSTRAINT ENGINEERING:
+- OWASP-aware requirements: specify input sanitization, output encoding, parameterized queries
+- Authentication/authorization boundary specification: who can call this, what tokens/scopes are required
+- Sensitive data handling: PII masking, secret rotation patterns, timing-safe comparisons
+- NEVER/ALWAYS security constraints: "NEVER interpolate user input into SQL", "ALWAYS validate content-type"
+
+PERFORMANCE BUDGET SPECIFICATION:
+- Big-O requirements: "must operate in O(n log n) time and O(n) space"
+- Concrete benchmarks: "must handle 10,000 items in under 50ms"
+- Memory constraints: streaming/chunked processing for large datasets, avoid materializing full collections
+- Caching strategy: memoization requirements, cache invalidation triggers
+
+ERROR TAXONOMY & RESILIENCE:
+- Typed error hierarchy: define custom error classes with codes, HTTP status mappings, and user-facing messages
+- Recovery strategies: retry with backoff, circuit breaker, fallback values, graceful degradation
+- Error boundary specification: which errors are recoverable vs fatal, logging requirements per error type
+- Partial failure handling: what happens when 3 of 5 parallel operations fail
+
+SELF-VERIFICATION HOOKS:
+- Embed assertion comments: "// INVARIANT: result array length must equal input array length"
+- Include runtime validation at boundaries: input validation, output schema verification
+- Suggest test scenarios that cover: happy path, edge cases, error paths, concurrent access, resource cleanup
+
+QUALITY ENGINEERING:
+- Documentation: JSDoc/TSDoc with @param, @returns, @throws, @example, @complexity annotations
+- Observability: logging points, metric emission, tracing span boundaries
+- Idempotency requirements for operations that may be retried
+- Backward compatibility: specify breaking vs non-breaking change constraints
 </techniques_to_apply>
-<output_length>Comprehensive prompt (400-600 words)</output_length>`;
+<output_length>Comprehensive, production-grade prompt (500-800 words of dense specification)</output_length>`;
   }
 }
 
@@ -577,8 +617,8 @@ Format requirements:
 export const codeModalityConfig: ModalityConfig = {
   modality: 'code',
   displayName: 'Code Generation',
-  description: 'Optimized for code generation (GitHub Copilot, Cursor, Claude, GPT)',
-  targetPlatforms: ['claude', 'gpt', 'copilot', 'general'],
+  description: 'Optimized for AI code assistants',
+  targetPlatforms: ['general'],
   subModalities: ['function', 'component', 'algorithm', 'refactor'],
   defaultSubModality: 'function',
   coreStructure: [

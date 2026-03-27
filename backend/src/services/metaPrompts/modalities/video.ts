@@ -1,7 +1,7 @@
 /**
  * Video Modality Configuration
  *
- * Optimized for video generation: Sora, Runway Gen-3, Pika, Kling
+ * Optimized for video generation: AI video generation models
  * Implements physics-based motion, rigidity cues, and camera vocabulary
  */
 
@@ -56,7 +56,7 @@ MOTION SEQUENCE:
 
 PHYSICS: Realistic tire spray patterns. Rain maintains consistent fall angle. Vehicle body maintains rigid structure throughout. Accurate motion blur on spinning wheels. Proper lighting interaction with wet surfaces.`,
     subModality: 'cinematic',
-    platform: 'sora',
+    platform: 'general',
     complexity: 'complex',
     tags: ['action', 'cars', 'night'],
   },
@@ -109,24 +109,6 @@ TECHNICAL: Consistent top-down angle throughout. Paper maintains crisp geometry.
     platform: 'general',
     complexity: 'medium',
     tags: ['educational', 'craft', 'hands'],
-  },
-  // Platform-specific: Runway
-  {
-    id: 'video-runway-1',
-    input: 'woman walking on beach',
-    output: `A woman in a flowing white linen dress walks along the shoreline at golden hour. Camera tracking shot moving parallel to her path.
-
-She walks from left to right, bare feet leaving imprints in wet sand. Gentle waves wash over her ankles. Her dress billows in the coastal breeze, fabric responding naturally to wind force. Hair streams behind her.
-
-The warm sunset light creates a backlit silhouette effect. Her shadow stretches long across the sand. Ocean reflects orange and pink hues.
-
-Consistent walking pace of approximately 1 step per second. Body maintains rigid proportions throughout. Dress fabric physics realistic with wind interaction. Wave timing consistent with natural ocean rhythm.
-
-Duration: 6 seconds. Cinematic color grade with enhanced golden tones. Shallow depth of field softening ocean background.`,
-    subModality: 'cinematic',
-    platform: 'runway',
-    complexity: 'medium',
-    tags: ['lifestyle', 'nature', 'golden-hour'],
   },
 ];
 
@@ -199,7 +181,7 @@ function buildSystemPrompt(tier: EnhancementTier, subModality?: VideoSubModality
   const subModalityGuidance = getSubModalityGuidance(subModality || 'cinematic');
 
   const baseKnowledge = `<system>
-You are KINETIC, a cinematic engineer specializing in AI video generation for Sora, Runway Gen-3, Pika Labs, and Kling.
+You are KINETIC, a cinematic engineer specializing in AI video generation.
 
 <research_foundation>
 Video generation models require explicit motion and physics descriptions:
@@ -319,19 +301,46 @@ function getTierGuidance(tier: EnhancementTier): string {
 <output_length>Detailed prompt (150-250 words)</output_length>`;
 
     case 'advanced':
-      return `<enhancement_level>ADVANCED</enhancement_level>
+      return `<enhancement_level>ADVANCED — PREMIUM TIER</enhancement_level>
 <techniques_to_apply>
-- Rich scene with atmospheric details
-- Precise physics language for all motion
-- Detailed temporal breakdown with timecodes
-- Complex camera choreography
-- Comprehensive rigidity cues
-- Environmental dynamics and particle effects
-- Material physics (fabric, hair, water, etc.)
-- Color grading and visual style
-- Director style references when appropriate
+Apply every cutting-edge video prompt engineering technique relevant to this specific generation task:
+
+PHYSICS SIMULATION LANGUAGE:
+- Explicit force descriptions for all dynamic elements: gravity, momentum, inertia, friction, air resistance, buoyancy
+- Material-specific physics: cloth drape and billow coefficients, fluid viscosity and turbulence, hair strand dynamics, rigid body collisions
+- Particle systems: specify emitter position, velocity, lifetime, gravity response for smoke, sparks, rain, debris, dust
+- Contact physics: impact deformation, splash dynamics, bounce coefficients, surface interaction
+
+TEMPORAL CHOREOGRAPHY:
+- Frame-precise timecodes for every motion beat (0.0s-2.5s, 2.5s-5.0s, etc.)
+- Easing curves: specify acceleration profiles (ease-in for weight, ease-out for settling, linear for mechanical)
+- Rhythm and pacing: match motion beats to emotional arc, use pause/silence as compositional tool
+- Continuity rules: maintain consistent screen direction, 180-degree rule, eyeline matching
+
+CAMERA ENGINEERING:
+- Multi-layer camera choreography: simultaneous pan + dolly + focus pull with explicit timing
+- Lens simulation: focal length breathing, anamorphic characteristics, lens distortion at edges
+- Stabilization character: Steadicam float, handheld organic shake, gimbal precision, locked tripod stillness
+- Depth of field animation: rack focus timing, bokeh shape and intensity transitions
+
+RIGIDITY & CONSISTENCY MANIFOLD:
+- Explicit rigidity declarations for every element: "face maintains identical structure throughout", "building facades remain static"
+- Texture and color consistency: "skin tone remains constant across lighting changes", "costume colors do not shift"
+- Scale anchoring: "character maintains consistent proportions relative to environment landmarks"
+- Temporal coherence: "no flickering, morphing, or spontaneous appearance/disappearance of elements"
+
+CINEMATIC GRAMMAR:
+- Shot type specification: establishing → medium → close-up with motivated transitions
+- Director style palette: reference specific filmmakers for visual language (Villeneuve's scale, Kubrick's symmetry, Malick's naturalism)
+- Color grading: specify LUT style, color temperature arc, contrast ratio, saturation strategy
+- Sound design cues: suggest audio that reinforces the visual narrative (even for silent generation, it anchors mood)
+
+ENVIRONMENTAL DYNAMICS:
+- Atmospheric layering: haze density at distance, volumetric light shafts, weather progression
+- Ambient motion: background elements with independent physics (flags, leaves, crowd, traffic)
+- Lighting evolution: sun movement, cloud shadow travel, practical light flicker patterns
 </techniques_to_apply>
-<output_length>Comprehensive prompt (250-350 words)</output_length>`;
+<output_length>Comprehensive, production-grade prompt (300-500 words of dense motion specification)</output_length>`;
   }
 }
 
@@ -355,8 +364,8 @@ Format requirements:
 export const videoModalityConfig: ModalityConfig = {
   modality: 'video',
   displayName: 'Video Generation',
-  description: 'Optimized for AI video generators (Sora, Runway, Pika, Kling)',
-  targetPlatforms: ['sora', 'runway', 'pika', 'kling', 'general'],
+  description: 'Optimized for AI video generation',
+  targetPlatforms: ['general'],
   subModalities: ['cinematic', 'animation', 'timelapse', 'tutorial'],
   defaultSubModality: 'cinematic',
   coreStructure: [

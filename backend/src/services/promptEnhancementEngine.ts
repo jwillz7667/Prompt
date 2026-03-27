@@ -2,7 +2,7 @@
  * Prompt Enhancement Engine v2.0
  *
  * Built on cutting-edge prompt engineering research (2025-2026):
- * - Structured prompting with XML tags (15-20% improvement per Anthropic)
+ * - Structured prompting with XML tags (15-20% improvement per research)
  * - Few-shot learning over abstract descriptions
  * - Automatic Chain-of-Thought integration
  * - Self-consistency and verification hooks
@@ -14,8 +14,8 @@
  * - "The Prompt Report" (arXiv:2406.06608) - 58 prompting techniques taxonomy
  * - "Structured Prompting Enables More Robust Evaluation" (arXiv:2511.20836)
  * - "A Survey of Automatic Prompt Engineering" (arXiv:2502.11560)
- * - Anthropic's Claude best practices
- * - OpenAI's GPT optimization guides
+ * - Industry best practices for structured prompting
+ * - Leading AI model optimization guides
  */
 
 import { promptLogger } from '../utils/logger.js';
@@ -31,7 +31,7 @@ import {
 
 export type PromptTone = 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
 export type OutputLength = 'concise' | 'standard' | 'detailed';
-export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
+export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw';
 export type EnhancementTier = 'basic' | 'standard' | 'advanced';
 
 export interface EnhancementRequest {
@@ -42,7 +42,6 @@ export interface EnhancementRequest {
   length?: OutputLength;
   targetModel?: 'claude' | 'gpt' | 'gemini' | 'llama' | 'general';
   customInstructions?: string;
-  targetCharacterLength?: number;
   // V3 features
   subModality?: SubModality;
   targetPlatform?: TargetPlatform;
@@ -82,7 +81,6 @@ function buildEnhancementSystemPrompt(
       tone: request.tone,
       length: request.length,
       customInstructions: request.customInstructions,
-      targetCharacterLength: request.targetCharacterLength,
     });
     return builder.buildSystemPrompt();
   }
@@ -172,11 +170,11 @@ function getModalityGuidance(modality: PromptModality): string {
   switch (modality) {
     case 'image':
       return `<modality>IMAGE_GENERATION</modality>
-<target_platforms>Midjourney, DALL-E, Stable Diffusion, Flux</target_platforms>
+<target_platforms>Image Generator, Image Creator, Diffusion Model, Image Studio</target_platforms>
 <domain_techniques>
 - Lead with subject (weighted highest in most models)
 - Stack descriptors: subject → style → lighting → camera → quality
-- Use platform-specific syntax when detectable (--ar, --v for MJ)
+- Use platform-specific syntax when detectable (--ar, --v for image generators)
 - Include negative concepts to exclude (avoid: blurry, watermark)
 - Reference art styles, artists, film stocks for aesthetic control
 - Specify camera lens, angle, lighting setup for photorealistic work
@@ -189,7 +187,7 @@ function getModalityGuidance(modality: PromptModality): string {
 
     case 'video':
       return `<modality>VIDEO_GENERATION</modality>
-<target_platforms>Sora, Runway Gen-3, Pika, Kling</target_platforms>
+<target_platforms>Video Generator, Video Creator, Video Animator, Video Studio</target_platforms>
 <domain_techniques>
 - Describe motion with physics language (forces, momentum, acceleration)
 - Include temporal markers for pacing
@@ -201,7 +199,7 @@ function getModalityGuidance(modality: PromptModality): string {
 
     case 'audio':
       return `<modality>AUDIO_GENERATION</modality>
-<target_platforms>Suno, Udio, MusicGen, Stable Audio</target_platforms>
+<target_platforms>Music Generator, Music Creator, Audio Generator, Audio Studio</target_platforms>
 <domain_techniques>
 - Specify genre and specific subgenre with 2-3 reference artists
 - Include tempo (BPM range), key signature, and time signature
@@ -217,7 +215,7 @@ function getModalityGuidance(modality: PromptModality): string {
 
     case 'code':
       return `<modality>CODE_GENERATION</modality>
-<target_platforms>GitHub Copilot, Cursor, Claude, ChatGPT</target_platforms>
+<target_platforms>Code Assistant, Code Editor, AI Assistant, AI Chat</target_platforms>
 <domain_techniques>
 - Use PCTF: Persona, Context, Task, Format
 - Specify language version and framework
@@ -230,7 +228,7 @@ function getModalityGuidance(modality: PromptModality): string {
 
     case '3d':
       return `<modality>3D_GENERATION</modality>
-<target_platforms>Meshy, Tripo3D, Point-E, Shap-E</target_platforms>
+<target_platforms>3D Generator, 3D Creator, Point Cloud Generator, Shape Generator</target_platforms>
 <domain_techniques>
 - Specify purpose: game asset, 3D printing, visualization, VR/AR
 - Include topology requirements (poly count, quad/tri)
@@ -243,7 +241,7 @@ function getModalityGuidance(modality: PromptModality): string {
     case 'text':
     default:
       return `<modality>TEXT_GENERATION</modality>
-<target_platforms>Claude, GPT-4, Gemini, Llama</target_platforms>
+<target_platforms>AI Assistant, AI Chat, AI Search, Open Source Models</target_platforms>
 <domain_techniques>
 - Assign expert persona appropriate to domain
 - Use structured sections for complex requests
@@ -438,6 +436,33 @@ validateEmail(null) // { valid: false, error: "Email must be a string" }
 </output>
 </example>
 </few_shot_examples>`,
+    nsfw: `<few_shot_examples>
+<example>
+<input>romantic scene</input>
+<output>
+<scene_parameters>
+Setting: A candlelit bedroom in a Parisian apartment during a thunderstorm
+Tone: Intensely romantic, slow-burn intimacy
+POV: Close third person, alternating awareness
+Sensory focus: Tactile (skin, fabric, warmth), auditory (rain, breathing, whispered words)
+</scene_parameters>
+
+<scene>
+Two lovers reunite after months apart. The storm outside mirrors their emotional intensity. Candlelight throws warm shadows across exposed skin as rain drums against tall windows.
+
+Begin with the charged moment of eye contact at the doorway. Build through tentative touch — fingertips tracing jawlines, hands finding familiar curves. Layer the soundtrack: rain, quickening breath, the rustle of clothing falling away.
+
+Describe the emotional vulnerability alongside the physical: the catch in a voice, the way fingers tremble, the relief of finally being held.
+</scene>
+
+<craft_notes>
+- Use metaphor drawn from the storm (lightning = desire, thunder = heartbeat, rain = release)
+- Internal monologue reveals what words cannot express
+- Pacing: slow beginning, escalating middle, transcendent climax, tender aftermath
+</craft_notes>
+</output>
+</example>
+</few_shot_examples>`,
   };
 
   return examples[modality] || examples.text;
@@ -532,6 +557,19 @@ NEVER:
 - Leave mesh density undefined
 - Skip UV/texturing needs
 - Ignore export format requirements
+</constraints>`,
+    nsfw: `<constraints>
+ALWAYS:
+- Establish setting, atmosphere, and sensory environment
+- Describe characters with specific physical and emotional detail
+- Include emotional arc and pacing (tension, escalation, release)
+- Use vivid, literary language with sensory specificity
+
+NEVER:
+- Use clinical or medical terminology unless intentional
+- Skip emotional context or character interiority
+- Leave the scene without atmosphere or setting
+- Use vague descriptors ("beautiful", "sexy") without concrete detail
 </constraints>`,
   };
 

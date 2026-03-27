@@ -668,3 +668,33 @@ export async function sendAccountDeleted(to: string, name: string | null): Promi
     replyTo: SUPPORT_EMAIL,
   });
 }
+
+export async function sendApiPaymentFailed(
+  to: string,
+  name: string | null,
+  tier: string
+): Promise<boolean> {
+  const displayName = name || 'there';
+
+  const content = `
+    <h2>Payment Failed</h2>
+    <p>Hi ${displayName},</p>
+    <p>We were unable to process your payment for your <strong>${tier}</strong> API subscription.</p>
+    <div class="info-box">
+      <p style="margin: 0; font-weight: 600;">What happens next?</p>
+      <p style="margin: 8px 0 0 0;">Your subscription is now marked as past due. Please update your payment method to avoid service interruption.</p>
+    </div>
+    <p style="text-align: center;">
+      <a href="${APP_URL}/developer/billing" class="button">Update Payment Method</a>
+    </p>
+    <p>If you believe this is an error, please contact us at <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
+    <p>Best,<br>The ${APP_NAME} Team</p>
+  `;
+
+  return sendEmail({
+    to,
+    subject: `Action required: Payment failed for your ${APP_NAME} API subscription`,
+    html: baseTemplate(content, 'Your API subscription payment could not be processed.'),
+    replyTo: SUPPORT_EMAIL,
+  });
+}

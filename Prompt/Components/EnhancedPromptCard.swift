@@ -9,14 +9,10 @@ import SwiftUI
 
 struct EnhancedPromptCard: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(AppStoreComplianceManager.self) private var complianceManager
-
     let enhancedPrompt: String
     let tokensUsed: Int
     let isCurrentPromptFavorite: Bool
     let onCopy: () -> Void
-    let onOpenClaude: () -> Void
-    let onOpenChatGPT: () -> Void
     let onSave: () -> Void
     let onShare: () -> Void
     let onStartThread: () -> Void
@@ -115,41 +111,6 @@ struct EnhancedPromptCard: View {
                 tintColor: colorScheme == .dark ? accentColor : Color.brandPurple,
                 intensity: .prominent
             ))
-
-            // AI services row
-            HStack(spacing: 8) {
-                Button {
-                    onOpenClaude()
-                } label: {
-                    Label("Claude", systemImage: "bubble.left.and.text.bubble.right")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(LiquidGlassButtonStyle(
-                    cornerRadius: 12,
-                    tintColor: Color(red: 0.85, green: 0.47, blue: 0.34),
-                    intensity: .standard
-                ))
-
-                if complianceManager.allowsChatGPTFeatures {
-                    Button {
-                        onOpenChatGPT()
-                    } label: {
-                        Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(LiquidGlassButtonStyle(
-                        cornerRadius: 12,
-                        tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
-                        intensity: .standard
-                    ))
-                }
-            }
 
             // Utility row: Save, Share, Thread, Clear
             HStack(spacing: 8) {

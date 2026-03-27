@@ -1,5 +1,4 @@
 import { SubscriptionTier } from '@prisma/client';
-import { prisma } from '../utils/prisma.js';
 
 export interface MaxModeQuotaInfo {
   usedToday: number;
@@ -8,16 +7,9 @@ export interface MaxModeQuotaInfo {
   isUnlimited: boolean;
 }
 
-const FREE_MAX_MODE_DAILY_LIMIT = 5;
-const MAX_MODE_AUDIT_ACTION = 'max_mode_prompt_used';
+const FREE_ALLOWED_MODALITIES = new Set(['text']);
 
-function startOfToday(): Date {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-}
-
-export async function getMaxModeQuota(userId: string, tier: SubscriptionTier): Promise<MaxModeQuotaInfo> {
+export async function getMaxModeQuota(_userId: string, tier: SubscriptionTier): Promise<MaxModeQuotaInfo> {
   if (tier !== SubscriptionTier.FREE) {
     return {
       usedToday: 0,
@@ -27,49 +19,30 @@ export async function getMaxModeQuota(userId: string, tier: SubscriptionTier): P
     };
   }
 
-  const usedToday = await prisma.auditLog.count({
-    where: {
-      userId,
-      action: MAX_MODE_AUDIT_ACTION,
-      createdAt: {
-        gte: startOfToday(),
-      },
-    },
-  });
-
+  // Free users have no MAX mode access
   return {
-    usedToday,
-    dailyLimit: FREE_MAX_MODE_DAILY_LIMIT,
-    remaining: Math.max(0, FREE_MAX_MODE_DAILY_LIMIT - usedToday),
+    usedToday: 0,
+    dailyLimit: 0,
+    remaining: 0,
     isUnlimited: false,
   };
 }
 
-export async function ensureMaxModeAvailable(userId: string, tier: SubscriptionTier): Promise<MaxModeQuotaInfo> {
-  const quota = await getMaxModeQuota(userId, tier);
-
-  if (!quota.isUnlimited && quota.remaining <= 0) {
+export async function ensureMaxModeAvailable(_userId: string, tier: SubscriptionTier): Promise<MaxModeQuotaInfo> {
+  if (tier === SubscriptionTier.FREE) {
     throw new Error('FREE_MAX_MODE_LIMIT_REACHED');
   }
 
-  return quota;
+  return getMaxModeQuota(_userId, tier);
 }
 
 export async function recordMaxModeUsage(userId: string, tier: SubscriptionTier): Promise<MaxModeQuotaInfo> {
-  if (tier !== SubscriptionTier.FREE) {
-    return getMaxModeQuota(userId, tier);
-  }
-
-  await prisma.auditLog.create({
-    data: {
-      userId,
-      action: MAX_MODE_AUDIT_ACTION,
-      resource: 'prompt',
-      metadata: {
-        recordedAt: new Date().toISOString(),
-      },
-    },
-  });
-
+  // No tracking needed — free users are fully blocked, subscribers are unlimited
   return getMaxModeQuota(userId, tier);
+}
+
+export function ensureModalityAvailable(modality: string | undefined, tier: SubscriptionTier): void {
+  if (tier === SubscriptionTier.FREE && modality && !FREE_ALLOWED_MODALITIES.has(modality)) {
+    throw new Error('MODALITY_REQUIRES_SUBSCRIPTION');
+  }
 }

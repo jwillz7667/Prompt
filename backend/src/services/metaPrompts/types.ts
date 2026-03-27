@@ -9,7 +9,7 @@
 // CORE MODALITY TYPES
 // ============================================================================
 
-export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
+export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw';
 
 // ============================================================================
 // SUB-MODALITY TYPES
@@ -53,13 +53,20 @@ export type ThreeDSubModality =
   | 'visualization'   // Architectural, product viz
   | 'animation';      // Rigged, animated models
 
+export type NsfwSubModality =
+  | 'romantic'        // Sensual, intimate, emotionally-driven
+  | 'explicit'        // Graphic adult content
+  | 'artistic'        // Tasteful erotic art direction
+  | 'fantasy';        // Fantastical adult themes
+
 export type SubModality =
   | TextSubModality
   | ImageSubModality
   | VideoSubModality
   | AudioSubModality
   | CodeSubModality
-  | ThreeDSubModality;
+  | ThreeDSubModality
+  | NsfwSubModality;
 
 // ============================================================================
 // PLATFORM TYPES
@@ -67,40 +74,43 @@ export type SubModality =
 // ============================================================================
 
 export type ImagePlatform =
-  | 'midjourney'       // Midjourney (--ar, --v, --s syntax)
-  | 'dalle'            // OpenAI DALL-E (natural language)
-  | 'stable-diffusion' // SD (weights, LoRA, embeddings)
-  | 'flux'             // Flux (clean, minimal syntax)
+  | 'midjourney'       // Image Generator (--ar, --v, --s syntax)
+  | 'dalle'            // Image Creator (natural language)
+  | 'stable-diffusion' // Diffusion Model (weights, LoRA, embeddings)
+  | 'flux'             // Image Studio (clean, minimal syntax)
   | 'general';         // Platform-agnostic
 
 export type VideoPlatform =
-  | 'sora'      // OpenAI Sora
-  | 'runway'    // Runway Gen-3
-  | 'pika'      // Pika Labs
-  | 'kling'     // Kling AI
+  | 'sora'      // Video Generator
+  | 'runway'    // Video Creator
+  | 'pika'      // Video Animator
+  | 'kling'     // Video Studio
   | 'general';  // Platform-agnostic
 
 export type AudioPlatform =
-  | 'suno'      // Suno AI
-  | 'udio'      // Udio
-  | 'musicgen'  // Meta MusicGen
+  | 'suno'      // Music Generator
+  | 'udio'      // Music Creator
+  | 'musicgen'  // Audio Generator
   | 'general';  // Platform-agnostic
 
 export type CodePlatform =
-  | 'claude'    // Anthropic Claude
-  | 'gpt'       // OpenAI GPT
-  | 'copilot'   // GitHub Copilot
+  | 'claude'    // AI Assistant
+  | 'gpt'       // AI Chat
+  | 'copilot'   // Code Assistant
   | 'general';  // Platform-agnostic
 
 export type TextPlatform =
-  | 'claude'    // Anthropic Claude
-  | 'gpt'       // OpenAI GPT
-  | 'gemini'    // Google Gemini
+  | 'claude'    // AI Assistant
+  | 'gpt'       // AI Chat
+  | 'gemini'    // AI Search
   | 'general';  // Platform-agnostic
 
 export type ThreeDPlatform =
-  | 'meshy'     // Meshy AI
-  | 'tripo3d'   // Tripo3D
+  | 'meshy'     // 3D Generator
+  | 'tripo3d'   // 3D Creator
+  | 'general';  // Platform-agnostic
+
+export type NsfwPlatform =
   | 'general';  // Platform-agnostic
 
 export type TargetPlatform =
@@ -109,7 +119,8 @@ export type TargetPlatform =
   | AudioPlatform
   | CodePlatform
   | TextPlatform
-  | ThreeDPlatform;
+  | ThreeDPlatform
+  | NsfwPlatform;
 
 // ============================================================================
 // ENHANCEMENT TIER
@@ -235,7 +246,6 @@ export interface MetaPromptBuilderOptions {
   tone?: 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
   length?: 'concise' | 'standard' | 'detailed';
   customInstructions?: string;
-  targetCharacterLength?: number;
 }
 
 // ============================================================================

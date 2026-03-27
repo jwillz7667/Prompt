@@ -3,7 +3,7 @@
 //  Prompt
 //
 //  Left-sliding sidebar drawer showing chat history, search, and user profile.
-//  Inspired by ChatGPT-style navigation.
+//  Left-sliding sidebar drawer for chat navigation.
 //
 
 import SwiftUI

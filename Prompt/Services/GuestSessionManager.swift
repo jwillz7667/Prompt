@@ -41,27 +41,11 @@ final class GuestSessionManager {
     }
 
     func submissionDecision(for mode: PromptGenerationMode) -> GuestSubmissionDecision {
-        if quota.remaining(for: mode) > 0 {
-            return .allowed
-        }
-
-        if quota.isExhausted {
-            shouldPresentAuthenticationGate = true
-            return .requiresAuthentication(
-                message: "Sign in to keep optimizing prompts and start your 7-day Premium trial."
-            )
-        }
-
-        switch mode {
-        case .standard:
-            return .blocked(
-                message: "Your 5 guest Standard prompts are used. Switch MAX on for your final guest prompt."
-            )
-        case .max:
-            return .blocked(
-                message: "Your guest MAX prompt is already used. Switch back to Standard or sign in to continue."
-            )
-        }
+        // All prompt submissions require authentication - prompt users to sign in
+        shouldPresentAuthenticationGate = true
+        return .requiresAuthentication(
+            message: "Sign in with Apple to start enhancing prompts and claim your 7-day free trial."
+        )
     }
 
     func presentAuthenticationGate() {

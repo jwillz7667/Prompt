@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { prisma } from '../utils/prisma.js';
+import { logger } from '../utils/logger.js';
 import { supportsPromptImageAttachmentColumn } from '../services/schemaCompatibilityService.js';
 
 export const collectionRouter = Router();
@@ -73,7 +74,7 @@ collectionRouter.get('/', async (req: AuthenticatedRequest, res: Response): Prom
 
     res.json({ collections });
   } catch (error) {
-    console.error('List collections error:', error);
+    logger.error({ err: error }, 'List collections error');
     res.status(500).json({ error: 'Failed to list collections' });
   }
 });
@@ -139,7 +140,7 @@ collectionRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): P
       })),
     });
   } catch (error) {
-    console.error('Get collection error:', error);
+    logger.error({ err: error }, 'Get collection error');
     res.status(500).json({ error: 'Failed to get collection' });
   }
 });
@@ -166,7 +167,7 @@ collectionRouter.post('/', async (req: AuthenticatedRequest, res: Response): Pro
 
     res.status(201).json({ collection });
   } catch (error) {
-    console.error('Create collection error:', error);
+    logger.error({ err: error }, 'Create collection error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -208,7 +209,7 @@ collectionRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response):
 
     res.json({ collection });
   } catch (error) {
-    console.error('Update collection error:', error);
+    logger.error({ err: error }, 'Update collection error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -244,7 +245,7 @@ collectionRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response)
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete collection error:', error);
+    logger.error({ err: error }, 'Delete collection error');
     res.status(500).json({ error: 'Failed to delete collection' });
   }
 });
@@ -309,7 +310,7 @@ collectionRouter.post('/:id/prompts', async (req: AuthenticatedRequest, res: Res
 
     res.json({ success: true, addedCount: validPromptIds.length });
   } catch (error) {
-    console.error('Add prompts to collection error:', error);
+    logger.error({ err: error }, 'Add prompts to collection error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -366,7 +367,7 @@ collectionRouter.delete('/:id/prompts/:promptId', async (req: AuthenticatedReque
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Remove prompt from collection error:', error);
+    logger.error({ err: error }, 'Remove prompt from collection error');
     res.status(500).json({ error: 'Failed to remove prompt from collection' });
   }
 });

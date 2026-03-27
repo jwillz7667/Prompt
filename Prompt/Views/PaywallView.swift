@@ -36,7 +36,7 @@ struct PaywallView: View {
     private var currentPlanTitle: String {
         switch storeKit.currentTier {
         case .free:
-            return "Unlock Premium prompt workflows"
+            return "Unlock the full experience"
         case .pro:
             return "Upgrade from Pro to Premium"
         case .premium:
@@ -50,11 +50,11 @@ struct PaywallView: View {
 
         switch storeKit.currentTier {
         case .free:
-            return "Stronger prompt rewrites, higher limits, and better tools in the same polished workflow."
+            return "Unlock all modalities, MAX mode, advanced prompt quality, and unlimited daily usage."
         case .pro:
-            return "Move into unlimited usage, MAX access, and the full production toolset."
+            return "Move into unlimited usage, MAX mode, and the strongest prompt engineering available."
         case .premium:
-            return "This account already has the full prompt workflow unlocked."
+            return "This account has the full experience unlocked across all modalities."
         }
     }
     private var headerTitle: String {
@@ -67,11 +67,11 @@ struct PaywallView: View {
 
         switch storeKit.currentTier {
         case .free:
-            return "Choose a plan and unlock stronger prompts, MAX mode, and the full toolset."
+            return "Choose a plan and unlock every modality, MAX mode, and stronger prompts."
         case .pro:
-            return "Step up from Pro and unlock unlimited usage, MAX mode, and the full workflow."
+            return "Step up from Pro and unlock unlimited usage, MAX mode, and the strongest prompts."
         case .premium:
-            return "Your account already has the strongest prompt workflow unlocked."
+            return "Your account has the strongest prompt workflow unlocked."
         }
     }
     private var selectedProductIsCurrent: Bool {
@@ -106,14 +106,32 @@ struct PaywallView: View {
 
                 ScrollView {
                     VStack(spacing: 18) {
-                        PromptPageHeader(
-                            title: headerTitle,
-                            subtitle: headerSubtitle,
-                            onLeadingTap: { dismiss() }
-                        ) {
-                            SubscriptionBadge(tier: storeKit.currentTier)
+                        // Clean header matching chat UI theme
+                        HStack {
+                            Spacer()
+
+                            Text(headerTitle)
+                                .font(.system(.headline, design: .rounded, weight: .bold))
+                                .foregroundStyle(textPrimary)
+
+                            Spacer()
                         }
-                        .padding(.top, 12)
+                        .overlay(alignment: .trailing) {
+                            Button {
+                                dismiss()
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(textSecondary)
+                                    .frame(width: 32, height: 32)
+                                    .background {
+                                        Circle()
+                                            .fill(Color.adaptiveBackgroundTertiary)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.top, 16)
 
                         heroCard
 
@@ -193,15 +211,15 @@ struct PaywallView: View {
                 )
 
                 benefitChip(
-                    title: "Advanced prompts",
-                    systemImage: "wand.and.stars",
-                    tint: accentColor
+                    title: "All modalities",
+                    systemImage: "slider.horizontal.3",
+                    tint: brandPurple
                 )
 
                 benefitChip(
-                    title: "Power tools",
-                    systemImage: "square.grid.2x2.fill",
-                    tint: brandPurple
+                    title: "Advanced AI",
+                    systemImage: "wand.and.stars",
+                    tint: accentColor
                 )
             }
 
@@ -302,9 +320,26 @@ struct PaywallView: View {
 
             VStack(spacing: 0) {
                 comparisonRow(
+                    title: "All modalities",
+                    subtitle: "Image, video, audio, code, and 3D prompt generation",
+                    value: "Pro & Premium",
+                    icon: "slider.horizontal.3",
+                    tint: brandPurple
+                )
+                LiquidGlassDivider()
+                comparisonRow(
+                    title: "MAX mode",
+                    subtitle: "Deeper reasoning for complex, multi-step prompts",
+                    value: "Pro & Premium",
+                    icon: "flame.fill",
+                    tint: warningColor
+                )
+                LiquidGlassDivider()
+                comparisonRow(
                     title: "Prompt quality",
-                    subtitle: "From basic cleanup to advanced prompt engineering",
+                    subtitle: "From basic cleanup to cutting-edge prompt engineering",
                     value: "Basic → Advanced",
+                    icon: "wand.and.stars",
                     tint: accentColor
                 )
                 LiquidGlassDivider()
@@ -312,13 +347,7 @@ struct PaywallView: View {
                     title: "Daily usage",
                     subtitle: "More prompts for active building sessions",
                     value: "10 → Unlimited",
-                    tint: brandPurple
-                )
-                LiquidGlassDivider()
-                comparisonRow(
-                    title: "Power tools",
-                    subtitle: "Unlock exports, workflows, sandboxing, and premium tools",
-                    value: "Paid plans only",
+                    icon: "arrow.up.right",
                     tint: successColor
                 )
             }
@@ -326,7 +355,7 @@ struct PaywallView: View {
         }
     }
 
-    private func comparisonRow(title: String, subtitle: String, value: String, tint: Color) -> some View {
+    private func comparisonRow(title: String, subtitle: String, value: String, icon: String = "", tint: Color) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
@@ -335,9 +364,16 @@ struct PaywallView: View {
                 Circle()
                     .stroke(tint.opacity(0.35), lineWidth: 1)
                     .frame(width: 36, height: 36)
-                Circle()
-                    .fill(tint)
-                    .frame(width: 10, height: 10)
+
+                if icon.isEmpty {
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 10, height: 10)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -405,14 +441,14 @@ struct PaywallView: View {
 
             fallbackPlanCard(
                 tier: .pro,
-                highlight: "Higher daily limits",
-                details: "Standard-quality prompt engineering, more prompt volume, and access to starter premium tools."
+                highlight: "All modalities + MAX",
+                details: "100 daily prompts, all modalities (image, video, audio, code, 3D), MAX mode, and standard-quality prompt engineering."
             )
 
             fallbackPlanCard(
                 tier: .premium,
-                highlight: "Unlimited workflow",
-                details: "Unlimited prompts, MAX mode access, variations, sandbox, workflows, and the strongest prompt quality."
+                highlight: "Unlimited + Advanced",
+                details: "Unlimited prompts, all modalities, MAX mode, and the most advanced prompt engineering with cutting-edge techniques."
             )
         }
     }

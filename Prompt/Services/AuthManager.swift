@@ -443,7 +443,6 @@ struct User: Codable, Identifiable, Sendable {
     var name: String?
     var avatarUrl: String?
     var isPremium: Bool
-    var customInstructions: String?
 
     nonisolated init(from dto: UserDTO) {
         self.id = dto.id
@@ -451,15 +450,14 @@ struct User: Codable, Identifiable, Sendable {
         self.name = dto.name
         self.avatarUrl = dto.avatarUrl
         self.isPremium = dto.isPremium
-        self.customInstructions = dto.customInstructions
     }
 }
 
 // MARK: - Profile Update
 
 extension AuthManager {
-    func updateProfile(name: String?, customInstructions: String?) async throws {
-        let request = ProfileUpdateRequest(name: name, customInstructions: customInstructions)
+    func updateProfile(name: String?) async throws {
+        let request = ProfileUpdateRequest(name: name)
         let response: ProfileUpdateResponse = try await APIClient.shared.request(
             "/users/profile",
             method: .patch,

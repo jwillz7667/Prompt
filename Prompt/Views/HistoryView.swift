@@ -445,6 +445,7 @@ struct HistoryView: View {
         case "audio": return "music.note"
         case "code": return "chevron.left.forwardslash.chevron.right"
         case "3d": return "cube"
+        case "nsfw": return "flame.fill"
         default: return "text.alignleft"
         }
     }
@@ -456,6 +457,7 @@ struct HistoryView: View {
         case "audio": return .teal
         case "code": return .green
         case "3d": return .blue
+        case "nsfw": return .red
         default: return .purple
         }
     }
@@ -553,7 +555,6 @@ struct PromptRowView: View {
 
 struct PromptDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(AppStoreComplianceManager.self) private var complianceManager
     let prompt: PromptRecord
     var onRerun: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
@@ -649,42 +650,6 @@ struct PromptDetailView: View {
                             .background(bgSecondary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .textSelection(.enabled)
-                    }
-
-                    // AI Service buttons (glass style)
-                    HStack(spacing: 8) {
-                        // Try in Claude
-                        Button {
-                            openInClaude(prompt: prompt.enhancedPrompt)
-                        } label: {
-                            Label("Claude", systemImage: "bubble.left.and.text.bubble.right")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                        }
-                        .buttonStyle(LiquidGlassButtonStyle(
-                            cornerRadius: 10,
-                            tintColor: Color(red: 0.85, green: 0.47, blue: 0.34),
-                            intensity: .standard
-                        ))
-
-                        if complianceManager.allowsChatGPTFeatures {
-                            Button {
-                                openInChatGPT(prompt: prompt.enhancedPrompt)
-                            } label: {
-                                Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                            }
-                            .buttonStyle(LiquidGlassButtonStyle(
-                                cornerRadius: 10,
-                                tintColor: Color(red: 0.0, green: 0.65, blue: 0.65),
-                                intensity: .standard
-                            ))
-                        }
                     }
 
                     // Re-enhance button (primary action)
@@ -862,26 +827,6 @@ struct PromptDetailView: View {
         }
     }
 
-    // MARK: - AI Service Links
-
-    private func openInClaude(prompt: String) {
-        guard !prompt.isEmpty,
-              let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://claude.ai/new?q=\(encodedPrompt)") else {
-            return
-        }
-        UIApplication.shared.open(url)
-    }
-
-    private func openInChatGPT(prompt: String) {
-        guard complianceManager.allowsChatGPTFeatures,
-              !prompt.isEmpty,
-              let encodedPrompt = prompt.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://chatgpt.com/?q=\(encodedPrompt)") else {
-            return
-        }
-        UIApplication.shared.open(url)
-    }
 }
 
 #Preview {

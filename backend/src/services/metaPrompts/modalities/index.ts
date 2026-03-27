@@ -12,6 +12,7 @@ import { videoModalityConfig } from './video.js';
 import { audioModalityConfig } from './audio.js';
 import { codeModalityConfig } from './code.js';
 import { threeDModalityConfig } from './3d.js';
+import { nsfwModalityConfig } from './nsfw.js';
 
 // ============================================================================
 // MODALITY REGISTRY
@@ -24,6 +25,7 @@ const modalityRegistry: Record<PromptModality, ModalityConfig> = {
   audio: audioModalityConfig,
   code: codeModalityConfig,
   '3d': threeDModalityConfig,
+  nsfw: nsfwModalityConfig,
 };
 
 // ============================================================================
@@ -194,4 +196,5 @@ export {
   audioModalityConfig,
   codeModalityConfig,
   threeDModalityConfig,
+  nsfwModalityConfig,
 };

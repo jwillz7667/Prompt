@@ -4,7 +4,7 @@ import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
 export type ConversationMode = 'optimize' | 'chat';
-export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
+export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw';
 export type EnhancementTier = 'basic' | 'standard' | 'advanced';
 
 export interface EnhancePromptRequest {
@@ -18,7 +18,6 @@ export interface EnhancePromptRequest {
   modality?: PromptModality;
   subModality?: string;
   customInstructions?: string;
-  targetCharacterLength?: number;
   imageAttachment?: PromptImageAttachment;
 }
 
@@ -85,15 +84,34 @@ const THREAD_CONTEXT_CHAR_BUDGET = 220_000;
 
 const QUALITY_PROFILES: Record<EnhancementTier, string> = {
   basic: [
-    '- prioritize clarity, strong structure, and directly usable wording',
-    '- avoid unnecessary elaboration unless the user explicitly asks for depth',
+    '- provide a clear, straightforward improvement over the original prompt',
+    '- add basic structure: define the task, specify the desired output format, and set a reasonable length',
+    '- keep the enhanced prompt short and focused — no advanced techniques, no elaborate scaffolding',
+    '- do NOT include XML tags, reasoning chains, self-verification, or expert personas',
+    '- the result should be a modest improvement that clarifies intent and adds minimal structure',
   ].join('\n'),
   standard: [
     '- improve instruction hierarchy, input framing, and output contract definition',
     '- add sensible constraints and quality checks when they materially improve reliability',
+    '- use structured sections (task, context, format, constraints) to organize the prompt',
+    '- add Chain-of-Thought triggers for analytical tasks',
   ].join('\n'),
   advanced: [
-    '- maximize robustness with explicit success criteria, failure-avoidance guidance, and verification checkpoints',
+    '- apply every cutting-edge prompt engineering technique that improves reliability for this specific task:',
+    '  * Meta Chain-of-Thought: embed explicit reasoning scaffolds that guide the target model through multi-step deliberation before producing output',
+    '  * Structured XML semantics: wrap distinct prompt sections in semantic XML tags (<task>, <context>, <constraints>, <output_contract>, <verification>) for 15-20% parsing improvement',
+    '  * Self-Refine hooks: instruct the target model to draft, critique its own output against success criteria, then revise before returning the final result',
+    '  * Persona-calibrated framing: assign a precise expert identity with domain depth, reasoning style, and epistemic standards',
+    '  * Recursive decomposition: break complex objectives into ordered sub-tasks with explicit dependency chains and intermediate checkpoints',
+    '  * Calibrated confidence prompting: require the target model to flag uncertainty levels and distinguish established facts from inferences',
+    '  * Negative constraint engineering: add high-signal NEVER rules that preempt the most likely failure modes for this specific task type',
+    '  * Output contract specification: define exact deliverable shape, acceptance criteria, and quality rubric so the target model self-evaluates',
+    '  * Few-shot reasoning traces: when examples are warranted, include the reasoning path (not just input→output) so the model learns the thought process',
+    '  * Multi-perspective simulation: for analytical tasks, instruct the model to evaluate from multiple stakeholder or methodological viewpoints before synthesizing',
+    '  * Chain of Verification: instruct the model to formulate verification questions targeting its own subclaims, answer them in isolation, then synthesize a more reliable final output',
+    '  * Contrastive reasoning: when examples are used, include both correct AND incorrect reasoning traces so the model learns what mistakes to avoid',
+    '  * Step-back abstraction: for complex problems, instruct the model to identify underlying principles first before tackling specifics',
+    '- the enhanced prompt should be comprehensive, production-grade, and dramatically superior to what an unassisted user would write',
     '- prefer precise constraints and evaluation rubrics over generic flourishes',
   ].join('\n'),
 };
@@ -105,6 +123,7 @@ const CHAT_MODALITY_GUIDANCE: Record<PromptModality, string> = {
   audio: '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
   code: '- give production-minded technical help, explain tradeoffs precisely, and include code only when useful',
   '3d': '- respond with concrete guidance on form, materials, topology, technical constraints, and downstream use',
+  nsfw: '- help the user craft vivid, detailed adult content prompts with atmosphere, character detail, and sensory language',
 };
 
 const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string }> = {
@@ -178,6 +197,18 @@ const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string 
       '- optimize for topology quality, material realism, and downstream usability such as game, AR/VR, or printing workflows',
       '- add explicit mesh, texture, and structural constraints that prevent common generation failures',
       '- specify the asset purpose and technical acceptance criteria precisely',
+    ].join('\n'),
+  },
+  nsfw: {
+    standard: [
+      '- establish scene, characters, atmosphere, and sensory details with vivid specificity',
+      '- define tone (romantic, explicit, artistic, fantasy) and emotional arc clearly',
+      '- include body language, dialogue cues, and environmental mood anchors',
+    ].join('\n'),
+    max: [
+      '- layer multiple sensory channels: visual detail, tactile sensation, scent, sound, emotional state',
+      '- choreograph physical progression with pacing, tension, and release beats',
+      '- use literary craft techniques: metaphor, internal monologue, power dynamics, and vulnerability',
     ].join('\n'),
   },
 };
@@ -375,11 +406,7 @@ function buildSubModalityGuidance(modality: PromptModality, subModality?: string
   return '';
 }
 
-function buildLengthConstraint(prompt: string, customInstructions?: string, targetCharacterLength?: number): string | null {
-  if (targetCharacterLength && targetCharacterLength > 0) {
-    return `The response must be exactly ${targetCharacterLength} characters long, including spaces and punctuation.`;
-  }
-
+function buildLengthConstraint(prompt: string, customInstructions?: string): string | null {
   const combined = `${prompt} ${customInstructions ?? ''}`;
   const matches: string[] = [];
   const patterns: Array<{ regex: RegExp; formatter: (value: string) => string }> = [
@@ -433,8 +460,7 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
 
   const lengthConstraint = buildLengthConstraint(
     request.prompt,
-    request.customInstructions,
-    request.targetCharacterLength
+    request.customInstructions
   );
 
   if (lengthConstraint) {
@@ -487,8 +513,7 @@ function buildChatUserMessage(request: ReturnType<typeof normalizeRequest>): str
 
   const lengthConstraint = buildLengthConstraint(
     request.prompt,
-    request.customInstructions,
-    request.targetCharacterLength
+    request.customInstructions
   );
 
   if (lengthConstraint) {

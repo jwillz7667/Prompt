@@ -187,7 +187,6 @@ struct SplashView: View {
     @State private var logoRotation = -14.0
     @State private var wordmarkOpacity = 0.0
     @State private var wordmarkOffset = 22.0
-    @State private var haloOpacity = 0.18
 
     // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -198,24 +197,9 @@ struct SplashView: View {
             LiquidGlassBackground()
 
             VStack(spacing: 24) {
-                ZStack {
-                    RadialGradient(
-                        colors: [
-                            (colorScheme == .dark ? Color.brandCyan : Color.brandPurple).opacity(0.28),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 8,
-                        endRadius: 140
-                    )
-                        .frame(width: 200, height: 200)
-                        .opacity(haloOpacity)
-                        .blur(radius: 18)
-
-                    AppBrandMark(size: 132, showsGlassBackdrop: false)
-                        .scaleEffect(logoScale)
-                        .rotationEffect(.degrees(logoRotation))
-                }
+                AppBrandMark(size: 132, showsGlassBackdrop: false)
+                    .scaleEffect(logoScale)
+                    .rotationEffect(.degrees(logoRotation))
 
                 VStack(spacing: 8) {
                     Text("Promptomize")
@@ -234,7 +218,6 @@ struct SplashView: View {
             withAnimation(.spring(response: 0.78, dampingFraction: 0.8)) {
                 logoScale = 1.0
                 logoRotation = 0
-                haloOpacity = 1
             }
 
             withAnimation(.easeOut(duration: 0.52).delay(0.12)) {

@@ -276,7 +276,6 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
-            customInstructions: sanitizedCustomInstructions(from: settings),
             imageAttachment: sentAttachment,
             previousTurns: seededTurnsForRequest
         )
@@ -411,7 +410,6 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
-            customInstructions: sanitizedCustomInstructions(from: settings),
             imageAttachment: sentAttachment
         )
         let responseMode = settings.conversationMode
@@ -766,12 +764,6 @@ final class ThreadViewModel {
         )
     }
 
-    private func sanitizedCustomInstructions(from settings: SettingsManager) -> String? {
-        let trimmed = settings.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return String(trimmed.prefix(2_000))
-    }
-
     private var seededTurnsForRequest: [SeedThreadTurnRequest]? {
         guard !turns.isEmpty else { return nil }
 
@@ -806,7 +798,6 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
-            customInstructions: sanitizedCustomInstructions(from: settings),
             imageAttachment: request.imageAttachment,
             previousTurns: seededTurnsForRequest ?? []
         )

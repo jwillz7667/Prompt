@@ -89,19 +89,7 @@ struct WhatsNewView: View {
                 .padding(.bottom, 32)
             }
         }
-        .background {
-            ZStack {
-                Color.adaptiveBackgroundPrimary
-                LinearGradient(
-                    colors: colorScheme == .dark
-                        ? [Color.brandPurple.opacity(0.08), Color.clear]
-                        : [Color.brandPurple.opacity(0.04), Color.clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .ignoresSafeArea()
-        }
+        .background { LiquidGlassBackground() }
     }
 
     // MARK: - Header

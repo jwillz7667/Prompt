@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { prisma } from '../utils/prisma.js';
+import { logger } from '../utils/logger.js';
 import { sendAccountDeleted } from '../services/emailService.js';
 import { registerDeviceToken, unregisterDeviceToken } from '../services/notificationService.js';
 
@@ -43,7 +44,7 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
 
     res.json({ user });
   } catch (error) {
-    console.error('Update profile error:', error);
+    logger.error({ err: error }, 'Update profile error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -113,7 +114,7 @@ userRouter.get('/stats', async (req: AuthenticatedRequest, res: Response): Promi
       })),
     });
   } catch (error) {
-    console.error('Get stats error:', error);
+    logger.error({ err: error }, 'Get stats error');
     res.status(500).json({ error: 'Failed to get stats' });
   }
 });
@@ -150,7 +151,7 @@ userRouter.get('/sessions', async (req: AuthenticatedRequest, res: Response): Pr
 
     res.json({ sessions: sessionsWithCurrent });
   } catch (error) {
-    console.error('Get sessions error:', error);
+    logger.error({ err: error }, 'Get sessions error');
     res.status(500).json({ error: 'Failed to get sessions' });
   }
 });
@@ -183,7 +184,7 @@ userRouter.delete('/sessions/:id', async (req: AuthenticatedRequest, res: Respon
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Revoke session error:', error);
+    logger.error({ err: error }, 'Revoke session error');
     res.status(500).json({ error: 'Failed to revoke session' });
   }
 });
@@ -213,13 +214,13 @@ userRouter.delete('/account', async (req: AuthenticatedRequest, res: Response): 
     // Send account deleted email (fire-and-forget)
     if (user) {
       sendAccountDeleted(user.email, user.name).catch((err) => {
-        console.error('Failed to send account deleted email:', err);
+        logger.error({ err }, 'Failed to send account deleted email');
       });
     }
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Delete account error:', error);
+    logger.error({ err: error }, 'Delete account error');
     res.status(500).json({ error: 'Failed to delete account' });
   }
 });
@@ -252,7 +253,7 @@ userRouter.post('/device-token', async (req: AuthenticatedRequest, res: Response
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Register device token error:', error);
+    logger.error({ err: error }, 'Register device token error');
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid request data', details: error.errors });
       return;
@@ -278,7 +279,7 @@ userRouter.delete('/device-token', async (req: AuthenticatedRequest, res: Respon
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Unregister device token error:', error);
+    logger.error({ err: error }, 'Unregister device token error');
     res.status(500).json({ error: 'Failed to unregister device token' });
   }
 });

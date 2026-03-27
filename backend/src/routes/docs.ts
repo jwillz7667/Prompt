@@ -217,7 +217,7 @@ const openApiSpec = {
             in: 'query',
             schema: {
               type: 'string',
-              enum: ['text', 'image', 'video', 'audio', 'code', '3d'],
+              enum: ['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw'],
             },
             description: 'Filter by modality',
           },
@@ -265,7 +265,7 @@ const openApiSpec = {
           },
           modality: {
             type: 'string',
-            enum: ['text', 'image', 'video', 'audio', 'code', '3d'],
+            enum: ['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw'],
             default: 'text',
             description: 'Target modality for the prompt',
           },
@@ -477,8 +477,8 @@ const openApiSpec = {
 const gptActionSpec = {
   openapi: '3.1.0',
   info: {
-    title: 'Promptomize GPT Actions',
-    description: 'Minimal action schema for the public Promptomize GPT in ChatGPT.',
+    title: 'Promptomize Actions',
+    description: 'Minimal action schema for third-party integrations.',
     version: '1.0.0',
   },
   servers: [
@@ -522,7 +522,7 @@ const gptActionSpec = {
                     prompt: 'A cinematic portrait of a founder working late at a desk.',
                     modality: 'image',
                     mode: 'standard',
-                    subModality: 'midjourney',
+                    subModality: 'photorealistic',
                   },
                 },
                 code: {
@@ -590,7 +590,7 @@ const gptActionSpec = {
         in: 'header',
         name: 'X-API-Key',
         description:
-          'Production API key created in the Promptomize developer portal. Use a dedicated key with only the enhance permission for GPT Store publishing.',
+          'Production API key created in the Promptomize developer portal. Use a dedicated key with only the enhance permission.',
       },
     },
     schemas: {
@@ -607,7 +607,7 @@ const gptActionSpec = {
           },
           modality: {
             type: 'string',
-            enum: ['text', 'image', 'video', 'audio', 'code', '3d'],
+            enum: ['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw'],
             default: 'text',
             description: 'Target prompt modality.',
           },
@@ -633,7 +633,7 @@ const gptActionSpec = {
           subModality: {
             type: 'string',
             description:
-              'Optional platform or engine hint, such as midjourney, dalle, stable-diffusion, runway, sora, suno, udio, or swiftui.',
+              'Optional platform or engine hint for specialized generation optimization.',
           },
         },
       },
@@ -758,7 +758,7 @@ docsRouter.get('/openapi.yaml', (_req: Request, res: Response): void => {
 });
 
 /**
- * GET /gpt-actions.json - Minimal OpenAPI 3.1 specification for GPT Actions (JSON)
+ * GET /gpt-actions.json - Minimal OpenAPI 3.1 specification for third-party actions (JSON)
  */
 docsRouter.get('/gpt-actions.json', (_req: Request, res: Response): void => {
   res.setHeader('Content-Type', 'application/json');
@@ -766,7 +766,7 @@ docsRouter.get('/gpt-actions.json', (_req: Request, res: Response): void => {
 });
 
 /**
- * GET /gpt-actions.yaml - Minimal OpenAPI 3.1 specification for GPT Actions (YAML)
+ * GET /gpt-actions.yaml - Minimal OpenAPI 3.1 specification for third-party actions (YAML)
  */
 docsRouter.get('/gpt-actions.yaml', (_req: Request, res: Response): void => {
   res.setHeader('Content-Type', 'text/yaml');

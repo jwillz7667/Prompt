@@ -3,7 +3,7 @@
 //  Prompt
 //
 //  Bottom sheet triggered by the + button, showing recent threads and enhancement features.
-//  Structural layout inspired by ChatGPT's options menu with Promptomize brand styling.
+//  Bottom sheet options menu with Promptomize brand styling.
 //
 
 import SwiftUI
@@ -20,11 +20,16 @@ struct ChatOptionsSheet: View {
     let onShowCamera: () -> Void
     let onShowPhotoPicker: () -> Void
     let onShowFilePicker: () -> Void
+    let onShowPaywall: () -> Void
+
+    @State private var showPaywallSheet = false
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { colorScheme == .dark ? Color.brandCyan : Color.brandPurple }
+
+    private var isSubscribed: Bool { storeKit.hasActiveSubscription }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -118,7 +123,7 @@ struct ChatOptionsSheet: View {
             // Feature options list
             ScrollView {
                 VStack(spacing: 0) {
-                    featureRow(
+                    premiumFeatureRow(
                         icon: "photo.artframe",
                         iconColor: .pink,
                         title: "Image prompt",
@@ -129,7 +134,7 @@ struct ChatOptionsSheet: View {
                         dismiss()
                     }
 
-                    featureRow(
+                    premiumFeatureRow(
                         icon: "video.fill",
                         iconColor: .red,
                         title: "Video prompt",
@@ -140,7 +145,7 @@ struct ChatOptionsSheet: View {
                         dismiss()
                     }
 
-                    featureRow(
+                    premiumFeatureRow(
                         icon: "chevron.left.forwardslash.chevron.right",
                         iconColor: .green,
                         title: "Code prompt",
@@ -151,7 +156,7 @@ struct ChatOptionsSheet: View {
                         dismiss()
                     }
 
-                    featureRow(
+                    premiumFeatureRow(
                         icon: "music.note",
                         iconColor: .orange,
                         title: "Audio prompt",
@@ -162,7 +167,7 @@ struct ChatOptionsSheet: View {
                         dismiss()
                     }
 
-                    featureRow(
+                    premiumFeatureRow(
                         icon: "cube.fill",
                         iconColor: .blue,
                         title: "3D prompt",
@@ -173,7 +178,7 @@ struct ChatOptionsSheet: View {
                         dismiss()
                     }
 
-                    featureRow(
+                    premiumFeatureRow(
                         icon: "flame.fill",
                         iconColor: .orange,
                         title: "MAX mode",
@@ -206,7 +211,77 @@ struct ChatOptionsSheet: View {
             }
         }
         .background(Color.adaptiveBackgroundSecondary)
+        .sheet(isPresented: $showPaywallSheet) {
+            PaywallView()
+        }
     }
+
+    // MARK: - Premium Feature Row (gated behind subscription)
+
+    private func premiumFeatureRow(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            if isSubscribed {
+                action()
+            } else {
+                dismiss()
+                onShowPaywall()
+            }
+        } label: {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(isSubscribed ? iconColor : iconColor.opacity(0.5))
+                    .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(title)
+                            .font(.system(.body, design: .rounded, weight: .semibold))
+                            .foregroundStyle(isSubscribed ? textPrimary : textSecondary)
+
+                        if !isSubscribed {
+                            Text("PRO")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background {
+                                    Capsule()
+                                        .fill(LinearGradient(
+                                            colors: [Color.brandPurple, Color.brandCyan],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ))
+                                }
+                        }
+                    }
+
+                    Text(subtitle)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(isSubscribed ? textSecondary : textTertiary)
+                }
+
+                Spacer()
+
+                if !isSubscribed {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(textTertiary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Standard Feature Row (always available)
 
     private func featureRow(
         icon: String,

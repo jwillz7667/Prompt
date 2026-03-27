@@ -30,7 +30,7 @@ class ImageAnalysisService {
   async enrichAttachmentForPrompt(
     attachment: PromptImageAttachment,
     userPrompt: string,
-    modality: 'text' | 'image' | 'video' | 'audio' | 'code' | '3d'
+    modality: 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw'
   ): Promise<PromptImageAttachment> {
     if (!attachment.dataUrl) {
       return attachment;
@@ -53,7 +53,7 @@ class ImageAnalysisService {
   private async analyzeImage(
     attachment: PromptImageAttachment,
     userPrompt: string,
-    modality: 'text' | 'image' | 'video' | 'audio' | 'code' | '3d'
+    modality: 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw'
   ): Promise<string> {
     if (!this.client) {
       promptLogger.warn('OPENAI_API_KEY missing; using fallback image analysis');

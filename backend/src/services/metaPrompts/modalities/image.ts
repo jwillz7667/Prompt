@@ -1,8 +1,8 @@
 /**
  * Image Modality Configuration
  *
- * Optimized for image generation: Midjourney, DALL-E, Stable Diffusion, Flux
- * Implements subject-first weighting, style references, and platform-specific syntax
+ * Optimized for image generation: AI image generation models
+ * Implements subject-first weighting, style references, and generation-optimized syntax
  */
 
 import type {
@@ -26,7 +26,7 @@ const fewShotExamples: FewShotExample[] = [
     input: 'a cat in space',
     output: `A majestic orange tabby cat floating weightlessly inside the International Space Station, Earth's blue curve visible through a large circular observation window behind it. Soft bioluminescent lighting reflects in its curious amber eyes, whiskers catching tiny floating droplets of water. Individual fur strands visible with photorealistic detail. NASA equipment, control panels, and zero-gravity handholds in the background. Shot on Hasselblad medium format camera, 85mm lens, f/2.8 shallow depth of field, cinematic color grading with teal and orange tones. 8K resolution, photorealistic rendering, volumetric lighting through the window --ar 16:9 --v 6.1 --s 250`,
     subModality: 'photorealistic',
-    platform: 'midjourney',
+    platform: 'general',
     complexity: 'complex',
     tags: ['space', 'animal', 'cinematic'],
   },
@@ -35,7 +35,7 @@ const fewShotExamples: FewShotExample[] = [
     input: 'portrait of old man',
     output: `Intimate portrait of an 80-year-old fisherman, weathered face with deep wrinkles telling stories of decades at sea. Silver stubble on pronounced cheekbones, piercing steel-blue eyes with cataracts catching the light. Wearing a faded navy cable-knit sweater. Rembrandt lighting from a nearby window, warm afternoon golden hour glow. Background: soft bokeh of a wooden fishing shack interior. Shot on Canon 5D Mark IV, 135mm f/1.8 lens, ISO 400. Rich skin tones, visible pores and texture, documentary photography style. Inspired by Steve McCurry's portraiture --ar 4:5 --v 6.1`,
     subModality: 'photorealistic',
-    platform: 'midjourney',
+    platform: 'general',
     complexity: 'complex',
     tags: ['portrait', 'character', 'documentary'],
   },
@@ -45,7 +45,7 @@ const fewShotExamples: FewShotExample[] = [
     input: 'magical forest',
     output: `Enchanted ancient forest at twilight, massive gnarled oak trees with bioluminescent moss draping from branches. Ethereal mist swirling between trees, fireflies creating constellations of warm golden light. A winding stone path disappears into the luminous fog. Painted in the style of Studio Ghibli backgrounds meets Thomas Kinkade's light mastery. Soft impressionistic brushstrokes, rich emerald and sapphire color palette with accents of warm amber. Painterly texture visible, oil on canvas aesthetic. Magical realism, high fantasy atmosphere --ar 16:9 --v 6.1 --s 500`,
     subModality: 'artistic',
-    platform: 'midjourney',
+    platform: 'general',
     complexity: 'medium',
     tags: ['fantasy', 'landscape', 'painting'],
   },
@@ -63,7 +63,7 @@ const fewShotExamples: FewShotExample[] = [
     input: 'alien creature design',
     output: `Creature concept art: bioluminescent deep-sea alien, semi-translucent membrane body revealing internal organs that glow cyan and magenta. Multiple articulated limbs ending in delicate manipulator appendages. Large compound eyes with fractal patterns. Flowing tendrils that function as sensory organs. Multiple angle views: front, side, 3/4, plus detail callouts for head, limbs, and texture. White background with subtle shadow. Professional creature design sheet layout, annotations showing scale (2.5m tall). Style: James Gurney meets Wayne Barlowe. Rendered in digital painting, clean linework --ar 3:2 --v 6.1`,
     subModality: 'concept',
-    platform: 'midjourney',
+    platform: 'general',
     complexity: 'complex',
     tags: ['creature', 'design', 'sci-fi'],
   },
@@ -73,31 +73,9 @@ const fewShotExamples: FewShotExample[] = [
     input: 'wireless earbuds',
     output: `Premium wireless earbuds product photography, matte black finish with rose gold accents. Earbuds floating above their charging case in dramatic levitation. One bud showing inner speaker detail, other showing ear-tip. Hard studio lighting with single key light creating crisp shadows. Minimal gradient background transitioning from charcoal to soft gray. Subtle reflection on glossy surface below. Apple-style product photography aesthetic, clean and minimal. Shot on Phase One medium format, 120mm macro lens, focus stacking for complete sharpness. 8K resolution, product catalog quality --ar 1:1 --v 6.1 --s 100`,
     subModality: 'product',
-    platform: 'midjourney',
+    platform: 'general',
     complexity: 'medium',
     tags: ['product', 'tech', 'commercial'],
-  },
-  // Platform-specific: DALL-E style (more natural language)
-  {
-    id: 'image-dalle-1',
-    input: 'cozy reading nook',
-    output: `A cozy reading nook in a bay window during a rainy autumn afternoon. Plush cushions in warm burgundy and cream colors are arranged on a built-in window seat. An open book lies next to a steaming cup of tea in a ceramic mug. Soft natural light filters through rain-streaked glass, with maple trees in orange and red visible outside. A knitted throw blanket drapes over the seat, and a small stack of vintage hardcover books sits nearby. The walls are painted a warm sage green with white trim. Photorealistic style with soft, diffused lighting and shallow depth of field focusing on the tea cup. Hygge aesthetic, inviting and peaceful atmosphere.`,
-    subModality: 'photorealistic',
-    platform: 'dalle',
-    complexity: 'medium',
-    tags: ['interior', 'cozy', 'lifestyle'],
-  },
-  // Platform-specific: Stable Diffusion (with weights)
-  {
-    id: 'image-sd-1',
-    input: 'warrior princess',
-    output: `(masterpiece, best quality:1.4), (intricate details:1.3), warrior princess standing on battlefield at dawn, (ornate golden armor with dragon motifs:1.2), flowing crimson cape, silver hair in complex braids, (determined expression:1.1), holding longsword with glowing runes, (dramatic backlighting from rising sun:1.3), (smoke and embers in atmosphere:1.1), (epic fantasy:1.2), volumetric lighting, ray tracing, 8k uhd, professional photography
-
-Negative prompt: (low quality, worst quality:1.4), blurry, deformed, bad anatomy, extra limbs, watermark, text, signature, cropped, out of frame`,
-    subModality: 'artistic',
-    platform: 'stable-diffusion',
-    complexity: 'complex',
-    tags: ['fantasy', 'character', 'epic'],
   },
 ];
 
@@ -152,7 +130,7 @@ function buildSystemPrompt(tier: EnhancementTier, subModality?: ImageSubModality
   const subModalityGuidance = getSubModalityGuidance(subModality || 'photorealistic');
 
   const baseKnowledge = `<system>
-You are VISIONARY, an elite prompt architect specializing in AI image generation across Midjourney, DALL-E, Stable Diffusion, and Flux models.
+You are VISIONARY, an elite prompt architect specializing in AI image generation.
 
 <research_foundation>
 Image generation models use tokenized text with implicit weighting:
@@ -266,18 +244,43 @@ function getTierGuidance(tier: EnhancementTier): string {
 <output_length>Detailed prompt (100-150 words)</output_length>`;
 
     case 'advanced':
-      return `<enhancement_level>ADVANCED</enhancement_level>
+      return `<enhancement_level>ADVANCED — PREMIUM TIER</enhancement_level>
 <techniques_to_apply>
-- Rich subject with micro-details and textures
-- Layered environment with foreground/midground/background
-- Multiple style references with fusion technique
-- Advanced lighting with color temperature and atmosphere
-- Complete camera specification with lens characteristics
-- Composition guidance
-- Platform-specific syntax optimization
-- Negative prompt suggestions when appropriate
+Apply every cutting-edge image prompt engineering technique relevant to this specific generation task:
+
+SUBJECT & COMPOSITION MASTERY:
+- Rich subject with micro-details: pores, fabric weave, surface imperfections, subsurface scattering cues
+- Layered composition with distinct foreground/midground/background depth planes and leading lines
+- Token weight optimization: front-load the most critical visual concepts (subject, action, emotion) since early tokens receive highest model attention
+- Compositional grammar: golden ratio, rule of thirds, negative space, framing elements, visual weight balance
+
+STYLE & REFERENCE ENGINEERING:
+- Multi-reference style fusion: blend 2-3 artists or movements with explicit weighting ("70% Greg Rutkowski, 30% Alphonse Mucha")
+- Medium simulation: specify exact artistic medium (oil on linen, Copic markers on bristol, wet-plate collodion)
+- Era-anchored aesthetics: reference specific periods, movements, and their visual signatures
+
+CINEMATIC LIGHTING & ATMOSPHERE:
+- Full lighting rig specification: key light (type, angle, intensity, color temperature), fill ratio, rim/hair light, practicals
+- Atmospheric depth: volumetric fog, god rays, dust motes, lens flare characteristics
+- Color temperature precision: Kelvin values (2700K warm, 5600K daylight, 8000K overcast blue)
+
+TECHNICAL CAMERA SPECIFICATION:
+- Complete camera chain: body (Hasselblad X2D, Canon R5), lens (specific focal length + aperture), film stock or sensor profile
+- Depth of field physics: aperture-accurate bokeh shape (circular, hexagonal), focus plane placement, background separation
+- Motion and exposure: shutter speed for motion blur control, ISO grain characteristics
+
+OUTPUT OPTIMIZATION:
+- Aspect ratio and style parameters calibrated to intent
+- Attention weight syntax for emphasis on key visual elements
+- Natural language descriptions with embedded quality anchors and style references
+- Detailed scene descriptions with emphasis on consistency and coherence cues
+
+QUALITY ENGINEERING:
+- Negative prompt engineering: preempt the most common failure modes (extra limbs, text artifacts, blurry backgrounds, inconsistent lighting)
+- Perceptual quality anchoring: reference specific photographers, studios, or publications (National Geographic, Annie Leibovitz, Apple product photography)
+- Micro-texture and material realism: surface imperfections, weathering, wear patterns, subsurface light behavior
 </techniques_to_apply>
-<output_length>Comprehensive prompt (150-200 words)</output_length>`;
+<output_length>Comprehensive, production-grade prompt (150-250 words of dense visual specification)</output_length>`;
   }
 }
 
@@ -288,7 +291,7 @@ CRITICAL: Return ONLY the enhanced image prompt. No explanations or preamble.
 Format requirements:
 - Lead with subject (no "An image of...")
 - Flow naturally from subject → environment → style → technical
-- ${tier === 'advanced' ? 'Include Midjourney parameters (--ar, --v, --s) at the end when appropriate' : 'Keep platform-agnostic unless specifically requested'}
+- ${tier === 'advanced' ? 'Include aspect ratio and style parameters when appropriate' : 'Keep platform-agnostic unless specifically requested'}
 - Keep within ${tier === 'basic' ? '100' : tier === 'standard' ? '150' : '200'} words
 </output_rules>`;
 }
@@ -300,8 +303,8 @@ Format requirements:
 export const imageModalityConfig: ModalityConfig = {
   modality: 'image',
   displayName: 'Image Generation',
-  description: 'Optimized for AI image generators (Midjourney, DALL-E, Stable Diffusion, Flux)',
-  targetPlatforms: ['midjourney', 'dalle', 'stable-diffusion', 'flux', 'general'],
+  description: 'Optimized for AI image generation',
+  targetPlatforms: ['general'],
   subModalities: ['photorealistic', 'artistic', 'concept', 'product'],
   defaultSubModality: 'photorealistic',
   coreStructure: [
@@ -317,7 +320,7 @@ export const imageModalityConfig: ModalityConfig = {
     'Cinematic vocabulary (lenses, film stocks)',
     'Artist and style references',
     'Negative prompts for refinement',
-    'Platform-specific syntax',
+    'Generation-optimized formatting',
     'Composition guidance',
   ],
   fewShotExamples,

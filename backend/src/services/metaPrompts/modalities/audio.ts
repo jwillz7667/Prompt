@@ -2,11 +2,10 @@
  * Audio Modality Configuration
  *
  * Research-backed optimization for AI audio/music generation.
- * Informed by: MusicCaps (Google), MusicGen (Meta), Stable Audio (Stability AI),
+ * Informed by: MusicCaps dataset, audio generation research papers,
  * "Open Prompt Challenge" (audionese concept), ConceptCaps 200-attribute taxonomy,
- * Mustango/MusicBench, SongComposer, and platform-specific Suno v5/Udio guides.
+ * Mustango/MusicBench, SongComposer, and music generation best practices.
  *
- * Target platforms: Suno, Udio, MusicGen, Stable Audio
  * Sub-modalities: music, lyrics, speech, soundscape, voiceover
  */
 
@@ -24,7 +23,7 @@ import type {
 // ============================================================================
 
 const fewShotExamples: FewShotExample[] = [
-  // ── Music: Indie Pop (Suno) ──────────────────────────────────────────────
+  // ── Music: Indie Pop ────────────────────────────────────────────────────
   {
     id: 'audio-music-1',
     input: 'happy song',
@@ -67,11 +66,11 @@ Fade with whistling melody, acoustic guitar, and light birds chirping ambiance.
 
 Production: Warm, analog feel. Slight tape saturation. Room reverb on drums. Wide stereo field. Radio-ready mix.`,
     subModality: 'music',
-    platform: 'suno',
+    platform: 'general',
     complexity: 'complex',
     tags: ['pop', 'uplifting', 'commercial'],
   },
-  // ── Music: Dark Electronic (Suno) ────────────────────────────────────────
+  // ── Music: Dark Electronic ──────────────────────────────────────────────
   {
     id: 'audio-music-2',
     input: 'dark electronic track',
@@ -110,13 +109,13 @@ Elements gradually filter out. End on sustained sub bass and metallic decay.
 
 Production: Heavy compression throughout. Parallel distortion on drums. Dark, industrial reverb. No warmth, all aggression. Club-optimized sub bass (30-60Hz focused).`,
     subModality: 'music',
-    platform: 'suno',
+    platform: 'general',
     complexity: 'complex',
     tags: ['electronic', 'dark', 'club'],
   },
-  // ── Music: Lo-fi Hip Hop (Udio) ──────────────────────────────────────────
+  // ── Music: Lo-fi Hip Hop ────────────────────────────────────────────────
   {
-    id: 'audio-udio-1',
+    id: 'audio-music-lofi-1',
     input: 'lo-fi hip hop beat',
     output: `Lo-fi hip hop, chill study beats
 Dusty vinyl crackle, warm tape saturation
@@ -145,13 +144,13 @@ Reference: Nujabes, J Dilla, Idealism
 
 Production: Intentionally imperfect, human feel, anti-quantized drums, warm low-end, rolled-off highs above 12kHz`,
     subModality: 'music',
-    platform: 'udio',
+    platform: 'general',
     complexity: 'medium',
     tags: ['lo-fi', 'chill', 'instrumental'],
   },
-  // ── Music: Cinematic Orchestral (Stable Audio) ───────────────────────────
+  // ── Music: Cinematic Orchestral ─────────────────────────────────────────
   {
-    id: 'audio-stable-1',
+    id: 'audio-music-cinematic-1',
     input: 'epic trailer music',
     output: `Cinematic orchestral trailer music, epic and dramatic, full orchestra with powerful brass, sweeping strings, thundering timpani. Building intensity from quiet tension to triumphant climax.
 
@@ -174,7 +173,7 @@ Production: Wide orchestral staging, brass center, strings LR, percussion behind
     complexity: 'complex',
     tags: ['cinematic', 'orchestral', 'trailer'],
   },
-  // ── Lyrics: Pop Song (Suno v5 format) ────────────────────────────────────
+  // ── Lyrics: Pop Song ─────────────────────────────────────────────────────
   {
     id: 'audio-lyrics-1',
     input: 'write lyrics about falling in love in summer',
@@ -234,11 +233,11 @@ Summer love... in your eyes...
 (Acoustic guitar fading with distant waves)
 [Fade Out]`,
     subModality: 'lyrics',
-    platform: 'suno',
+    platform: 'general',
     complexity: 'complex',
     tags: ['pop', 'romantic', 'summer'],
   },
-  // ── Lyrics: Rap/Hip-Hop (Suno format) ────────────────────────────────────
+  // ── Lyrics: Rap/Hip-Hop ─────────────────────────────────────────────────
   {
     id: 'audio-lyrics-2',
     input: 'rap verse about overcoming struggles',
@@ -290,11 +289,11 @@ This is for everyone who was told they couldn't...
 You can.
 [End]`,
     subModality: 'lyrics',
-    platform: 'suno',
+    platform: 'general',
     complexity: 'complex',
     tags: ['hip-hop', 'motivational', 'rap'],
   },
-  // ── Music: R&B/Soul (Suno with vocals) ───────────────────────────────────
+  // ── Music: R&B/Soul ─────────────────────────────────────────────────────
   {
     id: 'audio-music-3',
     input: 'smooth R&B love song',
@@ -346,7 +345,7 @@ Fade on Rhodes and vocal ad-libs. Final chord: Ebmaj9 sustained with piano susta
 
 Production: Warm, intimate, analog-inspired. Tape saturation on drums. Gentle compression. Wide stereo for strings, centered vocals. Modern neo-soul aesthetic with vintage undertones.`,
     subModality: 'music',
-    platform: 'suno',
+    platform: 'general',
     complexity: 'complex',
     tags: ['rnb', 'soul', 'romantic'],
   },
@@ -545,10 +544,10 @@ function buildSystemPrompt(tier: EnhancementTier, subModality?: AudioSubModality
   const subModalityGuidance = getSubModalityGuidance(subModality || 'music');
 
   const baseKnowledge = `<system>
-You are HARMONIC, a music architect specializing in AI audio generation for Suno, Udio, MusicGen, and Stable Audio.
+You are HARMONIC, a music architect specializing in AI audio and music generation prompts.
 
 <research_foundation>
-Based on music generation research (MusicCaps, MusicGen, Stable Audio, "Open Prompt Challenge"):
+Based on music generation research (MusicCaps, audio generation studies, "Open Prompt Challenge"):
 - User prompts are typically under-specified. Your job is to expand them into the rich "audionese" distribution that audio models respond to best.
 - The optimal prompt uses 4-7 specific descriptors per concept (not vague adjectives).
 - Front-load the most important descriptors: genre and mood in the first 20-30 words.
@@ -600,15 +599,11 @@ VOCAL TYPE: [Male Vocal] [Female Vocal] [Duet] [Choir] [Man] [Woman]
 EFFECTS: [Reverb] [Delay] [AutoTune] [Distorted Vocals] [Vocoder] [Telephone Effect]
 </structure_tags>
 
-<platform_notes>
-SUNO (v5): Accepts both keyword-style and conversational narrative prompts. Separate Style field (4-7 descriptors) from Lyrics field (with metatags). Paste choruses in full each time — never use [Repeat Chorus]. Supports vocal style tags, sound effects tags, and genre-specific metatags.
-
-UDIO: Use the Tag/Style field for genre anchoring and the Prompt field for descriptive details. Responds well to specific subgenres, era references, and production quality terms. Keep prompts under 200 words. Negative tags in brackets: [no vocals], [no drums].
-
-MUSICGEN: Single free-form text prompt, 30-80 words optimal. Front-load genre + mood. Primarily instrumental — do not request complex vocals. Specify concrete instruments. BPM for tempo control. Best for atmospheric and instrumental pieces.
-
-STABLE AUDIO: Supports explicit duration control and negative prompts. Responds excellently to production music terminology. Use negative prompt field to exclude unwanted elements. Trained on production libraries, so professional terms work well.
-</platform_notes>`;
+<generation_constraints>
+MUSIC STYLE PROMPTS: Keep under 500 characters. Use 4-7 dense keyword descriptors. Front-load genre + mood.
+LYRICS: Keep under 3000 characters. Use section structure tags. 8-12 syllables per line for verses.
+These limits ensure compatibility with all major AI music generators.
+</generation_constraints>`;
 
   const tierGuidance = getTierGuidance(tier);
   const outputFormat = getOutputFormat(tier, subModality);
@@ -649,7 +644,7 @@ CLASSICAL: cinematic orchestral, neo-classical, minimalist, baroque, romantic er
     lyrics: `<sub_modality>LYRIC WRITING</sub_modality>
 <optimization_focus>
 CORE PRINCIPLES (from SongComposer & Song Form research):
-- Write lyrics optimized for AI music generators (Suno, Udio)
+- Write lyrics optimized for AI music generators
 - Use proper section structure tags: [Verse], [Chorus], [Bridge], [Pre-Chorus], [Outro]
 - Keep lines to 8-12 syllables for verses, shorter and punchier for choruses
 - Clear vowels on downbeats improve singability
@@ -743,20 +738,53 @@ function getTierGuidance(tier: EnhancementTier): string {
 <output_length>Detailed prompt (150-300 words)</output_length>`;
 
     case 'advanced':
-      return `<enhancement_level>ADVANCED</enhancement_level>
+      return `<enhancement_level>ADVANCED — PREMIUM TIER</enhancement_level>
 <techniques_to_apply>
-- Precise genre positioning with multiple references and sonic description
-- Complete musical specification (tempo, key, time signature, chord progressions)
-- Rich mood vocabulary (5-7 descriptors from the sophisticated spectrum)
-- Detailed instrumentation with entry/exit points and performance styles
-- Full structure with bar counts, transitions, and section-by-section descriptions
-- Dynamic journey with specific markings (pp→fff) and tension/release mapping
-- Comprehensive vocal specification (type, register, delivery, processing, ad-libs)
-- Production specification (mix aesthetic, mastering style, spatial characteristics)
-- Platform-specific optimization and format conventions
-- Negative specifications (what to exclude) for cleaner output
+Apply every cutting-edge audio prompt engineering technique relevant to this specific generation task:
+
+HARMONIC & MELODIC ARCHITECTURE:
+- Full chord progression with voicings (e.g., "Am7(b5) → Dm9 → G13 → Cmaj7#11"), not just root notes
+- Voice leading and harmonic rhythm specification: how chords connect, when changes occur within the bar
+- Melodic contour description: ascending tension, descending resolution, intervallic leaps for emphasis
+- Key center movement: modulations, pivot chords, modal interchange, borrowed chords with emotional purpose
+
+ARRANGEMENT CHOREOGRAPHY:
+- Multi-layer instrumentation with precise entry/exit choreography: which instruments enter at which bar
+- Textural evolution: how density builds and thins across sections (sparse → lush → stripped → explosive)
+- Counter-melody and response patterns: call-and-response, antiphonal writing, doubling strategies
+- Frequency band management: assign instruments to specific spectral ranges to prevent masking
+
+PRODUCTION CHAIN SPECIFICATION:
+- Signal chain per element: mic type → preamp character → compression style → EQ curve → spatial processing
+- Bus processing: drum bus compression, vocal chain, master bus limiting strategy
+- Spatial design: stereo field placement, depth via reverb/delay, LCR panning, mid-side processing
+- Reference mastering: target loudness (LUFS), dynamic range, frequency balance reference tracks
+
+PSYCHOACOUSTIC ENGINEERING:
+- Tension/release mathematics: dissonance → resolution cycles aligned with song structure
+- Loudness perception: Fletcher-Munson curve awareness in frequency balance, perceived loudness vs actual level
+- Rhythmic entrainment: syncopation levels, groove pocket depth, micro-timing humanization
+- Ear candy: transitional effects (risers, downlifters, impacts, sweeps) placed at structural boundaries
+
+OUTPUT OPTIMIZATION:
+- Keep music style prompts under 500 characters, lyrics under 3000 characters
+- Use structure metatags: [Verse], [Chorus], [Bridge], etc.
+- Vocal style tags for precise delivery: [Whisper], [Rap], [Falsetto], [Belting]
+- Paste full choruses every time — never use shorthand like [Repeat Chorus]
+- Negative specifications to exclude unwanted elements
+
+VOCAL SPECIFICATION (when applicable):
+- Precise vocal type, register, timbre, and delivery micro-directions per section
+- Processing chain: compression ratio, de-essing, reverb type and decay, delay pattern, pitch correction level
+- Ad-lib and harmonization: specific backing vocal arrangements, gang vocals, counterpoint lines
+- Lyric delivery: syllable emphasis, breath placement, emotional coloring per line
+
+DYNAMIC ARC ENGINEERING:
+- Section-by-section dynamics with specific dB/loudness targets (verse: -18 LUFS, chorus: -12 LUFS)
+- Tension mapping: identify the emotional peak, the quiet moment, the build, the release
+- Contrast ratios: how much louder/denser/brighter each section is relative to the previous
 </techniques_to_apply>
-<output_length>Comprehensive prompt (300-500 words)</output_length>`;
+<output_length>Comprehensive, production-grade prompt (400-700 words of dense musical specification)</output_length>`;
   }
 }
 
@@ -764,6 +792,8 @@ function getOutputFormat(tier: EnhancementTier, subModality?: AudioSubModality):
   if (subModality === 'lyrics') {
     return `<output_rules>
 CRITICAL: Return ONLY the enhanced lyrics. No explanations or preamble.
+
+CHARACTER LIMIT: The entire lyrics output MUST stay under 3000 characters. Count characters carefully and trim if needed.
 
 Format requirements:
 - Start every section with a [Structure Tag] on its own line
@@ -781,6 +811,11 @@ Format requirements:
   return `<output_rules>
 CRITICAL: Return ONLY the enhanced audio prompt. No explanations or preamble.
 
+LENGTH CONSTRAINTS:
+- Music style/description prompts MUST stay under 500 characters. Use dense, keyword-style descriptors.
+- Lyrics MUST stay under 3000 characters total.
+- These limits ensure compatibility with all major AI music generators.
+
 Format requirements:
 - Start with [Genre:], [Tempo:], [Key:], [Mood:] header block
 - Use [Structure Tags] for all sections${tier === 'advanced' ? ' with bar counts and transition descriptions' : ''}
@@ -788,6 +823,7 @@ Format requirements:
 - Describe vocal characteristics when applicable (or specify "instrumental only")
 - End with production/mixing notes
 - Use sophisticated musical vocabulary throughout
+- If the user specifies a character or word limit in their prompt, that constraint overrides all other length guidance
 </output_rules>`;
 }
 
@@ -798,8 +834,8 @@ Format requirements:
 export const audioModalityConfig: ModalityConfig = {
   modality: 'audio',
   displayName: 'Audio Generation',
-  description: 'Optimized for AI audio/music generators (Suno, Udio, MusicGen, Stable Audio)',
-  targetPlatforms: ['suno', 'udio', 'musicgen', 'general'],
+  description: 'Optimized for AI audio and music generation',
+  targetPlatforms: ['general'],
   subModalities: ['music', 'lyrics', 'speech', 'soundscape', 'voiceover'],
   defaultSubModality: 'music',
   coreStructure: [
@@ -821,7 +857,7 @@ export const audioModalityConfig: ModalityConfig = {
     'Production era/style references (80s gated reverb, lo-fi tape warmth, modern radio-ready)',
     'Vocal delivery tags for lyrics ([Whisper], [Rap], [Falsetto], [Belting])',
     'Sophisticated emotional vocabulary (euphoric > happy, melancholic > sad)',
-    'Platform-specific format optimization (Suno metatags, Udio tags, MusicGen concise descriptions)',
+    'Character-optimized output (music style under 500 chars, lyrics under 3000 chars)',
     'Negative specifications for excluding unwanted elements',
   ],
   fewShotExamples,
