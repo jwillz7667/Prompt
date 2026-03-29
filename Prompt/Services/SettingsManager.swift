@@ -213,9 +213,9 @@ final class SettingsManager {
         maxModeEnabled ? .max : .standard
     }
 
-    /// Returns "nsfw" when NSFW mode is enabled, otherwise the selected modality's API value
+    /// Returns the selected modality's API value (NSFW is sent as a separate flag)
     var effectiveApiModality: String {
-        nsfwModeEnabled ? "nsfw" : selectedModality.apiModality
+        selectedModality.apiModality
     }
 
     // App Group for sharing with keyboard extension AND persistence across updates

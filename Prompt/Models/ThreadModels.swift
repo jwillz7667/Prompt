@@ -76,6 +76,7 @@ struct CreateThreadRequest: Encodable, Sendable {
     let subModality: String?
     let mode: String?
     let conversationMode: String?
+    let nsfw: Bool?
     let imageAttachment: PromptImageAttachment?
     let previousTurns: [SeedThreadTurnRequest]?
 }
@@ -85,6 +86,7 @@ struct AddTurnRequest: Encodable, Sendable {
     let subModality: String?
     let mode: String?
     let conversationMode: String?
+    let nsfw: Bool?
     let imageAttachment: PromptImageAttachment?
 }
 
@@ -108,6 +110,7 @@ struct GuestEnhanceRequest: Encodable, Sendable {
     let subModality: String?
     let mode: String?
     let conversationMode: String?
+    let nsfw: Bool?
     let imageAttachment: PromptImageAttachment?
     let previousTurns: [SeedThreadTurnRequest]
 }

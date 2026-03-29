@@ -27,6 +27,7 @@ struct ContentView: View {
     @State private var lastObservedTurnCount = 0
 
     @AppStorage("homeThreadId") private var homeThreadId = ""
+    @State private var backgroundedAt: Date?
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
     @AppStorage("hasSeenOnboardingPaywall") private var hasSeenOnboardingPaywall = false
     @AppStorage("lastPaywallShownDate") private var lastPaywallShownDateString = ""
@@ -150,6 +151,9 @@ struct ContentView: View {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             showSidebar = true
         }
+        Task {
+            await sidebarThreadViewModel.fetchThreads(refresh: true)
+        }
     }
 
     private func closeSidebar() {
@@ -205,8 +209,18 @@ struct ContentView: View {
     }
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
-        if newPhase == .active {
+        switch newPhase {
+        case .background:
+            backgroundedAt = Date()
+        case .active:
+            if let backgroundedAt,
+               Date().timeIntervalSince(backgroundedAt) >= 300 {
+                newConversation()
+            }
+            backgroundedAt = nil
             checkDailyPaywallReminder()
+        default:
+            break
         }
     }
 

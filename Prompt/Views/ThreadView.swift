@@ -93,6 +93,18 @@ struct ThreadView: View {
         isInputFocused || !viewModel.userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Controls how solid vs translucent the composer controls appear.
+    /// 1.0 = typing (most visible), 0.0 = streaming (most translucent/glass)
+    private var composerGlassIntensity: Double {
+        if isInputFocused || !viewModel.userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return 1.0
+        }
+        if viewModel.isStreaming {
+            return 0.0
+        }
+        return 0.35
+    }
+
     private var shouldShowSendButton: Bool {
         viewModel.canSend
     }
@@ -661,8 +673,33 @@ struct ThreadView: View {
                         .foregroundStyle(textPrimary)
                         .frame(width: floatingControlSize, height: floatingControlSize)
                         .background {
-                            Circle()
-                                .fill(Color.adaptiveBackgroundTertiary)
+                            ZStack {
+                                Circle().fill(.ultraThinMaterial)
+                                Circle().fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.06 + 0.06 * composerGlassIntensity)
+                                        : Color.white.opacity(0.3 + 0.5 * composerGlassIntensity)
+                                )
+                                Circle().fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(colorScheme == .dark ? 0.2 * composerGlassIntensity : 0.6 * composerGlassIntensity),
+                                            Color.clear
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .center
+                                    )
+                                )
+                            }
+                        }
+                        .clipShape(Circle())
+                        .overlay {
+                            Circle().stroke(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.1 + 0.18 * composerGlassIntensity)
+                                    : Color.white.opacity(0.4 + 0.45 * composerGlassIntensity),
+                                lineWidth: 1
+                            )
                         }
                 }
                 .buttonStyle(.plain)
@@ -675,8 +712,39 @@ struct ThreadView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.03 + 0.05 * composerGlassIntensity)
+                                    : Color.white.opacity(0.25 + 0.55 * composerGlassIntensity)
+                            )
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(colorScheme == .dark ? 0.1 * composerGlassIntensity : 0.5 * composerGlassIntensity),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.adaptiveBackgroundTertiary)
+                        .stroke(
+                            isInputFocused
+                                ? (colorScheme == .dark ? Color.brandCyan.opacity(0.7) : Color.brandPurple.opacity(0.45))
+                                : (colorScheme == .dark
+                                    ? Color.white.opacity(0.08 + 0.12 * composerGlassIntensity)
+                                    : Color.white.opacity(0.3 + 0.5 * composerGlassIntensity)),
+                            lineWidth: isInputFocused ? 1.5 : 1
+                        )
                 }
                 .onTapGesture {
                     activeComposerDrawer = nil
@@ -700,8 +768,37 @@ struct ThreadView: View {
                             .foregroundStyle(activeTint)
                             .frame(width: floatingControlSize, height: floatingControlSize)
                             .background {
-                                Circle()
-                                    .fill(hasNonTextModality ? buttonTint.opacity(colorScheme == .dark ? 0.15 : 0.10) : Color.adaptiveBackgroundTertiary)
+                                ZStack {
+                                    Circle().fill(.ultraThinMaterial)
+                                    if hasNonTextModality {
+                                        Circle().fill(buttonTint.opacity((colorScheme == .dark ? 0.12 : 0.08) + 0.08 * composerGlassIntensity))
+                                    } else {
+                                        Circle().fill(
+                                            colorScheme == .dark
+                                                ? Color.white.opacity(0.06 + 0.06 * composerGlassIntensity)
+                                                : Color.white.opacity(0.3 + 0.5 * composerGlassIntensity)
+                                        )
+                                    }
+                                    Circle().fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(colorScheme == .dark ? 0.2 * composerGlassIntensity : 0.6 * composerGlassIntensity),
+                                                Color.clear
+                                            ],
+                                            startPoint: .top,
+                                            endPoint: .center
+                                        )
+                                    )
+                                }
+                            }
+                            .clipShape(Circle())
+                            .overlay {
+                                Circle().stroke(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.1 + 0.18 * composerGlassIntensity)
+                                        : Color.white.opacity(0.4 + 0.45 * composerGlassIntensity),
+                                    lineWidth: 1
+                                )
                             }
 
                         if isMaxOn {
@@ -747,6 +844,7 @@ struct ThreadView: View {
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: viewModel.canSend)
         .animation(.spring(response: 0.28, dampingFraction: 0.84), value: isComposerExpanded)
         .animation(.spring(response: 0.3, dampingFraction: 0.84), value: activeComposerDrawer != nil)
+        .animation(.easeInOut(duration: 0.35), value: composerGlassIntensity)
     }
 
     private var floatingComposerOverlay: some View {

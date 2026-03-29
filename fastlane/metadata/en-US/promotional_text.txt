@@ -1,1 +1,1 @@
-NEW: Power Tools grid with inline Platform Optimization and Variations. Optimize prompts for 18+ AI platforms without leaving the screen.
+NEW in 2.0: NSFW toggle with 18+ disclaimer, redesigned widget, smart session refresh, swipe-to-dismiss sidebar, and history management. Optimize for 18+ AI platforms.

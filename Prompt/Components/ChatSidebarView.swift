@@ -145,6 +145,15 @@ struct ChatSidebarView: View {
                 .padding(.vertical, 14)
         }
         .buttonStyle(.plain)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                Task {
+                    await threadViewModel.deleteThread(id: thread.id)
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
         .contextMenu {
             Button(role: .destructive) {
                 Task {

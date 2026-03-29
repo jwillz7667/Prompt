@@ -103,6 +103,7 @@ platform :ios do
       project: PROJECT_PATH,
       scheme: SCHEME,
       clean: true,
+      destination: "generic/platform=iOS",
       export_options: EXPORT_OPTIONS_PATH,
       output_directory: BUILD_OUTPUT_PATH,
       output_name: options[:output_name] || "Prompt",

@@ -10,22 +10,27 @@ PLATFORM OPTIMIZATION
 Optimize prompts for leading text, image, video, music, code, and 3D platforms. Each platform has unique requirements — Promptomize handles them automatically.
 
 CONVERSATION THREADS
-Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
+Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs. The app automatically starts a fresh thread when you return after a break, so you always land on a clean slate.
 
 PROJECT CONTEXTS
 Attach reusable project contexts to your prompts for consistent, domain-specific enhancements across sessions.
+
+NSFW CREATIVE MODE
+Enable the 18+ toggle for mature creative prompts with a built-in age disclaimer. Full creative freedom when you need it.
 
 KEY FEATURES
 - 18+ platform-specific optimizations
 - 6 modalities: Text, Image, Video, Audio, Code, 3D
 - Tone and length controls
+- NSFW enhancement toggle with age verification
 - MAX Mode for PhD-level prompt engineering
 - Deep Think for advanced reasoning
-- Prompt history with favorites
+- Prompt history with favorites and swipe-to-delete
 - Templates for quick starts
 - Copy to clipboard or open in your preferred AI assistant
-- iOS Widget for instant access
+- Redesigned iOS Widget with brand design system
 - Offline queue with automatic sync
+- Smart session refresh after inactivity
 
 SUBSCRIPTION TIERS
 - Free: 10 prompts/day

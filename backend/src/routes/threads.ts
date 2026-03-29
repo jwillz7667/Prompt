@@ -110,6 +110,7 @@ const createThreadSchema = z.object({
   subModality: z.string().max(50).optional(),
   mode: z.enum(['standard', 'max']).default('standard'),
   conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
+  nsfw: z.boolean().optional(),
   customInstructions: z.string().max(2000).optional(),
   imageAttachment: imageAttachmentSchema.optional(),
   previousTurns: z.array(
@@ -129,6 +130,7 @@ const addTurnSchema = z.object({
   subModality: z.string().max(50).optional(),
   mode: z.enum(['standard', 'max']).default('standard'),
   conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
+  nsfw: z.boolean().optional(),
   customInstructions: z.string().max(2000).optional(),
   imageAttachment: imageAttachmentSchema.optional(),
 }).superRefine(validatePromptOrImage);
@@ -237,6 +239,7 @@ threadRouter.post(
           conversationMode: data.conversationMode,
           modality: data.modality,
           subModality: data.subModality,
+          nsfw: data.nsfw,
           customInstructions: data.customInstructions,
           previousTurns: data.previousTurns,
           imageAttachment: data.imageAttachment,
@@ -417,6 +420,7 @@ threadRouter.post(
           conversationMode: data.conversationMode,
           modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw',
           subModality: data.subModality,
+          nsfw: data.nsfw,
           customInstructions: data.customInstructions,
           previousTurns,
           imageAttachment: data.imageAttachment,

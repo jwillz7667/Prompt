@@ -276,6 +276,7 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
+            nsfw: settings.nsfwModeEnabled ? true : nil,
             imageAttachment: sentAttachment,
             previousTurns: seededTurnsForRequest
         )
@@ -410,6 +411,7 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
+            nsfw: settings.nsfwModeEnabled ? true : nil,
             imageAttachment: sentAttachment
         )
         let responseMode = settings.conversationMode
@@ -798,6 +800,7 @@ final class ThreadViewModel {
             subModality: settings.effectiveSubModality,
             mode: settings.promptMode.rawValue,
             conversationMode: settings.conversationMode.rawValue,
+            nsfw: settings.nsfwModeEnabled ? true : nil,
             imageAttachment: request.imageAttachment,
             previousTurns: seededTurnsForRequest ?? []
         )

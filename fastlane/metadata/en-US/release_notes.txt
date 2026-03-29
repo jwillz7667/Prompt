@@ -1,23 +1,22 @@
-What's New in Promptomize 1.5
+What's New in Promptomize 2.0
 
-POWER TOOLS
-- New unified Power Tools grid after enhancing: Platform Optimize, Variations, Sandbox, and Workflows all in one place
-- Expand any tool inline to use it without leaving the screen
+NSFW ENHANCEMENT TOGGLE
+- New 18+ content toggle with age disclaimer for mature creative workflows
+- Seamlessly integrates into the enhancement pipeline
 
-INLINE PLATFORM OPTIMIZATION
-- Validate and optimize prompts for 18 platforms across text, image, video, music, code, and 3D workflows
-- See improvement stats and apply optimized prompts with one tap
+REDESIGNED WIDGET
+- Brand-new design system with polished message bubbles and brand colors
+- Quick-access prompt enhancement right from your Home Screen
 
-INLINE VARIATIONS
-- Generate prompt alternatives using Quick, Comprehensive, Creative, or Platform strategies
-- Browse variations in a horizontal card view and swap them in instantly
+SMART SESSION REFRESH
+- App automatically starts a fresh thread when you return after 5 minutes
+- Jump straight into a new idea without clearing the old one
 
-REDESIGNED PROMPT SCREEN
-- Cleaner, progressive-disclosure layout: features appear when they become relevant
-- Simplified toolbar with only essential buttons
-- New "Start from Template" and "Continue Thread" quick access buttons below input
+SIDEBAR & HISTORY
+- Swipe-to-dismiss drawer for faster navigation
+- Delete individual history entries with a swipe
+- Profile info now visible in the sidebar
 
-BUG FIXES
-- Fixed StoreKit JWS verification issue
-- Fixed platform chip glow being clipped in scroll views
-- Added missing platform configurations for additional image, video, music, and 3D workflows
+QUALITY & COMPLIANCE
+- Updated app icons for full App Store compliance
+- Performance and stability improvements
