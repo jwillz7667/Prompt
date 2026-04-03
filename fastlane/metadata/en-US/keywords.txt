@@ -1,1 +1,1 @@
-image,video,music,code,3d,generator,creative,chatbot,text,workflow,art,rewrite,assistant,prompt,maker
+image,video,music,code,3d,generator,creative,chatbot,text,workflow,art,rewrite,template,maker,tool

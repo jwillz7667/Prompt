@@ -1,1 +1,1 @@
-NEW in 2.0: Power Tools grid, redesigned widget, smart session refresh, swipe-to-dismiss sidebar, and history management. Optimize prompts for all major AI platforms.
+NEW in 2.0: Power Tools grid, redesigned widget, smart session refresh, swipe-to-dismiss sidebar, and history management. Optimize prompts for every major AI platform.

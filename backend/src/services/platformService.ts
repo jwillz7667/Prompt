@@ -186,7 +186,7 @@ const PLATFORM_CONFIGS: Record<PlatformType, PlatformOptimization> = {
     platform: 'DALLE',
     syntaxRules: {
       format: 'natural',
-      forbiddenElements: ['celebrity names', 'violence', 'adult content'],
+      forbiddenElements: ['celebrity names', 'violence'],
       caseConventions: 'mixed',
     },
     limitations: {

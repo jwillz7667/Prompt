@@ -17,6 +17,6 @@ SIDEBAR & HISTORY
 - Delete individual history entries with a swipe
 - Profile info now visible in the sidebar
 
-QUALITY & COMPLIANCE
+QUALITY & POLISH
 - Updated app icons for full App Store compliance
-- Performance and stability improvements
+- Performance and stability improvements throughout
