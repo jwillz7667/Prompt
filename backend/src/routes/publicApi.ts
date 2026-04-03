@@ -29,7 +29,7 @@ publicApiRouter.use(enforceApiQuota);
 
 const enhanceSchema = z.object({
   prompt: z.string().min(1).max(100000),
-  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw']).default('text'),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
   mode: z.enum(['standard', 'max']).default('standard'),
   maxTokens: z.number().int().min(1).max(8192).optional(),
   customInstructions: z.string().max(2000).optional(),
@@ -40,7 +40,7 @@ const enhanceSchema = z.object({
 const historyQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw']).optional(),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).optional(),
 });
 
 // ============================================================================

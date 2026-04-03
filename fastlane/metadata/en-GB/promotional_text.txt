@@ -1,1 +1,1 @@
-NEW in 2.0: NSFW toggle with 18+ disclaimer, redesigned widget, smart session refresh, swipe-to-dismiss sidebar, and history management. Optimise for 18+ AI platforms.
+NEW in 2.0: Power Tools grid, redesigned widget, smart session refresh, swipe-to-dismiss sidebar, and history management. Optimise prompts for all major AI platforms.

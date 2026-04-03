@@ -1,4 +1,4 @@
-Promptomize transforms your ideas into powerful, optimised prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver the best possible results across 18+ platforms.
+Promptomize transforms your ideas into powerful, optimised prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver the best possible results across all major platforms.
 
 HOW IT WORKS
 Type what you want to achieve, select your target modality (text, image, video, audio, code, 3D), and tap Enhance. Our advanced AI engine rewrites your prompt using proven prompt engineering techniques tailored to your chosen platform.
@@ -15,14 +15,10 @@ Refine prompts through multi-turn conversations. Each turn builds on the previou
 PROJECT CONTEXTS
 Attach reusable project contexts to your prompts for consistent, domain-specific enhancements across sessions.
 
-NSFW CREATIVE MODE
-Enable the 18+ toggle for mature creative prompts with a built-in age disclaimer. Full creative freedom when you need it.
-
 KEY FEATURES
-- 18+ platform-specific optimisations
+- Platform-specific optimisations
 - 6 modalities: Text, Image, Video, Audio, Code, 3D
 - Tone and length controls
-- NSFW enhancement toggle with age verification
 - MAX Mode for advanced prompt engineering
 - Deep Think for advanced reasoning
 - Prompt history with favourites and swipe-to-delete

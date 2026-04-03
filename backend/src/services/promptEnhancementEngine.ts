@@ -31,7 +31,7 @@ import {
 
 export type PromptTone = 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
 export type OutputLength = 'concise' | 'standard' | 'detailed';
-export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw';
+export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
 export type EnhancementTier = 'basic' | 'standard' | 'advanced';
 
 export interface EnhancementRequest {
@@ -436,33 +436,6 @@ validateEmail(null) // { valid: false, error: "Email must be a string" }
 </output>
 </example>
 </few_shot_examples>`,
-    nsfw: `<few_shot_examples>
-<example>
-<input>romantic scene</input>
-<output>
-<scene_parameters>
-Setting: A candlelit bedroom in a Parisian apartment during a thunderstorm
-Tone: Intensely romantic, slow-burn intimacy
-POV: Close third person, alternating awareness
-Sensory focus: Tactile (skin, fabric, warmth), auditory (rain, breathing, whispered words)
-</scene_parameters>
-
-<scene>
-Two lovers reunite after months apart. The storm outside mirrors their emotional intensity. Candlelight throws warm shadows across exposed skin as rain drums against tall windows.
-
-Begin with the charged moment of eye contact at the doorway. Build through tentative touch — fingertips tracing jawlines, hands finding familiar curves. Layer the soundtrack: rain, quickening breath, the rustle of clothing falling away.
-
-Describe the emotional vulnerability alongside the physical: the catch in a voice, the way fingers tremble, the relief of finally being held.
-</scene>
-
-<craft_notes>
-- Use metaphor drawn from the storm (lightning = desire, thunder = heartbeat, rain = release)
-- Internal monologue reveals what words cannot express
-- Pacing: slow beginning, escalating middle, transcendent climax, tender aftermath
-</craft_notes>
-</output>
-</example>
-</few_shot_examples>`,
   };
 
   return examples[modality] || examples.text;
@@ -557,19 +530,6 @@ NEVER:
 - Leave mesh density undefined
 - Skip UV/texturing needs
 - Ignore export format requirements
-</constraints>`,
-    nsfw: `<constraints>
-ALWAYS:
-- Establish setting, atmosphere, and sensory environment
-- Describe characters with specific physical and emotional detail
-- Include emotional arc and pacing (tension, escalation, release)
-- Use vivid, literary language with sensory specificity
-
-NEVER:
-- Use clinical or medical terminology unless intentional
-- Skip emotional context or character interiority
-- Leave the scene without atmosphere or setting
-- Use vague descriptors ("beautiful", "sexy") without concrete detail
 </constraints>`,
   };
 
