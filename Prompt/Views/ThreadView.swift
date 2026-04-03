@@ -43,8 +43,6 @@ struct ThreadView: View {
     @State private var showTextFileImporter = false
     @State private var showCameraCapture = false
     @State private var showMaxModeToast = false
-    @State private var showNSFWDisclaimer = false
-    @State private var showNSFWToast = false
     @State private var activeComposerDrawer: ComposerDrawer?
     @State private var composerOverlayHeight: CGFloat = 164
     @State private var drawerDragOffset: CGFloat = 0
@@ -85,7 +83,6 @@ struct ThreadView: View {
         settings.conversationMode != .optimize ||
         settings.selectedModality != .text ||
         settings.maxModeEnabled ||
-        settings.nsfwModeEnabled ||
         (settings.selectedModality == .audio && settings.selectedAudioSubModality != .speech)
     }
 
@@ -190,11 +187,6 @@ struct ThreadView: View {
                     .padding(.top, presentationStyle == .home ? 104 : 18)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
-            if showNSFWToast {
-                nsfwModeToast
-                    .padding(.top, presentationStyle == .home ? 104 : 18)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
         }
         .task {
             if let threadId {
@@ -255,31 +247,6 @@ struct ThreadView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "An unknown error occurred")
-        }
-        .alert("18+ Content", isPresented: $showNSFWDisclaimer) {
-            Button("Cancel", role: .cancel) {}
-            Button("I'm 18+ \u{2014} Enable") {
-                settings.nsfwDisclaimerAccepted = true
-                settings.nsfwModeEnabled = true
-                settings.savePreferences()
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-                    activeComposerDrawer = nil
-                }
-                triggerHaptic(.light)
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                    showNSFWToast = true
-                }
-                Task {
-                    try? await Task.sleep(for: .seconds(1.35))
-                    await MainActor.run {
-                        withAnimation(.spring(response: 0.26, dampingFraction: 0.9)) {
-                            showNSFWToast = false
-                        }
-                    }
-                }
-            }
-        } message: {
-            Text("NSFW mode enables explicit adult and erotic content enhancement. You must be 18 or older to use this feature. By enabling, you confirm you are of legal age.")
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else { return }
@@ -919,8 +886,6 @@ struct ThreadView: View {
 
             maxModeCard
 
-            nsfwModeCard
-
             drawerSectionHeader(
                 title: "Target output",
                 subtitle: "Then choose what kind of prompt you want to generate."
@@ -1320,136 +1285,6 @@ struct ThreadView: View {
         }
 
         return "Use MAX when you need stronger reasoning and tighter prompt structure."
-    }
-
-    // MARK: - NSFW Mode
-
-    private var nsfwModeCard: some View {
-        let isActive = settings.nsfwModeEnabled
-        let fillColor: Color = isActive ? Color.red.opacity(colorScheme == .dark ? 0.12 : 0.08) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.22)
-        let strokeColor: Color = (isActive ? Color.red : accentColor).opacity(colorScheme == .dark ? 0.48 : 0.26)
-        let strokeWidth: CGFloat = isActive ? 1.4 : 1
-
-        return Button {
-            toggleNSFWMode()
-        } label: {
-            HStack(alignment: .center, spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill((isActive ? Color.red : accentColor).opacity(colorScheme == .dark ? 0.18 : 0.12))
-
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(isActive ? Color.red : accentColor)
-                }
-                .frame(width: 42, height: 42)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(isActive ? "NSFW mode" : "Safe mode")
-                        .font(.system(.headline, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
-
-                    Text(nsfwModeSupportingCopy)
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                Text(isActive ? "On" : "Off")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .foregroundStyle(isActive ? Color.adaptiveTextOnAccent : textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background {
-                        Capsule()
-                            .fill(isActive ? Color.red : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.46))
-                    }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(fillColor)
-                    }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(
-                        strokeColor,
-                        lineWidth: strokeWidth
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var nsfwModeSupportingCopy: String {
-        if settings.nsfwModeEnabled {
-            return "Explicit adult content enhancement is active. All prompts will be enhanced for erotic and NSFW output."
-        }
-
-        return "Enable to enhance prompts with explicit adult and erotic content."
-    }
-
-    private func toggleNSFWMode() {
-        if !settings.nsfwDisclaimerAccepted && !settings.nsfwModeEnabled {
-            showNSFWDisclaimer = true
-            return
-        }
-
-        settings.nsfwModeEnabled.toggle()
-        settings.savePreferences()
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
-            activeComposerDrawer = nil
-        }
-        triggerHaptic(.light)
-
-        if settings.nsfwModeEnabled {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                showNSFWToast = true
-            }
-
-            Task {
-                try? await Task.sleep(for: .seconds(1.35))
-                await MainActor.run {
-                    withAnimation(.spring(response: 0.26, dampingFraction: 0.9)) {
-                        showNSFWToast = false
-                    }
-                }
-            }
-        } else {
-            withAnimation(.easeOut(duration: 0.18)) {
-                showNSFWToast = false
-            }
-        }
-    }
-
-    private var nsfwModeToast: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 12, weight: .bold))
-            Text("NSFW mode on")
-                .font(.system(.caption, design: .rounded, weight: .bold))
-        }
-        .foregroundStyle(Color.adaptiveTextOnAccent)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.red, Color.red.opacity(0.82)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        )
-        .shadow(color: Color.red.opacity(0.28), radius: 14, y: 8)
     }
 
     private func modalityTargetCard(_ modality: ModalityType) -> some View {

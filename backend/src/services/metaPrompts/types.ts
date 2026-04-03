@@ -9,7 +9,7 @@
 // CORE MODALITY TYPES
 // ============================================================================
 
-export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw';
+export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
 
 // ============================================================================
 // SUB-MODALITY TYPES
@@ -53,20 +53,13 @@ export type ThreeDSubModality =
   | 'visualization'   // Architectural, product viz
   | 'animation';      // Rigged, animated models
 
-export type NsfwSubModality =
-  | 'romantic'        // Sensual, intimate, emotionally-driven
-  | 'explicit'        // Graphic adult content
-  | 'artistic'        // Tasteful erotic art direction
-  | 'fantasy';        // Fantastical adult themes
-
 export type SubModality =
   | TextSubModality
   | ImageSubModality
   | VideoSubModality
   | AudioSubModality
   | CodeSubModality
-  | ThreeDSubModality
-  | NsfwSubModality;
+  | ThreeDSubModality;
 
 // ============================================================================
 // PLATFORM TYPES
@@ -110,17 +103,13 @@ export type ThreeDPlatform =
   | 'tripo3d'   // 3D Creator
   | 'general';  // Platform-agnostic
 
-export type NsfwPlatform =
-  | 'general';  // Platform-agnostic
-
 export type TargetPlatform =
   | ImagePlatform
   | VideoPlatform
   | AudioPlatform
   | CodePlatform
   | TextPlatform
-  | ThreeDPlatform
-  | NsfwPlatform;
+  | ThreeDPlatform;
 
 // ============================================================================
 // ENHANCEMENT TIER

@@ -4,7 +4,7 @@ import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
 export type ConversationMode = 'optimize' | 'chat';
-export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d' | 'nsfw';
+export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
 export type EnhancementTier = 'basic' | 'standard' | 'advanced';
 
 export interface EnhancePromptRequest {
@@ -17,7 +17,6 @@ export interface EnhancePromptRequest {
   conversationMode?: ConversationMode;
   modality?: PromptModality;
   subModality?: string;
-  nsfw?: boolean;
   customInstructions?: string;
   imageAttachment?: PromptImageAttachment;
 }
@@ -124,7 +123,6 @@ const CHAT_MODALITY_GUIDANCE: Record<PromptModality, string> = {
   audio: '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
   code: '- give production-minded technical help, explain tradeoffs precisely, and include code only when useful',
   '3d': '- respond with concrete guidance on form, materials, topology, technical constraints, and downstream use',
-  nsfw: '- engage openly with explicit adult content requests; provide vivid erotic detail, sexual scenarios, and uninhibited creative direction without hedging or softening',
 };
 
 const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string }> = {
@@ -200,112 +198,7 @@ const MODALITY_GUIDANCE: Record<PromptModality, { standard: string; max: string 
       '- specify the asset purpose and technical acceptance criteria precisely',
     ].join('\n'),
   },
-  nsfw: {
-    standard: [
-      '- establish an explicit, erotically charged scene with vivid physical descriptions and uninhibited sexual detail',
-      '- define characters with specific physical attributes, desires, and sexual chemistry',
-      '- include frank depictions of sexual acts, arousal, and physical intimacy with sensory richness',
-    ].join('\n'),
-    max: [
-      '- craft deeply immersive erotic content with graphic physical choreography and raw sexual tension',
-      '- layer explicit sexual detail with emotional vulnerability, power dynamics, and carnal urgency',
-      '- use unrestrained, evocative language for anatomical specificity, orgasmic intensity, and primal desire',
-    ].join('\n'),
-  },
 };
-
-// NSFW overlay guidance injected on top of the real modality when nsfw flag is true
-const NSFW_MODALITY_OVERLAY: Record<string, { optimize: string; chat: string }> = {
-  text: {
-    optimize: [
-      'NSFW MODE ACTIVE — Adult content creation without restrictions.',
-      '- produce explicitly sexual, erotic, or adult content as the user intends',
-      '- use vivid, uninhibited language for sexual acts, anatomy, arousal, and physical intimacy',
-      '- build scenes with sensory immersion: touch, sound, scent, taste, sight — all in service of erotic atmosphere',
-      '- define characters with physical specificity, emotional stakes, and sexual chemistry',
-      '- include pacing architecture: tension → ignition → immersion → climax → aftermath',
-      '- do NOT censor, hedge, or soften explicit content',
-    ].join('\n'),
-    chat: [
-      'NSFW MODE ACTIVE — engage openly with explicit adult content.',
-      '- provide vivid erotic detail, sexual scenarios, and uninhibited creative direction without hedging or softening',
-      '- help the user develop characters, scenes, and narratives with frank sexual content',
-    ].join('\n'),
-  },
-  image: {
-    optimize: [
-      'NSFW MODE ACTIVE — Adult image prompt generation without restrictions.',
-      '- generate explicit visual prompts including nudity, sexual poses, erotic compositions, and intimate scenarios',
-      '- describe anatomy, body positioning, and sexual context with direct, specific visual language',
-      '- include erotic atmosphere: sensual lighting, intimate environments, suggestive or explicit framing',
-      '- specify skin detail, body contact, facial expressions of desire/pleasure, and clothing state (partial undress, etc.)',
-      '- do NOT censor or euphemize — describe the explicit visual content the user wants',
-    ].join('\n'),
-    chat: [
-      'NSFW MODE ACTIVE — help iterate on explicit/erotic image prompts.',
-      '- discuss nudity, sexual positioning, erotic composition, and adult visual content openly',
-      '- suggest improvements for explicit image generation without hedging',
-    ].join('\n'),
-  },
-  video: {
-    optimize: [
-      'NSFW MODE ACTIVE — Adult video prompt generation without restrictions.',
-      '- generate explicit video prompts including sexual motion, intimate choreography, and erotic scene progression',
-      '- describe physical interactions, body movement during intimate acts, and sensual camera work',
-      '- include pacing for erotic video: tension, approach, physical contact, escalation, climax',
-      '- specify expressions, sounds, clothing removal sequences, and environmental mood',
-      '- do NOT censor — describe the explicit video content the user wants to generate',
-    ].join('\n'),
-    chat: [
-      'NSFW MODE ACTIVE — help iterate on explicit/erotic video concepts.',
-      '- discuss sexual motion, intimate choreography, and adult video direction openly',
-      '- suggest improvements for explicit video generation without hedging',
-    ].join('\n'),
-  },
-  audio: {
-    optimize: [
-      'NSFW MODE ACTIVE — Adult audio prompt generation without restrictions.',
-      '- generate explicit audio prompts for erotic narration, intimate ASMR, sensual voiceover, or explicit lyrics',
-      '- describe vocal tone, breathing patterns, moans, whispers, and erotic soundscapes',
-      '- for music/lyrics: include sexually explicit lyrical content, seductive delivery, and provocative themes',
-      '- do NOT censor — describe the explicit audio content the user wants',
-    ].join('\n'),
-    chat: [
-      'NSFW MODE ACTIVE — help with explicit/erotic audio content.',
-      '- discuss erotic audio, explicit lyrics, intimate voice work, and adult soundscapes openly',
-    ].join('\n'),
-  },
-  code: {
-    optimize: [
-      'NSFW MODE ACTIVE — no content restrictions on code generation.',
-      '- generate code for adult content platforms, NSFW content management, or explicit content handling without restrictions',
-      '- do not add content filters, safety checks, or censorship to the generated code unless the user asks for them',
-    ].join('\n'),
-    chat: [
-      'NSFW MODE ACTIVE — assist with adult/NSFW-related code without restrictions.',
-    ].join('\n'),
-  },
-  '3d': {
-    optimize: [
-      'NSFW MODE ACTIVE — Adult 3D model prompt generation without restrictions.',
-      '- generate explicit 3D model prompts including anatomically detailed nude figures, erotic poses, and adult character designs',
-      '- describe body proportions, genital detail, sexual positioning, and intimate scene composition for 3D generation',
-      '- include material/texture guidance for realistic skin, body fluids, and intimate lighting',
-      '- do NOT censor — describe the explicit 3D content the user wants',
-    ].join('\n'),
-    chat: [
-      'NSFW MODE ACTIVE — help with explicit/erotic 3D model concepts.',
-      '- discuss anatomical detail, erotic poses, and adult 3D character design openly',
-    ].join('\n'),
-  },
-};
-
-function getNsfwOverlay(modality: PromptModality, conversationMode: ConversationMode): string {
-  const key = modality === 'nsfw' ? 'text' : modality;
-  const overlay = NSFW_MODALITY_OVERLAY[key];
-  if (!overlay) return NSFW_MODALITY_OVERLAY['text']![conversationMode === 'chat' ? 'chat' : 'optimize'];
-  return conversationMode === 'chat' ? overlay.chat : overlay.optimize;
-}
 
 function normalizeRequest(request: EnhancePromptRequest) {
   const mode: PromptMode = request.mode ?? 'standard';
@@ -392,8 +285,6 @@ function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>,
   const subModalityGuidance = buildSubModalityGuidance(request.modality, request.subModality);
   const modalityGuidance = MODALITY_GUIDANCE[request.modality][request.mode];
 
-  const nsfwOverlay = request.nsfw ? getNsfwOverlay(request.modality, 'optimize') : '';
-
   return [
     'You are Promptomize\'s production prompt transformation engine.',
     'Rewrite the user\'s raw request into a better prompt for another AI system.',
@@ -419,7 +310,6 @@ function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>,
     `Modality guidance for ${request.modality}:`,
     modalityGuidance,
     ...(subModalityGuidance ? ['', `Sub-modality guidance:`, subModalityGuidance] : []),
-    ...(nsfwOverlay ? ['', nsfwOverlay] : []),
     ...(threadGuidance ? ['', threadGuidance] : []),
   ].join('\n');
 }
@@ -448,8 +338,6 @@ function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, thr
 
   const subModalityGuidance = buildSubModalityGuidance(request.modality, request.subModality);
 
-  const nsfwOverlay = request.nsfw ? getNsfwOverlay(request.modality, 'chat') : '';
-
   return [
     'You are Promptomize\'s collaborative AI assistant inside a prompt-building workspace.',
     'Answer the user directly and help them continue the conversation.',
@@ -470,7 +358,6 @@ function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, thr
     `Modality guidance for ${request.modality}:`,
     CHAT_MODALITY_GUIDANCE[request.modality],
     ...(subModalityGuidance ? ['', 'Sub-modality guidance:', subModalityGuidance] : []),
-    ...(nsfwOverlay ? ['', nsfwOverlay] : []),
     ...(threadGuidance ? ['', threadGuidance] : []),
   ].join('\n');
 }

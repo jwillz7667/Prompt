@@ -472,7 +472,6 @@ struct HistoryView: View {
         case "audio": return "music.note"
         case "code": return "chevron.left.forwardslash.chevron.right"
         case "3d": return "cube"
-        case "nsfw": return "flame.fill"
         default: return "text.alignleft"
         }
     }
@@ -484,7 +483,6 @@ struct HistoryView: View {
         case "audio": return .teal
         case "code": return .green
         case "3d": return .blue
-        case "nsfw": return .red
         default: return .purple
         }
     }

@@ -1,8 +1,8 @@
 What's New in Promptomize 2.0
 
-NSFW ENHANCEMENT TOGGLE
-- New 18+ content toggle with age disclaimer for mature creative workflows
-- Seamlessly integrates into the enhancement pipeline
+POWER TOOLS
+- New inline Power Tools grid: Platform Optimize, Variations, Sandbox, and Workflows
+- Accessible directly after enhancing any prompt
 
 REDESIGNED WIDGET
 - Brand-new design system with polished message bubbles and brand colors

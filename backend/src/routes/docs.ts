@@ -217,7 +217,7 @@ const openApiSpec = {
             in: 'query',
             schema: {
               type: 'string',
-              enum: ['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw'],
+              enum: ['text', 'image', 'video', 'audio', 'code', '3d'],
             },
             description: 'Filter by modality',
           },
@@ -265,7 +265,7 @@ const openApiSpec = {
           },
           modality: {
             type: 'string',
-            enum: ['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw'],
+            enum: ['text', 'image', 'video', 'audio', 'code', '3d'],
             default: 'text',
             description: 'Target modality for the prompt',
           },
@@ -607,7 +607,7 @@ const gptActionSpec = {
           },
           modality: {
             type: 'string',
-            enum: ['text', 'image', 'video', 'audio', 'code', '3d', 'nsfw'],
+            enum: ['text', 'image', 'video', 'audio', 'code', '3d'],
             default: 'text',
             description: 'Target prompt modality.',
           },
