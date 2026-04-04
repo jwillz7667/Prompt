@@ -4,10 +4,9 @@ MAX MODE
 - Advanced reasoning and expert-level prompt engineering
 - Daily quota with premium unlimited access
 
-POWER TOOLS
-- Variations: Generate and compare alternative prompt versions
-- Sandbox: Test prompts across multiple AI platforms side-by-side
-- Workflows: Automate multi-step prompt sequences
+7 CREATIVE MODALITIES
+- Text, Image, Video, Music, Audio, Code, and 3D
+- Platform-aware suggestions for each modality
 
 REDESIGNED WIDGET
 - Brand-new design with polished message bubbles

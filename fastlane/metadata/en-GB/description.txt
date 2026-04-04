@@ -12,36 +12,29 @@ Activate MAX Mode for the most advanced enhancement available — deeper reasoni
 7 CREATIVE MODALITIES
 Text, Image, Video, Music, Audio, Code, and 3D. Each modality tailors your prompt for its target output — with platform-aware suggestions and optimised phrasing.
 
-POWER TOOLS
-After enhancing, unlock three premium tools:
-- Variations: Generate alternative versions of your prompt to find the perfect wording
-- Sandbox: Test your prompt across multiple AI platforms side-by-side
-- Workflows: Automate multi-step prompt sequences for complex projects
-
-PLATFORM OPTIMISATION
-Fine-tune prompts for specific AI platforms. Each platform has unique strengths and constraints — Promptomize adapts your prompt automatically for the best results.
-
 PROJECT CONTEXTS
 Attach reusable project contexts to keep your tone, terminology, and goals consistent across sessions — no need to repeat background information.
 
 CONVERSATION THREADS
 Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
 
+COLLECTIONS
+Organise your best prompts into folders. Star your favourites for quick access later.
+
 KEY FEATURES
 - 7 creative modalities with platform-aware suggestions
 - MAX Mode for expert-level prompt engineering
-- Power Tools: Variations, Sandbox, and Workflows
-- Platform optimisation for leading AI tools
+- Optimise and Chat conversation modes
 - Project contexts for domain-specific consistency
 - Collections to organise prompts into folders
 - Prompt history with favourites and swipe-to-delete
 - Offline support with automatic sync
 - iOS Widget for quick-access enhancement
-- Optimise and Chat conversation modes
+- Image attachments for visual context
 
 SUBSCRIPTION TIERS
 - Free: Daily prompts to get started
-- Pro: More prompts + Variations + platform optimisation
-- Premium: Unlimited prompts + Sandbox + Workflows + MAX Mode
+- Pro: More prompts per day
+- Premium: Unlimited prompts + MAX Mode
 
 Privacy-first: your prompts are processed securely and never used for training.
