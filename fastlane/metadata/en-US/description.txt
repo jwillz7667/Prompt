@@ -1,39 +1,47 @@
-Promptomize transforms your ideas into powerful, optimized prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver the best possible results across every major AI platform.
+Promptomize transforms your ideas into powerful, optimized prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver the best possible results.
 
 HOW IT WORKS
-Type what you want to achieve, select your target modality (text, image, video, audio, code, 3D), and tap Enhance. Our advanced AI engine rewrites your prompt using proven prompt engineering techniques tailored to your chosen platform.
+Type what you want to achieve, select your target modality, and tap Enhance. Our advanced AI engine rewrites your prompt using proven prompt engineering techniques — or switch to Chat mode for open-ended conversation.
+
+TWO MODES
+Optimize mode refines and strengthens your prompts with expert-level prompt engineering. Chat mode gives you a general-purpose AI assistant for brainstorming, research, and creative exploration.
+
+MAX MODE
+Activate MAX Mode for the most advanced enhancement available — deeper reasoning, stronger structure, and PhD-level prompt construction. Available with daily quota based on your plan.
+
+7 CREATIVE MODALITIES
+Text, Image, Video, Music, Audio, Code, and 3D. Each modality tailors your prompt for its target output — with platform-aware suggestions and optimized phrasing.
 
 POWER TOOLS
-After enhancing, access Platform Optimize, Variations, Sandbox, and Workflows from an inline Power Tools grid. Validate prompts against platform-specific requirements, generate alternative versions, test across multiple AI services, and automate multi-step workflows.
+After enhancing, unlock three premium tools:
+- Variations: Generate alternative versions of your prompt to find the perfect wording
+- Sandbox: Test your prompt across multiple AI platforms side-by-side
+- Workflows: Automate multi-step prompt sequences for complex projects
 
 PLATFORM OPTIMIZATION
-Optimize prompts for leading text, image, video, music, code, and 3D platforms. Each platform has unique requirements — Promptomize handles them automatically so you always get the best output.
-
-CONVERSATION THREADS
-Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs. The app automatically starts a fresh thread when you return after a break, so you always land on a clean slate.
+Fine-tune prompts for specific AI platforms. Each platform has unique strengths and constraints — Promptomize adapts your prompt automatically for the best results.
 
 PROJECT CONTEXTS
-Attach reusable project contexts to your prompts for consistent, domain-specific enhancements across sessions. Keep your tone, terminology, and goals aligned without repeating yourself.
+Attach reusable project contexts to keep your tone, terminology, and goals consistent across sessions — no need to repeat background information.
+
+CONVERSATION THREADS
+Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
 
 KEY FEATURES
-- Platform-specific optimizations for all major AI tools
-- 6 creative modalities: Text, Image, Video, Audio, Code, 3D
-- Tone, style, and length controls
+- 7 creative modalities with platform-aware suggestions
 - MAX Mode for expert-level prompt engineering
-- Deep Think for advanced reasoning and chain-of-thought
+- Power Tools: Variations, Sandbox, and Workflows
+- Platform optimization for leading AI tools
+- Project contexts for domain-specific consistency
+- Collections to organize prompts into folders
 - Prompt history with favorites and swipe-to-delete
-- Reusable templates for quick starts
-- A/B testing with Variations to find the best prompt
-- Sandbox to compare results across platforms side-by-side
-- Multi-step Workflows for complex automation
-- Copy to clipboard or open in your preferred AI assistant
-- Redesigned iOS Widget for quick-access enhancement
-- Offline queue with automatic sync
-- Smart session refresh after inactivity
+- Offline support with automatic sync
+- iOS Widget for quick-access enhancement
+- Optimize and Chat conversation modes
 
 SUBSCRIPTION TIERS
-- Free: 10 prompts/day — perfect for getting started
-- Pro: 100 prompts/day + platform optimization + variations
-- Premium: Unlimited prompts + sandbox comparisons + workflows + MAX Mode
+- Free: Daily prompts to get started
+- Pro: More prompts + Variations + platform optimization
+- Premium: Unlimited prompts + Sandbox + Workflows + MAX Mode
 
-Built with iOS 26 Liquid Glass design. Privacy-first: your prompts are processed securely and never used for training.
+Privacy-first: your prompts are processed securely and never used for training.

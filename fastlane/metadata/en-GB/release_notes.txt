@@ -1,16 +1,17 @@
 What's New in Promptomize 2.0
 
+MAX MODE
+- Advanced reasoning and expert-level prompt engineering
+- Daily quota with premium unlimited access
+
 POWER TOOLS
-- New inline Power Tools grid: Platform Optimise, Variations, Sandbox, and Workflows
-- Accessible directly after enhancing any prompt
+- Variations: Generate and compare alternative prompt versions
+- Sandbox: Test prompts across multiple AI platforms side-by-side
+- Workflows: Automate multi-step prompt sequences
 
 REDESIGNED WIDGET
-- Brand-new design system with polished message bubbles and brand colours
-- Quick-access prompt enhancement right from your Home Screen
-
-SMART SESSION REFRESH
-- App automatically starts a fresh thread when you return after 5 minutes
-- Jump straight into a new idea without clearing the old one
+- Brand-new design with polished message bubbles
+- Quick-access enhancement from your Home Screen
 
 SIDEBAR & HISTORY
 - Swipe-to-dismiss drawer for faster navigation
@@ -18,5 +19,5 @@ SIDEBAR & HISTORY
 - Profile info now visible in the sidebar
 
 QUALITY & POLISH
-- Updated app icons for full App Store compliance
+- Updated app icons
 - Performance and stability improvements throughout

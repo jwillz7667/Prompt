@@ -1,1 +1,1 @@
-NEW in 2.0: Power Tools grid, redesigned widget, smart session refresh, swipe-to-dismiss sidebar, and history management. Optimise prompts for every major AI platform.
+NEW in 2.0: MAX Mode with advanced reasoning, Power Tools (Variations, Sandbox, Workflows), 7 creative modalities, and a redesigned widget. Optimise prompts for any AI platform.
