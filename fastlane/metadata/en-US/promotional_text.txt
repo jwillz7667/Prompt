@@ -1,1 +1,1 @@
-NEW in 2.0: MAX Mode with advanced reasoning, Power Tools (Variations, Sandbox, Workflows), 7 creative modalities, and a redesigned widget. Optimize prompts for any AI platform.
+NEW in 2.0: MAX Mode, Power Tools (Variations, Sandbox, Workflows), 7 creative modalities, redesigned widget. Optimize prompts for any AI platform.
