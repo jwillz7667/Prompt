@@ -34,7 +34,12 @@ KEY FEATURES
 
 SUBSCRIPTION TIERS
 - Free: Daily prompts to get started
-- Pro: More prompts per day
-- Premium: Unlimited prompts + MAX Mode
+- Pro: More prompts per day, all modalities, and MAX Mode
+- Premium: Unlimited prompts, all modalities, MAX Mode, and advanced prompt engineering
+
+Subscriptions are billed monthly or annually through your Apple ID. They renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your device Settings under Subscriptions.
 
 Privacy-first: your prompts are processed securely and never used for training.
+
+Terms of Use: https://promptomize.app/terms
+Privacy Policy: https://promptomize.app/privacy

@@ -34,7 +34,12 @@ MAX 模式
 
 订阅方案
 - 免费版：每日提示词配额，轻松上手
-- Pro：更多每日配额
-- Premium：无限配额 + MAX 模式
+- Pro：更多每日配额、所有模态和 MAX 模式
+- Premium：无限配额、所有模态、MAX 模式和高级提示词工程
+
+订阅通过 Apple ID 按月或按年计费，到期前自动续订。如需取消，请在当前订阅期结束前至少 24 小时在设备"设置"中的"订阅"里操作。
 
 重视隐私：你的提示词会被安全处理，不会用于训练。
+
+使用条款: https://promptomize.app/terms
+隐私政策: https://promptomize.app/privacy
