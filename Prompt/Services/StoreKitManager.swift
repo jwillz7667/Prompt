@@ -157,7 +157,7 @@ final class StoreKitManager {
         error = nil
 
         do {
-            // Sync with App Store
+            // Sync with App Store (works without backend auth)
             try await AppStore.sync()
 
             // Collect all valid transactions
@@ -169,8 +169,8 @@ final class StoreKitManager {
                 }
             }
 
-            // Send to backend for restoration
-            if !signedTransactions.isEmpty {
+            // Send to backend for restoration only if authenticated
+            if !signedTransactions.isEmpty, await APIClient.shared.isAuthenticated {
                 let request = RestorePurchasesRequest(signedTransactions: signedTransactions)
                 let response: RestoreResponse = try await APIClient.shared.request(
                     "/subscriptions/restore",
@@ -183,7 +183,7 @@ final class StoreKitManager {
                 }
             }
 
-            // Re-check entitlements
+            // Re-check entitlements (local StoreKit check + conditional backend sync)
             await checkEntitlements()
 
             isLoading = false

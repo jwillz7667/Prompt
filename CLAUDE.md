@@ -49,7 +49,7 @@ npm run lint   # ESLint
 
 ### iOS (project root)
 ```bash
-xcodebuild -scheme Prompt -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' build
+xcodebuild -scheme Prompt -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
 ```
 
 **Prerequisites**: Local PostgreSQL required. Redis optional in dev (required for BullMQ queues and rate limiting at scale).
