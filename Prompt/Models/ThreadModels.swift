@@ -165,6 +165,26 @@ struct ThreadRecord: Identifiable, Sendable {
         self.createdAt = ISO8601DateFormatter().date(from: dto.createdAt) ?? Date()
         self.updatedAt = ISO8601DateFormatter().date(from: dto.updatedAt) ?? Date()
     }
+
+    init(
+        id: String,
+        title: String,
+        modality: String,
+        isArchived: Bool,
+        turnCount: Int,
+        lastPreview: String?,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.title = title
+        self.modality = modality
+        self.isArchived = isArchived
+        self.turnCount = turnCount
+        self.lastPreview = lastPreview
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
 }
 
 struct ThreadTurnRecord: Identifiable, Sendable {

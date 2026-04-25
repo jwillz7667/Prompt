@@ -299,7 +299,7 @@ struct ProfileView: View {
                             icon: "chart.bar.fill",
                             iconColor: accentColor,
                             title: "Analytics",
-                            showChevron: true
+                            showChevron: false
                         )
                     }
                     .listRowBackground(bgSecondary)

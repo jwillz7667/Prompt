@@ -112,6 +112,46 @@ final class ThreadViewModel {
     private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
     private let guestSession = GuestSessionManager.shared
 
+    // MARK: - Init
+
+    init() {
+        ThreadSyncBroadcaster.shared.register(self)
+    }
+
+    // MARK: - Cross-instance sync
+
+    /// Applies a thread upsert that originated from another ThreadViewModel instance.
+    /// Called by ThreadSyncBroadcaster so every ViewModel (home, sidebar, history) stays in sync.
+    func applyRemoteThreadUpsert(_ thread: ThreadRecord) {
+        threads.removeAll { $0.id == thread.id }
+        threads.insert(thread, at: 0)
+
+        if let current = currentThread, current.id == thread.id {
+            currentThread = ThreadDetailDTO(
+                id: current.id,
+                title: thread.title,
+                modality: thread.modality,
+                isArchived: thread.isArchived,
+                createdAt: current.createdAt,
+                updatedAt: ISO8601DateFormatter().string(from: thread.updatedAt),
+                turns: current.turns
+            )
+        }
+    }
+
+    /// Applies a thread deletion that originated from another ThreadViewModel instance.
+    func applyRemoteThreadDeletion(id: String) {
+        threads.removeAll { $0.id == id }
+        if currentThread?.id == id {
+            currentThread = nil
+            turns = []
+            pendingUserPrompt = nil
+            pendingImageAttachment = nil
+            streamingContent = ""
+            isStreaming = false
+        }
+    }
+
     // MARK: - Thread CRUD
 
     func fetchThreads(refresh: Bool = false) async {
@@ -185,6 +225,7 @@ final class ThreadViewModel {
             if currentThread?.id == id {
                 resetThread()
             }
+            ThreadSyncBroadcaster.shared.broadcastDeletion(id: id, from: self)
             return
         }
 
@@ -199,6 +240,7 @@ final class ThreadViewModel {
                 turns = []
                 pendingUserPrompt = nil
             }
+            ThreadSyncBroadcaster.shared.broadcastDeletion(id: id, from: self)
         } catch {
             errorMessage = "Failed to delete thread"
             showError = true
@@ -230,6 +272,12 @@ final class ThreadViewModel {
                     turns: thread.turns
                 )
             }
+            syncLocalThreadListAfterChange(
+                id: threadId,
+                fallbackTitle: title,
+                fallbackModality: currentThread?.modality ?? "text",
+                now: Date()
+            )
         } catch {
             errorMessage = "Failed to update title"
             showError = true
@@ -445,6 +493,12 @@ final class ThreadViewModel {
                         processingMs: event.usage?.processingMs ?? 0
                     )
                     clearPendingSubmission()
+                    syncLocalThreadListAfterChange(
+                        id: threadId,
+                        fallbackTitle: currentThread?.title ?? derivedThreadTitle(prompt: sentPrompt, attachment: sentAttachment),
+                        fallbackModality: currentThread?.modality ?? settings.effectiveApiModality,
+                        now: Date()
+                    )
                     await persistTurnToHistory(
                         turnRecord,
                         originalPrompt: sentPrompt,
@@ -662,6 +716,14 @@ final class ThreadViewModel {
             processingMs: 0
         )
         clearPendingSubmission()
+        if let threadId = currentThread?.id {
+            syncLocalThreadListAfterChange(
+                id: threadId,
+                fallbackTitle: currentThread?.title ?? derivedThreadTitle(prompt: prompt, attachment: attachment),
+                fallbackModality: currentThread?.modality ?? modality,
+                now: Date()
+            )
+        }
         await persistTurnToHistory(
             recoveredTurn,
             originalPrompt: prompt,
@@ -700,6 +762,14 @@ final class ThreadViewModel {
             processingMs: 0
         )
         clearPendingSubmission()
+        if let threadId = currentThread?.id {
+            syncLocalThreadListAfterChange(
+                id: threadId,
+                fallbackTitle: currentThread?.title ?? derivedThreadTitle(prompt: prompt, attachment: attachment),
+                fallbackModality: currentThread?.modality ?? modality,
+                now: Date()
+            )
+        }
         await persistTurnToHistory(
             recoveredTurn,
             originalPrompt: prompt,
@@ -738,7 +808,8 @@ final class ThreadViewModel {
     }
 
     private func upsertCurrentThread(id: String, title: String, modality: String) {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let now = Date()
+        let timestamp = ISO8601DateFormatter().string(from: now)
 
         if let thread = currentThread, thread.id == id {
             currentThread = ThreadDetailDTO(
@@ -750,18 +821,64 @@ final class ThreadViewModel {
                 updatedAt: timestamp,
                 turns: thread.turns
             )
-            return
+        } else {
+            currentThread = ThreadDetailDTO(
+                id: id,
+                title: title,
+                modality: modality,
+                isArchived: false,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+                turns: []
+            )
         }
 
-        currentThread = ThreadDetailDTO(
+        syncLocalThreadListAfterChange(id: id, fallbackTitle: title, fallbackModality: modality, now: now)
+    }
+
+    /// Updates the in-memory `threads` list and broadcasts the change so other
+    /// ThreadViewModel instances (sidebar, history, etc.) stay in sync without
+    /// waiting for a network refresh.
+    ///
+    /// Call this any time a thread is created or a turn is added/updated.
+    private func syncLocalThreadListAfterChange(id: String, fallbackTitle: String, fallbackModality: String, now: Date) {
+        let existing = threads.first(where: { $0.id == id })
+
+        let createdAt: Date = existing?.createdAt
+            ?? currentThread.flatMap { ISO8601DateFormatter().date(from: $0.createdAt) }
+            ?? now
+
+        let resolvedTitle: String = {
+            if let title = currentThread?.title, !title.isEmpty { return title }
+            if let title = existing?.title, !title.isEmpty { return title }
+            return fallbackTitle
+        }()
+
+        let resolvedModality: String = currentThread?.modality ?? existing?.modality ?? fallbackModality
+        let resolvedIsArchived: Bool = currentThread?.isArchived ?? existing?.isArchived ?? false
+        let resolvedTurnCount: Int = turns.count > 0 ? turns.count : (existing?.turnCount ?? 0)
+        let resolvedPreview: String? = {
+            if let lastEnhanced = turns.last?.enhancedPrompt, !lastEnhanced.isEmpty {
+                return String(lastEnhanced.prefix(120))
+            }
+            return existing?.lastPreview
+        }()
+
+        let record = ThreadRecord(
             id: id,
-            title: title,
-            modality: modality,
-            isArchived: false,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            turns: []
+            title: resolvedTitle,
+            modality: resolvedModality,
+            isArchived: resolvedIsArchived,
+            turnCount: resolvedTurnCount,
+            lastPreview: resolvedPreview,
+            createdAt: createdAt,
+            updatedAt: now
         )
+
+        threads.removeAll { $0.id == id }
+        threads.insert(record, at: 0)
+
+        ThreadSyncBroadcaster.shared.broadcastUpsert(record, from: self)
     }
 
     private var seededTurnsForRequest: [SeedThreadTurnRequest]? {

@@ -1,3 +1,5 @@
+import OpenAI from 'openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions.js';
 import { type TierFeatures } from './subscriptionService.js';
 import { imageAnalysisService, type PromptImageAttachment } from './imageAnalysisService.js';
 import { promptLogger } from '../utils/logger.js';
@@ -81,6 +83,13 @@ const MAX_TEMPERATURE = 0.2;
 const STANDARD_MAX_TOKENS = 3072;
 const MAX_MAX_TOKENS = 6144;
 const THREAD_CONTEXT_CHAR_BUDGET = 220_000;
+
+// Vision-capable OpenAI models used when a request includes an image. DeepSeek's
+// chat endpoint is text-only, so any image would collapse to a short analysis
+// blurb — we route those through GPT-4.1 vision so the model actually sees the
+// pixels and can maintain visual context across a whole thread.
+const OPENAI_VISION_STANDARD_MODEL = 'gpt-4.1-mini';
+const OPENAI_VISION_MAX_MODEL = 'gpt-4.1';
 
 const QUALITY_PROFILES: Record<EnhancementTier, string> = {
   basic: [
@@ -275,10 +284,13 @@ function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>,
 
   const threadGuidance = threadAware
     ? [
-        'Thread handling:',
-        '- preserve continuity with prior turns when relevant',
-        '- if the user is refining prior work, build on the latest assistant output instead of starting over',
-        '- still return a standalone prompt that is usable on its own',
+        'Thread / refinement handling (CRITICAL):',
+        '- when prior turns exist, the user\'s newest message is almost always a REFINEMENT INSTRUCTION for the most recent enhanced prompt — NOT a brand-new raw request',
+        '- start from the most recent assistant output (the prior enhanced prompt) and apply the user\'s new instruction to it',
+        '- preserve ALL prior decisions, structure, tone, constraints, and style unless the user explicitly asks to change them',
+        '- when the user input is wrapped in <refinement_request>, treat <prior_enhanced_prompt> as the base and apply <user_refinement_instruction> as a targeted edit',
+        '- only start from scratch if the user clearly changes topic, says "new prompt", or asks for something unrelated to the existing thread',
+        '- do not acknowledge the refinement, do not explain what you changed — return the full revised prompt only',
       ].join('\n')
     : '';
 
@@ -329,10 +341,12 @@ function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, thr
 
   const threadGuidance = threadAware
     ? [
-        'Thread handling:',
-        '- continue the conversation naturally from prior turns',
-        '- treat the latest assistant reply as part of the active working context',
-        '- do not restart from scratch unless the user clearly changes direction',
+        'Thread handling (CRITICAL):',
+        '- this is an ongoing conversation — ALWAYS treat prior user messages and your prior replies as the active working context',
+        '- read the full conversation history above before answering — the newest user message is a continuation, not a fresh start',
+        '- if the user previously uploaded an image (see <source_image_analysis> in earlier turns), keep that visual context in mind for every subsequent reply',
+        '- do not restart, reintroduce yourself, or ask the user to repeat context they already provided',
+        '- only change direction if the user clearly says "new topic" or "start over"',
       ].join('\n')
     : '';
 
@@ -475,6 +489,65 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
   sections.push('');
   sections.push('Rewrite the raw user request into a polished prompt that another AI system can execute immediately.');
   sections.push('Return only the rewritten prompt.');
+
+  return sections.join('\n');
+}
+
+function buildOptimizeRefinementUserMessage(
+  request: ReturnType<typeof normalizeRequest>,
+  priorEnhancedPrompt: string
+): string {
+  const sections = [
+    '<refinement_request>',
+    `<conversation_mode>${request.conversationMode}</conversation_mode>`,
+    `<mode>${request.mode}</mode>`,
+    `<modality>${request.modality}</modality>`,
+    `<quality_profile>${request.tier}</quality_profile>`,
+  ];
+
+  if (request.subModality) {
+    sections.push(`<sub_modality>${request.subModality}</sub_modality>`);
+  }
+
+  if (request.customInstructions?.trim()) {
+    sections.push('<custom_instructions>');
+    sections.push(request.customInstructions.trim());
+    sections.push('</custom_instructions>');
+  }
+
+  const lengthConstraint = buildLengthConstraint(
+    request.prompt,
+    request.customInstructions
+  );
+
+  if (lengthConstraint) {
+    sections.push('<hard_length_constraint>');
+    sections.push(lengthConstraint);
+    sections.push('</hard_length_constraint>');
+  }
+
+  if (request.imageAttachment) {
+    sections.push('<source_image>');
+    sections.push(`<mime_type>${request.imageAttachment.mimeType}</mime_type>`);
+    sections.push(`<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`);
+    if (request.imageAttachment.analysis?.trim()) {
+      sections.push('<visual_analysis>');
+      sections.push(request.imageAttachment.analysis.trim());
+      sections.push('</visual_analysis>');
+    }
+    sections.push('</source_image>');
+  }
+
+  sections.push('<prior_enhanced_prompt>');
+  sections.push(priorEnhancedPrompt);
+  sections.push('</prior_enhanced_prompt>');
+
+  sections.push('<user_refinement_instruction>');
+  sections.push(request.prompt);
+  sections.push('</user_refinement_instruction>');
+  sections.push('</refinement_request>');
+  sections.push('');
+  sections.push('Apply the <user_refinement_instruction> to <prior_enhanced_prompt>. Preserve its structure, intent, and all prior constraints unless the user explicitly asks to change them. Do not start from scratch. Return only the full revised prompt — no explanation, no preamble, no diff.');
 
   return sections.join('\n');
 }
@@ -677,40 +750,84 @@ function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { pr
   return buildOptimizeThreadMessages(request);
 }
 
+/**
+ * Smart budget-based trimming that prioritizes keeping both the foundation
+ * turn (index 0) AND the most recent turns, since those two ends hold the
+ * most signal for follow-up refinements. When the char budget is exhausted
+ * we drop from the MIDDLE of the conversation rather than silently losing
+ * the whole early context (which is what caused the "AI forgets after 3-4
+ * turns" regression — a single large response could trigger the old backward
+ * break and evict every earlier turn).
+ */
+function selectTurnsWithinBudget(
+  previousTurns: ThreadTurnContext[],
+  alreadyUsedChars: number
+): ThreadTurnContext[] {
+  if (previousTurns.length === 0) return [];
+
+  const charCost = (turn: ThreadTurnContext) =>
+    turn.originalPrompt.length +
+    turn.enhancedPrompt.length +
+    (turn.imageAttachment?.analysis?.length ?? 0) +
+    64;
+
+  // Fast path: if every turn fits, keep them all in order.
+  const totalRequired = previousTurns.reduce(
+    (sum, turn) => sum + charCost(turn),
+    alreadyUsedChars
+  );
+  if (totalRequired <= THREAD_CONTEXT_CHAR_BUDGET) {
+    return [...previousTurns];
+  }
+
+  // Budget exceeded: always keep the foundation turn (#0) plus as many of the
+  // most recent turns as fit. Middle turns are dropped.
+  const foundation = previousTurns[0];
+  if (!foundation) return [];
+  let usedChars = alreadyUsedChars + charCost(foundation);
+
+  const recentTurns: ThreadTurnContext[] = [];
+  for (let i = previousTurns.length - 1; i >= 1; i -= 1) {
+    const turn = previousTurns[i];
+    if (!turn) continue;
+    const cost = charCost(turn);
+    if (usedChars + cost > THREAD_CONTEXT_CHAR_BUDGET) continue;
+    recentTurns.unshift(turn);
+    usedChars += cost;
+  }
+
+  return [foundation, ...recentTurns];
+}
+
 function buildOptimizeThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
   const messages: DeepSeekMessage[] = [
     { role: 'system', content: buildSystemPrompt(request, true) },
   ];
 
-  let usedChars = messages[0]?.content.length ?? 0;
-  const turnsToInclude: ThreadTurnContext[] = [];
-
-  for (let index = request.previousTurns.length - 1; index >= 0; index -= 1) {
-    const turn = request.previousTurns[index];
-    if (!turn) continue;
-    const turnChars = turn.originalPrompt.length + turn.enhancedPrompt.length + 32;
-    if (usedChars + turnChars > THREAD_CONTEXT_CHAR_BUDGET) {
-      break;
-    }
-
-    turnsToInclude.unshift(turn);
-    usedChars += turnChars;
-  }
+  const systemChars = messages[0]?.content.length ?? 0;
+  const turnsToInclude = selectTurnsWithinBudget(request.previousTurns, systemChars);
 
   for (const turn of turnsToInclude) {
     messages.push({
       role: 'user',
-      content: `Previous raw request:\n${buildPreviousTurnRequest(turn)}`,
+      content: buildPreviousTurnRequest(turn),
     });
     messages.push({
       role: 'assistant',
-      content: `Previous rewritten prompt:\n${turn.enhancedPrompt}`,
+      content: turn.enhancedPrompt,
     });
   }
 
+  const hasPriorEnhanced = turnsToInclude.length > 0;
+  const latestPriorEnhanced = hasPriorEnhanced
+    ? turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? ''
+    : '';
+
   messages.push({
     role: 'user',
-    content: buildUserMessage(request),
+    content: hasPriorEnhanced && latestPriorEnhanced
+      ? buildOptimizeRefinementUserMessage(request, latestPriorEnhanced)
+      : buildUserMessage(request),
   });
 
   return messages;
@@ -721,20 +838,8 @@ function buildChatThreadMessages(request: ReturnType<typeof normalizeRequest> & 
     { role: 'system', content: buildSystemPrompt(request, true) },
   ];
 
-  let usedChars = messages[0]?.content.length ?? 0;
-  const turnsToInclude: ThreadTurnContext[] = [];
-
-  for (let index = request.previousTurns.length - 1; index >= 0; index -= 1) {
-    const turn = request.previousTurns[index];
-    if (!turn) continue;
-    const turnChars = turn.originalPrompt.length + turn.enhancedPrompt.length + 32;
-    if (usedChars + turnChars > THREAD_CONTEXT_CHAR_BUDGET) {
-      break;
-    }
-
-    turnsToInclude.unshift(turn);
-    usedChars += turnChars;
-  }
+  const systemChars = messages[0]?.content.length ?? 0;
+  const turnsToInclude = selectTurnsWithinBudget(request.previousTurns, systemChars);
 
   for (const turn of turnsToInclude) {
     messages.push({
@@ -758,12 +863,20 @@ function buildChatThreadMessages(request: ReturnType<typeof normalizeRequest> & 
 function buildPreviousTurnRequest(turn: ThreadTurnContext): string {
   const sections: string[] = [];
 
-  if (turn.originalPrompt.trim()) {
-    sections.push(turn.originalPrompt.trim());
+  if (turn.imageAttachment?.analysis?.trim()) {
+    sections.push('<source_image_analysis>');
+    if (turn.imageAttachment.mimeType) {
+      sections.push(`mime_type: ${turn.imageAttachment.mimeType}`);
+    }
+    if (turn.imageAttachment.width && turn.imageAttachment.height) {
+      sections.push(`dimensions: ${turn.imageAttachment.width}x${turn.imageAttachment.height}`);
+    }
+    sections.push(turn.imageAttachment.analysis.trim());
+    sections.push('</source_image_analysis>');
   }
 
-  if (turn.imageAttachment?.analysis?.trim()) {
-    sections.push(`Source image analysis:\n${turn.imageAttachment.analysis.trim()}`);
+  if (turn.originalPrompt.trim()) {
+    sections.push(turn.originalPrompt.trim());
   }
 
   if (sections.length === 0) {
@@ -853,11 +966,176 @@ export async function enhancePromptStream(
   }
 }
 
+function hasImageContext(request: EnhancePromptInThreadRequest): boolean {
+  if (request.imageAttachment?.dataUrl) return true;
+  return request.previousTurns.some((turn) => !!turn.imageAttachment?.dataUrl);
+}
+
+function selectVisionModel(mode: PromptMode): string {
+  return mode === 'max' ? OPENAI_VISION_MAX_MODEL : OPENAI_VISION_STANDARD_MODEL;
+}
+
+function getOpenAIClient(): OpenAI {
+  const apiKey = process.env['OPENAI_API_KEY'];
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable not configured');
+  }
+  return new OpenAI({ apiKey });
+}
+
+function buildVisionThreadMessages(
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }
+): ChatCompletionMessageParam[] {
+  const systemContent = buildSystemPrompt(request, true);
+  const messages: ChatCompletionMessageParam[] = [
+    { role: 'system', content: systemContent },
+  ];
+
+  const turnsToInclude = selectTurnsWithinBudget(request.previousTurns, systemContent.length);
+
+  for (const turn of turnsToInclude) {
+    const priorUserText = buildPreviousTurnRequest(turn);
+    if (turn.imageAttachment?.dataUrl) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: priorUserText },
+          {
+            type: 'image_url',
+            image_url: { url: turn.imageAttachment.dataUrl, detail: 'auto' },
+          },
+        ],
+      });
+    } else {
+      messages.push({ role: 'user', content: priorUserText });
+    }
+
+    messages.push({ role: 'assistant', content: turn.enhancedPrompt });
+  }
+
+  const hasPrior = turnsToInclude.length > 0;
+  const latestPriorEnhanced = hasPrior
+    ? turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? ''
+    : '';
+
+  const latestText = request.conversationMode === 'chat'
+    ? buildChatUserMessage(request)
+    : hasPrior && latestPriorEnhanced
+      ? buildOptimizeRefinementUserMessage(request, latestPriorEnhanced)
+      : buildOptimizeUserMessage(request);
+
+  if (request.imageAttachment?.dataUrl) {
+    messages.push({
+      role: 'user',
+      content: [
+        { type: 'text', text: latestText },
+        {
+          type: 'image_url',
+          image_url: { url: request.imageAttachment.dataUrl, detail: 'auto' },
+        },
+      ],
+    });
+  } else {
+    messages.push({ role: 'user', content: latestText });
+  }
+
+  return messages;
+}
+
+async function streamOpenAIVisionCompletion(
+  messages: ChatCompletionMessageParam[],
+  model: string,
+  temperature: number,
+  maxTokens: number,
+  conversationMode: ConversationMode,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const startedAt = Date.now();
+  let collected = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    const client = getOpenAIClient();
+    const stream = await client.chat.completions.create({
+      model,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (delta) {
+        collected += delta;
+        await callbacks.onToken(delta);
+      }
+      if (chunk.usage) {
+        inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
+        outputTokens = chunk.usage.completion_tokens ?? outputTokens;
+      }
+    }
+
+    await callbacks.onComplete({
+      enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
+      model,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      processingMs: Date.now() - startedAt,
+    });
+  } catch (error) {
+    promptLogger.error({ err: error }, 'OpenAI vision streaming failed');
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
+async function enhancePromptInThreadVisionStream(
+  request: EnhancePromptInThreadRequest,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const enrichedRequest = await enrichRequestWithImageAnalysis(request);
+  const normalized = normalizeRequest(enrichedRequest);
+  const messages = buildVisionThreadMessages({
+    ...normalized,
+    previousTurns: request.previousTurns,
+  });
+  const model = selectVisionModel(normalized.mode);
+
+  await streamOpenAIVisionCompletion(
+    messages,
+    model,
+    normalized.temperature,
+    normalized.maxTokens,
+    normalized.conversationMode,
+    {
+      ...callbacks,
+      onComplete: (result) => {
+        callbacks.onComplete({
+          ...result,
+          imageAttachment: normalized.imageAttachment,
+        });
+      },
+    }
+  );
+}
+
 export async function enhancePromptInThreadStream(
   request: EnhancePromptInThreadRequest,
   callbacks: StreamCallbacks
 ): Promise<void> {
   try {
+    // Any image anywhere in the thread (current turn or prior turn) routes
+    // through a vision-capable OpenAI model so the AI actually sees the
+    // pixels. DeepSeek is text-only and would only receive a text summary,
+    // which is why "images don't get used as context" was reported.
+    if (hasImageContext(request)) {
+      await enhancePromptInThreadVisionStream(request, callbacks);
+      return;
+    }
+
     const enrichedRequest = await enrichRequestWithImageAnalysis(request);
     const normalized = normalizeRequest(enrichedRequest);
     const apiKey = getApiKey();
