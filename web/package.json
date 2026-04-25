@@ -1,12 +1,37 @@
 {
-  "name": "promptomize-web",
+  "name": "@promptomize/web",
   "version": "2.0.0",
   "private": true,
+  "description": "Promptomize web app — Next.js 14 marketing site, dashboard, and developer portal.",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "author": {
+    "name": "Justin Williams",
+    "email": "support@promptomize.app",
+    "url": "https://promptomize.app"
+  },
+  "homepage": "https://promptomize.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwillz7667/Prompt.git",
+    "directory": "web"
+  },
+  "bugs": {
+    "url": "https://github.com/jwillz7667/Prompt/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\" --ignore-path .prettierignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\" --ignore-path .prettierignore",
+    "clean": "rimraf .next out .turbo"
   },
   "dependencies": {
     "@stripe/stripe-js": "^4.8.0",
@@ -36,7 +61,11 @@
     "autoprefixer": "^10.4.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.0",
+    "eslint-config-prettier": "^9.1.0",
     "postcss": "^8.4.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "rimraf": "^6.0.1",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.0.0"
   }

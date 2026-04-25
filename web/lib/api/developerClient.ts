@@ -48,7 +48,7 @@ export async function developerApiClient<T>(
   }
 
   // Add developer auth token
-  let token = getDeveloperAccessToken()
+  const token = getDeveloperAccessToken()
   if (token) {
     requestHeaders['Authorization'] = `Bearer ${token}`
   }

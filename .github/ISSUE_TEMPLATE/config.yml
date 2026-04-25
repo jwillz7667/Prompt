@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/jwillz7667/Prompt/security/advisories/new
+    about: Please report security issues privately via GitHub Security Advisories or security@promptomize.app — do NOT open a public issue.
+  - name: Product support
+    url: mailto:support@promptomize.app
+    about: For end-user support requests (account, billing, app crashes), email the support team.
+  - name: Feature discussion
+    url: https://github.com/jwillz7667/Prompt/discussions
+    about: For open-ended product or design discussion, use GitHub Discussions.

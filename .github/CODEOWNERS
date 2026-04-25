@@ -1,0 +1,62 @@
+# =============================================================================
+# CODEOWNERS — automatic reviewer assignment for pull requests.
+#
+# Each line is a file pattern followed by one or more owners. The last matching
+# pattern wins. Owners are required reviewers when branch protection is enabled.
+#
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+# =============================================================================
+
+# Default — anything not matched below
+*                                       @jwillz7667
+
+# -----------------------------------------------------------------------------
+# Backend
+# -----------------------------------------------------------------------------
+/backend/                               @jwillz7667
+/backend/prisma/                        @jwillz7667
+/backend/src/services/promptEnhancementEngine.ts  @jwillz7667
+/backend/src/services/metaPrompts/      @jwillz7667
+/backend/src/middleware/                @jwillz7667
+/backend/src/routes/webhooks.ts         @jwillz7667
+/backend/src/routes/apiStripeWebhook.ts @jwillz7667
+/backend/src/routes/admin.ts            @jwillz7667
+/backend/Dockerfile                     @jwillz7667
+
+# -----------------------------------------------------------------------------
+# Web
+# -----------------------------------------------------------------------------
+/web/                                   @jwillz7667
+/web/middleware.ts                      @jwillz7667
+/web/next.config.js                     @jwillz7667
+/web/vercel.json                        @jwillz7667
+
+# -----------------------------------------------------------------------------
+# iOS
+# -----------------------------------------------------------------------------
+/Prompt/                                @jwillz7667
+/PromptWidgetExtension/                 @jwillz7667
+/PromptKeyboard/                        @jwillz7667
+/PromptUITests/                         @jwillz7667
+/Prompt.xcodeproj/                      @jwillz7667
+/fastlane/                              @jwillz7667
+ExportOptions*.plist                    @jwillz7667
+
+# -----------------------------------------------------------------------------
+# CI / Infra / Repo hygiene
+# -----------------------------------------------------------------------------
+/.github/                               @jwillz7667
+/.github/workflows/                     @jwillz7667
+/.github/CODEOWNERS                     @jwillz7667
+LICENSE                                 @jwillz7667
+SECURITY.md                             @jwillz7667
+CONTRIBUTING.md                         @jwillz7667
+CODE_OF_CONDUCT.md                      @jwillz7667
+CHANGELOG.md                            @jwillz7667
+ARCHITECTURE.md                         @jwillz7667
+README.md                               @jwillz7667
+
+# -----------------------------------------------------------------------------
+# ChatGPT App
+# -----------------------------------------------------------------------------
+/chatgpt-app/                           @jwillz7667

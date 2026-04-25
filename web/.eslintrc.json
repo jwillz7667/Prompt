@@ -1,9 +1,21 @@
 {
-  "extends": "next/core-web-vitals",
+  "extends": ["next/core-web-vitals", "prettier"],
   "rules": {
     "@next/next/no-img-element": "off",
     "react/no-unescaped-entities": "warn",
     "@next/next/next-script-for-ga": "warn",
     "react-hooks/exhaustive-deps": "warn"
-  }
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "out/",
+    "public/sw.js",
+    "public/sw.js.map",
+    "public/workbox-*.js",
+    "public/workbox-*.js.map",
+    "public/worker-*.js",
+    "public/worker-*.js.map",
+    "next-env.d.ts"
+  ]
 }

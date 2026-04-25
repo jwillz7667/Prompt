@@ -1,0 +1,73 @@
+name: Feature request
+description: Suggest a new feature, enhancement, or change.
+title: "[feat]: "
+labels: ["enhancement", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please describe the user problem first, then your proposed
+        solution. Concrete user stories help us evaluate impact and scope.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Target component
+      options:
+        - iOS app
+        - Widget extension
+        - Keyboard extension
+        - Web app
+        - Backend API
+        - Enterprise / Public API
+        - ChatGPT App (MCP)
+        - Multiple / Cross-cutting
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What user problem does this solve? Describe the user, the situation, and the friction.
+      placeholder: |
+        As a Pro-tier user, I want … so that …
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: A clear and concise description of what you want to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider, and why are they less good?
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope & non-goals
+      description: What is explicitly **not** part of this request? Where does the line stop?
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Mockups, links, related issues, prior art, anything else helpful.
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues / discussions and this is not a duplicate.
+          required: true

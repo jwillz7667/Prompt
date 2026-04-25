@@ -1,0 +1,61 @@
+# =============================================================================
+# SwiftFormat configuration — https://github.com/nicklockwood/SwiftFormat
+# Aligned with the existing Promptomize iOS source style.
+# =============================================================================
+
+# ─── Swift language version ─────────────────────────────────────────────────
+--swiftversion 6.0
+
+# ─── Indentation & whitespace ───────────────────────────────────────────────
+--indent 4
+--tabwidth 4
+--maxwidth 120
+--linebreaks lf
+--trimwhitespace always
+--commas inline
+--semicolons never
+
+# ─── Wrapping ───────────────────────────────────────────────────────────────
+--wraparguments before-first
+--wrapcollections before-first
+--wrapparameters before-first
+--wrapconditions before-first
+--wrapreturntype if-multiline
+--closingparen balanced
+
+# ─── Self / explicit qualifiers ─────────────────────────────────────────────
+--self init-only
+--selfrequired
+
+# ─── Headers / comments ─────────────────────────────────────────────────────
+--header ignore
+--stripunusedargs closure-only
+
+# ─── Modifier ordering — match Apple style ──────────────────────────────────
+--modifierorder \
+public,internal,fileprivate,private,\
+final,override,required,convenience,\
+@MainActor,@Sendable,\
+static,class,\
+mutating,nonmutating,\
+weak,unowned,\
+lazy,dynamic,\
+prefix,postfix
+
+# ─── Type / pattern preferences ─────────────────────────────────────────────
+--patternlet hoist
+--ifdef no-indent
+--funcattributes prev-line
+--typeattributes prev-line
+--varattributes same-line
+--shortoptionals always
+--guardelse next-line
+--elseposition same-line
+--xcodeindentation enabled
+
+# ─── Disabled rules (intentional, to avoid touching working patterns) ──────
+--disable redundantSelf            # SwiftUI views frequently use self for clarity
+--disable wrapMultilineStatementBraces
+
+# ─── Excluded paths ─────────────────────────────────────────────────────────
+--exclude Pods,Carthage,build,DerivedData,.build,.swiftpm,Package.swift

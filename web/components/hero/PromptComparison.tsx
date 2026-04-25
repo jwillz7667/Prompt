@@ -144,10 +144,9 @@ function useTypewriter(
       return
     }
 
-    let timeoutId: NodeJS.Timeout
     let intervalId: NodeJS.Timeout
 
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setIsTyping(true)
       let currentIndex = 0
 

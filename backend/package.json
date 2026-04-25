@@ -1,17 +1,45 @@
 {
-  "name": "prompt-enhancer-api",
-  "version": "1.0.0",
-  "description": "Enterprise backend for Prompt Enhancer iOS app",
+  "name": "@promptomize/backend",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Promptomize backend — Express + TypeScript REST API with Prisma, Redis, BullMQ, and Socket.IO.",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "author": {
+    "name": "Justin Williams",
+    "email": "support@promptomize.app",
+    "url": "https://promptomize.app"
+  },
+  "homepage": "https://github.com/jwillz7667/Prompt#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jwillz7667/Prompt.git",
+    "directory": "backend"
+  },
+  "bugs": {
+    "url": "https://github.com/jwillz7667/Prompt/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.{ts,json,md}\" \"prisma/**/*.prisma\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,json,md}\" \"prisma/**/*.prisma\" \"*.{json,md}\"",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset",
+    "clean": "rimraf dist .tsbuildinfo",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -56,12 +84,16 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.9.0",
     "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.31.0",
     "pino-pretty": "^11.0.0",
+    "prettier": "^3.4.2",
     "prisma": "^5.22.0",
+    "rimraf": "^6.0.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
-  },
-  "engines": {
-    "node": ">=20.0.0"
   }
 }

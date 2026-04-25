@@ -1,0 +1,65 @@
+# EditorConfig — https://editorconfig.org
+# Cross-editor enforcement for whitespace, line endings, and final newline.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+# Markdown — preserve trailing whitespace because two trailing spaces is a hard line break
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# Swift — Apple's Swift style guide uses 4 spaces
+[*.{swift,c,h,m,mm}]
+indent_size = 4
+max_line_length = 120
+
+# Makefiles must use tabs
+[{Makefile,*.mk,GNUmakefile}]
+indent_style = tab
+
+# Shell / Bash
+[*.{sh,bash,zsh}]
+indent_size = 2
+
+# Ruby (fastlane / Xcode helper scripts)
+[*.{rb,gemspec}]
+indent_size = 2
+
+# YAML / TOML — common config formats
+[*.{yml,yaml,toml}]
+indent_size = 2
+
+# JSON
+[*.{json,jsonc}]
+indent_size = 2
+
+# Prisma schema
+[*.prisma]
+indent_size = 2
+
+# Python (if added)
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+# package.json — npm enforces 2-space; ensure we never accidentally re-format
+[package.json]
+indent_size = 2
+
+# Generated files / vendor — ignore (no enforcement)
+[{**/node_modules/**,**/dist/**,**/build/**,**/.next/**}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset
