@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, getAccessToken } from './client'
 import type {
   SubscriptionStatusResponse,
   TrialEligibilityResponse,
@@ -29,9 +29,13 @@ export async function getProducts(): Promise<{ products: StripeProduct[] }> {
 export async function createStripeCheckout(
   request: StripeCheckoutRequest
 ): Promise<StripeCheckoutResponse> {
+  const token = getAccessToken()
   const response = await fetch('/api/stripe/checkout', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(request),
     credentials: 'include',
   })
@@ -45,8 +49,10 @@ export async function createStripeCheckout(
 }
 
 export async function createStripePortalSession(): Promise<StripePortalResponse> {
+  const token = getAccessToken()
   const response = await fetch('/api/stripe/portal', {
     method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     credentials: 'include',
   })
 

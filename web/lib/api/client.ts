@@ -26,10 +26,10 @@ let tokenStore: TokenStore = {
 let refreshPromise: Promise<string | null> | null = null
 
 // Token management
-export function setTokens(accessToken: string, refreshToken: string, expiresIn: number) {
+export function setTokens(accessToken: string, refreshToken: string | undefined, expiresIn: number) {
   tokenStore = {
     accessToken,
-    refreshToken,
+    refreshToken: refreshToken || null,
     expiresAt: Date.now() + expiresIn * 1000,
   }
   if (typeof window !== 'undefined') {
@@ -79,7 +79,9 @@ async function refreshAccessToken(): Promise<string | null> {
       })
 
       if (!response.ok) {
-        clearTokens()
+        if ([400, 401, 403].includes(response.status)) {
+          clearTokens()
+        }
         return null
       }
 
@@ -87,7 +89,6 @@ async function refreshAccessToken(): Promise<string | null> {
       setTokens(data.accessToken, data.refreshToken, data.expiresIn)
       return data.accessToken
     } catch {
-      clearTokens()
       return null
     } finally {
       refreshPromise = null

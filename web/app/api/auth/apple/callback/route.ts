@@ -11,6 +11,14 @@ export async function POST(request: NextRequest) {
     const state = formData.get('state') as string
     const userJson = formData.get('user') as string | null
 
+    const cookieStore = await cookies()
+    const expectedState = cookieStore.get('oauth_state_apple')?.value
+    if (!expectedState || !state || state !== expectedState) {
+      cookieStore.delete('oauth_state_apple')
+      return NextResponse.redirect(new URL('/login?error=invalid_state', request.url), 303)
+    }
+    cookieStore.delete('oauth_state_apple')
+
     if (!code || !idToken) {
       // Use 303 to convert POST to GET
       return NextResponse.redirect(new URL('/login?error=invalid_response', request.url), 303)
@@ -51,10 +59,6 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
-    console.log('Apple auth successful, got tokens')
-
-    // Set tokens in cookies
-    const cookieStore = await cookies()
 
     // Refresh token in HTTP-only cookie
     cookieStore.set('refreshToken', data.refreshToken, {
@@ -86,8 +90,6 @@ export async function POST(request: NextRequest) {
     // Redirect to dashboard
     // Use 303 to convert POST to GET
     const redirectUrl = new URL('/dashboard', request.url)
-    console.log('Redirecting to:', redirectUrl.toString())
-
     return NextResponse.redirect(redirectUrl, 303)
   } catch (error) {
     console.error('Apple auth callback error:', error)

@@ -62,6 +62,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const stripeEventContext = { stripeEventId: event.id, stripeEventType: event.type }
+
     // Handle the event
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -125,6 +127,7 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
 
   // Notify backend
   await notifyBackend('subscription.created', {
+    stripeEventId: session.id,
     userId,
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
@@ -198,20 +201,17 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 }
 
 async function notifyBackend(event: string, data: Record<string, unknown>) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/webhooks/stripe`, {
+  const response = await fetch(`${API_BASE_URL}/webhooks/stripe`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Webhook-Secret': BACKEND_WEBHOOK_SECRET,
       },
       body: JSON.stringify({ event, data }),
-    })
+  })
 
-    if (!response.ok) {
-      console.error('Failed to notify backend:', await response.text())
-    }
-  } catch (error) {
-    console.error('Error notifying backend:', error)
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Failed to notify backend (${response.status}): ${body}`)
   }
 }

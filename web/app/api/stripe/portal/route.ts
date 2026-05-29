@@ -3,6 +3,10 @@ import Stripe from 'stripe'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
 
+function appOrigin(request: NextRequest): string {
+  return process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+}
+
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2025-02-24.acacia',

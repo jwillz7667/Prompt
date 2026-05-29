@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { cookies } from 'next/headers'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
+
+const ALLOWED_PRICE_IDS = new Set([
+  process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
+  process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL,
+  process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY,
+  process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL,
+].filter(Boolean) as string[])
+
+function appOrigin(request: NextRequest): string {
+  return process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+}
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -13,17 +23,23 @@ function getStripe() {
 export async function POST(request: NextRequest) {
   try {
     const stripe = getStripe()
-    const { priceId, successUrl, cancelUrl } = await request.json()
+    const { priceId } = await request.json()
 
-    if (!priceId || !successUrl || !cancelUrl) {
+    if (!priceId) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       )
     }
 
+    if (!ALLOWED_PRICE_IDS.has(priceId)) {
+      return NextResponse.json(
+        { error: 'Invalid price selected' },
+        { status: 400 }
+      )
+    }
+
     // Get user info from backend
-    const cookieStore = await cookies()
     const accessToken = request.headers.get('authorization')?.replace('Bearer ', '')
 
     if (!accessToken) {
@@ -86,8 +102,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'subscription',
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      success_url: `${appOrigin(request)}/dashboard?checkout=success`,
+      cancel_url: `${appOrigin(request)}/upgrade?checkout=canceled`,
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
       metadata: {

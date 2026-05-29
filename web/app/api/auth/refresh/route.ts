@@ -23,11 +23,12 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      // Clear invalid refresh token
-      cookieStore.delete('refreshToken')
+      if ([400, 401, 403].includes(response.status)) {
+        cookieStore.delete('refreshToken')
+      }
       return NextResponse.json(
         { error: 'Refresh failed' },
-        { status: 401 }
+        { status: response.status >= 500 || response.status === 429 ? response.status : 401 }
       )
     }
 
@@ -42,10 +43,9 @@ export async function POST(request: NextRequest) {
       path: '/',
     })
 
-    // Return new tokens
+    // Return only short-lived access token; keep refresh token in HttpOnly cookie.
     return NextResponse.json({
       accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
       expiresIn: data.expiresIn,
     })
   } catch (error) {

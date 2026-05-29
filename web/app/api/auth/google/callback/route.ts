@@ -11,11 +11,20 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const code = searchParams.get('code')
+    const state = searchParams.get('state')
     const error = searchParams.get('error')
 
     if (error) {
       return NextResponse.redirect(new URL(`/login?error=${error}`, request.url))
     }
+
+    const cookieStore = await cookies()
+    const expectedState = cookieStore.get('oauth_state_google')?.value
+    if (!expectedState || !state || state !== expectedState) {
+      cookieStore.delete('oauth_state_google')
+      return NextResponse.redirect(new URL('/login?error=invalid_state', request.url))
+    }
+    cookieStore.delete('oauth_state_google')
 
     if (!code) {
       return NextResponse.redirect(new URL('/login?error=no_code', request.url))
@@ -70,7 +79,6 @@ export async function GET(request: NextRequest) {
     const data = await response.json()
 
     // Set refresh token in HTTP-only cookie
-    const cookieStore = await cookies()
     cookieStore.set('refreshToken', data.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -79,12 +87,23 @@ export async function GET(request: NextRequest) {
       path: '/',
     })
 
-    // Redirect to dashboard with tokens in URL
     const redirectUrl = new URL('/dashboard', request.url)
-    redirectUrl.searchParams.set('token', data.accessToken)
-    redirectUrl.searchParams.set('expiresIn', data.expiresIn.toString())
-
-    return NextResponse.redirect(redirectUrl)
+    const redirect = NextResponse.redirect(redirectUrl)
+    redirect.cookies.set('accessToken', data.accessToken, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60,
+      path: '/',
+    })
+    redirect.cookies.set('tokenExpiresIn', data.expiresIn.toString(), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60,
+      path: '/',
+    })
+    return redirect
   } catch (error) {
     console.error('Google auth callback error:', error)
     return NextResponse.redirect(new URL('/login?error=server_error', request.url))
