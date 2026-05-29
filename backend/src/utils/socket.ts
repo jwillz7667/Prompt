@@ -1,17 +1,19 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { logger } from './logger.js';
+import { verifyAccessToken } from './jwt.js';
+import { prisma } from './prisma.js';
 
 let io: SocketIOServer | null = null;
 
 // Admin API key for authentication
 const ADMIN_API_KEY = process.env['ADMIN_API_KEY'] || '';
 
+type SocketRole = 'user' | 'agent';
+
 interface TypingData {
   ticketId: string;
   isTyping: boolean;
-  role: 'user' | 'agent';
-  userId?: string;
 }
 
 interface MessageData {
@@ -23,6 +25,64 @@ interface MessageData {
     createdAt: string;
     isFromAI: boolean;
   };
+}
+
+function extractBearerToken(socket: Socket): string | null {
+  const authToken = socket.handshake.auth?.['token'];
+  if (typeof authToken === 'string' && authToken.trim()) {
+    return authToken.replace(/^Bearer\s+/i, '').trim();
+  }
+
+  const authHeader = socket.handshake.headers.authorization;
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7).trim();
+  }
+
+  return null;
+}
+
+async function authorizeTicketJoin(
+  socket: Socket,
+  ticketId: string,
+  requestedRole: SocketRole,
+  apiKey?: string
+): Promise<{ authorized: true; role: SocketRole; userId?: string } | { authorized: false; reason: string }> {
+  if (!ticketId || typeof ticketId !== 'string' || ticketId.length > 128) {
+    return { authorized: false, reason: 'Invalid ticket id' };
+  }
+
+  if (requestedRole === 'agent') {
+    const handshakeAdminKey = socket.handshake.auth?.['apiKey'];
+    const candidateApiKey = apiKey || (typeof handshakeAdminKey === 'string' ? handshakeAdminKey : undefined);
+
+    if (!ADMIN_API_KEY || candidateApiKey !== ADMIN_API_KEY) {
+      return { authorized: false, reason: 'Unauthorized' };
+    }
+
+    return { authorized: true, role: 'agent' };
+  }
+
+  const token = extractBearerToken(socket);
+  if (!token) {
+    return { authorized: false, reason: 'Authentication required' };
+  }
+
+  try {
+    const decoded = verifyAccessToken(token);
+    const ticket = await prisma.supportTicket.findFirst({
+      where: { id: ticketId, userId: decoded.userId },
+      select: { id: true },
+    });
+
+    if (!ticket) {
+      return { authorized: false, reason: 'Ticket not found' };
+    }
+
+    return { authorized: true, role: 'user', userId: decoded.userId };
+  } catch (error) {
+    logger.warn({ error, socketId: socket.id, ticketId }, 'Invalid socket ticket auth token');
+    return { authorized: false, reason: 'Invalid token' };
+  }
 }
 
 export function initializeSocket(httpServer: HttpServer, allowedOrigins: string[]): SocketIOServer {
@@ -55,52 +115,74 @@ export function initializeSocket(httpServer: HttpServer, allowedOrigins: string[
     logger.info({ socketId: socket.id }, 'Socket connected');
 
     // Join ticket room for real-time updates
-    socket.on('join:ticket', (data: { ticketId: string; role: 'user' | 'agent'; apiKey?: string }) => {
+    socket.on('join:ticket', async (data: { ticketId: string; role: SocketRole; apiKey?: string }) => {
       const { ticketId, role, apiKey } = data;
+      const authorization = await authorizeTicketJoin(socket, ticketId, role, apiKey);
 
-      // Validate admin API key for agents
-      if (role === 'agent') {
-        if (!ADMIN_API_KEY || apiKey !== ADMIN_API_KEY) {
-          socket.emit('error', { message: 'Unauthorized' });
-          return;
-        }
+      if (!authorization.authorized) {
+        socket.emit('ticket:error', { message: authorization.reason });
+        return;
+      }
+
+      const previousTicketId = socket.data.ticketId as string | undefined;
+      if (previousTicketId && previousTicketId !== ticketId) {
+        socket.leave(`ticket:${previousTicketId}`);
       }
 
       const room = `ticket:${ticketId}`;
       socket.join(room);
       socket.data.ticketId = ticketId;
-      socket.data.role = role;
+      socket.data.role = authorization.role;
+      socket.data.userId = authorization.userId;
 
-      logger.info({ socketId: socket.id, ticketId, role }, 'Joined ticket room');
+      logger.info({ socketId: socket.id, ticketId, role: authorization.role }, 'Joined ticket room');
 
       // Notify others in the room
-      socket.to(room).emit('participant:joined', { role });
+      socket.to(room).emit('participant:joined', { role: authorization.role });
     });
 
     // Leave ticket room
     socket.on('leave:ticket', (data: { ticketId: string }) => {
+      if (socket.data.ticketId !== data.ticketId) {
+        socket.emit('ticket:error', { message: 'Cannot leave a ticket that was not joined' });
+        return;
+      }
+
       const room = `ticket:${data.ticketId}`;
       socket.leave(room);
       socket.to(room).emit('participant:left', { role: socket.data.role });
+      socket.data.ticketId = undefined;
+      socket.data.role = undefined;
+      socket.data.userId = undefined;
       logger.info({ socketId: socket.id, ticketId: data.ticketId }, 'Left ticket room');
     });
 
     // Typing indicator
     socket.on('typing:start', (data: TypingData) => {
+      if (socket.data.ticketId !== data.ticketId) {
+        socket.emit('ticket:error', { message: 'Join the ticket before sending typing events' });
+        return;
+      }
+
       const room = `ticket:${data.ticketId}`;
       socket.to(room).emit('typing:update', {
         ticketId: data.ticketId,
         isTyping: true,
-        role: data.role,
+        role: socket.data.role,
       });
     });
 
     socket.on('typing:stop', (data: TypingData) => {
+      if (socket.data.ticketId !== data.ticketId) {
+        socket.emit('ticket:error', { message: 'Join the ticket before sending typing events' });
+        return;
+      }
+
       const room = `ticket:${data.ticketId}`;
       socket.to(room).emit('typing:update', {
         ticketId: data.ticketId,
         isTyping: false,
-        role: data.role,
+        role: socket.data.role,
       });
     });
 

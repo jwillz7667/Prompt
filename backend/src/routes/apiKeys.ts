@@ -19,6 +19,7 @@ import {
 } from '../services/apiKeyService.js';
 import { getKeyUsageStats, getUsageHistory } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
+import { prisma } from '../utils/prisma.js';
 
 export const apiKeysRouter = Router();
 
@@ -75,6 +76,19 @@ apiKeysRouter.post('/', async (req: DeveloperAuthenticatedRequest, res: Response
     }
 
     const data = createKeySchema.parse(req.body);
+    const developer = await prisma.developer.findUnique({
+      where: { id: req.developer.id },
+      select: { emailVerified: true, isActive: true },
+    });
+
+    if (!developer?.isActive || !developer.emailVerified) {
+      res.status(403).json({
+        error: 'Email verification required',
+        code: 'DEVELOPER_EMAIL_NOT_VERIFIED',
+        message: 'Verify your developer email before creating API keys.',
+      });
+      return;
+    }
 
     const result = await generateApiKey(req.developer.id, data.name, {
       permissions: data.permissions as ApiKeyPermission[],

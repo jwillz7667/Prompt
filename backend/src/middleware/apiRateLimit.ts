@@ -108,16 +108,8 @@ async function checkRateLimitRedis(
       },
     };
   } catch (error) {
-    logger.error({ error, keyId }, 'Redis rate limit error');
-    // Fall back to allowing the request on Redis error
-    return {
-      allowed: true,
-      info: {
-        limit,
-        remaining: limit - 1,
-        reset: Math.ceil((now + WINDOW_SIZE_MS) / 1000),
-      },
-    };
+    logger.error({ error, keyId }, 'Redis rate limit error; using in-memory fail-safe limiter');
+    return checkRateLimitMemory(keyId, limit);
   }
 }
 

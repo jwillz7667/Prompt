@@ -112,7 +112,10 @@ app.use(express.json({
     const request = req as express.Request & { rawBody?: Buffer; originalUrl?: string; url?: string };
     const requestPath = request.originalUrl || request.url || '';
 
-    if (requestPath.startsWith('/api/v1/webhooks/api-stripe')) {
+    if (
+      requestPath.startsWith('/api/v1/webhooks/api-stripe') ||
+      requestPath.startsWith('/api/v1/webhooks/resend/inbound')
+    ) {
       request.rawBody = Buffer.from(buf);
     }
   },

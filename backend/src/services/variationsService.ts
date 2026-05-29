@@ -379,6 +379,8 @@ async function ensurePromptSeed(
     return promptId;
   }
 
+  // Only seed.id is consumed downstream; the narrow `select` keeps RETURNING
+  // off columns that may be absent on legacy production schemas.
   const seed = await prisma.prompt.create({
     data: {
       userId,
@@ -393,6 +395,7 @@ async function ensurePromptSeed(
       totalTokens: 0,
       processingMs: 0,
     },
+    select: { id: true },
   });
 
   return seed.id;

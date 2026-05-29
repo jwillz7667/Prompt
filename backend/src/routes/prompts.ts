@@ -28,6 +28,7 @@ import {
   recordGuestPromptUsage,
   type GuestQuotaSnapshot,
 } from '../services/guestQuotaService.js';
+import { resolveGuestIdentity } from '../services/anonymousSessionService.js';
 import { supportsPromptImageAttachmentColumn } from '../services/schemaCompatibilityService.js';
 
 export const promptRouter = Router();
@@ -205,21 +206,13 @@ promptRouter.post(
   async (req, res): Promise<void> => {
     beginSSE(res);
 
-    const rawDeviceId = req.header('X-Device-ID')?.trim();
-    if (!rawDeviceId) {
-      writeSSEEvent(res, {
-        type: 'error',
-        message: 'Device identifier missing. Please restart the app and try again.',
-      });
-      res.end();
-      return;
-    }
-
     try {
+      const guestIdentity = resolveGuestIdentity(req);
       const data = guestEnhancePromptSchema.parse(req.body);
       const maxTokens = Math.min(data.maxTokens ?? 4096, data.mode === 'max' ? 6144 : 4096);
 
-      await ensureGuestQuotaAvailable(rawDeviceId, data.mode);
+      await ensureGuestQuotaAvailable(guestIdentity.quotaKey, data.mode);
+      const reservedQuota = await recordGuestPromptUsage(guestIdentity.quotaKey, data.mode);
 
       await enhancePromptInThreadStream(
         {
@@ -239,8 +232,6 @@ promptRouter.post(
             writeSSEEvent(res, { type: 'token', content: token });
           },
           onComplete: async (result) => {
-            const quota = await recordGuestPromptUsage(rawDeviceId, data.mode);
-
             writeSSEEvent(res, {
               type: 'complete',
               usage: {
@@ -250,30 +241,41 @@ promptRouter.post(
                 processingMs: result.processingMs,
               },
               imageAttachment: result.imageAttachment,
-              guestQuota: quota,
+              guestQuota: reservedQuota,
+              guestSession: guestIdentity.sessionToken,
             });
             res.write('data: [DONE]\n\n');
             res.end();
           },
           onError: async (error) => {
-            const quota = await getGuestQuota(rawDeviceId);
+            const quota = await getGuestQuota(guestIdentity.quotaKey);
             writeSSEEvent(res, {
               type: 'error',
               message: error.message,
               guestQuota: quota,
+              guestSession: guestIdentity.sessionToken,
             });
             res.end();
           },
         }
       );
     } catch (error) {
-      const quota = await getGuestQuota(rawDeviceId);
+      let quota: GuestQuotaSnapshot | null = null;
+      let guestSession: string | undefined;
+      try {
+        const guestIdentity = resolveGuestIdentity(req);
+        quota = await getGuestQuota(guestIdentity.quotaKey);
+        guestSession = guestIdentity.sessionToken;
+      } catch {
+        quota = null;
+      }
 
       if (error instanceof z.ZodError) {
         writeSSEEvent(res, {
           type: 'error',
           message: 'Invalid request data.',
           guestQuota: quota,
+          guestSession,
         });
         res.end();
         return;
@@ -283,8 +285,11 @@ promptRouter.post(
         (error.message === 'GUEST_STANDARD_LIMIT_REACHED' || error.message === 'GUEST_MAX_LIMIT_REACHED')) {
         writeSSEEvent(res, {
           type: 'error',
-          message: guestQuotaMessage(error.message === 'GUEST_STANDARD_LIMIT_REACHED' ? 'standard' : 'max', quota),
+          message: quota
+            ? guestQuotaMessage(error.message === 'GUEST_STANDARD_LIMIT_REACHED' ? 'standard' : 'max', quota)
+            : 'Guest prompt limit reached. Sign in to keep optimizing prompts.',
           guestQuota: quota,
+          guestSession,
         });
         res.end();
         return;
@@ -294,6 +299,7 @@ promptRouter.post(
         type: 'error',
         message: 'Failed to enhance prompt',
         guestQuota: quota,
+        guestSession,
       });
       res.end();
     }
@@ -368,7 +374,10 @@ promptRouter.post(
         imageAttachment: data.imageAttachment,
       });
 
-      // Save the prompt to the database
+      // Save the prompt to the database.
+      // `select` constrains the RETURNING clause; without it Prisma asks the DB
+      // to return every column declared in the schema, which fails on legacy
+      // databases that pre-date the imageAttachment migration.
       const savedPrompt = await prisma.prompt.create({
         data: {
           userId: req.user.id,
@@ -384,6 +393,7 @@ promptRouter.post(
           totalTokens: result.totalTokens,
           processingMs: result.processingMs,
         },
+        select: promptSelect(supportsImageAttachment),
       });
 
       // Update user stats
@@ -427,7 +437,11 @@ promptRouter.post(
       // Return enhanced prompt with subscription info
       res.status(200).json({
         enhancedPrompt: result.enhancedPrompt,
-        prompt: savedPrompt,
+        prompt: {
+          ...savedPrompt,
+          imageAttachment:
+            'imageAttachment' in savedPrompt ? savedPrompt.imageAttachment ?? null : null,
+        },
         usage: {
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
@@ -529,7 +543,10 @@ promptRouter.post(
             res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
           },
           onComplete: async (result) => {
-            // Save prompt to database
+            // Save prompt to database. Only the id flows back to the client
+            // via the SSE complete event, so a narrow `select` keeps the
+            // RETURNING clause off any columns that may not exist on legacy
+            // production schemas (e.g. imageAttachment before migration).
             const savedPrompt = await prisma.prompt.create({
               data: {
                 userId: req.user!.id,
@@ -545,6 +562,7 @@ promptRouter.post(
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
               },
+              select: { id: true },
             });
             savedPromptId = savedPrompt.id;
 
@@ -656,6 +674,7 @@ promptRouter.post(
           title: data.title,
           tags: data.tags,
         },
+        select: promptSelect(supportsImageAttachment),
       });
 
       // Update user stats

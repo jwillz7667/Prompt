@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { Webhook } from 'svix';
 import { processAppStoreNotification, requestTestNotification } from '../services/appleStoreService.js';
-import { addAgentReplyToTicket } from '../services/supportService.js';
+import { addAgentReplyToTicket, addMessageToTicket } from '../services/supportService.js';
 import { webhookLogger } from '../utils/logger.js';
 import { idempotencyGuard, appStoreKeyExtractor } from '../middleware/idempotency.js';
 import { prisma } from '../utils/prisma.js';
@@ -244,6 +245,54 @@ webhookRouter.post('/appstore/test', async (req: Request, res: Response): Promis
 
 const RESEND_WEBHOOK_SECRET = process.env['RESEND_WEBHOOK_SECRET'] || '';
 
+function normalizeEmail(value: string): string {
+  const match = value.match(/<([^>]+)>/);
+  return (match?.[1] || value).trim().toLowerCase();
+}
+
+const RESEND_TRUSTED_AGENT_EMAILS = new Set(
+  (process.env['RESEND_TRUSTED_AGENT_EMAILS'] || process.env['SUPPORT_EMAIL'] || '')
+    .split(',')
+    .map((email) => normalizeEmail(email))
+    .filter(Boolean)
+);
+
+if (process.env['NODE_ENV'] === 'production' && !RESEND_WEBHOOK_SECRET) {
+  throw new Error('RESEND_WEBHOOK_SECRET must be set in production');
+}
+
+function verifyResendWebhookSignature(req: Request): boolean {
+  if (!RESEND_WEBHOOK_SECRET) {
+    return process.env['NODE_ENV'] !== 'production';
+  }
+
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (!rawBody) {
+    webhookLogger.error('Missing raw body for Resend webhook verification');
+    return false;
+  }
+
+  const svixId = req.header('svix-id');
+  const svixTimestamp = req.header('svix-timestamp');
+  const svixSignature = req.header('svix-signature');
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    return false;
+  }
+
+  try {
+    const webhook = new Webhook(RESEND_WEBHOOK_SECRET);
+    webhook.verify(rawBody.toString('utf8'), {
+      'svix-id': svixId,
+      'svix-timestamp': svixTimestamp,
+      'svix-signature': svixSignature,
+    });
+    return true;
+  } catch (error) {
+    webhookLogger.warn({ error }, 'Invalid Resend webhook signature');
+    return false;
+  }
+}
+
 // Resend inbound email webhook payload schema
 const resendInboundSchema = z.object({
   type: z.string(),
@@ -263,16 +312,10 @@ const resendInboundSchema = z.object({
 
 webhookRouter.post('/resend/inbound', async (req: Request, res: Response): Promise<void> => {
   try {
-    // Verify webhook secret if configured
-    if (RESEND_WEBHOOK_SECRET) {
-      const signature = req.headers['svix-signature'] as string;
-      // For production, you should verify the signature using Resend's SDK
-      // For now, we'll just check if the header exists when secret is set
-      if (!signature) {
-        webhookLogger.warn('Missing Resend webhook signature');
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-      }
+    if (!verifyResendWebhookSignature(req)) {
+      webhookLogger.warn('Rejected Resend inbound webhook with missing or invalid signature');
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
 
     const payload = resendInboundSchema.parse(req.body);
@@ -303,6 +346,11 @@ webhookRouter.post('/resend/inbound', async (req: Request, res: Response): Promi
       where: {
         id: {
           startsWith: shortTicketId,
+        },
+      },
+      include: {
+        user: {
+          select: { email: true },
         },
       },
     });
@@ -365,8 +413,18 @@ webhookRouter.post('/resend/inbound', async (req: Request, res: Response): Promi
       return;
     }
 
-    // Add the reply to the ticket
-    await addAgentReplyToTicket(ticket.id, replyContent);
+    const senderEmail = normalizeEmail(from);
+    const userEmail = normalizeEmail(ticket.user.email);
+
+    if (RESEND_TRUSTED_AGENT_EMAILS.has(senderEmail)) {
+      await addAgentReplyToTicket(ticket.id, replyContent);
+    } else if (senderEmail === userEmail) {
+      await addMessageToTicket(ticket.id, ticket.userId, replyContent, 'user', false);
+    } else {
+      webhookLogger.warn({ ticketId: ticket.id, from }, 'Rejected inbound email from untrusted sender');
+      res.status(202).json({ success: false, message: 'Sender is not authorized for this ticket' });
+      return;
+    }
 
     webhookLogger.info({ ticketId: ticket.id, from }, 'Processed inbound email reply');
     res.status(200).json({ success: true, ticketId: ticket.id });

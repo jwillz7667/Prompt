@@ -7,6 +7,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { validateApiKey, hasPermission, type ValidatedApiKey, type ApiKeyPermission } from '../services/apiKeyService.js';
 import { logger } from '../utils/logger.js';
+import { prisma } from '../utils/prisma.js';
 
 // ============================================================================
 // TYPES
@@ -49,6 +50,21 @@ export const apiKeyAuth = async (
         error: 'Invalid API key',
         code: 'INVALID_API_KEY',
         message: 'The provided API key is invalid, expired, or revoked',
+      });
+      return;
+    }
+
+    const developer = await prisma.developer.findUnique({
+      where: { id: validated.developerId },
+      select: { isActive: true, emailVerified: true },
+    });
+
+    if (!developer?.isActive || !developer.emailVerified) {
+      logger.warn({ developerId: validated.developerId }, 'Blocked API key for inactive or unverified developer');
+      res.status(403).json({
+        error: 'Developer account is not verified',
+        code: 'DEVELOPER_NOT_VERIFIED',
+        message: 'Verify your developer email before using API keys.',
       });
       return;
     }
