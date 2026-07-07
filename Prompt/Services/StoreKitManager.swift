@@ -50,7 +50,62 @@ final class StoreKitManager {
     // MARK: - Initialization
 
     private init() {
+        // Optimistically restore the last-known subscription so the UI and
+        // widgets show the correct tier immediately on cold start instead of
+        // defaulting to FREE until syncWithBackend() completes (or while
+        // offline / the backend is briefly unreachable). The network sync
+        // refreshes and corrects this shortly after launch.
+        if SharedDataManager.shared.isAuthenticated {
+            subscriptionInfo = Self.loadCachedSubscriptionInfo()
+        }
         updateListenerTask = listenForTransactions()
+    }
+
+    // MARK: - Subscription Cache
+
+    private static func loadCachedSubscriptionInfo() -> AppSubscriptionInfo? {
+        guard let data = SharedDataManager.shared.cachedSubscriptionData,
+              let cached = try? JSONDecoder().decode(AppSubscriptionInfo.self, from: data) else {
+            return nil
+        }
+
+        // Never resurrect an already-expired entitlement from cache while
+        // offline — fall back to FREE rather than show a stale paid tier. A
+        // trialing entitlement is bounded by trialEndsAt, a paid one by
+        // expiresAt; using expiresAt for a trial (as before) let an ended trial
+        // keep showing a paid tier until the next successful network sync.
+        let now = Date()
+        if cached.isTrialing {
+            if let trialEndsAt = cached.trialEndsAt, trialEndsAt < now {
+                return nil
+            }
+        } else if let expiresAt = cached.expiresAt, expiresAt < now {
+            return nil
+        }
+
+        return cached
+    }
+
+    private func persistSubscriptionCache() {
+        guard let info = subscriptionInfo else {
+            SharedDataManager.shared.cachedSubscriptionData = nil
+            return
+        }
+        SharedDataManager.shared.cachedSubscriptionData = try? JSONEncoder().encode(info)
+    }
+
+    /// Drops all cached subscription state. Called on sign-out so a new or
+    /// anonymous session never inherits the previous user's paid tier.
+    func clearSubscriptionState() {
+        subscriptionInfo = nil
+        usageInfo = nil
+        purchasedProductIDs = []
+        SharedDataManager.shared.cachedSubscriptionData = nil
+        SharedDataManager.shared.updateSubscription(tier: SubscriptionTier.free.rawValue)
+        // updateSubscription(tier:) does not reload widgets, so without this the
+        // widget and keyboard extensions keep showing the signed-out user's paid
+        // tier until some other event refreshes them.
+        SharedDataManager.shared.reloadWidgets()
     }
 
     // Note: No deinit needed - this is a singleton that lives for app lifetime
@@ -226,9 +281,15 @@ final class StoreKitManager {
 
             self.usageInfo = response.usage
 
+            // Persist the fresh snapshot so the next cold start restores the
+            // correct tier even before the network responds.
+            persistSubscriptionCache()
+
             // Sync to shared storage for widgets and extensions
             syncToSharedStorage()
         } catch {
+            // Keep the last-known subscriptionInfo on failure — a transient
+            // network/backend error must not drop the user to FREE.
             ErrorHandler.shared.handleSilently(error, context: "syncWithBackend")
         }
     }

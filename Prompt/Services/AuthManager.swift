@@ -296,6 +296,7 @@ final class AuthManager: NSObject {
 
         await APIClient.shared.clearTokens()
         clearSignedInState()
+        StoreKitManager.shared.clearSubscriptionState()
         currentUser = nil
         isLoading = false
     }
@@ -306,6 +307,7 @@ final class AuthManager: NSObject {
         try await APIClient.shared.requestVoid("/auth/logout-all", method: .post)
         await APIClient.shared.clearTokens()
         clearSignedInState()
+        StoreKitManager.shared.clearSubscriptionState()
         currentUser = nil
     }
 }

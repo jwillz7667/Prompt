@@ -19,6 +19,7 @@ final class SharedDataManager: @unchecked Sendable {
         static let dailyPromptsUsed = "dailyPromptsUsed"
         static let dailyPromptsLimit = "dailyPromptsLimit"
         static let subscriptionTier = "subscriptionTier"
+        static let cachedSubscriptionInfo = "cachedSubscriptionInfo"
         static let lastEnhancedPrompt = "lastEnhancedPrompt"
         static let lastEnhancedPromptOriginal = "lastEnhancedPromptOriginal"
         static let lastEnhancedPromptDate = "lastEnhancedPromptDate"
@@ -76,6 +77,22 @@ final class SharedDataManager: @unchecked Sendable {
 
     var isPremium: Bool {
         subscriptionTier != "FREE"
+    }
+
+    /// Full last-known subscription snapshot, stored as a JSON blob owned by the
+    /// main app (kept as raw Data here so this type carries no dependency on the
+    /// app-only model layer and stays usable from extensions). Lets the app
+    /// restore the correct tier on cold start instead of defaulting to FREE
+    /// until a network sync completes.
+    var cachedSubscriptionData: Data? {
+        get { defaults?.data(forKey: Keys.cachedSubscriptionInfo) }
+        set {
+            if let data = newValue {
+                defaults?.set(data, forKey: Keys.cachedSubscriptionInfo)
+            } else {
+                defaults?.removeObject(forKey: Keys.cachedSubscriptionInfo)
+            }
+        }
     }
 
     // MARK: - Recent Prompt Data
@@ -177,6 +194,7 @@ final class SharedDataManager: @unchecked Sendable {
             Keys.dailyPromptsUsed,
             Keys.dailyPromptsLimit,
             Keys.subscriptionTier,
+            Keys.cachedSubscriptionInfo,
             Keys.lastEnhancedPrompt,
             Keys.lastEnhancedPromptOriginal,
             Keys.lastEnhancedPromptDate,

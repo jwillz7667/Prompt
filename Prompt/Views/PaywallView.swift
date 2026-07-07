@@ -249,7 +249,7 @@ struct PaywallView: View {
                 Spacer()
             }
 
-            Text("Try the full premium workflow before committing. Cancel during the trial if it is not the right fit.")
+            Text("Get 7 days of full Premium access, free. No payment is required and nothing is charged — your trial simply ends automatically after 7 days.")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(textSecondary)
                 .fixedSize(horizontal: false, vertical: true)

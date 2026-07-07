@@ -434,10 +434,27 @@ actor APIClient {
             }
 
             guard httpResponse.statusCode == 200 else {
-                await clearTokens()
+                // Only a definitive auth rejection means the refresh token is
+                // no longer valid. Clearing tokens on any non-200 turns a
+                // transient backend blip (429, 5xx, or a 502/503 while the
+                // server restarts) into a silent logout — which drops the user
+                // to the FREE tier and hides their server-side history. Keep
+                // the session for transient failures and surface a retryable
+                // error so the caller can back off instead.
+                let isAuthRejection = httpResponse.statusCode == 401 || httpResponse.statusCode == 403
+                if isAuthRejection {
+                    await clearTokens()
+                    isRefreshing = false
+                    resumePendingRequests(with: APIError.unauthorized)
+                    throw APIError.unauthorized
+                }
+
                 isRefreshing = false
-                resumePendingRequests(with: APIError.unauthorized)
-                throw APIError.unauthorized
+                let transientError: APIError = httpResponse.statusCode == 429
+                    ? .rateLimited
+                    : .serverError(httpResponse.statusCode)
+                resumePendingRequests(with: transientError)
+                throw transientError
             }
 
             let tokenResponse = try JSONDecoder().decode(TokenRefreshResponse.self, from: data)
