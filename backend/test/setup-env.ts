@@ -22,3 +22,10 @@ process.env['DATABASE_URL'] =
 process.env['NODE_ENV'] = 'test';
 process.env['JWT_ACCESS_SECRET'] = process.env['JWT_ACCESS_SECRET'] || 'test-access-secret';
 process.env['JWT_REFRESH_SECRET'] = process.env['JWT_REFRESH_SECRET'] || 'test-refresh-secret';
+
+// Provider availability must be deterministic in tests regardless of what a
+// developer's shell or CI exports — compare tests assert on the
+// unconfigured-provider paths and never call a real provider.
+delete process.env['ANTHROPIC_API_KEY'];
+delete process.env['OPENAI_API_KEY'];
+delete process.env['GEMINI_API_KEY'];
