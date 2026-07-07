@@ -1,6 +1,14 @@
+import { randomBytes } from 'node:crypto';
+
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import {
+  compareEnhancements,
+  CompareValidationError,
+  MAX_COMPARE_PROVIDERS,
+} from '../services/promptCompareService.js';
+import { getAvailableProviders, COMPARE_PROVIDERS } from '../services/providerAdapters.js';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
   enforceQuota,
@@ -97,8 +105,50 @@ function promptSelect(includeImageAttachment: boolean) {
     tags: true,
     isFavorite: true,
     isArchived: true,
+    version: true,
+    rootPromptId: true,
     createdAt: true,
   } satisfies Prisma.PromptSelect;
+}
+
+// Version chains: a prompt's chain root is (rootPromptId ?? id). Creating a
+// prompt with parentPromptId places it at the head of the parent's chain.
+// Ownership of the parent is enforced here; a forged parent id from another
+// user degrades to a 404-equivalent error rather than cross-tenant linkage.
+async function resolveVersionFields(
+  userId: string,
+  parentPromptId?: string
+): Promise<{ version: number; rootPromptId: string } | Record<string, never>> {
+  if (!parentPromptId) {
+    return {};
+  }
+
+  const parent = await prisma.prompt.findFirst({
+    where: { id: parentPromptId, userId },
+    select: { id: true, rootPromptId: true },
+  });
+  if (!parent) {
+    throw createHttpError(404, 'Parent prompt not found');
+  }
+
+  const rootPromptId = parent.rootPromptId ?? parent.id;
+  const head = await prisma.prompt.aggregate({
+    where: { OR: [{ id: rootPromptId }, { rootPromptId }] },
+    _max: { version: true },
+  });
+
+  return { version: (head._max.version ?? 1) + 1, rootPromptId };
+}
+
+class HttpError extends Error {
+  constructor(readonly statusCode: number, message: string) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
+function createHttpError(statusCode: number, message: string): HttpError {
+  return new HttpError(statusCode, message);
 }
 
 // Validation schemas
@@ -124,6 +174,7 @@ const createPromptSchema = z.object({
   imageAttachment: imageAttachmentSchema.optional(),
   title: z.string().max(200).optional(),
   tags: z.array(z.string().max(50)).max(20).default([]),
+  parentPromptId: z.string().cuid().optional(),
 }).superRefine(requirePromptOrImage);
 
 const updatePromptSchema = z.object({
@@ -162,6 +213,7 @@ const enhancePromptSchemaBase = z.object({
   customInstructions: z.string().max(2000).optional(),
   subModality: z.string().optional(),
   imageAttachment: imageAttachmentSchema.optional(),
+  parentPromptId: z.string().cuid().optional(),
 });
 
 const enhancePromptSchema = enhancePromptSchemaBase.superRefine(requirePromptOrImage);
@@ -383,6 +435,7 @@ promptRouter.post(
       // `select` constrains the RETURNING clause; without it Prisma asks the DB
       // to return every column declared in the schema, which fails on legacy
       // databases that pre-date the imageAttachment migration.
+      const versionFields = await resolveVersionFields(req.user.id, data.parentPromptId);
       const savedPrompt = await prisma.prompt.create({
         data: {
           userId: req.user.id,
@@ -397,6 +450,7 @@ promptRouter.post(
           outputTokens: result.outputTokens,
           totalTokens: result.totalTokens,
           processingMs: result.processingMs,
+          ...versionFields,
         },
         select: promptSelect(supportsImageAttachment),
       });
@@ -460,6 +514,10 @@ promptRouter.post(
       promptLogger.error({ err: error }, 'Enhance prompt error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        return;
+      }
+      if (error instanceof HttpError) {
+        res.status(error.statusCode).json({ error: error.message });
         return;
       }
       if (error instanceof Error) {
@@ -568,6 +626,11 @@ promptRouter.post(
               // Only the id flows back to the client via the SSE complete
               // event, so a narrow `select` keeps the RETURNING clause off any
               // columns that may not exist on legacy production schemas.
+              // Mid-stream there is no way to surface a 404 for a bad parent
+              // id (headers are already sent), and failing here would drop the
+              // whole enhancement — degrade to saving an unversioned original.
+              const versionFields = await resolveVersionFields(req.user!.id, data.parentPromptId)
+                .catch(() => ({}));
               const baseData = {
                 userId: req.user!.id,
                 originalPrompt: data.prompt,
@@ -580,6 +643,7 @@ promptRouter.post(
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
+                ...versionFields,
               };
 
               let savedPrompt: { id: string };
@@ -706,6 +770,7 @@ promptRouter.post(
 
       const data = createPromptSchema.parse(req.body);
       const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
+      const versionFields = await resolveVersionFields(req.user.id, data.parentPromptId);
 
       const prompt = await prisma.prompt.create({
         data: {
@@ -723,6 +788,7 @@ promptRouter.post(
           processingMs: data.processingMs,
           title: data.title,
           tags: data.tags,
+          ...versionFields,
         },
         select: promptSelect(supportsImageAttachment),
       });
@@ -781,6 +847,10 @@ promptRouter.post(
       promptLogger.error({ err: error }, 'Create prompt error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        return;
+      }
+      if (error instanceof HttpError) {
+        res.status(error.statusCode).json({ error: error.message });
         return;
       }
       res.status(500).json({ error: 'Failed to create prompt' });
@@ -1048,3 +1118,263 @@ promptRouter.post('/bulk/delete', async (req: AuthenticatedRequest, res: Respons
     res.status(500).json({ error: 'Failed to delete prompts' });
   }
 });
+
+// ============================================================================
+// VERSION HISTORY
+// ============================================================================
+
+promptRouter.get('/:id/versions', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const anchor = await prisma.prompt.findFirst({
+      where: { id: req.params['id'] as string, userId: req.user.id },
+      select: { id: true, rootPromptId: true },
+    });
+    if (!anchor) {
+      res.status(404).json({ error: 'Prompt not found' });
+      return;
+    }
+
+    const rootPromptId = anchor.rootPromptId ?? anchor.id;
+    const versions = await prisma.prompt.findMany({
+      where: {
+        userId: req.user.id,
+        OR: [{ id: rootPromptId }, { rootPromptId }],
+      },
+      select: {
+        id: true,
+        version: true,
+        title: true,
+        originalPrompt: true,
+        enhancedPrompt: true,
+        model: true,
+        modality: true,
+        createdAt: true,
+      },
+      orderBy: { version: 'desc' },
+    });
+
+    res.json({ rootPromptId, versions });
+  } catch (error) {
+    promptLogger.error({ err: error }, 'List prompt versions error');
+    res.status(500).json({ error: 'Failed to list versions' });
+  }
+});
+
+// Restore = copy an older version's content to a NEW head version. History is
+// append-only; nothing is overwritten, so a restore is itself restorable.
+promptRouter.post('/:id/restore', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const source = await prisma.prompt.findFirst({
+      where: { id: req.params['id'] as string, userId: req.user.id },
+    });
+    if (!source) {
+      res.status(404).json({ error: 'Prompt not found' });
+      return;
+    }
+
+    const versionFields = await resolveVersionFields(req.user.id, source.id);
+    const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
+    const restored = await prisma.prompt.create({
+      data: {
+        userId: req.user.id,
+        originalPrompt: source.originalPrompt,
+        enhancedPrompt: source.enhancedPrompt,
+        model: source.model,
+        temperature: source.temperature,
+        maxTokens: source.maxTokens,
+        modality: source.modality,
+        inputTokens: source.inputTokens,
+        outputTokens: source.outputTokens,
+        totalTokens: source.totalTokens,
+        processingMs: source.processingMs,
+        title: source.title,
+        tags: source.tags,
+        ...versionFields,
+      },
+      select: promptSelect(supportsImageAttachment),
+    });
+
+    res.status(201).json({ prompt: restored });
+  } catch (error) {
+    promptLogger.error({ err: error }, 'Restore prompt version error');
+    if (error instanceof HttpError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    res.status(500).json({ error: 'Failed to restore version' });
+  }
+});
+
+// ============================================================================
+// SHARING
+// ============================================================================
+
+promptRouter.post('/:id/share', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const prompt = await prisma.prompt.findFirst({
+      where: { id: req.params['id'] as string, userId: req.user.id },
+      select: { id: true },
+    });
+    if (!prompt) {
+      res.status(404).json({ error: 'Prompt not found' });
+      return;
+    }
+
+    // Reuse an existing active share so repeated taps return a stable URL.
+    const existing = await prisma.sharedPrompt.findFirst({
+      where: { promptId: prompt.id, isRevoked: false },
+      select: { slug: true, createdAt: true, viewCount: true },
+    });
+    if (existing) {
+      res.json({ share: existing });
+      return;
+    }
+
+    const share = await prisma.sharedPrompt.create({
+      data: {
+        // 12 bytes -> 16 base64url chars; unguessable capability token.
+        slug: randomBytes(12).toString('base64url'),
+        promptId: prompt.id,
+        userId: req.user.id,
+      },
+      select: { slug: true, createdAt: true, viewCount: true },
+    });
+
+    res.status(201).json({ share });
+  } catch (error) {
+    promptLogger.error({ err: error }, 'Create share link error');
+    res.status(500).json({ error: 'Failed to create share link' });
+  }
+});
+
+promptRouter.delete('/:id/share', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const result = await prisma.sharedPrompt.updateMany({
+      where: {
+        promptId: req.params['id'] as string,
+        userId: req.user.id,
+        isRevoked: false,
+      },
+      data: { isRevoked: true, revokedAt: new Date() },
+    });
+    if (result.count === 0) {
+      res.status(404).json({ error: 'No active share for this prompt' });
+      return;
+    }
+
+    res.json({ revoked: result.count });
+  } catch (error) {
+    promptLogger.error({ err: error }, 'Revoke share link error');
+    res.status(500).json({ error: 'Failed to revoke share link' });
+  }
+});
+
+// ============================================================================
+// MULTI-PROVIDER COMPARE (PRO/PREMIUM)
+// ============================================================================
+
+const compareSchema = z.object({
+  prompt: z.string().min(1).max(100000),
+  providers: z
+    .array(z.enum(COMPARE_PROVIDERS as [string, ...string[]]))
+    .min(2)
+    .max(MAX_COMPARE_PROVIDERS),
+  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+  tone: z
+    .enum(['professional', 'casual', 'academic', 'creative', 'technical', 'friendly'])
+    .optional(),
+  customInstructions: z.string().max(2000).optional(),
+});
+
+promptRouter.get('/compare/providers', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Not authenticated' });
+    return;
+  }
+  res.json({ providers: getAvailableProviders() });
+});
+
+promptRouter.post(
+  '/compare',
+  enforceQuota('enhance_prompt'),
+  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
+      if (subscriptionInfo.tier === 'FREE') {
+        res.status(403).json({
+          error: 'Subscription required',
+          code: 'COMPARE_REQUIRES_SUBSCRIPTION',
+          message: 'Upgrade to Pro or Premium to compare providers side by side.',
+        });
+        return;
+      }
+
+      const data = compareSchema.parse(req.body);
+      const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+
+      const results = await compareEnhancements({
+        prompt: data.prompt,
+        providers: data.providers as Parameters<typeof compareEnhancements>[0]['providers'],
+        modality: data.modality,
+        tone: data.tone,
+        tier: promptTier,
+        customInstructions: data.customInstructions,
+      });
+
+      // One compare call charges one enhancement from the user's quota
+      // (enforced above); token accounting still records real upstream usage.
+      const totalTokens = results.reduce(
+        (sum, r) => sum + (r.inputTokens ?? 0) + (r.outputTokens ?? 0),
+        0
+      );
+      await Promise.all([
+        recordUsage(req.user.id),
+        prisma.user.update({
+          where: { id: req.user.id },
+          data: { tokenUsage: { increment: BigInt(totalTokens) } },
+        }),
+      ]);
+
+      res.json({ results });
+    } catch (error) {
+      promptLogger.error({ err: error }, 'Compare providers error');
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        return;
+      }
+      if (error instanceof CompareValidationError) {
+        res.status(422).json({
+          error: error.message,
+          availableProviders: error.availableProviders,
+        });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to compare providers' });
+    }
+  }
+);

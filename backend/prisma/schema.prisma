@@ -166,6 +166,12 @@ model Prompt {
   isFavorite      Boolean  @default(false)
   isArchived      Boolean  @default(false)
 
+  // Version history: rows re-enhanced or restored from this prompt share its
+  // root. rootPromptId is null for an original — the effective root is
+  // (rootPromptId ?? id) — so no backfill was needed for pre-existing rows.
+  version         Int      @default(1)
+  rootPromptId    String?
+
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -174,6 +180,7 @@ model Prompt {
   variations      PromptVariation[]
   contextUsages   ContextUsage[]
   sandboxTests    SandboxTest[]
+  shares          SharedPrompt[]
 
   // Indexes for fast queries at scale
   @@index([userId, createdAt(sort: Desc)])
@@ -181,6 +188,28 @@ model Prompt {
   @@index([userId, isArchived])
   @@index([userId, tags])
   @@index([createdAt(sort: Desc)])
+  @@index([rootPromptId, version(sort: Desc)])
+}
+
+// ============================================================================
+// SHARED PROMPTS - Public read-only links to enhanced prompts
+// ============================================================================
+
+model SharedPrompt {
+  id        String    @id @default(cuid())
+  // URL token; unguessable (crypto-random base64url), not derived from ids.
+  slug      String    @unique
+  promptId  String
+  prompt    Prompt    @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  userId    String
+
+  isRevoked Boolean   @default(false)
+  viewCount Int       @default(0)
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([promptId])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 // ============================================================================
@@ -498,6 +527,7 @@ model Template {
   content     String   @db.Text
   description String?
   category    String   @default("General")
+  modality    String   @default("text") // text, image, video, audio, code, 3d
   icon        String?  @default("doc.text")
 
   // Template type
@@ -514,6 +544,8 @@ model Template {
   @@index([userId, createdAt(sort: Desc)])
   @@index([category])
   @@index([isBuiltIn])
+  // Serves the public library's default browse query (modality tab + newest).
+  @@index([isPublic, modality, createdAt(sort: Desc)])
 }
 
 // ============================================================================

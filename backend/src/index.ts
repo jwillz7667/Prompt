@@ -19,6 +19,8 @@ import { threadRouter } from './routes/threads.js';
 import { adminRouter } from './routes/admin.js';
 import { platformRouter } from './routes/platforms.js';
 import contextsRouter from './routes/contexts.js';
+import { templatesRouter } from './routes/templates.js';
+import { sharedRouter } from './routes/shared.js';
 import sandboxRouter from './routes/sandbox.js';
 import workflowsRouter from './routes/workflows.js';
 import variationsRouter from './routes/variations.js';
@@ -40,12 +42,17 @@ import { initRedis, closeRedis } from './utils/redis.js';
 import { initQueues, closeQueues } from './utils/queue.js';
 import { initializeSocket } from './utils/socket.js';
 import { validateEnvAtBoot } from './utils/env.js';
+import { initSentry } from './utils/sentry.js';
 
 config();
 
 // Surface missing configuration at boot (loud, not fatal) so a misconfigured
 // deploy is diagnosable from the first log line instead of failing per-request.
 validateEnvAtBoot();
+
+// No-op without SENTRY_DSN; must run before any request is served so the
+// error handler's captureError calls have an initialized client.
+initSentry();
 
 // Initialize Redis and Queues
 (async () => {
@@ -162,6 +169,8 @@ app.use('/api/v1/threads', threadRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/platforms', platformRouter);
 app.use('/api/v1/contexts', contextsRouter);
+app.use('/api/v1/templates', templatesRouter);
+app.use('/api/v1/shared', sharedRouter);
 app.use('/api/v1/sandbox', sandboxRouter);
 app.use('/api/v1/workflows', workflowsRouter);
 app.use('/api/v1/variations', variationsRouter);

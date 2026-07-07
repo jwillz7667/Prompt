@@ -622,3 +622,48 @@ adminRouter.post('/debug/set-tier/:userId', async (req: Request, res: Response):
     res.status(500).json({ error: 'Failed to set tier' });
   }
 });
+
+// ============================================================================
+// TEMPLATE MODERATION
+// Community templates stay private until an admin approves them here.
+// ============================================================================
+
+const moderateTemplateSchema = z.object({
+  isPublic: z.boolean().optional(),
+  isBuiltIn: z.boolean().optional(),
+}).refine((value) => value.isPublic !== undefined || value.isBuiltIn !== undefined, {
+  message: 'At least one of isPublic or isBuiltIn is required',
+});
+
+// User-submitted templates awaiting review (private, non-built-in).
+adminRouter.get('/templates/pending', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const templates = await prisma.template.findMany({
+      where: { isBuiltIn: false, isPublic: false, userId: { not: null } },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+    });
+    res.json({ templates });
+  } catch (error) {
+    logger.error({ error }, 'Admin list pending templates error');
+    res.status(500).json({ error: 'Failed to list pending templates' });
+  }
+});
+
+adminRouter.patch('/templates/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = moderateTemplateSchema.parse(req.body);
+    const template = await prisma.template.update({
+      where: { id: req.params['id'] as string },
+      data,
+    });
+    res.json({ template });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      return;
+    }
+    logger.error({ error }, 'Admin moderate template error');
+    res.status(500).json({ error: 'Failed to moderate template' });
+  }
+});

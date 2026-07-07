@@ -629,6 +629,36 @@ interface DeepSeekResponse {
 }
 
 // ============================================================================
+// MESSAGE BUILDING (shared with multi-provider compare)
+// ============================================================================
+
+export interface EnhancementMessages {
+  systemPrompt: string;
+  userMessage: string;
+  temperature: number;
+  maxTokens: number;
+}
+
+// The compare feature runs the SAME meta-prompt against different providers,
+// so provider output differences reflect the models, not prompt drift.
+export function buildEnhancementMessages(request: EnhancementRequest): EnhancementMessages {
+  const modality = request.modality || 'text';
+  const tier = request.tier || 'advanced';
+  const temperature = tier === 'basic' ? 0.5 : tier === 'standard' ? 0.6 : 0.7;
+  const maxTokens = tier === 'basic' ? 1024 : tier === 'standard' ? 2048 : 4096;
+  return {
+    systemPrompt: buildEnhancementSystemPrompt(tier, modality, request),
+    userMessage: buildUserMessage(request),
+    temperature,
+    maxTokens,
+  };
+}
+
+export function cleanEnhancedOutput(content: string): string {
+  return cleanEnhancedPrompt(content);
+}
+
+// ============================================================================
 // MAIN ENHANCEMENT FUNCTION
 // ============================================================================
 
