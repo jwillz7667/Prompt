@@ -90,24 +90,36 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
   let dailyUsage;
 
   if (cachedSub && cachedUsage) {
-    // Use cached data (fast path)
-    logger.debug({ userId }, 'Subscription cache hit');
-    const limits = TIER_LIMITS[cachedSub.tier as SubscriptionTier];
-    return {
-      tier: cachedSub.tier as SubscriptionTier,
-      status: cachedSub.status as SubscriptionStatus,
-      expiresAt: cachedSub.expiresAt ? new Date(cachedSub.expiresAt) : null,
-      isTrialing: false,
-      trialEndsAt: null,
-      dailyPromptsUsed: cachedUsage.promptCount,
-      dailyPromptsLimit: limits.dailyPrompts,
-      canPerformAction: limits.dailyPrompts === -1 || cachedUsage.promptCount < limits.dailyPrompts,
-      features: {
-        promptQuality: limits.promptQuality,
-        canExport: limits.canExport,
-        maxTokensPerPrompt: limits.maxTokensPerPrompt,
-      },
-    };
+    // A subscription can expire *during* the 300s cache TTL. Serving the cached
+    // tier in that window would keep a lapsed user on a paid tier and, worse,
+    // skip the DB-side expiry downgrade (handleExpiredSubscription) entirely.
+    // If the cached expiry is in the past, fall through to the DB path so the
+    // expiry handler runs and the cache is rewritten with the corrected tier.
+    const cachedExpiry = cachedSub.expiresAt ? new Date(cachedSub.expiresAt) : null;
+    const isExpired = cachedExpiry !== null && cachedExpiry.getTime() <= Date.now();
+
+    if (!isExpired) {
+      // Use cached data (fast path)
+      logger.debug({ userId }, 'Subscription cache hit');
+      const limits = TIER_LIMITS[cachedSub.tier as SubscriptionTier];
+      return {
+        tier: cachedSub.tier as SubscriptionTier,
+        status: cachedSub.status as SubscriptionStatus,
+        expiresAt: cachedExpiry,
+        isTrialing: false,
+        trialEndsAt: null,
+        dailyPromptsUsed: cachedUsage.promptCount,
+        dailyPromptsLimit: limits.dailyPrompts,
+        canPerformAction: limits.dailyPrompts === -1 || cachedUsage.promptCount < limits.dailyPrompts,
+        features: {
+          promptQuality: limits.promptQuality,
+          canExport: limits.canExport,
+          maxTokensPerPrompt: limits.maxTokensPerPrompt,
+        },
+      };
+    }
+
+    logger.debug({ userId }, 'Subscription cache hit but expired - refreshing from database');
   }
 
   // Cache miss - query database
@@ -472,6 +484,29 @@ export async function handleGracePeriod(
       gracePeriodEndDate,
     },
   });
+
+  await invalidateSubscriptionCaches(userId);
+}
+
+// ============================================================================
+// CACHE INVALIDATION
+// ============================================================================
+
+// Invalidate every cache entry whose value derives from a user's subscription
+// tier. Any path that mutates a subscription or a user's tier (webhooks, App
+// Store verification, expiration cron, manual updates) MUST call this so the
+// next `getSubscriptionInfo` reads fresh data instead of serving a stale tier
+// for up to the cache TTL. Best-effort: a Redis failure must never break the
+// mutation that just succeeded in Postgres.
+export async function invalidateSubscriptionCaches(userId: string): Promise<void> {
+  try {
+    await Promise.all([
+      cache.invalidateSubscription(userId),
+      cache.invalidateUser(userId),
+    ]);
+  } catch (error) {
+    logger.warn({ error, userId }, 'Failed to invalidate subscription caches');
+  }
 }
 
 // ============================================================================
@@ -496,6 +531,8 @@ async function handleExpiredSubscription(subscriptionId: string): Promise<void> 
       isPremium: false,
     },
   });
+
+  await invalidateSubscriptionCaches(subscription.userId);
 
   // Send expiration email (fire-and-forget)
   sendSubscriptionExpired(
@@ -526,6 +563,8 @@ async function handleExpiredTrial(subscriptionId: string): Promise<void> {
       isPremium: false,
     },
   });
+
+  await invalidateSubscriptionCaches(subscription.userId);
 
   // Send trial expiration email (fire-and-forget)
   sendSubscriptionExpired(

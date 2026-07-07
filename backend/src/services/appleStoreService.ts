@@ -15,6 +15,7 @@ import {
   cancelSubscription,
   handleGracePeriod,
   getTierFromProductId,
+  invalidateSubscriptionCaches,
 } from './subscriptionService.js';
 import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
 import { storeLogger } from '../utils/logger.js';
@@ -270,11 +271,13 @@ export async function processAppStoreNotification(
             where: { userId },
             data: { autoRenewEnabled: false },
           });
+          await invalidateSubscriptionCaches(userId);
         } else if (subtype === Subtype.AUTO_RENEW_ENABLED) {
           await prisma.subscription.update({
             where: { userId },
             data: { autoRenewEnabled: true },
           });
+          await invalidateSubscriptionCaches(userId);
         }
         break;
 
@@ -330,6 +333,7 @@ export async function processAppStoreNotification(
               where: { userId },
               data: { autoRenewProductId: renewalInfo.autoRenewProductId },
             });
+            await invalidateSubscriptionCaches(userId);
           }
         }
         break;

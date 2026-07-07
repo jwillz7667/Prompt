@@ -9,6 +9,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { prisma } from '../utils/prisma.js';
 import { sendSupportMessageNotification } from '../services/notificationService.js';
+import { invalidateSubscriptionCaches } from '../services/subscriptionService.js';
 
 export const adminRouter = Router();
 
@@ -452,6 +453,11 @@ adminRouter.post('/debug/set-tier-by-email/:email', async (req: Request, res: Re
       },
     });
 
+    // The subscription cache (sub:${userId}, TTL 300s) would otherwise serve
+    // the previous tier for up to 5 minutes, so the client keeps seeing the
+    // stale tier right after an admin change.
+    await invalidateSubscriptionCaches(user.id);
+
     res.json({
       success: true,
       message: `User tier set to ${tier}`,
@@ -600,6 +606,10 @@ adminRouter.post('/debug/set-tier/:userId', async (req: Request, res: Response):
         expiresAt: tier === 'FREE' ? null : expiresAt,
       },
     });
+
+    // Invalidate the cached subscription/user so the new tier is reflected
+    // immediately instead of after the 300s cache TTL.
+    await invalidateSubscriptionCaches(userId);
 
     res.json({
       success: true,

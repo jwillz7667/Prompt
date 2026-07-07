@@ -91,6 +91,41 @@ const THREAD_CONTEXT_CHAR_BUDGET = 220_000;
 const OPENAI_VISION_STANDARD_MODEL = 'gpt-4.1-mini';
 const OPENAI_VISION_MAX_MODEL = 'gpt-4.1';
 
+// ---------------------------------------------------------------------------
+// Upstream resilience
+// ---------------------------------------------------------------------------
+// DeepSeek is the sole text provider on the live enhancement path. A bare fetch
+// with no timeout blocks until undici's ~300s body-timeout default, and a single
+// transient 429/5xx/network blip surfaces to the user as "error getting a
+// response from the model" with no retry — exactly the reported incident. These
+// bounds harden both the one-shot and streaming calls and are env-overridable so
+// they can be tuned without a redeploy.
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (typeof raw !== 'string') return fallback;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const DEEPSEEK_REQUEST_TIMEOUT_MS = envInt('DEEPSEEK_REQUEST_TIMEOUT_MS', 90_000);
+const DEEPSEEK_CONNECT_TIMEOUT_MS = envInt('DEEPSEEK_CONNECT_TIMEOUT_MS', 30_000);
+const DEEPSEEK_STREAM_IDLE_TIMEOUT_MS = envInt('DEEPSEEK_STREAM_IDLE_TIMEOUT_MS', 60_000);
+const DEEPSEEK_MAX_RETRIES = envInt('DEEPSEEK_MAX_RETRIES', 2);
+const OPENAI_REQUEST_TIMEOUT_MS = envInt('OPENAI_REQUEST_TIMEOUT_MS', 120_000);
+const OPENAI_MAX_RETRIES = envInt('OPENAI_MAX_RETRIES', 2);
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function backoffDelayMs(attempt: number): number {
+  return Math.min(500 * 2 ** attempt, 4_000);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const QUALITY_PROFILES: Record<EnhancementTier, string> = {
   basic: [
     '- provide a clear, straightforward improvement over the original prompt',
@@ -612,23 +647,62 @@ async function requestCompletion(
   conversationMode: ConversationMode
 ): Promise<EnhancePromptResult> {
   const startedAt = Date.now();
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(request),
-  });
+  const body = JSON.stringify(request);
 
-  const processingMs = Date.now() - startedAt;
+  let response: Response | null = null;
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    const body = await response.text();
-    promptLogger.error({ status: response.status, body }, 'DeepSeek completion request failed');
-    throw new Error(`DeepSeek API error: ${response.status}`);
+  for (let attempt = 0; attempt <= DEEPSEEK_MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DEEPSEEK_REQUEST_TIMEOUT_MS);
+
+    let attemptResponse: Response;
+    try {
+      attemptResponse = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      // Network failure or abort (timeout). A one-shot request never emitted
+      // partial output, so retrying is always safe here.
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < DEEPSEEK_MAX_RETRIES) {
+        promptLogger.warn({ attempt, error: lastError.message }, 'DeepSeek completion request failed, retrying');
+        await delay(backoffDelayMs(attempt));
+        continue;
+      }
+      throw lastError;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (attemptResponse.ok) {
+      response = attemptResponse;
+      break;
+    }
+
+    if (isRetryableStatus(attemptResponse.status) && attempt < DEEPSEEK_MAX_RETRIES) {
+      const errBody = await attemptResponse.text().catch(() => '');
+      promptLogger.warn({ attempt, status: attemptResponse.status, body: errBody }, 'DeepSeek completion transient error, retrying');
+      await delay(backoffDelayMs(attempt));
+      continue;
+    }
+
+    const errBody = await attemptResponse.text().catch(() => '');
+    promptLogger.error({ status: attemptResponse.status, body: errBody }, 'DeepSeek completion request failed');
+    throw new Error(`DeepSeek API error: ${attemptResponse.status}`);
   }
 
+  if (!response) {
+    throw lastError ?? new Error('DeepSeek API request failed after retries');
+  }
+
+  const processingMs = Date.now() - startedAt;
   const parsed = (await response.json()) as DeepSeekResponse;
   const content = sanitizeModelOutput(parsed.choices?.[0]?.message?.content ?? '', conversationMode);
 
@@ -653,23 +727,65 @@ async function streamCompletion(
   callbacks: StreamCallbacks
 ): Promise<void> {
   const startedAt = Date.now();
+  const body = JSON.stringify(request);
   let inputTokens = 0;
   let outputTokens = 0;
   let collected = '';
 
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(request),
-  });
+  // Phase 1 — establish the connection, with retry. This is safe to retry
+  // because no tokens have been emitted to the client yet. A fresh
+  // AbortController is created per attempt (an aborted controller cannot be
+  // reused); the successful one is kept for the read-phase idle watchdog.
+  let response: Response | null = null;
+  let streamController: AbortController | null = null;
 
-  if (!response.ok) {
-    const body = await response.text();
-    promptLogger.error({ status: response.status, body }, 'DeepSeek streaming request failed');
-    await callbacks.onError(new Error(`DeepSeek API error: ${response.status}`));
+  for (let attempt = 0; attempt <= DEEPSEEK_MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const connectTimer = setTimeout(() => controller.abort(), DEEPSEEK_CONNECT_TIMEOUT_MS);
+    try {
+      const attemptResponse = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body,
+        signal: controller.signal,
+      });
+      clearTimeout(connectTimer);
+
+      if (attemptResponse.ok) {
+        response = attemptResponse;
+        streamController = controller;
+        break;
+      }
+
+      if (isRetryableStatus(attemptResponse.status) && attempt < DEEPSEEK_MAX_RETRIES) {
+        const errBody = await attemptResponse.text().catch(() => '');
+        promptLogger.warn({ attempt, status: attemptResponse.status, body: errBody }, 'DeepSeek streaming transient error, retrying');
+        await delay(backoffDelayMs(attempt));
+        continue;
+      }
+
+      const errBody = await attemptResponse.text().catch(() => '');
+      promptLogger.error({ status: attemptResponse.status, body: errBody }, 'DeepSeek streaming request failed');
+      await callbacks.onError(new Error(`DeepSeek API error: ${attemptResponse.status}`));
+      return;
+    } catch (error) {
+      clearTimeout(connectTimer);
+      if (attempt < DEEPSEEK_MAX_RETRIES) {
+        const message = error instanceof Error ? error.message : String(error);
+        promptLogger.warn({ attempt, error: message }, 'DeepSeek streaming connection failed, retrying');
+        await delay(backoffDelayMs(attempt));
+        continue;
+      }
+      await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+  }
+
+  if (!response || !streamController) {
+    await callbacks.onError(new Error('DeepSeek API request failed after retries'));
     return;
   }
 
@@ -679,13 +795,30 @@ async function streamCompletion(
     return;
   }
 
+  // Phase 2 — consume the stream under an inactivity watchdog so a stalled
+  // upstream cannot hang the request for undici's ~300s body-timeout default.
+  // The watchdog re-arms on every chunk; on stall it aborts the socket, which
+  // surfaces as a rejected reader.read() in the loop below.
+  const activeController = streamController;
   const decoder = new TextDecoder();
   let buffer = '';
+  let streamStalled = false;
+  let idleTimer: NodeJS.Timeout | null = null;
+
+  const armIdleTimer = (): void => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      streamStalled = true;
+      activeController.abort();
+    }, DEEPSEEK_STREAM_IDLE_TIMEOUT_MS);
+  };
 
   try {
+    armIdleTimer();
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      armIdleTimer();
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -721,18 +854,29 @@ async function streamCompletion(
         }
       }
     }
-
-    await callbacks.onComplete({
-      enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
-      model: request.model,
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      processingMs: Date.now() - startedAt,
-    });
   } catch (error) {
-    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    // A watchdog abort lands here mid-stream. If tokens were already generated,
+    // finalize with the partial content rather than failing an almost-complete
+    // response; otherwise surface the error to the caller.
+    if (streamStalled && collected.trim().length > 0) {
+      promptLogger.warn({ contentLength: collected.length }, 'DeepSeek stream stalled; finalizing with partial content');
+    } else {
+      if (idleTimer) clearTimeout(idleTimer);
+      await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+  } finally {
+    if (idleTimer) clearTimeout(idleTimer);
   }
+
+  await callbacks.onComplete({
+    enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
+    model: request.model,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    processingMs: Date.now() - startedAt,
+  });
 }
 
 function buildMessages(request: ReturnType<typeof normalizeRequest>, threadAware = false): DeepSeekMessage[] {
@@ -980,7 +1124,11 @@ function getOpenAIClient(): OpenAI {
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY environment variable not configured');
   }
-  return new OpenAI({ apiKey });
+  // The OpenAI SDK defaults to a 10-minute timeout and 2 retries. Tighten the
+  // timeout so a hung vision stream cannot block a request for minutes; the
+  // SDK applies it per-request (including the streaming connect) and handles
+  // retry/backoff on transient failures internally.
+  return new OpenAI({ apiKey, timeout: OPENAI_REQUEST_TIMEOUT_MS, maxRetries: OPENAI_MAX_RETRIES });
 }
 
 function buildVisionThreadMessages(

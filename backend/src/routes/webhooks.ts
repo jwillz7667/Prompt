@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { Webhook } from 'svix';
 import { processAppStoreNotification, requestTestNotification } from '../services/appleStoreService.js';
+import { invalidateSubscriptionCaches } from '../services/subscriptionService.js';
 import { addAgentReplyToTicket, addMessageToTicket } from '../services/supportService.js';
 import { webhookLogger } from '../utils/logger.js';
 import { idempotencyGuard, appStoreKeyExtractor } from '../middleware/idempotency.js';
@@ -105,6 +106,8 @@ webhookRouter.post('/stripe', async (req: Request, res: Response): Promise<void>
           },
         });
 
+        await invalidateSubscriptionCaches(userId);
+
         webhookLogger.info({ userId, tier: subscriptionTier }, 'Stripe subscription updated');
         break;
       }
@@ -134,6 +137,8 @@ webhookRouter.post('/stripe', async (req: Request, res: Response): Promise<void>
           },
         });
 
+        await invalidateSubscriptionCaches(userId);
+
         webhookLogger.info({ userId }, 'Stripe subscription deleted, downgraded to FREE');
         break;
       }
@@ -148,6 +153,8 @@ webhookRouter.post('/stripe', async (req: Request, res: Response): Promise<void>
             status: SubscriptionStatus.GRACE_PERIOD,
           },
         });
+
+        await invalidateSubscriptionCaches(userId);
 
         webhookLogger.warn({ userId, invoiceId }, 'Payment failed, entered grace period');
         break;
@@ -257,9 +264,11 @@ const RESEND_TRUSTED_AGENT_EMAILS = new Set(
     .filter(Boolean)
 );
 
-if (process.env['NODE_ENV'] === 'production' && !RESEND_WEBHOOK_SECRET) {
-  throw new Error('RESEND_WEBHOOK_SECRET must be set in production');
-}
+// No boot-time throw here: this module is imported unconditionally by
+// index.ts, so a throw would crash-loop the whole backend over an optional
+// inbound-email feature. verifyResendWebhookSignature fails closed instead
+// (rejects every request in production while the secret is unset), and
+// env.ts surfaces the missing var at boot.
 
 function verifyResendWebhookSignature(req: Request): boolean {
   if (!RESEND_WEBHOOK_SECRET) {

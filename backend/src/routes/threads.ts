@@ -21,7 +21,12 @@ import {
   recordMaxModeUsage,
 } from '../services/maxModeQuotaService.js';
 import type { PromptImageAttachment } from '../services/imageAnalysisService.js';
-import { supportsThreadTurnImageAttachmentColumn } from '../services/schemaCompatibilityService.js';
+import {
+  supportsThreadTurnImageAttachmentColumn,
+  resetSchemaCompatibilityCache,
+  isMissingColumnError,
+  withImageAttachmentReadFallback,
+} from '../services/schemaCompatibilityService.js';
 
 export const threadRouter = Router();
 
@@ -246,64 +251,111 @@ threadRouter.post(
             res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
           },
           onComplete: async (result) => {
-            // Save the turn
-            const turn = await prisma.threadTurn.create({
-              data: {
+            // The model already produced a billable answer. Persistence is
+            // best-effort: a DB failure must never turn a successful
+            // enhancement into a client error or a lost token stream.
+
+            // Charge the daily quota first and on its own. The model call has
+            // already happened, so the quota is owed even if the turn row fails
+            // to persist below — otherwise a persistence error would silently
+            // hand the user a free enhancement (fail-open).
+            try {
+              await recordUsage(req.user!.id);
+            } catch (usageError) {
+              logger.error({ err: usageError, userId: req.user!.id }, 'Failed to record daily usage for thread turn');
+            }
+
+            let turnId: string | null = null;
+            let maxModeQuota = maxModeQuotaBeforeUse;
+            try {
+              const baseData = {
                 threadId: thread.id,
                 turnIndex: data.previousTurns.length,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
-                ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
                 model: result.model,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
-              },
-              select: {
-                id: true,
-              },
-            });
+              };
 
-            // Update user stats + usage in parallel
-            await Promise.all([
-              prisma.user.update({
-                where: { id: req.user!.id },
-                data: {
-                  promptCount: { increment: 1 },
-                  tokenUsage: { increment: BigInt(result.totalTokens) },
-                },
-              }),
-              prisma.usageRecord.upsert({
-                where: {
-                  userId_date: {
+              let turn: { id: string };
+              try {
+                turn = await prisma.threadTurn.create({
+                  data: {
+                    ...baseData,
+                    ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
+                  },
+                  select: { id: true },
+                });
+              } catch (createError) {
+                if (supportsImageAttachment && isMissingColumnError(createError)) {
+                  resetSchemaCompatibilityCache();
+                  logger.warn(
+                    { err: createError, threadId: thread.id },
+                    'ThreadTurn imageAttachment column missing; retrying persist without it'
+                  );
+                  turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
+                } else {
+                  throw createError;
+                }
+              }
+              turnId = turn.id;
+
+              // Update user stats + usage in parallel (quota already charged above)
+              await Promise.all([
+                prisma.user.update({
+                  where: { id: req.user!.id },
+                  data: {
+                    promptCount: { increment: 1 },
+                    tokenUsage: { increment: BigInt(result.totalTokens) },
+                  },
+                }),
+                prisma.usageRecord.upsert({
+                  where: {
+                    userId_date: {
+                      userId: req.user!.id,
+                      date: new Date(new Date().setHours(0, 0, 0, 0)),
+                    },
+                  },
+                  update: {
+                    promptCount: { increment: 1 },
+                    tokenCount: { increment: BigInt(result.totalTokens) },
+                  },
+                  create: {
                     userId: req.user!.id,
                     date: new Date(new Date().setHours(0, 0, 0, 0)),
+                    promptCount: 1,
+                    tokenCount: BigInt(result.totalTokens),
                   },
-                },
-                update: {
-                  promptCount: { increment: 1 },
-                  tokenCount: { increment: BigInt(result.totalTokens) },
-                },
-                create: {
-                  userId: req.user!.id,
-                  date: new Date(new Date().setHours(0, 0, 0, 0)),
-                  promptCount: 1,
-                  tokenCount: BigInt(result.totalTokens),
-                },
-              }),
-              recordUsage(req.user!.id),
-            ]);
-            const maxModeQuota = data.mode === 'max'
-              ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-              : maxModeQuotaBeforeUse;
+                }),
+              ]);
+              maxModeQuota = data.mode === 'max'
+                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                : maxModeQuotaBeforeUse;
+            } catch (persistError) {
+              logger.error(
+                { err: persistError, threadId: thread.id },
+                'Failed to persist thread turn; returning result to client without saving'
+              );
+              // The thread row was created up-front for this first turn. If no
+              // turn persisted, it is a blank orphan that would show up as an
+              // empty thread in history — delete it and drop the threadId from
+              // the response so the client holds no dangling reference.
+              if (turnId === null) {
+                await prisma.thread.delete({ where: { id: thread.id } }).catch((cleanupError) => {
+                  logger.error({ err: cleanupError, threadId: thread.id }, 'Failed to clean up orphan thread');
+                });
+              }
+            }
 
-            // Send completion event
+            // Send completion event (always — the enhancement succeeded)
             res.write(
               `data: ${JSON.stringify({
                 type: 'complete',
-                threadId: thread.id,
-                turnId: turn.id,
+                threadId: turnId ? thread.id : null,
+                turnId,
                 turnIndex: data.previousTurns.length,
                 usage: {
                   inputTokens: result.inputTokens,
@@ -426,68 +478,106 @@ threadRouter.post(
             res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
           },
           onComplete: async (result) => {
-            // Save the turn
-            const turn = await prisma.threadTurn.create({
-              data: {
+            // The model already produced a billable answer. Persistence is
+            // best-effort: a DB failure must never turn a successful
+            // enhancement into a client error or a lost token stream.
+
+            // Charge the daily quota first and on its own. The model call has
+            // already happened, so the quota is owed even if the turn row fails
+            // to persist below — otherwise a persistence error would silently
+            // hand the user a free enhancement (fail-open).
+            try {
+              await recordUsage(req.user!.id);
+            } catch (usageError) {
+              logger.error({ err: usageError, userId: req.user!.id }, 'Failed to record daily usage for thread turn');
+            }
+
+            let turnId: string | null = null;
+            let maxModeQuota = maxModeQuotaBeforeUse;
+            try {
+              const baseData = {
                 threadId: thread.id,
                 turnIndex: nextTurnIndex,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
-                ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
                 model: result.model,
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
-              },
-              select: {
-                id: true,
-              },
-            });
+              };
 
-            // Update thread timestamp + user stats in parallel
-            await Promise.all([
-              prisma.thread.update({
-                where: { id: thread.id },
-                data: { updatedAt: new Date() },
-              }),
-              prisma.user.update({
-                where: { id: req.user!.id },
-                data: {
-                  promptCount: { increment: 1 },
-                  tokenUsage: { increment: BigInt(result.totalTokens) },
-                },
-              }),
-              prisma.usageRecord.upsert({
-                where: {
-                  userId_date: {
+              let turn: { id: string };
+              try {
+                turn = await prisma.threadTurn.create({
+                  data: {
+                    ...baseData,
+                    ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
+                  },
+                  select: { id: true },
+                });
+              } catch (createError) {
+                if (supportsImageAttachment && isMissingColumnError(createError)) {
+                  resetSchemaCompatibilityCache();
+                  logger.warn(
+                    { err: createError, threadId: thread.id },
+                    'ThreadTurn imageAttachment column missing; retrying persist without it'
+                  );
+                  turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
+                } else {
+                  throw createError;
+                }
+              }
+              turnId = turn.id;
+
+              // Update thread timestamp + user stats in parallel (quota already charged above)
+              await Promise.all([
+                prisma.thread.update({
+                  where: { id: thread.id },
+                  data: { updatedAt: new Date() },
+                }),
+                prisma.user.update({
+                  where: { id: req.user!.id },
+                  data: {
+                    promptCount: { increment: 1 },
+                    tokenUsage: { increment: BigInt(result.totalTokens) },
+                  },
+                }),
+                prisma.usageRecord.upsert({
+                  where: {
+                    userId_date: {
+                      userId: req.user!.id,
+                      date: new Date(new Date().setHours(0, 0, 0, 0)),
+                    },
+                  },
+                  update: {
+                    promptCount: { increment: 1 },
+                    tokenCount: { increment: BigInt(result.totalTokens) },
+                  },
+                  create: {
                     userId: req.user!.id,
                     date: new Date(new Date().setHours(0, 0, 0, 0)),
+                    promptCount: 1,
+                    tokenCount: BigInt(result.totalTokens),
                   },
-                },
-                update: {
-                  promptCount: { increment: 1 },
-                  tokenCount: { increment: BigInt(result.totalTokens) },
-                },
-                create: {
-                  userId: req.user!.id,
-                  date: new Date(new Date().setHours(0, 0, 0, 0)),
-                  promptCount: 1,
-                  tokenCount: BigInt(result.totalTokens),
-                },
-              }),
-              recordUsage(req.user!.id),
-            ]);
-            const maxModeQuota = data.mode === 'max'
-              ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-              : maxModeQuotaBeforeUse;
+                }),
+              ]);
+              maxModeQuota = data.mode === 'max'
+                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                : maxModeQuotaBeforeUse;
+            } catch (persistError) {
+              logger.error(
+                { err: persistError, threadId: thread.id },
+                'Failed to persist thread turn; returning result to client without saving'
+              );
+            }
 
-            // Send completion event
+            // Send completion event (always — the enhancement succeeded)
             res.write(
               `data: ${JSON.stringify({
                 type: 'complete',
                 threadId: thread.id,
-                turnId: turn.id,
+                turnId,
                 turnIndex: nextTurnIndex,
                 usage: {
                   inputTokens: result.inputTokens,
@@ -615,16 +705,21 @@ threadRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
     }
 
     const threadId = req.params.id as string;
+    const userId = req.user.id;
     const supportsImageAttachment = await supportsThreadTurnImageAttachmentColumn();
-    const thread = await prisma.thread.findFirst({
-      where: { id: threadId, userId: req.user.id },
-      include: {
-        turns: {
-          orderBy: { turnIndex: 'asc' },
-          select: threadTurnSelect(supportsImageAttachment),
-        },
-      },
-    });
+    const thread = await withImageAttachmentReadFallback(
+      supportsImageAttachment,
+      (supportsColumn) =>
+        prisma.thread.findFirst({
+          where: { id: threadId, userId },
+          include: {
+            turns: {
+              orderBy: { turnIndex: 'asc' },
+              select: threadTurnSelect(supportsColumn),
+            },
+          },
+        }),
+    );
 
     if (!thread) {
       res.status(404).json({ error: 'Thread not found' });

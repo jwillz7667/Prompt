@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import { getRedis, isRedisAvailable } from '../utils/redis.js';
 import { queues } from '../utils/queue.js';
+import { getMissingRequiredEnvVars } from '../utils/env.js';
 
 export const healthRouter = Router();
 
@@ -28,6 +29,7 @@ export function trackMetrics(duration: number, isError: boolean): void {
 // Comprehensive health check
 healthRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
   const checks: HealthChecks = {
+    config: checkConfig(),
     database: await checkDatabase(),
     redis: await checkRedis(),
     queues: await checkQueues(),
@@ -173,6 +175,27 @@ healthRouter.get('/status', async (_req: Request, res: Response): Promise<void> 
   });
 });
 
+// Required configuration must be present for the service to function. A missing
+// required env var is 'error' (not 'degraded') so /health returns 503 and the
+// CI deploy verification fails fast on a misconfigured rollout. Railway's own
+// healthcheck targets /health/live (liveness only), so this never crash-loops a
+// deploy — it just makes the misconfiguration visible.
+function checkConfig(): ServiceCheck {
+  const missing = getMissingRequiredEnvVars();
+  if (missing.length > 0) {
+    return {
+      status: 'error',
+      latency: 0,
+      message: `Missing required configuration: ${missing.join(', ')}`,
+    };
+  }
+  return {
+    status: 'ok',
+    latency: 0,
+    message: 'All required configuration present',
+  };
+}
+
 // Individual service checks
 async function checkDatabase(): Promise<ServiceCheck> {
   try {
@@ -272,6 +295,7 @@ interface ServiceCheck {
 }
 
 interface HealthChecks {
+  config: ServiceCheck;
   database: ServiceCheck;
   redis: ServiceCheck;
   queues: ServiceCheck;

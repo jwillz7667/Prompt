@@ -29,7 +29,12 @@ import {
   type GuestQuotaSnapshot,
 } from '../services/guestQuotaService.js';
 import { resolveGuestIdentity } from '../services/anonymousSessionService.js';
-import { supportsPromptImageAttachmentColumn } from '../services/schemaCompatibilityService.js';
+import {
+  supportsPromptImageAttachmentColumn,
+  resetSchemaCompatibilityCache,
+  isMissingColumnError,
+  withImageAttachmentReadFallback,
+} from '../services/schemaCompatibilityService.js';
 
 export const promptRouter = Router();
 
@@ -543,12 +548,27 @@ promptRouter.post(
             res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
           },
           onComplete: async (result) => {
-            // Save prompt to database. Only the id flows back to the client
-            // via the SSE complete event, so a narrow `select` keeps the
-            // RETURNING clause off any columns that may not exist on legacy
-            // production schemas (e.g. imageAttachment before migration).
-            const savedPrompt = await prisma.prompt.create({
-              data: {
+            // The model already produced a billable answer. Persistence is
+            // best-effort from here: a DB failure (schema drift, transient
+            // outage) must never turn a successful enhancement into a client
+            // error or a lost token stream. We log loudly and still deliver
+            // the result; the client treats a null promptId as "not saved".
+            // Charge the daily quota first and on its own. The model call has
+            // already happened, so the quota is owed even if persistence fails
+            // below — otherwise a DB error would silently hand the user a free
+            // enhancement (fail-open).
+            try {
+              await recordUsage(req.user!.id);
+            } catch (usageError) {
+              promptLogger.error({ err: usageError, userId: req.user!.id }, 'Failed to record daily usage for prompt');
+            }
+
+            let maxModeQuota = maxModeQuotaBeforeUse;
+            try {
+              // Only the id flows back to the client via the SSE complete
+              // event, so a narrow `select` keeps the RETURNING clause off any
+              // columns that may not exist on legacy production schemas.
+              const baseData = {
                 userId: req.user!.id,
                 originalPrompt: data.prompt,
                 enhancedPrompt: result.enhancedPrompt,
@@ -556,50 +576,80 @@ promptRouter.post(
                 temperature: data.temperature || 0.7,
                 maxTokens,
                 modality: data.modality,
-                ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
-              },
-              select: { id: true },
-            });
-            savedPromptId = savedPrompt.id;
+              };
 
-            // Update user stats in parallel
-            await Promise.all([
-              prisma.user.update({
-                where: { id: req.user!.id },
-                data: {
-                  promptCount: { increment: 1 },
-                  tokenUsage: { increment: BigInt(result.totalTokens) },
-                },
-              }),
-              prisma.usageRecord.upsert({
-                where: {
-                  userId_date: {
+              let savedPrompt: { id: string };
+              try {
+                savedPrompt = await prisma.prompt.create({
+                  data: {
+                    ...baseData,
+                    ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
+                  },
+                  select: { id: true },
+                });
+              } catch (createError) {
+                // Schema drift: the image column was expected but is missing
+                // from the live DB. Self-heal the support cache and retry
+                // without it so the prompt still persists.
+                if (supportsImageAttachment && isMissingColumnError(createError)) {
+                  resetSchemaCompatibilityCache();
+                  promptLogger.warn(
+                    { err: createError, userId: req.user!.id },
+                    'imageAttachment column missing; retrying prompt persist without it'
+                  );
+                  savedPrompt = await prisma.prompt.create({
+                    data: baseData,
+                    select: { id: true },
+                  });
+                } else {
+                  throw createError;
+                }
+              }
+              savedPromptId = savedPrompt.id;
+
+              // Update user stats in parallel (quota already charged above)
+              await Promise.all([
+                prisma.user.update({
+                  where: { id: req.user!.id },
+                  data: {
+                    promptCount: { increment: 1 },
+                    tokenUsage: { increment: BigInt(result.totalTokens) },
+                  },
+                }),
+                prisma.usageRecord.upsert({
+                  where: {
+                    userId_date: {
+                      userId: req.user!.id,
+                      date: new Date(new Date().setHours(0, 0, 0, 0)),
+                    },
+                  },
+                  update: {
+                    promptCount: { increment: 1 },
+                    tokenCount: { increment: BigInt(result.totalTokens) },
+                  },
+                  create: {
                     userId: req.user!.id,
                     date: new Date(new Date().setHours(0, 0, 0, 0)),
+                    promptCount: 1,
+                    tokenCount: BigInt(result.totalTokens),
                   },
-                },
-                update: {
-                  promptCount: { increment: 1 },
-                  tokenCount: { increment: BigInt(result.totalTokens) },
-                },
-                create: {
-                  userId: req.user!.id,
-                  date: new Date(new Date().setHours(0, 0, 0, 0)),
-                  promptCount: 1,
-                  tokenCount: BigInt(result.totalTokens),
-                },
-              }),
-              recordUsage(req.user!.id),
-            ]);
-            const maxModeQuota = data.mode === 'max'
-              ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-              : maxModeQuotaBeforeUse;
+                }),
+              ]);
+              maxModeQuota = data.mode === 'max'
+                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                : maxModeQuotaBeforeUse;
+            } catch (persistError) {
+              promptLogger.error(
+                { err: persistError, userId: req.user!.id },
+                'Failed to persist enhanced prompt; returning result to client without saving'
+              );
+            }
 
-            // Send completion event
+            // Send completion event (always — the enhancement succeeded)
             res.write(
               `data: ${JSON.stringify({
                 type: 'complete',
@@ -777,16 +827,20 @@ promptRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
       ];
     }
 
-    const [prompts, total] = await Promise.all([
-      prisma.prompt.findMany({
-        where,
-        orderBy: { [query.sortBy]: query.sortOrder },
-        skip,
-        take: query.limit,
-        select: promptSelect(supportsImageAttachment),
-      }),
-      prisma.prompt.count({ where }),
-    ]);
+    const [prompts, total] = await withImageAttachmentReadFallback(
+      supportsImageAttachment,
+      (supportsColumn) =>
+        Promise.all([
+          prisma.prompt.findMany({
+            where,
+            orderBy: { [query.sortBy]: query.sortOrder },
+            skip,
+            take: query.limit,
+            select: promptSelect(supportsColumn),
+          }),
+          prisma.prompt.count({ where }),
+        ]),
+    );
 
     res.json({
       prompts: prompts.map((prompt) => ({
@@ -822,14 +876,19 @@ promptRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
     }
 
     const promptId = req.params.id as string;
+    const userId = req.user.id;
     const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
-    const prompt = await prisma.prompt.findFirst({
-      where: {
-        id: promptId,
-        userId: req.user.id,
-      },
-      select: promptSelect(supportsImageAttachment),
-    });
+    const prompt = await withImageAttachmentReadFallback(
+      supportsImageAttachment,
+      (supportsColumn) =>
+        prisma.prompt.findFirst({
+          where: {
+            id: promptId,
+            userId,
+          },
+          select: promptSelect(supportsColumn),
+        }),
+    );
 
     if (!prompt) {
       res.status(404).json({ error: 'Prompt not found' });
