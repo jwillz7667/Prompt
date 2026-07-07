@@ -81,6 +81,11 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+      # Integration tests run against the job's Postgres service container;
+      # test/setup-env.ts keeps the CI-provided DATABASE_URL because CI=true.
+      - name: Run tests
+        run: npm test
+
       - name: Build
         run: npm run build
 

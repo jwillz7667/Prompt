@@ -2,7 +2,7 @@
   "name": "@promptomize/backend",
   "version": "2.0.0",
   "private": true,
-  "description": "Promptomize backend — Express + TypeScript REST API with Prisma, Redis, BullMQ, and Socket.IO.",
+  "description": "Promptomize backend \u2014 Express + TypeScript REST API with Prisma, Redis, BullMQ, and Socket.IO.",
   "license": "SEE LICENSE IN ../LICENSE",
   "author": {
     "name": "Justin Williams",
@@ -40,13 +40,16 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "clean": "rimraf dist .tsbuildinfo",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@apple/app-store-server-library": "^2.0.0",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
+    "@sentry/node": "^9.47.1",
     "@types/bcrypt": "^6.0.0",
     "@types/yaml": "^1.9.6",
     "apple-signin-auth": "^1.7.6",
@@ -84,6 +87,7 @@
     "@types/handlebars": "^4.0.40",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.9.0",
+    "@types/supertest": "^7.2.0",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
@@ -94,7 +98,9 @@
     "prettier": "^3.4.2",
     "prisma": "^5.22.0",
     "rimraf": "^6.0.1",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.10"
   }
 }
