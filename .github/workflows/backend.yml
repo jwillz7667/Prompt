@@ -109,6 +109,9 @@ jobs:
       # this gate is what catches an alive-but-broken backend. 10 minutes
       # covers Railway's queue + Docker build + healthcheck window.
       - name: Wait for Railway rollout to become healthy
+        # Override the workflow default (backend/): this job never checks out
+        # the repo, so that directory does not exist on the runner.
+        working-directory: ${{ github.workspace }}
         run: |
           URL="https://backend-production-d538.up.railway.app/health"
           echo "Polling $URL for a healthy response..."
