@@ -5,7 +5,23 @@ import { logger } from '../utils/logger.js';
 // CONFIGURATION
 // ============================================================================
 
-const resend = new Resend(process.env['RESEND_API_KEY']);
+// Lazy: the Resend constructor THROWS when the key is unset, and this module
+// sits in the import chain of most routes — instantiating at module scope
+// would crash the whole backend at boot over a missing optional email key
+// (the exact outage class removed from webhooks.ts). Without a key, email
+// sending fails per-call and is logged; nothing else is affected.
+let resendClient: Resend | null = null;
+
+function getResend(): Resend {
+  if (!resendClient) {
+    const apiKey = process.env['RESEND_API_KEY'];
+    if (!apiKey) {
+      throw new Error('RESEND_API_KEY is not configured; email delivery is disabled');
+    }
+    resendClient = new Resend(apiKey);
+  }
+  return resendClient;
+}
 
 const FROM_EMAIL = process.env['FROM_EMAIL'] || 'Promptomize <noreply@promptomize.app>';
 const SUPPORT_EMAIL = process.env['SUPPORT_EMAIL'] || 'support@promptomize.app';
@@ -51,7 +67,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: FROM_EMAIL,
       to: options.to,
       subject: options.subject,
