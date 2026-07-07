@@ -84,61 +84,42 @@ jobs:
       - name: Build
         run: npm run build
 
-  deploy:
-    name: Deploy to Railway
+  # Railway's GitHub integration deploys this service itself on every push to
+  # main (the service is repo-connected with Root Directory /backend). Running
+  # `railway up` here as well raced that build — two deployments of the same
+  # commit competed and one always FAILED (deploys a5ada28e, 55a92735). CI's
+  # job is therefore verification only: wait for Railway's own rollout to
+  # serve a healthy response, and turn the pipeline red if it never does.
+  verify-deploy:
+    name: Verify Railway deployment
     runs-on: ubuntu-latest
     needs: lint-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
-    # Serialize deploys. Without this, two pushes in quick succession race:
-    # the second `railway up` can finish before the first, leaving the older
-    # commit as the live release. cancel-in-progress:false lets an in-flight
-    # deploy finish (never interrupt a rollout) and queues the next one.
+    # Serialize verification across queued pushes so a green check always
+    # refers to the most recently verified rollout, never an interleaving.
     concurrency:
       group: backend-deploy
       cancel-in-progress: false
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      # No --detach: a detached `railway up` returns the moment the upload
-      # finishes, so the verification step below would poll while the OLD
-      # version is still live and report a false green. Blocking until the
-      # deployment reaches SUCCESS makes the CLI exit non-zero on a failed
-      # build or a healthcheck that never passes, failing the pipeline.
-      #
-      # Runs from the repo root, NOT backend/: the Railway service has
-      # Root Directory = /backend, so it resolves `backend/` INSIDE the
-      # uploaded snapshot. Uploading from backend/ produces a snapshot with
-      # no `backend/` entry and the build fails with
-      # "lstat .../backend: no such file or directory" (deploy 55a92735).
-      - name: Deploy to Railway
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service backend
-
-      # By the time the blocking deploy returns, Railway has already flipped
-      # traffic (its healthcheckPath is /health/live — liveness only — so a
-      # process that boots in DB-degraded mode does not crash-loop). This poll
-      # hits the comprehensive /health (503 if DB/Redis/queues are in error) so
-      # a deploy that is alive but cannot reach its dependencies still turns the
-      # pipeline red instead of silently serving a broken backend.
-      - name: Verify deployment health
+      # Polls the comprehensive /health (503 if DB/Redis/queues/config are in
+      # error), not /health/live: Railway's own healthcheck is liveness-only
+      # so a process that boots in dependency-degraded mode still goes live —
+      # this gate is what catches an alive-but-broken backend. 10 minutes
+      # covers Railway's queue + Docker build + healthcheck window.
+      - name: Wait for Railway rollout to become healthy
         run: |
           URL="https://backend-production-d538.up.railway.app/health"
           echo "Polling $URL for a healthy response..."
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 60); do
             sleep 10
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" || echo "000")
-            echo "Attempt ${attempt}/30: HTTP ${code}"
+            echo "Attempt ${attempt}/60: HTTP ${code}"
             if [ "$code" = "200" ]; then
               echo "Deployment is healthy."
               exit 0
             fi
           done
-          echo "::error::Deployment did not report healthy within 5 minutes"
+          echo "::error::Deployment did not report healthy within 10 minutes"
           exit 1
