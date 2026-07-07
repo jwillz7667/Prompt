@@ -74,7 +74,7 @@ jobs:
       - name: Verify no schema drift between migrations and schema.prisma
         run: |
           npx prisma migrate diff \
-            --from-database-url "$DATABASE_URL" \
+            --from-url "$DATABASE_URL" \
             --to-schema-datamodel prisma/schema.prisma \
             --exit-code
 
