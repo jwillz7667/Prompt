@@ -1,0 +1,39 @@
+name: Uptime Monitor
+
+# Polls the production backend's comprehensive health endpoint on a schedule.
+# A failed scheduled run emails the workflow author — this is the alarm that
+# was missing when the backend sat dark behind a 502 from May 29 to July 7.
+# GitHub disables cron workflows after 60 days without repo activity; the
+# keepalive step prevents that by touching the workflow's own run history.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-health:
+    name: Check production health
+    runs-on: ubuntu-latest
+    steps:
+      # Retry inside a single run so a transient network blip on the runner
+      # does not page anyone; three consecutive failures 30s apart means the
+      # backend is genuinely unhealthy.
+      - name: Probe /health
+        run: |
+          URL="https://backend-production-d538.up.railway.app/health"
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 15 "$URL" || echo "000")
+            echo "Attempt ${attempt}/3: HTTP ${code}"
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::Production backend unhealthy: HTTP ${code} from ${URL}"
+          cat /tmp/health.json 2>/dev/null || true
+          exit 1
