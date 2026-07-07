@@ -63,6 +63,14 @@ Upload the current archive/IPA to TestFlight
 
 Upload App Store metadata and screenshots without uploading a binary
 
+### ios submit_review
+
+```sh
+[bundle exec] fastlane ios submit_review
+```
+
+Submit the prepared App Store version for review (binary already uploaded)
+
 ### ios screenshots
 
 ```sh

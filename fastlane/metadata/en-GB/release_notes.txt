@@ -1,22 +1,9 @@
-What's New in Promptomize 2.0
+This update is all about reliability. We focused on making Promptomize faster and more dependable behind the scenes — no setting to change, it just works better.
 
-MAX MODE
-- Advanced reasoning and expert-level prompt engineering
-- Daily quota with premium unlimited access
+WHAT'S IMPROVED
+- More dependable AI responses: enhancements now recover smoothly from slow or interrupted connections instead of stalling, so you get your result.
+- Sturdier chat history: your conversations and prompts save and sync more reliably, with fixes that prevent empty or missing entries.
+- Accurate subscription status: your plan and daily limits now stay correctly in sync, including right after you upgrade, change, or restore a plan.
+- Stronger security and general stability throughout the app.
 
-7 CREATIVE MODALITIES
-- Text, Image, Video, Music, Audio, Code, and 3D
-- Platform-aware suggestions for each modality
-
-REDESIGNED WIDGET
-- Brand-new design with polished message bubbles
-- Quick-access enhancement from your Home Screen
-
-SIDEBAR & HISTORY
-- Swipe-to-dismiss drawer for faster navigation
-- Delete individual history entries with a swipe
-- Profile info now visible in the sidebar
-
-QUALITY & POLISH
-- Updated app icons
-- Performance and stability improvements throughout
+Thanks for using Promptomize. Keep the feedback coming — it shapes what we build next.

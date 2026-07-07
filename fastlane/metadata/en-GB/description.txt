@@ -1,4 +1,4 @@
-Promptomize transforms your ideas into powerful, optimised prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver the best possible results.
+Promptomize transforms your ideas into powerful, optimised prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver stronger, more consistent results.
 
 HOW IT WORKS
 Type what you want to achieve, select your target modality, and tap Enhance. Our advanced AI engine rewrites your prompt using proven prompt engineering techniques — or switch to Chat mode for open-ended conversation.
@@ -7,7 +7,7 @@ TWO MODES
 Optimise mode refines and strengthens your prompts with expert-level prompt engineering. Chat mode gives you a general-purpose AI assistant for brainstorming, research, and creative exploration.
 
 MAX MODE
-Activate MAX Mode for the most advanced enhancement available — deeper reasoning, stronger structure, and PhD-level prompt construction. Available with daily quota based on your plan.
+Activate MAX Mode for our most advanced enhancement — deeper reasoning, stronger structure, and expert-level prompt construction. Available with daily quota based on your plan.
 
 7 CREATIVE MODALITIES
 Text, Image, Video, Music, Audio, Code, and 3D. Each modality tailors your prompt for its target output — with platform-aware suggestions and optimised phrasing.
@@ -37,7 +37,7 @@ SUBSCRIPTION TIERS
 - Pro: More prompts per day, all modalities, and MAX Mode
 - Premium: Unlimited prompts, all modalities, MAX Mode, and advanced prompt engineering
 
-Subscriptions are billed monthly or annually through your Apple ID. They renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your device Settings under Subscriptions.
+Premium includes a 7-day free trial for new subscribers. After the trial, your subscription automatically renews at the price shown at purchase (monthly or annually) unless you cancel at least 24 hours before the trial ends. Subscriptions are billed through your Apple ID and renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your device Settings under Subscriptions.
 
 Privacy-first: your prompts are processed securely and never used for training.
 

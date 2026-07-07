@@ -1,1 +1,1 @@
-image,video,music,code,3d,creative,chat,text,writing,art,rewrite,template,assistant,maker,tool,craft
+engineering,optimiser,assistant,copywriting,chat,rewrite,image,video,music,code,3d,creative,template

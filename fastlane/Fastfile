@@ -162,6 +162,33 @@ platform :ios do
     )
   end
 
+  desc "Submit the prepared App Store version for review (binary already uploaded)"
+  lane :submit_review do |options|
+    ensure_release_files!
+
+    version = current_release_version(options)
+
+    deliver(
+      api_key_path: API_KEY_PATH,
+      app_identifier: APP_IDENTIFIER,
+      app_version: version,
+      metadata_path: METADATA_PATH,
+      screenshots_path: SCREENSHOTS_PATH,
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      overwrite_screenshots: false,
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,
+      run_precheck_before_submit: true,
+      precheck_include_in_app_purchases: false
+      # No submission_information: export compliance is declared in Info.plist
+      # (ITSAppUsesNonExemptEncryption=false) and the app's content-rights
+      # declaration is already set on App Store Connect — re-PATCHing it is
+      # rejected ("attribute value not acceptable for current resource state").
+    )
+  end
+
   desc "Capture App Store screenshots"
   lane :screenshots do
     capture_screenshots(
