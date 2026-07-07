@@ -30,6 +30,7 @@ KEY FEATURES
 - Prompt history with favourites and swipe-to-delete
 - Offline support with automatic sync
 - iOS Widget for quick-access enhancement
+- Siri & Shortcuts: enhance a prompt by voice, from Spotlight, or inside your own shortcuts
 - Image attachments for visual context
 
 SUBSCRIPTION TIERS

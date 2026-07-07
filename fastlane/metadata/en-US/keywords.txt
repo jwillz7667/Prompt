@@ -1,1 +1,1 @@
-engineering,optimizer,assistant,copywriting,chat,rewrite,image,video,music,code,3d,creative,template
+engineering,optimizer,assistant,copywriting,chat,rewrite,image,video,music,code,3d,siri,art,template

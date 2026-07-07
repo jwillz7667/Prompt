@@ -1,9 +1,12 @@
-This update is all about reliability. We focused on making Promptomize faster and more dependable behind the scenes — no setting to change, it just works better.
+Promptomize 2.1 — your prompt enhancer now works from anywhere on your iPhone.
 
-WHAT'S IMPROVED
-- More dependable AI responses: enhancements now recover smoothly from slow or interrupted connections instead of stalling, so you get your result.
-- Sturdier chat history: your conversations and prompts save and sync more reliably, with fixes that prevent empty or missing entries.
-- Accurate subscription status: your plan and daily limits now stay correctly in sync, including right after you upgrade, change, or restore a plan.
-- Stronger security and general stability throughout the app.
+NEW: SIRI & SHORTCUTS
+- Say "Enhance a prompt with Promptomize", or run it from the Shortcuts app and Spotlight.
+- The enhanced prompt is copied to your clipboard automatically — perfect for chaining into your own shortcuts.
 
-Thanks for using Promptomize. Keep the feedback coming — it shapes what we build next.
+IMPROVED
+- Stay signed in: brief network hiccups no longer sign you out or hide your history.
+- Subscription status stays accurate right after you upgrade, change, or restore a plan.
+- Faster, more dependable enhancements with smarter recovery on slow connections.
+
+Thanks for using Promptomize — your feedback shapes every release.
