@@ -24,6 +24,8 @@ import { sharedRouter } from './routes/shared.js';
 import sandboxRouter from './routes/sandbox.js';
 import workflowsRouter from './routes/workflows.js';
 import variationsRouter from './routes/variations.js';
+import { optimizeRouter } from './routes/optimize.js';
+import { initReflectionQueue, closeReflectionQueue } from './services/reflectionJobService.js';
 import { resumePendingVariationGenerations } from './services/variationsService.js';
 import {
   assertExpectedSchemaAtBoot,
@@ -67,6 +69,9 @@ reportDegradedBootIfNeeded();
 (async () => {
   await initRedis();
   await initQueues();
+  // No-op unless REFLECTION_LOOP_ENABLED=true; degrades to inline jobs
+  // without Redis.
+  await initReflectionQueue();
 })();
 
 const app = express();
@@ -183,6 +188,8 @@ app.use('/api/v1/shared', sharedRouter);
 app.use('/api/v1/sandbox', sandboxRouter);
 app.use('/api/v1/workflows', workflowsRouter);
 app.use('/api/v1/variations', variationsRouter);
+// Reflection-loop optimizer — dark unless REFLECTION_LOOP_ENABLED=true
+app.use('/api/v1/optimize', optimizeRouter);
 
 // Enterprise API routes
 app.use('/api/v1/developer/auth', developerAuthRouter);
@@ -215,6 +222,7 @@ const shutdown = async () => {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
   }
+  await closeReflectionQueue();
   await closeRedis();
   await closeQueues();
   await prisma.$disconnect();
