@@ -245,6 +245,129 @@ actor APIClient {
         }
     }
 
+    // MARK: - Raw SSE Streaming
+
+    /// Generic server-sent-events transport: yields each `data:` payload as raw
+    /// bytes so feature services own event decoding (e.g. OptimizeService).
+    /// SSE comment lines (`: heartbeat`) are skipped and `[DONE]` finishes the
+    /// stream. Shares token refresh and HTTP error mapping with `requestStream`
+    /// without changing its behavior.
+    func requestRawEventStream(
+        _ endpoint: String,
+        method: HTTPMethod = .get,
+        body: (any Encodable)? = nil,
+        requiresAuth: Bool = true
+    ) -> AsyncThrowingStream<Data, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    try await rawEventStreamRequest(
+                        endpoint,
+                        method: method,
+                        body: body,
+                        requiresAuth: requiresAuth,
+                        isRetry: false,
+                        continuation: continuation
+                    )
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func rawEventStreamRequest(
+        _ endpoint: String,
+        method: HTTPMethod,
+        body: (any Encodable)?,
+        requiresAuth: Bool,
+        isRetry: Bool,
+        continuation: AsyncThrowingStream<Data, Error>.Continuation
+    ) async throws {
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        if requiresAuth && accessToken == nil {
+            loadStoredTokens()
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method.rawValue
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.timeoutInterval = 120
+
+        let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
+        request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
+
+        if requiresAuth {
+            guard let token = accessToken else {
+                throw APIError.notAuthenticated
+            }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        if let body = body {
+            request.httpBody = try Self.makeJSONEncoder().encode(body)
+        }
+
+        do {
+            let (bytes, response) = try await urlSession.bytes(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+
+            if httpResponse.statusCode == 401 {
+                if requiresAuth && !isRetry {
+                    try await refreshAccessToken()
+                    try await rawEventStreamRequest(
+                        endpoint,
+                        method: method,
+                        body: body,
+                        requiresAuth: requiresAuth,
+                        isRetry: true,
+                        continuation: continuation
+                    )
+                    return
+                }
+
+                throw APIError.unauthorized
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                let errorBody = try await streamErrorBody(from: bytes)
+                throw streamAPIError(statusCode: httpResponse.statusCode, body: errorBody)
+            }
+
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+
+                guard line.hasPrefix("data: ") else { continue }
+
+                let payload = String(line.dropFirst(6))
+                if payload == "[DONE]" {
+                    continuation.finish()
+                    return
+                }
+
+                if let data = payload.data(using: .utf8) {
+                    continuation.yield(data)
+                }
+            }
+
+            continuation.finish()
+        } catch let urlError as URLError where urlError.code == .timedOut {
+            throw APIError.requestTimedOut
+        }
+    }
+
     private func streamErrorBody(from bytes: URLSession.AsyncBytes) async throws -> Data {
         var data = Data()
         for try await byte in bytes {

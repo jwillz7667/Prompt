@@ -39,6 +39,8 @@ struct ThreadView: View {
 
     @State private var showPaywallSheet = false
     @State private var showWorkspaceActions = false
+    @State private var optimizeViewModel = OptimizeViewModel()
+    @State private var optimizeSeed: OptimizeSeedPrompt?
     @State private var showPhotoPicker = false
     @State private var showTextFileImporter = false
     @State private var showCameraCapture = false
@@ -195,6 +197,12 @@ struct ThreadView: View {
         }
         .sheet(isPresented: $showPaywallSheet) {
             PaywallView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(24)
+        }
+        .sheet(item: $optimizeSeed) { seed in
+            OptimizeSheet(initialPrompt: seed.prompt, viewModel: optimizeViewModel)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(24)
@@ -601,10 +609,32 @@ struct ThreadView: View {
     private func messageRow(_ message: ThreadMessage) -> some View {
         ThreadMessageBubble(
             message: message,
-            isStreaming: viewModel.isStreaming && message.id == "streaming"
+            isStreaming: viewModel.isStreaming && message.id == "streaming",
+            onOptimize: optimizeAction(for: message)
         )
         .id(message.id)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// Reflection-loop entry point for a completed optimize-mode turn. The
+    /// loop takes the turn's ORIGINAL user prompt (spec: it optimizes raw
+    /// prompts, not the enhanced output). Hidden once the backend reports the
+    /// feature flag is off.
+    private func optimizeAction(for message: ThreadMessage) -> (() -> Void)? {
+        guard message.role == .assistant,
+              message.responseMode == .optimize,
+              message.id != "streaming",
+              optimizeViewModel.state != .featureDisabled,
+              let originalPrompt = viewModel.turns
+                  .first(where: { $0.turnIndex == message.turnIndex })?
+                  .originalPrompt,
+              !originalPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+
+        return {
+            triggerHaptic(.light)
+            optimizeSeed = OptimizeSeedPrompt(prompt: originalPrompt)
+        }
     }
 
     // MARK: - Composer
@@ -1675,6 +1705,12 @@ struct ThreadView: View {
         activeComposerDrawer = nil
         triggerHaptic(.light)
     }
+}
+
+/// Sheet item seeding OptimizeSheet with one turn's original prompt.
+private struct OptimizeSeedPrompt: Identifiable {
+    let id = UUID()
+    let prompt: String
 }
 
 private struct ThreadComposerOverlayHeightPreferenceKey: PreferenceKey {

@@ -10,6 +10,9 @@ import SwiftUI
 struct ThreadMessageBubble: View {
     let message: ThreadMessage
     let isStreaming: Bool
+    /// When set, an "Optimize" affordance appears in the assistant action row
+    /// (reflection-loop optimizer entry point). Callers pass nil to hide it.
+    var onOptimize: (() -> Void)? = nil
 
     @State private var showCopied = false
 
@@ -129,6 +132,21 @@ struct ThreadMessageBubble: View {
                 }
 
                 Spacer()
+
+                if let onOptimize {
+                    Button {
+                        onOptimize()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "wand.and.rays")
+                                .font(.system(size: 10, weight: .medium))
+                            Text("Optimize")
+                                .font(.system(.caption2, design: .rounded, weight: .medium))
+                        }
+                        .foregroundStyle(textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 Button {
                     UIPasteboard.general.string = message.content
