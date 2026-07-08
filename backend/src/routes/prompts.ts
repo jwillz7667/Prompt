@@ -24,6 +24,7 @@ import {
   enhancePromptInThreadStream,
   getPromptTierFromSubscription,
 } from '../services/deepseekService.js';
+import { DEEPSEEK_V4_FLASH_MODEL } from '../services/deepseekModels.js';
 import {
   ensureMaxModeAvailable,
   ensureModalityAvailable,
@@ -155,7 +156,7 @@ function createHttpError(statusCode: number, message: string): HttpError {
 const createPromptSchema = z.object({
   originalPrompt: z.string().max(100000).default(''),
   enhancedPrompt: z.string().min(1).max(500000),
-  model: z.string().default('deepseek-reasoner'),
+  model: z.string().default(DEEPSEEK_V4_FLASH_MODEL),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.preprocess(
     (value) => {

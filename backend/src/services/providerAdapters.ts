@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 
 import { promptLogger } from '../utils/logger.js';
+import { resolveDeepseekModel } from './deepseekModels.js';
 
 /**
  * Uniform non-streaming completion across AI providers, used by the
@@ -66,7 +67,13 @@ async function completeDeepseek(
   apiKey: string,
   request: ProviderCompletionRequest
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
-  const model = process.env['DEEPSEEK_COMPARE_MODEL'] || 'deepseek-chat';
+  // Compare is a non-thinking surface; a legacy id in DEEPSEEK_COMPARE_MODEL
+  // is remapped, and thinking is always sent explicitly (V4 Flash defaults it
+  // ON and bills the CoT as output tokens).
+  const { model, thinking } = resolveDeepseekModel(
+    process.env['DEEPSEEK_COMPARE_MODEL'] || undefined,
+    false
+  );
   const response = await fetch(DEEPSEEK_API_URL, {
     method: 'POST',
     headers: {
@@ -82,6 +89,7 @@ async function completeDeepseek(
       temperature: request.temperature,
       max_tokens: request.maxTokens,
       stream: false,
+      thinking,
     }),
   });
 

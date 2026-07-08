@@ -20,6 +20,11 @@
 
 import { promptLogger } from '../utils/logger.js';
 import {
+  DEEPSEEK_THINKING_DISABLED,
+  getDeepseekModel,
+  type DeepSeekThinkingConfig,
+} from './deepseekModels.js';
+import {
   MetaPromptBuilder,
   type SubModality,
   type TargetPlatform,
@@ -613,6 +618,9 @@ interface DeepSeekRequest {
   temperature: number;
   max_tokens: number;
   stream: boolean;
+  // Required on every request: V4 Flash defaults thinking ON and bills the
+  // chain-of-thought as output tokens, so it must be set explicitly.
+  thinking: DeepSeekThinkingConfig;
 }
 
 interface DeepSeekResponse {
@@ -671,8 +679,9 @@ export async function enhancePromptV2(request: EnhancementRequest): Promise<Enha
   const modality = request.modality || 'text';
   const tier = request.tier || 'advanced';
 
-  // Select model and parameters based on tier
-  const model = tier === 'basic' ? 'deepseek-chat' : 'deepseek-chat';
+  // Select parameters based on tier; the v2 engine never needs CoT, so
+  // thinking stays explicitly disabled for every tier.
+  const model = getDeepseekModel();
   const temperature = tier === 'basic' ? 0.5 : tier === 'standard' ? 0.6 : 0.7;
   const maxTokens = tier === 'basic' ? 1024 : tier === 'standard' ? 2048 : 4096;
 
@@ -689,6 +698,7 @@ export async function enhancePromptV2(request: EnhancementRequest): Promise<Enha
     temperature,
     max_tokens: maxTokens,
     stream: false,
+    thinking: DEEPSEEK_THINKING_DISABLED,
   };
 
   const startTime = Date.now();
@@ -766,7 +776,7 @@ export async function enhancePromptV2Stream(
   const modality = request.modality || 'text';
   const tier = request.tier || 'advanced';
 
-  const model = 'deepseek-chat';
+  const model = getDeepseekModel();
   const temperature = tier === 'basic' ? 0.5 : tier === 'standard' ? 0.6 : 0.7;
   const maxTokens = tier === 'basic' ? 1024 : tier === 'standard' ? 2048 : 4096;
 
@@ -774,7 +784,7 @@ export async function enhancePromptV2Stream(
   const systemPrompt = buildEnhancementSystemPrompt(tier, modality, request);
   const userMessage = buildUserMessage(request);
 
-  const deepseekRequest = {
+  const deepseekRequest: DeepSeekRequest = {
     model,
     messages: [
       { role: 'system', content: systemPrompt },
@@ -783,6 +793,7 @@ export async function enhancePromptV2Stream(
     temperature,
     max_tokens: maxTokens,
     stream: true,
+    thinking: DEEPSEEK_THINKING_DISABLED,
   };
 
   const startTime = Date.now();

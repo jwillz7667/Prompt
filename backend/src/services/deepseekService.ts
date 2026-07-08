@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions.js';
 import { type TierFeatures } from './subscriptionService.js';
 import { imageAnalysisService, type PromptImageAttachment } from './imageAnalysisService.js';
+import { resolveDeepseekModel, type DeepSeekThinkingConfig } from './deepseekModels.js';
 import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
@@ -49,17 +50,20 @@ export interface StreamCallbacks {
   onError: (error: Error) => void | Promise<void>;
 }
 
-interface DeepSeekMessage {
+export interface DeepSeekMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
-interface DeepSeekRequest {
+export interface DeepSeekRequest {
   model: string;
   messages: DeepSeekMessage[];
   temperature: number;
   max_tokens: number;
   stream: boolean;
+  // Required on every request: V4 Flash defaults thinking ON and bills the
+  // chain-of-thought as output tokens, so it must be set explicitly.
+  thinking: DeepSeekThinkingConfig;
 }
 
 interface DeepSeekResponse {
@@ -76,8 +80,6 @@ interface DeepSeekResponse {
 }
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const STANDARD_MODEL = 'deepseek-chat';
-const MAX_MODEL = 'deepseek-reasoner';
 const STANDARD_TEMPERATURE = 0.35;
 const MAX_TEMPERATURE = 0.2;
 const STANDARD_MAX_TOKENS = 3072;
@@ -248,7 +250,9 @@ function normalizeRequest(request: EnhancePromptRequest) {
   const mode: PromptMode = request.mode ?? 'standard';
   const conversationMode: ConversationMode = request.conversationMode ?? 'optimize';
   const modality = request.modality ?? detectModality(request.prompt);
-  const model = request.model ?? (mode === 'max' ? MAX_MODEL : STANDARD_MODEL);
+  // MAX mode maps to thinking; standard stays non-thinking. Legacy model ids
+  // from older clients (deepseek-chat/-reasoner) are remapped inside.
+  const { model, thinking } = resolveDeepseekModel(request.model, mode === 'max');
   const temperature = request.temperature ?? (mode === 'max' ? MAX_TEMPERATURE : STANDARD_TEMPERATURE);
   const maxTokens = Math.min(
     request.maxTokens ?? (mode === 'max' ? MAX_MAX_TOKENS : STANDARD_MAX_TOKENS),
@@ -262,6 +266,7 @@ function normalizeRequest(request: EnhancePromptRequest) {
     conversationMode,
     modality,
     model,
+    thinking,
     temperature,
     maxTokens,
   };
@@ -641,7 +646,10 @@ function sanitizeModelOutput(content: string, conversationMode: ConversationMode
     .trim();
 }
 
-async function requestCompletion(
+// Exported for the reflection-loop transport (services/reflectionLoop), which
+// reuses this hardened one-shot call path (timeouts, retries, backoff) with
+// its own stage-specific messages and thinking config.
+export async function requestCompletion(
   request: DeepSeekRequest,
   apiKey: string,
   conversationMode: ConversationMode
@@ -831,8 +839,12 @@ async function streamCompletion(
         if (!payload || payload === '[DONE]') continue;
 
         try {
+          // In thinking mode the CoT streams as `reasoning_content` deltas
+          // before `content`. It is intentionally NOT forwarded to clients —
+          // only the final answer streams out. Its cost still lands in
+          // usage.completion_tokens (thinking bills as output tokens).
           const parsed = JSON.parse(payload) as {
-            choices?: Array<{ delta?: { content?: string } }>;
+            choices?: Array<{ delta?: { content?: string; reasoning_content?: string } }>;
             usage?: {
               prompt_tokens?: number;
               completion_tokens?: number;
@@ -1065,6 +1077,7 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
       temperature: normalized.temperature,
       max_tokens: normalized.maxTokens,
       stream: false,
+      thinking: normalized.thinking,
     },
     apiKey,
     normalized.conversationMode
@@ -1092,6 +1105,7 @@ export async function enhancePromptStream(
         temperature: normalized.temperature,
         max_tokens: normalized.maxTokens,
         stream: true,
+        thinking: normalized.thinking,
       },
       apiKey,
       normalized.conversationMode,
@@ -1298,6 +1312,7 @@ export async function enhancePromptInThreadStream(
         temperature: normalized.temperature,
         max_tokens: normalized.maxTokens,
         stream: true,
+        thinking: normalized.thinking,
       },
       apiKey,
       normalized.conversationMode,

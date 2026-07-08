@@ -148,7 +148,7 @@ model Prompt {
   enhancedPrompt  String   @db.Text
 
   // Metadata
-  model           String   @default("deepseek-reasoner")
+  model           String   @default("deepseek-v4-flash")
   temperature     Float    @default(0.7)
   maxTokens       Int      @default(8192)
   modality        String   @default("text")  // text, image, video, audio, code, 3d
@@ -780,7 +780,7 @@ model ThreadTurn {
   originalPrompt  String   @db.Text
   enhancedPrompt  String   @db.Text
   imageAttachment Json?
-  model           String   @default("deepseek-chat")
+  model           String   @default("deepseek-v4-flash")
   inputTokens     Int      @default(0)
   outputTokens    Int      @default(0)
   totalTokens     Int      @default(0)

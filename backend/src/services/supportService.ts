@@ -2,6 +2,7 @@ import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import type { TicketCategory, TicketPriority, TicketStatus } from '@prisma/client';
 import { sendTicketCreated, sendTicketNotificationToSupport, sendTicketResponse } from './emailService.js';
+import { DEEPSEEK_THINKING_DISABLED, getDeepseekModel } from './deepseekModels.js';
 import { emitNewMessage } from '../utils/socket.js';
 import { sendSupportMessageNotification } from './notificationService.js';
 
@@ -58,7 +59,6 @@ export interface TicketWithMessages extends Ticket {
 // ============================================================================
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const SUPPORT_MODEL = 'deepseek-chat';
 const MAX_TOKENS = 1024;
 const TEMPERATURE = 0.3; // Lower temperature for more consistent support responses
 
@@ -229,11 +229,14 @@ export async function chatWithSupport(request: ChatRequest): Promise<ChatRespons
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: SUPPORT_MODEL,
+        model: getDeepseekModel(),
         messages,
         temperature: TEMPERATURE,
         max_tokens: MAX_TOKENS,
         stream: false,
+        // Support chat never needs CoT; V4 Flash defaults thinking ON and
+        // bills it as output tokens, so disable it explicitly.
+        thinking: DEEPSEEK_THINKING_DISABLED,
       }),
     });
 

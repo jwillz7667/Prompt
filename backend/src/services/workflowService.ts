@@ -431,10 +431,11 @@ class WorkflowService {
 
       while (retryCount < maxRetries) {
         try {
+          // No explicit model: deepseekService resolves the centralized
+          // default (standard mode → thinking disabled).
           const enhanceResult = await enhancePrompt({
             prompt: renderedPrompt,
             tier: 'standard',
-            model: 'deepseek-chat',
             temperature: 0.7,
             maxTokens: 4096,
             modality: 'text'
