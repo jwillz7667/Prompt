@@ -30,6 +30,15 @@ jobs:
             echo "Attempt ${attempt}/3: HTTP ${code}"
             if [ "$code" = "200" ]; then
               cat /tmp/health.json
+              # A 200 can still hide a degraded boot: start.sh boots the server
+              # even when `prisma migrate deploy` fails, and the app reports
+              # that as migrations != "ok". No retry — the flag is set for the
+              # lifetime of the degraded process, so waiting cannot clear it.
+              migrations=$(jq -r '.migrations // "absent"' /tmp/health.json)
+              if [ "$migrations" != "ok" ]; then
+                echo "::error::Production backend booted degraded: migrations field is '${migrations}' (expected 'ok'). prisma migrate deploy likely failed at boot — check Railway deploy logs."
+                exit 1
+              fi
               exit 0
             fi
             sleep 30

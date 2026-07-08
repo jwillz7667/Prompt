@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.js';
 import { getRedis, isRedisAvailable } from '../utils/redis.js';
 import { queues } from '../utils/queue.js';
 import { getMissingRequiredEnvVars } from '../utils/env.js';
+import { getMigrationBootStatus } from '../services/bootStatusService.js';
 
 export const healthRouter = Router();
 
@@ -46,6 +47,11 @@ healthRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
     timestamp: new Date().toISOString(),
     version: process.env['npm_package_version'] || '1.0.0',
     uptime: Math.floor((Date.now() - metrics.startTime) / 1000),
+    // "failed_at_boot" when start.sh's `prisma migrate deploy` failed and the
+    // server booted degraded. Deliberately NOT part of `checks`: the service is
+    // still serving, so the HTTP status stays 200 — the scheduled uptime
+    // workflow inspects this field and alerts when it is not "ok".
+    migrations: getMigrationBootStatus(),
     checks,
     memory: {
       heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),

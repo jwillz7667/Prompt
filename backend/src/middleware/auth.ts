@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import { verifyAccessToken, type DecodedToken } from '../utils/jwt.js';
 import { prisma } from '../utils/prisma.js';
 import { cache } from '../utils/redis.js';
@@ -12,6 +13,16 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+// Stable machine-readable reasons for a 401, additive to the existing `error`
+// message so current clients keep working. iOS keys its session-expired UX off
+// these: TOKEN_EXPIRED → silent refresh; TOKEN_INVALID / SESSION_REVOKED →
+// sign out; TOKEN_MISSING → not authenticated at all.
+export type AuthErrorCode =
+  | 'TOKEN_MISSING'
+  | 'TOKEN_EXPIRED'
+  | 'TOKEN_INVALID'
+  | 'SESSION_REVOKED';
+
 export const authenticate = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -21,7 +32,10 @@ export const authenticate = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing or invalid authorization header' });
+      res.status(401).json({
+        error: 'Missing or invalid authorization header',
+        code: 'TOKEN_MISSING' satisfies AuthErrorCode,
+      });
       return;
     }
 
@@ -40,7 +54,12 @@ export const authenticate = async (
       });
 
       if (!dbUser) {
-        res.status(401).json({ error: 'User not found or inactive' });
+        // A valid token for a user that no longer exists: the session is dead
+        // and a refresh cannot revive it, so clients must treat it as revoked.
+        res.status(401).json({
+          error: 'User not found or inactive',
+          code: 'SESSION_REVOKED' satisfies AuthErrorCode,
+        });
         return;
       }
 
@@ -56,12 +75,18 @@ export const authenticate = async (
     }
 
     if (!user.isActive) {
-      res.status(401).json({ error: 'User not found or inactive' });
+      res.status(401).json({
+        error: 'User not found or inactive',
+        code: 'SESSION_REVOKED' satisfies AuthErrorCode,
+      });
       return;
     }
 
     if (user.tokenVersion !== decoded.tokenVersion) {
-      res.status(401).json({ error: 'Token has been revoked' });
+      res.status(401).json({
+        error: 'Token has been revoked',
+        code: 'SESSION_REVOKED' satisfies AuthErrorCode,
+      });
       return;
     }
 
@@ -73,10 +98,26 @@ export const authenticate = async (
 
     next();
   } catch (error) {
-    if (error instanceof Error && error.name === 'TokenExpiredError') {
-      res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
+    // TokenExpiredError extends JsonWebTokenError, so it must be checked first.
+    if (error instanceof jwt.TokenExpiredError) {
+      res.status(401).json({
+        error: 'Token expired',
+        code: 'TOKEN_EXPIRED' satisfies AuthErrorCode,
+      });
       return;
     }
+    if (error instanceof jwt.JsonWebTokenError) {
+      // Covers malformed tokens, bad signatures, and NotBeforeError.
+      res.status(401).json({
+        error: 'Invalid token',
+        code: 'TOKEN_INVALID' satisfies AuthErrorCode,
+      });
+      return;
+    }
+    // Not a token problem (e.g. DB unreachable mid-lookup). Keep the historical
+    // body — deliberately WITHOUT a code — so clients do not force a sign-out
+    // over an infrastructure blip, and log it since it was previously silent.
+    logger.error({ err: error }, 'Authentication failed for a non-token reason');
     res.status(401).json({ error: 'Invalid token' });
   }
 };

@@ -25,7 +25,11 @@ import sandboxRouter from './routes/sandbox.js';
 import workflowsRouter from './routes/workflows.js';
 import variationsRouter from './routes/variations.js';
 import { resumePendingVariationGenerations } from './services/variationsService.js';
-import { warmSchemaCompatibilityCache } from './services/schemaCompatibilityService.js';
+import {
+  assertExpectedSchemaAtBoot,
+  warmSchemaCompatibilityCache,
+} from './services/schemaCompatibilityService.js';
+import { reportDegradedBootIfNeeded } from './services/bootStatusService.js';
 // Enterprise API routes
 import { apiKeysRouter } from './routes/apiKeys.js';
 import { publicApiRouter } from './routes/publicApi.js';
@@ -53,6 +57,11 @@ validateEnvAtBoot();
 // No-op without SENTRY_DSN; must run before any request is served so the
 // error handler's captureError calls have an initialized client.
 initSentry();
+
+// If scripts/start.sh exported MIGRATE_DEPLOY_FAILED=1 (prisma migrate deploy
+// failed but we boot anyway), make the degraded state loud: fatal log + Sentry.
+// Must run after initSentry so the capture actually ships.
+reportDegradedBootIfNeeded();
 
 // Initialize Redis and Queues
 (async () => {
@@ -237,6 +246,13 @@ httpServer.listen(port, '0.0.0.0', () => {
   void warmSchemaCompatibilityCache()
     .catch((error) => {
       logger.error({ error }, 'Failed to warm schema compatibility cache');
+    });
+
+  // Assert the full drift-prone object set once at boot; any missing column or
+  // table is error-logged with the complete list and captured in Sentry.
+  void assertExpectedSchemaAtBoot()
+    .catch((error) => {
+      logger.error({ error }, 'Failed to run boot-time schema assertion');
     });
 });
 

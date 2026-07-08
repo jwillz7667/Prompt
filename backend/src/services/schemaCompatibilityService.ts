@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma.js';
-import { logInfo, logWarn } from '../utils/logger.js';
+import { logError, logInfo, logWarn } from '../utils/logger.js';
+import { captureError } from '../utils/sentry.js';
 
 // Memoized, definitive results only. `null` means "not yet known" so the next
 // call re-probes. A transient probe failure (DB briefly unreachable) must never
@@ -123,6 +124,86 @@ export async function withImageAttachmentReadFallback<T>(
       return await run(false);
     }
     throw error;
+  }
+}
+
+// Full expected object set for the tables production has drifted on before.
+// These are the columns/tables recent migrations added that the code depends
+// on; extend the lists when a new migration adds a drift-prone object.
+const EXPECTED_COLUMNS: ReadonlyArray<{ table: string; column: string }> = [
+  { table: 'Prompt', column: 'imageAttachment' },
+  { table: 'Prompt', column: 'version' },
+  { table: 'Prompt', column: 'rootPromptId' },
+  { table: 'ThreadTurn', column: 'imageAttachment' },
+  { table: 'Template', column: 'modality' },
+];
+
+const EXPECTED_TABLES: ReadonlyArray<string> = ['SharedPrompt'];
+
+export interface SchemaAssertionResult {
+  // false only when the information_schema probes themselves failed (DB
+  // unreachable), so the result is not authoritative — mirrors ColumnProbe.
+  known: boolean;
+  // Complete list of missing objects: 'Table.column' or 'Table (table)'.
+  missing: string[];
+}
+
+// Boot-time assertion that the live database has every drift-prone object the
+// deployed code expects. Purely observational — it never throws and never
+// blocks boot; the read/write fallbacks above still handle drift per-request.
+// On any missing object it logs the COMPLETE missing list at error level and
+// captures a Sentry event, so drift is one search away instead of a slow trickle
+// of per-request warnings.
+export async function assertExpectedSchemaAtBoot(): Promise<SchemaAssertionResult> {
+  try {
+    const columnTables = [...new Set(EXPECTED_COLUMNS.map(({ table }) => table))];
+    // ::text casts because information_schema identifier types (sql_identifier)
+    // are not deserializable by Prisma's raw query engine.
+    const columnRows = await prisma.$queryRaw<Array<{ table_name: string; column_name: string }>>`
+      SELECT table_name::text AS table_name, column_name::text AS column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN (${Prisma.join(columnTables)})
+    `;
+    const tableRows = await prisma.$queryRaw<Array<{ table_name: string }>>`
+      SELECT table_name::text AS table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name IN (${Prisma.join([...EXPECTED_TABLES])})
+    `;
+
+    const presentColumns = new Set(columnRows.map((row) => `${row.table_name}.${row.column_name}`));
+    const presentTables = new Set(tableRows.map((row) => row.table_name));
+
+    const missing = [
+      ...EXPECTED_COLUMNS.filter(({ table, column }) => !presentColumns.has(`${table}.${column}`)).map(
+        ({ table, column }) => `${table}.${column}`
+      ),
+      ...EXPECTED_TABLES.filter((table) => !presentTables.has(table)).map(
+        (table) => `${table} (table)`
+      ),
+    ];
+
+    if (missing.length > 0) {
+      logError('SCHEMA_DRIFT: live database is missing expected objects', undefined, { missing });
+      captureError(
+        new Error(`SCHEMA_DRIFT: live database is missing expected objects: ${missing.join(', ')}`),
+        { missing }
+      );
+    } else {
+      logInfo('Boot-time schema assertion passed', {
+        checkedColumns: EXPECTED_COLUMNS.length,
+        checkedTables: EXPECTED_TABLES.length,
+      });
+    }
+
+    return { known: true, missing };
+  } catch (error) {
+    // Same posture as probeColumn: a probe failure is not evidence of drift.
+    logWarn('Boot-time schema assertion could not run; result unknown', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { known: false, missing: [] };
   }
 }
 
