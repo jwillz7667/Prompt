@@ -4,6 +4,7 @@ import {
   authenticateWithApple,
   authenticateWithGoogle,
   refreshTokens,
+  RefreshTokenError,
   logout,
   logoutAllDevices,
 } from '../services/authService.js';
@@ -101,12 +102,21 @@ authRouter.post('/refresh', async (req: Request, res: Response): Promise<void> =
     const result = await refreshTokens(data.refreshToken);
     res.json(result);
   } catch (error) {
-    authLogger.warn({ err: error }, 'Token refresh failed');
     if (error instanceof z.ZodError) {
+      authLogger.warn({ err: error }, 'Token refresh failed');
       res.status(400).json({ error: 'Invalid request data' });
       return;
     }
-    res.status(401).json({ error: 'Token refresh failed' });
+    if (error instanceof RefreshTokenError) {
+      authLogger.warn({ code: error.code, err: error }, 'Token refresh failed');
+      res.status(401).json({ error: 'Token refresh failed', code: error.code });
+      return;
+    }
+    // Infrastructure failure (DB/Redis), not a bad token. 401 here would make
+    // clients discard their session over a transient outage, so return 503 and
+    // let them retry with the same refresh token.
+    authLogger.error({ err: error }, 'Token refresh infrastructure failure');
+    res.status(503).json({ error: 'Temporarily unavailable, retry', code: 'RETRY_LATER' });
   }
 });
 

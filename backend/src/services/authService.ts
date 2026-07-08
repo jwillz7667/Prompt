@@ -1,6 +1,7 @@
 import appleSignin from 'apple-signin-auth';
 import { OAuth2Client } from 'google-auth-library';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../utils/prisma.js';
 import { generateTokenPair, verifyRefreshToken, type TokenPayload } from '../utils/jwt.js';
 import { authLogger } from '../utils/logger.js';
@@ -222,22 +223,55 @@ export async function authenticateWithGoogle(
 // TOKEN REFRESH
 // ============================================================================
 
+/**
+ * Token-level refresh failure: the refresh token itself is expired, invalid,
+ * or its session was revoked. Anything else thrown by refreshTokens (Prisma,
+ * Redis) is an infrastructure failure and must NOT be surfaced as 401 — the
+ * iOS client clears its keychain session on 401/403, so converting a DB blip
+ * into a 401 logs every active user out (the July 2026 incident amplifier).
+ */
+export class RefreshTokenError extends Error {
+  constructor(
+    readonly code: 'TOKEN_EXPIRED' | 'TOKEN_INVALID' | 'SESSION_REVOKED',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RefreshTokenError';
+  }
+}
+
 export async function refreshTokens(refreshToken: string): Promise<AuthResult> {
-  const decoded = verifyRefreshToken(refreshToken);
+  let decoded;
+  try {
+    decoded = verifyRefreshToken(refreshToken);
+  } catch (error) {
+    // TokenExpiredError extends JsonWebTokenError, so it must be checked first.
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new RefreshTokenError('TOKEN_EXPIRED', 'Refresh token expired');
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      throw new RefreshTokenError('TOKEN_INVALID', 'Refresh token invalid');
+    }
+    throw error;
+  }
 
   const session = await prisma.session.findUnique({
     where: { refreshToken },
     include: { user: true },
   });
 
-  if (!session || session.expiresAt < new Date()) {
-    throw new Error('Invalid or expired session');
+  if (!session) {
+    throw new RefreshTokenError('SESSION_REVOKED', 'Session not found');
+  }
+
+  if (session.expiresAt < new Date()) {
+    throw new RefreshTokenError('TOKEN_EXPIRED', 'Session expired');
   }
 
   if (session.user.tokenVersion !== decoded.tokenVersion) {
     // Token version mismatch - user has been logged out
     await prisma.session.delete({ where: { id: session.id } });
-    throw new Error('Session invalidated');
+    throw new RefreshTokenError('SESSION_REVOKED', 'Session invalidated');
   }
 
   const tokens = generateTokenPair({
