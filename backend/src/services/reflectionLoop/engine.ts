@@ -33,6 +33,7 @@ import {
   type Intake,
   type PackageOutput,
   type Rubric,
+  type TargetModelFamily,
 } from './schemas.js';
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,12 @@ export interface ReflectionEngineDeps {
 export interface OptimizeJobInput {
   rawPrompt: string;
   userGoal?: string | undefined;
+  /**
+   * Target-model profile the user explicitly picked (spec §4 P2, §8).
+   * Precedence lives in resolveTargetModelFamily: a specific family here
+   * beats whatever P0 infers; 'unknown' or absent defers to the inference.
+   */
+  targetModelFamily?: TargetModelFamily | undefined;
   /** User-provided values for {{variable}} slots; missing slots get placeholders. */
   variableValues?: Record<string, string> | undefined;
 }
@@ -263,6 +270,20 @@ export function fillVariableSlots(
 
 function estimatePromptTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN));
+}
+
+/**
+ * Effective target-model profile for P2 formatting (spec §4): both P0
+ * inference and the request supply one, and the user's explicit choice wins.
+ * 'unknown' is the schema's "no specific target" value — an explicit
+ * 'unknown' (the generic profile, all FREE users can send) or an omitted
+ * field defers to whatever P0 inferred from the prompt text.
+ */
+export function resolveTargetModelFamily(
+  requested: TargetModelFamily | undefined,
+  inferred: TargetModelFamily
+): TargetModelFamily {
+  return requested !== undefined && requested !== 'unknown' ? requested : inferred;
 }
 
 /**
@@ -674,7 +695,9 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
       CANDIDATES_SYSTEM_PROMPT,
       buildCandidatesUserMessage({
         taskType: intake.task_type,
-        targetModelFamily: intake.target_model_family,
+        // Explicit user choice beats P0's inference; intake itself stays
+        // untouched so the outcome reports what P0 actually saw.
+        targetModelFamily: resolveTargetModelFamily(job.targetModelFamily, intake.target_model_family),
         inferredGoal: intake.inferred_goal,
         missingIngredients: intake.missing_ingredients,
         language: intake.language,

@@ -15,6 +15,7 @@ import {
   createDeepseekSinglePass,
   createProductionReflectionEngine,
   intakeSchema,
+  resolveTargetModelFamily,
   type Intake,
   type OptimizeJobInput,
   type ReflectionLlmCall,
@@ -22,6 +23,7 @@ import {
   type ReflectionProgressPhase,
   type ReflectionUsage,
   type ScoredCandidate,
+  type TargetModelFamily,
 } from './reflectionLoop/index.js';
 
 /**
@@ -54,7 +56,8 @@ export interface ReflectionJobRequest {
   singlePassTier: EnhancementTier;
   rawPrompt: string;
   goal?: string | undefined;
-  targetModelFamily?: string | undefined;
+  /** §8 target-model profile. The route gates FREE to 'unknown' (generic). */
+  targetModelFamily?: TargetModelFamily | undefined;
   variableValues?: Record<string, string> | undefined;
 }
 
@@ -107,6 +110,12 @@ export type ReflectionJobResult =
       originalWon: boolean;
       stopReason: string;
       rolloutsUsed: number;
+      /**
+       * Effective target-model profile the winner was formatted for (spec §4
+       * P2): the user's explicit request when specific, else P0's inference.
+       * Additive field — intake never reaches this client-facing payload.
+       */
+      requestedTargetModelFamily: TargetModelFamily;
       usage: ReflectionUsage;
       promptId: string | null;
     };
@@ -539,14 +548,19 @@ export async function subscribeToReflectionJob(
 
 type ProgressReporter = (events: ReflectionProgressUpdate[]) => void | Promise<void>;
 
-function composeUserGoal(goal: string | undefined, targetModelFamily: string | undefined): string | undefined {
+function composeUserGoal(
+  goal: string | undefined,
+  targetModelFamily: TargetModelFamily | undefined
+): string | undefined {
   const parts: string[] = [];
   if (goal?.trim()) {
     parts.push(goal.trim());
   }
-  // The intake reads the target from anywhere in the prompt/goal text
-  // (spec §4 P0 rules), so a structured hint folds into the goal.
-  if (targetModelFamily) {
+  // A specific family also rides along as a goal-text hint so P0's intake and
+  // the single-pass polish see it. P2 does not depend on this hint: the
+  // explicit choice overrides the inferred family there (engine precedence,
+  // resolveTargetModelFamily). 'unknown' carries no information — skip it.
+  if (targetModelFamily && targetModelFamily !== 'unknown') {
     parts.push(`Target model family: ${targetModelFamily}.`);
   }
   return parts.length > 0 ? parts.join('\n') : undefined;
@@ -569,6 +583,7 @@ async function processReflectionJob(
   const jobInput: OptimizeJobInput = {
     rawPrompt: request.rawPrompt,
     userGoal: composeUserGoal(request.goal, request.targetModelFamily),
+    targetModelFamily: request.targetModelFamily,
     variableValues: request.variableValues,
   };
 
@@ -579,7 +594,8 @@ async function processReflectionJob(
           await createProductionReflectionEngine({
             singlePassTier: request.singlePassTier,
             onProgress: (event) => emit(event.phase, event.rolloutsUsed),
-          }).optimize(jobInput)
+          }).optimize(jobInput),
+          request.targetModelFamily
         );
 
   return finalizeJobResult(request, result, Date.now() - startedAt);
@@ -596,7 +612,10 @@ function toReceipt(candidate: ScoredCandidate): ReflectionCandidateReceipt {
   };
 }
 
-function toJobResult(outcome: ReflectionOutcome): ReflectionJobResult {
+function toJobResult(
+  outcome: ReflectionOutcome,
+  requestedTargetModelFamily: TargetModelFamily | undefined
+): ReflectionJobResult {
   switch (outcome.status) {
     case 'refused':
       return {
@@ -627,6 +646,12 @@ function toJobResult(outcome: ReflectionOutcome): ReflectionJobResult {
         originalWon: outcome.originalWon,
         stopReason: outcome.stopReason,
         rolloutsUsed: outcome.rolloutsUsed,
+        // Same precedence the engine applied at P2, recomputed from the same
+        // inputs, so the client sees exactly the family the winner targets.
+        requestedTargetModelFamily: resolveTargetModelFamily(
+          requestedTargetModelFamily,
+          outcome.intake.target_model_family
+        ),
         usage: outcome.usage,
         promptId: null,
       };

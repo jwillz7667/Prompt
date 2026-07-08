@@ -74,6 +74,20 @@ optimizeRouter.post(
       const tier = req.subscription?.tier ?? 'FREE';
       const mode: ReflectionJobMode = tier === 'FREE' ? 'fast_path' : 'full_loop';
 
+      // §8 target-model profiles: Free 1 / Pro all. FREE is locked to the
+      // generic profile — 'unknown' (or omitting the field) is the only
+      // accepted value. Body matches the MODALITY/MAX_MODE/COMPARE gates in
+      // routes/prompts.ts. No quota is consumed: recordUsage runs on job
+      // completion, not in enforceQuota.
+      if (tier === 'FREE' && data.target_model_family !== undefined && data.target_model_family !== 'unknown') {
+        res.status(403).json({
+          error: 'Subscription required',
+          code: 'TARGET_MODEL_REQUIRES_SUBSCRIPTION',
+          message: 'Upgrade to Pro or Premium to optimize for a specific model family.',
+        });
+        return;
+      }
+
       const jobId = await enqueueReflectionJob({
         userId: req.user.id,
         mode,

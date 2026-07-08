@@ -25,6 +25,8 @@ export const TARGET_MODEL_FAMILIES = [
   'unknown',
 ] as const;
 
+export type TargetModelFamily = (typeof TARGET_MODEL_FAMILIES)[number];
+
 export const MISSING_INGREDIENTS = [
   'context_facts',
   'examples',

@@ -155,6 +155,45 @@ describe('reflection optimize routes', () => {
       );
     });
 
+    it('returns 403 when FREE tier requests a specific target-model family', async () => {
+      const res = await request(app)
+        .post('/api/v1/optimize')
+        .set('Authorization', `Bearer ${freeUser.accessToken}`)
+        .send({ raw_prompt: 'write a poem about the sea', target_model_family: 'claude' });
+
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({
+        error: 'Subscription required',
+        code: 'TARGET_MODEL_REQUIRES_SUBSCRIPTION',
+        message: 'Upgrade to Pro or Premium to optimize for a specific model family.',
+      });
+      expect(enqueueMock).not.toHaveBeenCalled();
+    });
+
+    it("accepts the generic profile ('unknown') from FREE tier", async () => {
+      const res = await request(app)
+        .post('/api/v1/optimize')
+        .set('Authorization', `Bearer ${freeUser.accessToken}`)
+        .send({ raw_prompt: 'write a poem about the sea', target_model_family: 'unknown' });
+
+      expect(res.status).toBe(202);
+      expect(res.body.mode).toBe('fast_path');
+      expect(enqueueMock).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: freeUser.id, targetModelFamily: 'unknown' })
+      );
+    });
+
+    it('returns 400 for a target_model_family outside the enum', async () => {
+      const res = await request(app)
+        .post('/api/v1/optimize')
+        .set('Authorization', `Bearer ${proUser.accessToken}`)
+        .send({ raw_prompt: 'write a poem about the sea', target_model_family: 'mistral' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid request data');
+      expect(enqueueMock).not.toHaveBeenCalled();
+    });
+
     it('enqueues the full loop for PRO tier', async () => {
       const res = await request(app)
         .post('/api/v1/optimize')

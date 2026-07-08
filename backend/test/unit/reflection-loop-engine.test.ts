@@ -5,6 +5,7 @@ import {
   computeWeightedTotal,
   createReflectionEngine,
   fillVariableSlots,
+  resolveTargetModelFamily,
   selectTopCandidate,
   type ReflectionLlmCall,
   type ReflectionLlmRequest,
@@ -521,6 +522,35 @@ describe('reflection loop engine', () => {
     expect(singlePass).toHaveBeenCalledTimes(1);
   });
 
+  it("formats P2 for the explicitly requested family, overriding P0's inference", async () => {
+    const mock = createMockLlm(
+      baseHandlers({ handlers: { intake: () => intakeJson({ target_model_family: 'gpt' }) } })
+    );
+    const engine = createReflectionEngine({ llm: mock.llm, singlePass: createSinglePassMock() });
+
+    const outcome = await engine.optimize({ rawPrompt: ORIGINAL_PROMPT, targetModelFamily: 'claude' });
+
+    const candidatesMessage = mock.callsFor('candidates')[0]?.userMessage ?? '';
+    expect(candidatesMessage).toContain('target_model_family: claude');
+    expect(candidatesMessage).not.toContain('target_model_family: gpt');
+    // Intake stays P0's honest output — only the P2 input is overridden.
+    expect(outcome.status).toBe('optimized');
+    if (outcome.status !== 'optimized') return;
+    expect(outcome.intake.target_model_family).toBe('gpt');
+  });
+
+  it("defers to P0's inference when the request says 'unknown' or nothing", async () => {
+    const mock = createMockLlm(
+      baseHandlers({ handlers: { intake: () => intakeJson({ target_model_family: 'gemini' }) } })
+    );
+    const engine = createReflectionEngine({ llm: mock.llm, singlePass: createSinglePassMock() });
+
+    await engine.optimize({ rawPrompt: ORIGINAL_PROMPT, targetModelFamily: 'unknown' });
+
+    const candidatesMessage = mock.callsFor('candidates')[0]?.userMessage ?? '';
+    expect(candidatesMessage).toContain('target_model_family: gemini');
+  });
+
   it('emits progress phases in pipeline order', async () => {
     const mock = createMockLlm(baseHandlers());
     const phases: string[] = [];
@@ -567,6 +597,13 @@ describe('reflection loop helpers', () => {
     critique.weighted_total = 3.33;
 
     expect(computeWeightedTotal(critique, rubric)).toBe(3.33);
+  });
+
+  it('resolveTargetModelFamily: explicit specific choice wins, unknown/absent defer to inference', () => {
+    expect(resolveTargetModelFamily('claude', 'gpt')).toBe('claude');
+    expect(resolveTargetModelFamily('unknown', 'gpt')).toBe('gpt');
+    expect(resolveTargetModelFamily(undefined, 'deepseek')).toBe('deepseek');
+    expect(resolveTargetModelFamily('reasoning_model', 'unknown')).toBe('reasoning_model');
   });
 
   it('selectTopCandidate prefers higher score, then fewer prompt tokens', () => {

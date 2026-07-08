@@ -14,6 +14,7 @@ export {
   computeWeightedTotal,
   createReflectionEngine,
   fillVariableSlots,
+  resolveTargetModelFamily,
   selectTopCandidate,
   type OptimizeJobInput,
   type ReflectionEngine,
@@ -77,6 +78,7 @@ export {
   type RevisionOutput,
   type Rubric,
   type RubricCriterion,
+  type TargetModelFamily,
 } from './schemas.js';
 
 export {
