@@ -20,6 +20,13 @@ final class AuthManager: NSObject {
     var isCheckingSession = true
     var error: AuthError?
 
+    /// True when the stored tokens were rejected outright (refresh returned
+    /// 401/403) and cleared. Cached session data keeps `isAuthenticated` true
+    /// so the app still looks signed in — this flag is the signal feature UI
+    /// uses to surface a "sign in again" state instead of rendering as
+    /// authenticated with no data.
+    var isSessionExpired = false
+
     // MARK: - Persistent Session Storage (App Group for update persistence)
 
     private let appGroupId = "group.com.res.promptomizer"
@@ -47,6 +54,7 @@ final class AuthManager: NSObject {
 
     /// Store that user has signed in
     private func markAsSignedIn() {
+        isSessionExpired = false
         appGroupDefaults?.set(true, forKey: hasSignedInKey)
         // Also update SharedDataManager
         SharedDataManager.shared.isAuthenticated = true
@@ -57,6 +65,7 @@ final class AuthManager: NSObject {
 
     /// Clear sign-in state (only on explicit sign out)
     private func clearSignedInState() {
+        isSessionExpired = false
         appGroupDefaults?.removeObject(forKey: hasSignedInKey)
         appGroupDefaults?.removeObject(forKey: cachedUserKey)
         // Also clear from standard UserDefaults (migration cleanup)
@@ -121,6 +130,15 @@ final class AuthManager: NSObject {
         }
     }
 
+    // MARK: - Session Expiration
+
+    /// Called by APIClient when a token refresh is rejected outright (401/403)
+    /// and the stored tokens have been cleared. Flips the app into a visible
+    /// "session expired" state so chats/history can offer re-authentication.
+    func handleSessionExpiration() {
+        isSessionExpired = true
+    }
+
     // MARK: - Session Check
 
     func checkExistingSession() async {
@@ -151,6 +169,7 @@ final class AuthManager: NSObject {
                     print("[Auth] Token invalid (401), clearing session")
                     #endif
                     await APIClient.shared.clearTokens()
+                    isSessionExpired = true
                     // Don't clear UserDefaults - let user stay "logged in" with cached data
                 } else {
                     // Network or other transient error - use cached user

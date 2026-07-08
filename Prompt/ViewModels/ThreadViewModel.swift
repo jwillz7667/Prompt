@@ -9,12 +9,28 @@ import Foundation
 import SwiftUI
 import UIKit
 
+/// Outcome of the most recent thread-list fetch. Views must not render the
+/// "No chats yet" empty state unless this is `.loaded` — an expired session or
+/// a failed request used to render identically to an empty history, hiding
+/// auth failures from users with extensive server-side history.
+enum ThreadListLoadState: Equatable, Sendable {
+    /// No server fetch has completed yet (initial state, or guest without a session).
+    case idle
+    /// The last fetch succeeded; an empty `threads` array is authoritative.
+    case loaded
+    /// The client has no valid session — the user must sign in again.
+    case sessionExpired
+    /// The last fetch failed with a retryable network/API error.
+    case failed(String)
+}
+
 @Observable
 @MainActor
 final class ThreadViewModel {
     // MARK: - State
 
     var threads: [ThreadRecord] = []
+    var threadListState: ThreadListLoadState = .idle
     var currentThread: ThreadDetailDTO?
     var turns: [ThreadTurnRecord] = []
     var userPrompt: String = ""
@@ -159,6 +175,11 @@ final class ThreadViewModel {
             threads = []
             totalPages = 1
             isLoadingThreads = false
+            // AuthManager can keep reporting a cached "signed in" UI while the
+            // keychain has no usable tokens (e.g. the refresh token lapsed).
+            // That mismatch is an expired session, not an empty history — it
+            // must never render as "No chats yet".
+            threadListState = AuthManager.shared.isAuthenticated ? .sessionExpired : .idle
             return
         }
 
@@ -176,15 +197,33 @@ final class ThreadViewModel {
                 threads.append(contentsOf: response.threads.map { ThreadRecord(from: $0) })
             }
             totalPages = response.pagination.totalPages
+            threadListState = .loaded
         } catch let error as APIError {
-            errorMessage = error.localizedDescription
-            showError = true
+            applyFetchThreadsFailure(error)
         } catch {
-            errorMessage = "Failed to load threads"
-            showError = true
+            applyFetchThreadsFailure(nil)
         }
 
         isLoadingThreads = false
+    }
+
+    private func applyFetchThreadsFailure(_ error: APIError?) {
+        switch error {
+        case .unauthorized, .notAuthenticated:
+            // Terminal auth failure (token refresh rejected mid-request):
+            // surface the re-auth state rather than an alert or empty list.
+            threadListState = .sessionExpired
+        default:
+            let message = error?.localizedDescription ?? "Failed to load threads"
+            // Keep already-loaded pages visible on a pagination/refresh blip;
+            // only replace the list UI with the retryable error state when
+            // there is nothing to show.
+            if threads.isEmpty {
+                threadListState = .failed(message)
+            }
+            errorMessage = message
+            showError = true
+        }
     }
 
     func loadThread(id: String) async {

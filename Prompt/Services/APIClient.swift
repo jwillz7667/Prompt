@@ -444,6 +444,11 @@ actor APIClient {
                 let isAuthRejection = httpResponse.statusCode == 401 || httpResponse.statusCode == 403
                 if isAuthRejection {
                     await clearTokens()
+                    // Converge app-level auth state: AuthManager keeps a cached
+                    // "signed in" appearance after tokens are cleared, so it
+                    // must be told the session is terminally gone or the UI
+                    // keeps rendering as authenticated with no data.
+                    await MainActor.run { AuthManager.shared.handleSessionExpiration() }
                     isRefreshing = false
                     resumePendingRequests(with: APIError.unauthorized)
                     throw APIError.unauthorized

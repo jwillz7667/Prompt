@@ -37,6 +37,13 @@ struct ChatSidebarView: View {
         }
     }
 
+    /// Either signal means the stored session is no longer valid: the fetch
+    /// short-circuit (`threadListState`) or APIClient's terminal refresh
+    /// failure propagated through AuthManager.
+    private var isSessionExpired: Bool {
+        threadViewModel.threadListState == .sessionExpired || authManager.isSessionExpired
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Search bar + new chat button
@@ -83,15 +90,51 @@ struct ChatSidebarView: View {
                 ProgressView()
                     .tint(accentColor)
                 Spacer()
+            } else if isSessionExpired {
+                statusState(
+                    icon: "person.crop.circle.badge.exclamationmark",
+                    title: "Session expired",
+                    message: "Your chats are still saved. Sign in again to see them.",
+                    actionTitle: "Sign In Again"
+                ) {
+                    guestSession.presentAuthenticationGate()
+                    onDismiss()
+                }
+            } else if case .failed(let message) = threadViewModel.threadListState, threadViewModel.threads.isEmpty {
+                statusState(
+                    icon: "wifi.exclamationmark",
+                    title: "Couldn't load chats",
+                    message: message,
+                    actionTitle: "Retry"
+                ) {
+                    Task { await threadViewModel.fetchThreads(refresh: true) }
+                }
+            } else if threadViewModel.threadListState == .idle, !authManager.isAuthenticated {
+                statusState(
+                    icon: "person.crop.circle",
+                    title: "Sign in to see your chats",
+                    message: "Chats sync to your account once you sign in.",
+                    actionTitle: "Sign In"
+                ) {
+                    guestSession.presentAuthenticationGate()
+                    onDismiss()
+                }
             } else if filteredThreads.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 32, weight: .light))
-                        .foregroundStyle(textTertiary)
-                    Text(searchText.isEmpty ? "No chats yet" : "No results")
-                        .font(.system(.subheadline, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
+                    if threadViewModel.threadListState == .loaded || !searchText.isEmpty {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundStyle(textTertiary)
+                        // "No chats yet" only after the server confirmed an empty list
+                        Text(searchText.isEmpty ? "No chats yet" : "No results")
+                            .font(.system(.subheadline, design: .rounded, weight: .medium))
+                            .foregroundStyle(textSecondary)
+                    } else {
+                        // .idle while signed in: the fetch kicks off on appearance
+                        ProgressView()
+                            .tint(accentColor)
+                    }
                 }
                 Spacer()
             } else {
@@ -127,6 +170,54 @@ struct ChatSidebarView: View {
                 await threadViewModel.fetchThreads(refresh: true)
             }
         }
+    }
+
+    // MARK: - Status States
+
+    @ViewBuilder
+    private func statusState(
+        icon: String,
+        title: String,
+        message: String,
+        actionTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Spacer()
+        VStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(textTertiary)
+
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text(message)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+
+            Button {
+                triggerHaptic(.light)
+                action()
+            } label: {
+                Text(actionTitle)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(Color.adaptiveBackgroundTertiary.opacity(colorScheme == .dark ? 1 : 0.6))
+                    }
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        Spacer()
     }
 
     // MARK: - Thread Row

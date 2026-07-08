@@ -78,15 +78,7 @@ struct HistoryView: View {
 
                     Group {
                         if selectedTab == .chats {
-                            if !authManager.isAuthenticated {
-                                signInRequiredState
-                            } else if threadViewModel.isLoadingThreads && threadViewModel.threads.isEmpty {
-                                loadingView
-                            } else if filteredThreads.isEmpty {
-                                emptyStateView
-                            } else {
-                                threadList
-                            }
+                            chatsContent
                         } else if historyManager.isLoading && historyManager.prompts.isEmpty {
                             loadingView
                         } else if historyManager.prompts.isEmpty {
@@ -167,6 +159,35 @@ struct HistoryView: View {
         }
     }
 
+    // MARK: - Chats Tab Content
+
+    /// The "No Chats Yet" empty state must only render after a successful
+    /// server response with zero threads. An expired session or a failed
+    /// fetch gets its own state — silently rendering an empty list hid auth
+    /// failures from users with extensive history.
+    @ViewBuilder
+    private var chatsContent: some View {
+        if authManager.isSessionExpired || threadViewModel.threadListState == .sessionExpired {
+            sessionExpiredState
+        } else if !authManager.isAuthenticated {
+            signInRequiredState
+        } else if threadViewModel.isLoadingThreads && threadViewModel.threads.isEmpty {
+            loadingView
+        } else if case .failed(let message) = threadViewModel.threadListState, threadViewModel.threads.isEmpty {
+            threadsUnavailableState(message)
+        } else if filteredThreads.isEmpty {
+            if threadViewModel.threadListState == .loaded || !threadViewModel.threads.isEmpty {
+                // Confirmed-empty history, or a search with no matches
+                emptyStateView
+            } else {
+                // .idle while signed in: the fetch kicks off on appearance
+                loadingView
+            }
+        } else {
+            threadList
+        }
+    }
+
     // MARK: - Loading View
 
     private var loadingView: some View {
@@ -238,6 +259,83 @@ struct HistoryView: View {
                 dismiss()
             } label: {
                 Label("Sign In with Apple", systemImage: "apple.logo")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: accentColor, intensity: .prominent))
+            .padding(.horizontal, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var sessionExpiredState: some View {
+        VStack(spacing: 22) {
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.14))
+                    .frame(width: 96, height: 96)
+
+                Image(systemName: "person.crop.circle.badge.exclamationmark")
+                    .font(.system(size: 40, weight: .regular))
+                    .foregroundStyle(accentColor)
+            }
+
+            VStack(spacing: 8) {
+                Text("Session expired")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text("Your chats are still saved to your account, but this device's sign-in has lapsed. Sign in again to see them.")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+            }
+
+            Button {
+                guestSession.presentAuthenticationGate()
+                dismiss()
+            } label: {
+                Label("Sign In with Apple", systemImage: "apple.logo")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: accentColor, intensity: .prominent))
+            .padding(.horizontal, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func threadsUnavailableState(_ message: String) -> some View {
+        VStack(spacing: 22) {
+            ZStack {
+                Circle()
+                    .fill(accentColor.opacity(0.14))
+                    .frame(width: 96, height: 96)
+
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 40, weight: .regular))
+                    .foregroundStyle(accentColor)
+            }
+
+            VStack(spacing: 8) {
+                Text("Couldn't load chats")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+
+                Text(message)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+            }
+
+            Button {
+                Task {
+                    await threadViewModel.fetchThreads(refresh: true)
+                }
+            } label: {
+                Label("Try Again", systemImage: "arrow.clockwise")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
