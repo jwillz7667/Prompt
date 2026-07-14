@@ -2,6 +2,8 @@ import {
   AppStoreServerAPIClient,
   Environment,
   SignedDataVerifier,
+  VerificationException,
+  VerificationStatus,
   JWSTransactionDecodedPayload,
   JWSRenewalInfoDecodedPayload,
   NotificationTypeV2,
@@ -36,6 +38,16 @@ const environment =
     ? Environment.PRODUCTION
     : Environment.SANDBOX;
 
+// TestFlight builds always produce Sandbox-signed transactions, so a
+// production-pinned verifier rejects every TestFlight purchase. Sandbox JWS
+// are still Apple-signed and bundle-id checked; only builds provisioned by
+// this team (TestFlight/dev) can mint them. Trade-off accepted knowingly:
+// TestFlight testers get entitlements without being charged (IAP is always
+// free in TestFlight). The transaction's environment is persisted on
+// AppStoreTransaction for auditability. Set to 'false' to opt out.
+const ACCEPT_SANDBOX_TRANSACTIONS =
+  process.env['APPLE_ACCEPT_SANDBOX_TRANSACTIONS'] !== 'false';
+
 // Root CA certificates for App Store (embedded for reliability)
 const APPLE_ROOT_CA_G3 = `-----BEGIN CERTIFICATE-----
 MIICQzCCAcmgAwIBAgIILcX8iNLFS5UwCgYIKoZIzj0EAwMwZzEbMBkGA1UEAwwS
@@ -58,7 +70,7 @@ at+qIxUCMG1mihDK1A3UT82NQz60imOlM27jbdoXt2QfyFMm+YhidDkLF1vLUagM
 // ============================================================================
 
 let apiClient: AppStoreServerAPIClient | null = null;
-let signedDataVerifier: SignedDataVerifier | null = null;
+const verifiersByEnvironment = new Map<Environment, SignedDataVerifier>();
 
 function getApiClient(): AppStoreServerAPIClient {
   if (!apiClient) {
@@ -77,17 +89,72 @@ function getApiClient(): AppStoreServerAPIClient {
   return apiClient;
 }
 
-function getSignedDataVerifier(): SignedDataVerifier {
-  if (!signedDataVerifier) {
-    signedDataVerifier = new SignedDataVerifier(
+function getSignedDataVerifier(targetEnvironment: Environment = environment): SignedDataVerifier {
+  let verifier = verifiersByEnvironment.get(targetEnvironment);
+  if (!verifier) {
+    verifier = new SignedDataVerifier(
       [Buffer.from(APPLE_ROOT_CA_G3)],
       true, // Enable online checks
-      environment,
+      targetEnvironment,
       APPLE_BUNDLE_ID,
-      APPLE_APP_ID ? parseInt(APPLE_APP_ID, 10) : undefined
+      // Apple docs: appAppleId is omitted in the sandbox environment
+      targetEnvironment === Environment.SANDBOX
+        ? undefined
+        : APPLE_APP_ID
+          ? parseInt(APPLE_APP_ID, 10)
+          : undefined
     );
+    verifiersByEnvironment.set(targetEnvironment, verifier);
   }
-  return signedDataVerifier;
+  return verifier;
+}
+
+function isSandboxPayloadRejection(error: unknown): boolean {
+  // Transactions fail with INVALID_ENVIRONMENT. Notifications fail earlier
+  // with INVALID_APP_IDENTIFIER: the production verifier compares its
+  // configured appAppleId against the payload's, and sandbox notification
+  // payloads omit appAppleId entirely, so that check throws before the
+  // environment check is ever reached.
+  return (
+    error instanceof VerificationException &&
+    (error.status === VerificationStatus.INVALID_ENVIRONMENT ||
+      error.status === VerificationStatus.INVALID_APP_IDENTIFIER)
+  );
+}
+
+/**
+ * Runs a verification against the primary environment, retrying against
+ * SANDBOX when the payload was signed for the other environment (TestFlight
+ * purchases hitting a production server). Returns the environment that
+ * actually verified so nested payloads can be decoded consistently.
+ */
+async function verifyWithEnvironmentFallback<T>(
+  verify: (verifier: SignedDataVerifier) => Promise<T>
+): Promise<{ payload: T; verifiedEnvironment: Environment }> {
+  try {
+    return { payload: await verify(getSignedDataVerifier()), verifiedEnvironment: environment };
+  } catch (error) {
+    if (
+      environment === Environment.PRODUCTION &&
+      ACCEPT_SANDBOX_TRANSACTIONS &&
+      isSandboxPayloadRejection(error)
+    ) {
+      storeLogger.info(
+        'Payload rejected by production verifier - retrying with sandbox verifier (TestFlight purchase)'
+      );
+      try {
+        return {
+          payload: await verify(getSignedDataVerifier(Environment.SANDBOX)),
+          verifiedEnvironment: Environment.SANDBOX,
+        };
+      } catch {
+        // The payload is neither valid production nor valid sandbox data:
+        // the original production error is the meaningful one.
+        throw error;
+      }
+    }
+    throw error;
+  }
 }
 
 // ============================================================================
@@ -109,10 +176,11 @@ export interface VerifiedTransaction {
 export async function verifySignedTransaction(
   signedTransaction: string
 ): Promise<VerifiedTransaction> {
-  const verifier = getSignedDataVerifier();
-
-  // Verify and decode the signed transaction
-  const decodedTransaction = await verifier.verifyAndDecodeTransaction(signedTransaction);
+  // Verify and decode the signed transaction (production first, sandbox
+  // fallback for TestFlight purchases)
+  const { payload: decodedTransaction } = await verifyWithEnvironmentFallback(
+    (verifier) => verifier.verifyAndDecodeTransaction(signedTransaction)
+  );
 
   return {
     transactionId: decodedTransaction.transactionId || '',
@@ -206,11 +274,13 @@ export interface NotificationPayload {
 export async function processAppStoreNotification(
   signedPayload: string
 ): Promise<{ success: boolean; message: string }> {
-  const verifier = getSignedDataVerifier();
-
   try {
-    // Verify and decode the notification
-    const notification = await verifier.verifyAndDecodeNotification(signedPayload);
+    // Verify and decode the notification (production first, sandbox fallback
+    // — Apple sends Sandbox-signed notifications for TestFlight purchases).
+    // Nested payloads below must be decoded with the same environment.
+    const { payload: notification, verifiedEnvironment } =
+      await verifyWithEnvironmentFallback((v) => v.verifyAndDecodeNotification(signedPayload));
+    const verifier = getSignedDataVerifier(verifiedEnvironment);
 
     const notificationType = notification.notificationType;
     const subtype = notification.subtype;

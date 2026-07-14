@@ -14,6 +14,7 @@ import {
   verifySignedTransaction,
   processVerifiedTransaction,
 } from '../services/appleStoreService.js';
+import { VerificationException } from '@apple/app-store-server-library';
 import { subscriptionLogger } from '../utils/logger.js';
 import { prisma } from '../utils/prisma.js';
 
@@ -97,12 +98,17 @@ subscriptionRouter.post('/verify', async (req: AuthenticatedRequest, res: Respon
     // Get updated subscription info
     const subscriptionInfo = await getSubscriptionInfo(req.user.id);
 
+    // Deployed iOS clients decode this into a model requiring isTrialing —
+    // omitting it makes the decode throw and the client treats a successful
+    // activation as failed, so keep this shape in sync with GET /status.
     res.json({
       success: true,
       subscription: {
         tier: subscriptionInfo.tier,
         status: subscriptionInfo.status,
         expiresAt: subscriptionInfo.expiresAt?.toISOString() || null,
+        isTrialing: subscriptionInfo.isTrialing,
+        trialEndsAt: subscriptionInfo.trialEndsAt?.toISOString() || null,
       },
       features: subscriptionInfo.features,
     });
@@ -114,16 +120,11 @@ subscriptionRouter.post('/verify', async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    // Handle specific Apple verification errors
-    if (error instanceof Error) {
-      if (error.message.includes('signature')) {
-        res.status(400).json({ error: 'Invalid transaction signature' });
-        return;
-      }
-      if (error.message.includes('expired')) {
-        res.status(400).json({ error: 'Transaction has expired' });
-        return;
-      }
+    // Apple rejected the signed transaction itself — a permanent failure the
+    // client must not retry (400), unlike infra errors below (500).
+    if (error instanceof VerificationException) {
+      res.status(400).json({ error: 'Invalid transaction', code: 'TRANSACTION_INVALID' });
+      return;
     }
 
     res.status(500).json({ error: 'Failed to verify purchase' });
@@ -194,6 +195,8 @@ subscriptionRouter.post('/restore', async (req: AuthenticatedRequest, res: Respo
           tier: subscriptionInfo.tier,
           status: subscriptionInfo.status,
           expiresAt: subscriptionInfo.expiresAt?.toISOString() || null,
+          isTrialing: subscriptionInfo.isTrialing,
+          trialEndsAt: subscriptionInfo.trialEndsAt?.toISOString() || null,
         },
         features: subscriptionInfo.features,
       });
