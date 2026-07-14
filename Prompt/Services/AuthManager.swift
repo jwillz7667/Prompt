@@ -272,8 +272,9 @@ final class AuthManager: NSObject {
             print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
             #endif
 
-            // Sync subscription status after successful authentication
-            await StoreKitManager.shared.syncWithBackend()
+            // Activate any pending purchases and sync subscription status
+            // now that the session exists to attach them to
+            await StoreKitManager.shared.checkEntitlements()
 
             // Track successful sign-in
             AnalyticsService.shared.trackSignIn(provider: "apple", success: true)
@@ -395,8 +396,9 @@ extension AuthManager: ASAuthorizationControllerDelegate {
                 print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
                 #endif
 
-                // Sync subscription status after successful authentication
-                await StoreKitManager.shared.syncWithBackend()
+                // Activate any pending purchases and sync subscription status
+                // now that the session exists to attach them to
+                await StoreKitManager.shared.checkEntitlements()
 
                 // Track successful sign-in
                 AnalyticsService.shared.trackSignIn(provider: "apple", success: true)

@@ -144,13 +144,31 @@ final class StoreKitManager {
                 let transaction = try checkVerified(verification)
 
                 // Sync with backend using JWS from the verification result
-                await syncTransactionWithBackend(jwsRepresentation: verification.jwsRepresentation)
+                let outcome = await syncTransactionWithBackend(jwsRepresentation: verification.jwsRepresentation)
 
-                // Finish the transaction
-                await transaction.finish()
+                // Only finish once the backend has resolved the transaction
+                // (granted, or permanently rejected). Left unfinished,
+                // StoreKit redelivers it via Transaction.updates /
+                // Transaction.unfinished, so a transient activation failure
+                // retries on next launch or after sign-in instead of being
+                // dropped forever.
+                if outcome != .retryLater {
+                    await transaction.finish()
+                }
 
-                // Refresh entitlements
+                // Refresh entitlements (also retries pending activations)
                 await checkEntitlements()
+
+                if outcome != .accepted, await APIClient.shared.isAuthenticated, !hasActiveSubscription {
+                    // Purchase succeeded at Apple but activation on the
+                    // account failed and the entitlement still isn't active —
+                    // surface it instead of showing success over still-locked
+                    // features.
+                    let activationError = StoreError.activationFailed
+                    self.error = activationError
+                    isLoading = false
+                    throw activationError
+                }
 
                 isLoading = false
                 return transaction
@@ -182,6 +200,11 @@ final class StoreKitManager {
     // MARK: - Check Entitlements
 
     func checkEntitlements() async {
+        // Purchases whose backend activation failed (offline, signed out,
+        // server error) are intentionally left unfinished — retry them first
+        // so the status sync below reflects the recovered entitlement.
+        await activatePendingTransactions()
+
         var purchasedIds: Set<String> = []
 
         // Check current entitlements
@@ -203,6 +226,22 @@ final class StoreKitManager {
 
         // Sync with backend to get authoritative subscription info
         await syncWithBackend()
+    }
+
+    /// Re-attempts backend activation for transactions that were never
+    /// finished because the backend sync failed at purchase time. Finishes
+    /// each transaction only once the backend accepts it.
+    private func activatePendingTransactions() async {
+        guard await APIClient.shared.isAuthenticated else { return }
+
+        for await result in Transaction.unfinished {
+            guard case .verified(let transaction) = result else { continue }
+
+            let outcome = await syncTransactionWithBackend(jwsRepresentation: result.jwsRepresentation)
+            if outcome != .retryLater {
+                await transaction.finish()
+            }
+        }
     }
 
     // MARK: - Restore Purchases
@@ -274,7 +313,7 @@ final class StoreKitManager {
                 tier: response.subscription.tier,
                 status: response.subscription.status,
                 expiresAt: expiresAt,
-                isTrialing: response.subscription.isTrialing,
+                isTrialing: response.subscription.isTrialing ?? false,
                 trialEndsAt: trialEndsAt,
                 features: response.features
             )
@@ -367,8 +406,16 @@ final class StoreKitManager {
                     let transaction = try await self?.checkVerified(result)
 
                     if let transaction = transaction {
-                        await self?.syncTransactionWithBackend(jwsRepresentation: result.jwsRepresentation)
-                        await transaction.finish()
+                        // Finish only after the backend resolves the
+                        // transaction (accepted or permanently rejected);
+                        // otherwise StoreKit redelivers it on the next launch
+                        // and activation is retried.
+                        let outcome = await self?.syncTransactionWithBackend(
+                            jwsRepresentation: result.jwsRepresentation
+                        )
+                        if let outcome, outcome != .retryLater {
+                            await transaction.finish()
+                        }
                         await self?.checkEntitlements()
                     }
                 } catch {
@@ -393,18 +440,54 @@ final class StoreKitManager {
 
     // MARK: - Sync Transaction with Backend
 
-    private func syncTransactionWithBackend(jwsRepresentation: String) async {
+    /// Outcome of a backend activation attempt for a signed transaction.
+    /// Determines whether the StoreKit transaction may be finished: finishing
+    /// on `.retryLater` would drop the purchase forever, while never
+    /// finishing on `.rejected` would re-verify a permanently invalid
+    /// transaction on every launch.
+    private enum PurchaseSyncOutcome {
+        case accepted
+        case rejected
+        case retryLater
+    }
+
+    /// Sends the signed transaction to the backend for verification and
+    /// entitlement grant.
+    private func syncTransactionWithBackend(jwsRepresentation: String) async -> PurchaseSyncOutcome {
+        guard await APIClient.shared.isAuthenticated else {
+            // No session — the backend has no account to attach the purchase
+            // to. The unfinished transaction is retried after sign-in via
+            // activatePendingTransactions().
+            return .retryLater
+        }
+
         do {
-            let request = VerifyPurchaseRequest(signedTransaction: jwsRepresentation)
-            let _: VerifyPurchaseResponse = try await APIClient.shared.request(
+            let response: VerifyPurchaseResponse = try await APIClient.shared.request(
                 "/subscriptions/verify",
                 method: .post,
-                body: request
+                body: VerifyPurchaseRequest(signedTransaction: jwsRepresentation)
             )
+            return response.success ? .accepted : .rejected
+        } catch APIError.decodingError {
+            // The server returned 200 — the entitlement was granted; only the
+            // response shape drifted. Treat as accepted so the transaction
+            // finishes instead of re-verifying forever.
+            ErrorHandler.shared.handleSilently(APIError.decodingError, context: "syncTransactionWithBackend")
+            return .accepted
+        } catch let error as APIError {
+            ErrorHandler.shared.handleSilently(error, context: "syncTransactionWithBackend")
+            switch error {
+            case .badRequest:
+                // Apple itself rejected the signed transaction — permanent.
+                return .rejected
+            case .serverMessage(_, let code) where code == 400 || code == 422:
+                return .rejected
+            default:
+                return .retryLater
+            }
         } catch {
-            #if DEBUG
-            print("Failed to verify purchase with backend: \(error)")
-            #endif
+            ErrorHandler.shared.handleSilently(error, context: "syncTransactionWithBackend")
+            return .retryLater
         }
     }
 
@@ -449,6 +532,7 @@ enum StoreError: LocalizedError {
     case purchasePending
     case failedVerification
     case unknownPurchaseResult
+    case activationFailed
     case restoreFailed(Error)
     case trialNotAvailable(String)
     case trialFailed(Error)
@@ -465,6 +549,8 @@ enum StoreError: LocalizedError {
             return "Transaction verification failed"
         case .unknownPurchaseResult:
             return "Unknown purchase result"
+        case .activationFailed:
+            return "Your purchase went through, but we couldn't activate it on your account. It will retry automatically — or tap Restore Purchase."
         case .restoreFailed(let error):
             return "Failed to restore purchases: \(error.localizedDescription)"
         case .trialNotAvailable(let message):

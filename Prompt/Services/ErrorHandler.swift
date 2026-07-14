@@ -386,6 +386,8 @@ final class ErrorHandler: ObservableObject {
                 return .verificationFailed
             case .unknownPurchaseResult:
                 return .purchaseFailed("Unknown purchase result")
+            case .activationFailed:
+                return .purchaseFailed("Your purchase went through, but we couldn't activate it on your account. It will retry automatically — or tap Restore Purchase.")
             case .restoreFailed:
                 return .restoreFailed
             case .trialNotAvailable(let message):

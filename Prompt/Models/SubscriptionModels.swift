@@ -144,7 +144,10 @@ struct SubscriptionResponse: Codable {
     let tier: SubscriptionTier
     let status: SubscriptionStatus
     let expiresAt: String?
-    let isTrialing: Bool
+    // Optional because not every endpoint includes it (e.g. older backend
+    // /verify and /restore responses) — a required key here made the decode
+    // throw and successful purchase activations register as failures.
+    let isTrialing: Bool?
     let trialEndsAt: String?
 }
 
