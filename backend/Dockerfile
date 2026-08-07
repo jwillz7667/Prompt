@@ -1,5 +1,5 @@
 # Build stage - use Debian-based image for OpenSSL compatibility
-FROM node:20-slim AS builder
+FROM node:26-slim AS builder
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:20-slim AS runner
+FROM node:26-slim AS runner
 
 WORKDIR /app
 
