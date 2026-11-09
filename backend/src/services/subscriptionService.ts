@@ -1,12 +1,11 @@
 import { prisma } from '../utils/prisma.js';
-import { SubscriptionTier, SubscriptionStatus, Prisma } from '@prisma/client';
+import { SubscriptionTier, SubscriptionStatus } from '@prisma/client';
 import { cache } from '../utils/redis.js';
 import { logger } from '../utils/logger.js';
 import {
   sendSubscriptionConfirmation,
   sendSubscriptionCancelled,
   sendSubscriptionExpired,
-  sendDailyLimitReached,
 } from './emailService.js';
 
 // ============================================================================
@@ -79,15 +78,13 @@ const FREE_TRIAL_DAYS = parseInt(process.env['FREE_TRIAL_DAYS'] || '7', 10);
 export async function getSubscriptionInfo(userId: string): Promise<SubscriptionInfo> {
   // Get today's date key for cache
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
   const dateKey = today.toISOString().split('T')[0] as string;
 
   // Try to get cached subscription info
   const cachedSub = await cache.getSubscription(userId);
   const cachedUsage = await cache.getDailyUsage(userId, dateKey);
 
-  let subscription;
-  let dailyUsage;
 
   if (cachedSub && cachedUsage) {
     // A subscription can expire *during* the 300s cache TTL. Serving the cached
@@ -106,11 +103,12 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
         tier: cachedSub.tier as SubscriptionTier,
         status: cachedSub.status as SubscriptionStatus,
         expiresAt: cachedExpiry,
-        isTrialing: false,
-        trialEndsAt: null,
+        isTrialing: cachedSub.isTrialing ?? false,
+        trialEndsAt: cachedSub.trialEndsAt ? new Date(cachedSub.trialEndsAt) : null,
         dailyPromptsUsed: cachedUsage.promptCount,
         dailyPromptsLimit: limits.dailyPrompts,
-        canPerformAction: limits.dailyPrompts === -1 || cachedUsage.promptCount < limits.dailyPrompts,
+        canPerformAction:
+          limits.dailyPrompts === -1 || cachedUsage.promptCount < limits.dailyPrompts,
         features: {
           promptQuality: limits.promptQuality,
           canExport: limits.canExport,
@@ -124,7 +122,7 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
 
   // Cache miss - query database
   logger.debug({ userId }, 'Subscription cache miss - querying database');
-  [subscription, dailyUsage] = await Promise.all([
+  const [subscription, dailyUsage] = await Promise.all([
     prisma.subscription.findUnique({
       where: { userId },
       include: { user: true },
@@ -143,20 +141,33 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
     effectiveTier = subscription.tier;
     status = subscription.status;
     isTrialing = subscription.isTrialing;
-    expiresAt = subscription.expiresAt;
+    expiresAt =
+      subscription.status === SubscriptionStatus.GRACE_PERIOD && subscription.gracePeriodEndDate
+        ? subscription.gracePeriodEndDate
+        : subscription.expiresAt;
     trialEndsAt = subscription.trialEndDate;
 
     // Check if subscription has expired
-    if (subscription.expiresAt && subscription.expiresAt < new Date()) {
-      if (subscription.status !== SubscriptionStatus.EXPIRED) {
-        await handleExpiredSubscription(subscription.id);
+    if (expiresAt && expiresAt <= new Date()) {
+      effectiveTier = SubscriptionTier.FREE;
+      status = SubscriptionStatus.EXPIRED;
+      if (
+        subscription.status !== SubscriptionStatus.EXPIRED ||
+        subscription.tier !== SubscriptionTier.FREE
+      ) {
+        if (!(await handleExpiredSubscription(subscription.id))) return getSubscriptionInfo(userId);
         effectiveTier = SubscriptionTier.FREE;
         status = SubscriptionStatus.EXPIRED;
+        isTrialing = false;
       }
     }
 
     // Check if trial has ended
-    if (subscription.isTrialing && subscription.trialEndDate && subscription.trialEndDate < new Date()) {
+    if (
+      subscription.isTrialing &&
+      subscription.trialEndDate &&
+      subscription.trialEndDate < new Date()
+    ) {
       await handleExpiredTrial(subscription.id);
       effectiveTier = SubscriptionTier.FREE;
       isTrialing = false;
@@ -178,6 +189,8 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
     dailyLimit: limits.dailyPrompts,
     maxTokens: limits.maxTokensPerPrompt,
     promptQuality: limits.promptQuality,
+    isTrialing,
+    trialEndsAt: trialEndsAt?.toISOString() || null,
   });
 
   await cache.setDailyUsage(userId, dateKey, {
@@ -208,7 +221,10 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
 
 export type QuotaAction = 'enhance_prompt' | 'export';
 
-export async function canPerformAction(userId: string, action: QuotaAction): Promise<{
+export async function canPerformAction(
+  userId: string,
+  action: QuotaAction,
+): Promise<{
   allowed: boolean;
   reason?: string;
   remainingQuota?: number;
@@ -254,7 +270,7 @@ export async function canPerformAction(userId: string, action: QuotaAction): Pro
 
 async function getTodayUsage(userId: string) {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
 
   return prisma.dailyUsage.findUnique({
     where: {
@@ -268,7 +284,7 @@ async function getTodayUsage(userId: string) {
 
 export async function recordUsage(userId: string): Promise<void> {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
   const dateKey = today.toISOString().split('T')[0] as string;
 
   await prisma.dailyUsage.upsert({
@@ -301,71 +317,31 @@ export async function startFreeTrial(userId: string): Promise<{
   message: string;
   trialEndDate?: Date;
 }> {
-  // Check if user already has a subscription or has used trial
-  const existingSubscription = await prisma.subscription.findUnique({
-    where: { userId },
-  });
-
-  if (existingSubscription?.hasUsedTrial) {
-    return {
-      success: false,
-      message: 'Trial already used',
+  const trialEndDate = new Date(Date.now() + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`subscription:${userId}`}, 0))`;
+    const existing = await tx.subscription.findUnique({ where: { userId } });
+    if (existing?.hasUsedTrial) return { success: false, message: 'Trial already used' };
+    if (existing && existing.tier !== SubscriptionTier.FREE) {
+      return { success: false, message: 'Already subscribed' };
+    }
+    const data = {
+      tier: SubscriptionTier.PREMIUM,
+      status: SubscriptionStatus.ACTIVE,
+      isTrialing: true,
+      hasUsedTrial: true,
+      trialEndDate,
+      expiresAt: trialEndDate,
     };
-  }
-
-  if (existingSubscription?.tier !== SubscriptionTier.FREE) {
-    return {
-      success: false,
-      message: 'Already subscribed',
-    };
-  }
-
-  const trialEndDate = new Date();
-  trialEndDate.setDate(trialEndDate.getDate() + FREE_TRIAL_DAYS);
-
-  if (existingSubscription) {
-    // Update existing subscription to trial
-    await prisma.subscription.update({
-      where: { userId },
-      data: {
-        tier: SubscriptionTier.PREMIUM,
-        status: SubscriptionStatus.ACTIVE,
-        isTrialing: true,
-        hasUsedTrial: true,
-        trialEndDate,
-        expiresAt: trialEndDate,
-      },
+    await tx.subscription.upsert({ where: { userId }, update: data, create: { userId, ...data } });
+    await tx.user.update({
+      where: { id: userId },
+      data: { subscriptionTier: SubscriptionTier.PREMIUM, isPremium: true },
     });
-  } else {
-    // Create new subscription with trial
-    await prisma.subscription.create({
-      data: {
-        userId,
-        tier: SubscriptionTier.PREMIUM,
-        status: SubscriptionStatus.ACTIVE,
-        isTrialing: true,
-        hasUsedTrial: true,
-        trialEndDate,
-        expiresAt: trialEndDate,
-      },
-    });
-  }
-
-  // Update user's tier
-  await prisma.user.update({
-    where: { id: userId },
-    data: { subscriptionTier: SubscriptionTier.PREMIUM },
+    return { success: true, message: 'Trial started', trialEndDate };
   });
-
-  // Invalidate subscription cache
-  await cache.invalidateSubscription(userId);
-  await cache.invalidateUser(userId);
-
-  return {
-    success: true,
-    message: 'Trial started',
-    trialEndDate,
-  };
+  await invalidateSubscriptionCaches(userId);
+  return result;
 }
 
 export async function hasUsedTrial(userId: string): Promise<boolean> {
@@ -391,7 +367,7 @@ export async function updateSubscription(
     expiresAt: Date | null;
     autoRenewEnabled: boolean;
     autoRenewProductId?: string;
-  }
+  },
 ): Promise<void> {
   const existingSubscription = await prisma.subscription.findUnique({
     where: { userId },
@@ -466,17 +442,14 @@ export async function cancelSubscription(userId: string): Promise<void> {
       subscription.user.email,
       subscription.user.name,
       subscription.tier,
-      subscription.expiresAt
+      subscription.expiresAt,
     ).catch((err) => {
       logger.warn({ error: err, userId }, 'Failed to send subscription cancellation email');
     });
   }
 }
 
-export async function handleGracePeriod(
-  userId: string,
-  gracePeriodEndDate: Date
-): Promise<void> {
+export async function handleGracePeriod(userId: string, gracePeriodEndDate: Date): Promise<void> {
   await prisma.subscription.update({
     where: { userId },
     data: {
@@ -500,10 +473,7 @@ export async function handleGracePeriod(
 // mutation that just succeeded in Postgres.
 export async function invalidateSubscriptionCaches(userId: string): Promise<void> {
   try {
-    await Promise.all([
-      cache.invalidateSubscription(userId),
-      cache.invalidateUser(userId),
-    ]);
+    await Promise.all([cache.invalidateSubscription(userId), cache.invalidateUser(userId)]);
   } catch (error) {
     logger.warn({ error, userId }, 'Failed to invalidate subscription caches');
   }
@@ -513,70 +483,59 @@ export async function invalidateSubscriptionCaches(userId: string): Promise<void
 // EXPIRATION HANDLING
 // ============================================================================
 
-async function handleExpiredSubscription(subscriptionId: string): Promise<void> {
-  const subscription = await prisma.subscription.update({
-    where: { id: subscriptionId },
-    data: {
-      tier: SubscriptionTier.FREE,
-      status: SubscriptionStatus.EXPIRED,
-    },
-    include: { user: true },
+async function expireSubscription(subscriptionId: string, trialOnly = false): Promise<boolean> {
+  const expired = await prisma.$transaction(async (tx) => {
+    const owner = await tx.subscription.findUnique({
+      where: { id: subscriptionId },
+      select: { userId: true },
+    });
+    if (!owner) return null;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`subscription:${owner.userId}`}, 0))`;
+    // Recheck after acquiring the same lock as purchase/renewal processing.
+    const current = await tx.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: { user: true },
+    });
+    if (!current || (trialOnly && !current.isTrialing)) return null;
+    const expiry = trialOnly
+      ? current.trialEndDate
+      : current.status === SubscriptionStatus.GRACE_PERIOD && current.gracePeriodEndDate
+        ? current.gracePeriodEndDate
+        : current.expiresAt;
+    if (!expiry || expiry > new Date()) return null;
+    await tx.subscription.update({
+      where: { id: subscriptionId },
+      data: {
+        tier: SubscriptionTier.FREE,
+        status: SubscriptionStatus.EXPIRED,
+        isTrialing: false,
+      },
+    });
+    await tx.user.update({
+      where: { id: current.userId },
+      data: {
+        subscriptionTier: SubscriptionTier.FREE,
+        isPremium: false,
+      },
+    });
+    return current;
   });
-
-  // Update user's tier
-  await prisma.user.update({
-    where: { id: subscription.userId },
-    data: {
-      subscriptionTier: SubscriptionTier.FREE,
-      isPremium: false,
-    },
+  if (!expired) return false;
+  await invalidateSubscriptionCaches(expired.userId);
+  sendSubscriptionExpired(expired.user.email, expired.user.name, expired.tier).catch((error) => {
+    logger.warn({ error, userId: expired.userId }, 'Failed to send subscription expiration email');
   });
-
-  await invalidateSubscriptionCaches(subscription.userId);
-
-  // Send expiration email (fire-and-forget)
-  sendSubscriptionExpired(
-    subscription.user.email,
-    subscription.user.name,
-    subscription.tier
-  ).catch((err) => {
-    logger.warn({ error: err, userId: subscription.userId }, 'Failed to send subscription expiration email');
-  });
+  return true;
 }
 
-async function handleExpiredTrial(subscriptionId: string): Promise<void> {
-  const subscription = await prisma.subscription.update({
-    where: { id: subscriptionId },
-    data: {
-      tier: SubscriptionTier.FREE,
-      status: SubscriptionStatus.EXPIRED,
-      isTrialing: false,
-    },
-    include: { user: true },
-  });
-
-  // Update user's tier
-  await prisma.user.update({
-    where: { id: subscription.userId },
-    data: {
-      subscriptionTier: SubscriptionTier.FREE,
-      isPremium: false,
-    },
-  });
-
-  await invalidateSubscriptionCaches(subscription.userId);
-
-  // Send trial expiration email (fire-and-forget)
-  sendSubscriptionExpired(
-    subscription.user.email,
-    subscription.user.name,
-    'PREMIUM' // Trial was for Premium
-  ).catch((err) => {
-    logger.warn({ error: err, userId: subscription.userId }, 'Failed to send trial expiration email');
-  });
+async function handleExpiredSubscription(subscriptionId: string): Promise<boolean> {
+  return expireSubscription(subscriptionId);
 }
 
-// Cron job function to process expired subscriptions
+async function handleExpiredTrial(subscriptionId: string): Promise<boolean> {
+  return expireSubscription(subscriptionId, true);
+}
+
 export async function processExpiredSubscriptions(): Promise<number> {
   const now = new Date();
 
@@ -626,19 +585,11 @@ export function getTierLimits(tier: SubscriptionTier): TierLimits {
 }
 
 export async function ensureSubscriptionExists(userId: string): Promise<void> {
-  const existing = await prisma.subscription.findUnique({
+  await prisma.subscription.upsert({
     where: { userId },
+    update: {},
+    create: { userId, tier: SubscriptionTier.FREE, status: SubscriptionStatus.ACTIVE },
   });
-
-  if (!existing) {
-    await prisma.subscription.create({
-      data: {
-        userId,
-        tier: SubscriptionTier.FREE,
-        status: SubscriptionStatus.ACTIVE,
-      },
-    });
-  }
 }
 
 // Get available products for display

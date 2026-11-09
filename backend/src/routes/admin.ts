@@ -114,7 +114,7 @@ adminRouter.post('/tickets/:ticketId/reply', async (req: Request, res: Response)
     res.json({ success: true, message: 'Reply sent and user notified via email' });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -151,7 +151,7 @@ adminRouter.patch('/tickets/:ticketId/status', async (req: Request, res: Respons
     res.json({ success: true, status: data.status });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.issues });
       return;
     }
     logger.error({ error }, 'Admin update ticket status error');
@@ -660,7 +660,7 @@ adminRouter.patch('/templates/:id', async (req: Request, res: Response): Promise
     res.json({ template });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.issues });
       return;
     }
     logger.error({ error }, 'Admin moderate template error');

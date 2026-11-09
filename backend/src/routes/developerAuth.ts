@@ -73,7 +73,7 @@ developerAuthRouter.post('/signup', async (req: Request, res: Response): Promise
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -107,7 +107,7 @@ developerAuthRouter.post('/login', async (req: Request, res: Response): Promise<
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -142,7 +142,7 @@ developerAuthRouter.post('/refresh', async (req: Request, res: Response): Promis
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -258,7 +258,7 @@ developerAuthRouter.patch(
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
       logger.error({ error }, 'Update developer profile error');
@@ -292,7 +292,7 @@ developerAuthRouter.post(
       res.json({ success: true, message: 'Password changed successfully. Please login again.' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
       if (error instanceof Error && error.message === 'Current password is incorrect') {

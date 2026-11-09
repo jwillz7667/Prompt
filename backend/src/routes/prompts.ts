@@ -514,7 +514,7 @@ promptRouter.post(
     } catch (error) {
       promptLogger.error({ err: error }, 'Enhance prompt error');
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
       if (error instanceof HttpError) {
@@ -847,7 +847,7 @@ promptRouter.post(
     } catch (error) {
       promptLogger.error({ err: error }, 'Create prompt error');
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
       if (error instanceof HttpError) {
@@ -928,7 +928,7 @@ promptRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
   } catch (error) {
     promptLogger.error({ err: error }, 'List prompts error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to list prompts' });
@@ -1022,7 +1022,7 @@ promptRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
   } catch (error) {
     promptLogger.error({ err: error }, 'Update prompt error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to update prompt' });
@@ -1365,7 +1365,7 @@ promptRouter.post(
     } catch (error) {
       promptLogger.error({ err: error }, 'Compare providers error');
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
       if (error instanceof CompareValidationError) {

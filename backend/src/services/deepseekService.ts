@@ -1,8 +1,8 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions.js';
 import { type TierFeatures } from './subscriptionService.js';
-import { imageAnalysisService, type PromptImageAttachment } from './imageAnalysisService.js';
-import { resolveDeepseekModel, type DeepSeekThinkingConfig } from './deepseekModels.js';
+import type { PromptImageAttachment } from './imageAnalysisService.js';
+import { DEEPSEEK_FLASH_MODEL, getDeepseekModel, type DeepSeekThinkingConfig } from './deepseekModels.js';
 import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
@@ -57,7 +57,7 @@ export interface DeepSeekMessage {
 
 export interface DeepSeekRequest {
   model: string;
-  messages: DeepSeekMessage[];
+  messages: ChatCompletionMessageParam[];
   temperature: number;
   max_tokens: number;
   stream: boolean;
@@ -71,6 +71,7 @@ interface DeepSeekResponse {
     message?: {
       content?: string;
     };
+    finish_reason?: string;
   }>;
   usage?: {
     prompt_tokens?: number;
@@ -86,10 +87,8 @@ const STANDARD_MAX_TOKENS = 3072;
 const MAX_MAX_TOKENS = 6144;
 const THREAD_CONTEXT_CHAR_BUDGET = 220_000;
 
-// Vision-capable OpenAI models used when a request includes an image. DeepSeek's
-// chat endpoint is text-only, so any image would collapse to a short analysis
-// blurb — we route those through GPT-4.1 vision so the model actually sees the
-// pixels and can maintain visual context across a whole thread.
+// Retained compatibility defaults for deployments explicitly selecting OpenAI.
+// Native DeepSeek Flash vision is the default; operators can override these IDs.
 const OPENAI_VISION_STANDARD_MODEL = 'gpt-4.1-mini';
 const OPENAI_VISION_MAX_MODEL = 'gpt-4.1';
 
@@ -105,14 +104,16 @@ const OPENAI_VISION_MAX_MODEL = 'gpt-4.1';
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
   if (typeof raw !== 'string') return fallback;
-  const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const parsed = Number(raw);
+  const minimum = name.endsWith('MAX_RETRIES') ? 0 : 1;
+  return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
 }
 
 const DEEPSEEK_REQUEST_TIMEOUT_MS = envInt('DEEPSEEK_REQUEST_TIMEOUT_MS', 90_000);
 const DEEPSEEK_CONNECT_TIMEOUT_MS = envInt('DEEPSEEK_CONNECT_TIMEOUT_MS', 30_000);
 const DEEPSEEK_STREAM_IDLE_TIMEOUT_MS = envInt('DEEPSEEK_STREAM_IDLE_TIMEOUT_MS', 60_000);
-const DEEPSEEK_MAX_RETRIES = envInt('DEEPSEEK_MAX_RETRIES', 2);
+const DEEPSEEK_MAX_RETRIES = Math.min(envInt('DEEPSEEK_MAX_RETRIES', 2), 3);
+const DEEPSEEK_STREAM_TOTAL_TIMEOUT_MS = envInt('DEEPSEEK_STREAM_TOTAL_TIMEOUT_MS', 180_000);
 const OPENAI_REQUEST_TIMEOUT_MS = envInt('OPENAI_REQUEST_TIMEOUT_MS', 120_000);
 const OPENAI_MAX_RETRIES = envInt('OPENAI_MAX_RETRIES', 2);
 
@@ -250,9 +251,11 @@ function normalizeRequest(request: EnhancePromptRequest) {
   const mode: PromptMode = request.mode ?? 'standard';
   const conversationMode: ConversationMode = request.conversationMode ?? 'optimize';
   const modality = request.modality ?? detectModality(request.prompt);
-  // MAX mode maps to thinking; standard stays non-thinking. Legacy model ids
-  // from older clients (deepseek-chat/-reasoner) are remapped inside.
-  const { model, thinking } = resolveDeepseekModel(request.model, mode === 'max');
+  // Provider selection is server-owned: a client model string must not route
+  // a free/standard request to a more expensive model outside its quota gate.
+  const model = getDeepseekModel();
+  // The server-authorized mode controls paid reasoning, never a legacy model ID.
+  const thinking: DeepSeekThinkingConfig = { type: mode === 'max' ? 'enabled' : 'disabled' };
   const temperature = request.temperature ?? (mode === 'max' ? MAX_TEMPERATURE : STANDARD_TEMPERATURE);
   const maxTokens = Math.min(
     request.maxTokens ?? (mode === 'max' ? MAX_MAX_TOKENS : STANDARD_MAX_TOKENS),
@@ -535,7 +538,6 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
 
 function buildOptimizeRefinementUserMessage(
   request: ReturnType<typeof normalizeRequest>,
-  priorEnhancedPrompt: string
 ): string {
   const sections = [
     '<refinement_request>',
@@ -578,16 +580,14 @@ function buildOptimizeRefinementUserMessage(
     sections.push('</source_image>');
   }
 
-  sections.push('<prior_enhanced_prompt>');
-  sections.push(priorEnhancedPrompt);
-  sections.push('</prior_enhanced_prompt>');
+  sections.push('The most recent assistant message is the prior enhanced prompt to revise.');
 
   sections.push('<user_refinement_instruction>');
   sections.push(request.prompt);
   sections.push('</user_refinement_instruction>');
   sections.push('</refinement_request>');
   sections.push('');
-  sections.push('Apply the <user_refinement_instruction> to <prior_enhanced_prompt>. Preserve its structure, intent, and all prior constraints unless the user explicitly asks to change them. Do not start from scratch. Return only the full revised prompt — no explanation, no preamble, no diff.');
+  sections.push('Apply the <user_refinement_instruction> to the most recent assistant prompt. Preserve its structure, intent, and all prior constraints unless the user explicitly asks to change them. Do not start from scratch. Return only the full revised prompt — no explanation, no preamble, no diff.');
 
   return sections.join('\n');
 }
@@ -649,152 +649,105 @@ function sanitizeModelOutput(content: string, conversationMode: ConversationMode
 // Exported for the reflection-loop transport (services/reflectionLoop), which
 // reuses this hardened one-shot call path (timeouts, retries, backoff) with
 // its own stage-specific messages and thinking config.
+class DeepseekResponseError extends Error {
+  constructor(readonly status: number) {
+    super(`DeepSeek API error: ${status}`);
+  }
+}
+
+function mayRetry(error: unknown): boolean {
+  return error instanceof DeepseekResponseError
+    ? isRetryableStatus(error.status)
+    : error instanceof TypeError || (error instanceof Error && error.name === 'AbortError');
+}
+
 export async function requestCompletion(
   request: DeepSeekRequest,
   apiKey: string,
   conversationMode: ConversationMode
 ): Promise<EnhancePromptResult> {
   const startedAt = Date.now();
-  const body = JSON.stringify(request);
-
-  let response: Response | null = null;
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= DEEPSEEK_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
+    // Keep the deadline active through body decoding, not just HTTP headers.
     const timer = setTimeout(() => controller.abort(), DEEPSEEK_REQUEST_TIMEOUT_MS);
-
-    let attemptResponse: Response;
     try {
-      attemptResponse = await fetch(DEEPSEEK_API_URL, {
+      const response = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(request),
         signal: controller.signal,
       });
-    } catch (error) {
-      // Network failure or abort (timeout). A one-shot request never emitted
-      // partial output, so retrying is always safe here.
-      lastError = error instanceof Error ? error : new Error(String(error));
-      if (attempt < DEEPSEEK_MAX_RETRIES) {
-        promptLogger.warn({ attempt, error: lastError.message }, 'DeepSeek completion request failed, retrying');
-        await delay(backoffDelayMs(attempt));
-        continue;
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new DeepseekResponseError(response.status);
       }
-      throw lastError;
+      const parsed = (await response.json()) as DeepSeekResponse;
+      const choice = parsed.choices?.[0];
+      if (choice?.finish_reason && choice.finish_reason !== 'stop') {
+        throw new Error('The AI response was interrupted or exceeded its output limit. Please try a shorter request.');
+      }
+      const content = sanitizeModelOutput(choice?.message?.content ?? '', conversationMode);
+      if (!content) throw new Error('DeepSeek returned an empty enhancement');
+      const inputTokens = parsed.usage?.prompt_tokens ?? 0;
+      const outputTokens = parsed.usage?.completion_tokens ?? 0;
+      return {
+        enhancedPrompt: content,
+        model: request.model,
+        inputTokens,
+        outputTokens,
+        totalTokens: parsed.usage?.total_tokens ?? inputTokens + outputTokens,
+        processingMs: Date.now() - startedAt,
+      };
+    } catch (error) {
+      if (attempt >= DEEPSEEK_MAX_RETRIES || !mayRetry(error)) throw error;
+      // Do not log upstream response bodies: they can echo user prompts.
+      promptLogger.warn({ attempt, status: error instanceof DeepseekResponseError ? error.status : undefined }, 'Retrying DeepSeek completion');
     } finally {
       clearTimeout(timer);
     }
-
-    if (attemptResponse.ok) {
-      response = attemptResponse;
-      break;
-    }
-
-    if (isRetryableStatus(attemptResponse.status) && attempt < DEEPSEEK_MAX_RETRIES) {
-      const errBody = await attemptResponse.text().catch(() => '');
-      promptLogger.warn({ attempt, status: attemptResponse.status, body: errBody }, 'DeepSeek completion transient error, retrying');
-      await delay(backoffDelayMs(attempt));
-      continue;
-    }
-
-    const errBody = await attemptResponse.text().catch(() => '');
-    promptLogger.error({ status: attemptResponse.status, body: errBody }, 'DeepSeek completion request failed');
-    throw new Error(`DeepSeek API error: ${attemptResponse.status}`);
+    await delay(backoffDelayMs(attempt));
   }
-
-  if (!response) {
-    throw lastError ?? new Error('DeepSeek API request failed after retries');
-  }
-
-  const processingMs = Date.now() - startedAt;
-  const parsed = (await response.json()) as DeepSeekResponse;
-  const content = sanitizeModelOutput(parsed.choices?.[0]?.message?.content ?? '', conversationMode);
-
-  if (!content) {
-    throw new Error('DeepSeek returned an empty enhancement');
-  }
-
-  return {
-    enhancedPrompt: content,
-    model: request.model,
-    inputTokens: parsed.usage?.prompt_tokens ?? 0,
-    outputTokens: parsed.usage?.completion_tokens ?? 0,
-    totalTokens: parsed.usage?.total_tokens ?? 0,
-    processingMs,
-  };
 }
 
-async function streamCompletion(
+/** Shared SSE transport for both enhancement engines. Never persist partial output as success. */
+export async function streamCompletion(
   request: DeepSeekRequest,
   apiKey: string,
   conversationMode: ConversationMode,
   callbacks: StreamCallbacks
 ): Promise<void> {
   const startedAt = Date.now();
-  const body = JSON.stringify(request);
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let collected = '';
-
-  // Phase 1 — establish the connection, with retry. This is safe to retry
-  // because no tokens have been emitted to the client yet. A fresh
-  // AbortController is created per attempt (an aborted controller cannot be
-  // reused); the successful one is kept for the read-phase idle watchdog.
-  let response: Response | null = null;
-  let streamController: AbortController | null = null;
-
-  for (let attempt = 0; attempt <= DEEPSEEK_MAX_RETRIES; attempt++) {
+  let response: Response | undefined;
+  let activeController: AbortController | undefined;
+  // Retry only the connection, before exposing any tokens to the caller.
+  for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
-    const connectTimer = setTimeout(() => controller.abort(), DEEPSEEK_CONNECT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), DEEPSEEK_CONNECT_TIMEOUT_MS);
     try {
-      const attemptResponse = await fetch(DEEPSEEK_API_URL, {
+      const candidate = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ ...request, stream_options: { include_usage: true } }),
         signal: controller.signal,
       });
-      clearTimeout(connectTimer);
-
-      if (attemptResponse.ok) {
-        response = attemptResponse;
-        streamController = controller;
-        break;
+      if (!candidate.ok) {
+        await candidate.body?.cancel();
+        throw new DeepseekResponseError(candidate.status);
       }
-
-      if (isRetryableStatus(attemptResponse.status) && attempt < DEEPSEEK_MAX_RETRIES) {
-        const errBody = await attemptResponse.text().catch(() => '');
-        promptLogger.warn({ attempt, status: attemptResponse.status, body: errBody }, 'DeepSeek streaming transient error, retrying');
-        await delay(backoffDelayMs(attempt));
-        continue;
-      }
-
-      const errBody = await attemptResponse.text().catch(() => '');
-      promptLogger.error({ status: attemptResponse.status, body: errBody }, 'DeepSeek streaming request failed');
-      await callbacks.onError(new Error(`DeepSeek API error: ${attemptResponse.status}`));
-      return;
+      response = candidate;
+      activeController = controller;
+      break;
     } catch (error) {
-      clearTimeout(connectTimer);
-      if (attempt < DEEPSEEK_MAX_RETRIES) {
-        const message = error instanceof Error ? error.message : String(error);
-        promptLogger.warn({ attempt, error: message }, 'DeepSeek streaming connection failed, retrying');
-        await delay(backoffDelayMs(attempt));
-        continue;
+      if (attempt >= DEEPSEEK_MAX_RETRIES || !mayRetry(error)) {
+        await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+        return;
       }
-      await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-      return;
+      promptLogger.warn({ attempt, status: error instanceof DeepseekResponseError ? error.status : undefined }, 'Retrying DeepSeek stream connection');
+    } finally {
+      clearTimeout(timer);
     }
-  }
-
-  if (!response || !streamController) {
-    await callbacks.onError(new Error('DeepSeek API request failed after retries'));
-    return;
+    await delay(backoffDelayMs(attempt));
   }
 
   const reader = response.body?.getReader();
@@ -802,93 +755,88 @@ async function streamCompletion(
     await callbacks.onError(new Error('DeepSeek stream body unavailable'));
     return;
   }
-
-  // Phase 2 — consume the stream under an inactivity watchdog so a stalled
-  // upstream cannot hang the request for undici's ~300s body-timeout default.
-  // The watchdog re-arms on every chunk; on stall it aborts the socket, which
-  // surfaces as a rejected reader.read() in the loop below.
-  const activeController = streamController;
+  const controller = activeController;
   const decoder = new TextDecoder();
   let buffer = '';
-  let streamStalled = false;
-  let idleTimer: NodeJS.Timeout | null = null;
-
+  let collected = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let finished = false;
+  let finishReason: string | undefined;
+  let idleTimer: NodeJS.Timeout | undefined;
+  const totalTimer = setTimeout(() => controller.abort(), DEEPSEEK_STREAM_TOTAL_TIMEOUT_MS);
   const armIdleTimer = (): void => {
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      streamStalled = true;
-      activeController.abort();
-    }, DEEPSEEK_STREAM_IDLE_TIMEOUT_MS);
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => controller.abort(), DEEPSEEK_STREAM_IDLE_TIMEOUT_MS);
   };
 
+  const consumeLine = async (line: string): Promise<void> => {
+    if (!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if (!payload) return;
+    if (payload === '[DONE]') { finished = true; return; }
+    // Invalid data is an upstream error, not a successful truncated answer.
+    const parsed = JSON.parse(payload) as {
+      choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+      error?: unknown;
+    };
+    if (parsed.error) throw new Error('The AI provider interrupted the response. Please try again.');
+    const choice = parsed.choices?.[0];
+    if (choice?.finish_reason) finishReason = choice.finish_reason;
+    const delta = choice?.delta?.content;
+    if (delta) {
+      collected += delta;
+      // Await consumer errors instead of swallowing them as JSON parse errors.
+      await callbacks.onToken(delta);
+    }
+    inputTokens = parsed.usage?.prompt_tokens ?? inputTokens;
+    outputTokens = parsed.usage?.completion_tokens ?? outputTokens;
+  };
+
+  let result: EnhancePromptResult;
   try {
     armIdleTimer();
-    while (true) {
+    while (!finished) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        buffer += decoder.decode();
+        if (buffer.trim()) await consumeLine(buffer);
+        break;
+      }
       armIdleTimer();
-
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
+      buffer = lines.pop() ?? '';
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-
-        const payload = line.slice(6).trim();
-        if (!payload || payload === '[DONE]') continue;
-
-        try {
-          // In thinking mode the CoT streams as `reasoning_content` deltas
-          // before `content`. It is intentionally NOT forwarded to clients —
-          // only the final answer streams out. Its cost still lands in
-          // usage.completion_tokens (thinking bills as output tokens).
-          const parsed = JSON.parse(payload) as {
-            choices?: Array<{ delta?: { content?: string; reasoning_content?: string } }>;
-            usage?: {
-              prompt_tokens?: number;
-              completion_tokens?: number;
-            };
-          };
-
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            collected += delta;
-            await callbacks.onToken(delta);
-          }
-
-          if (parsed.usage) {
-            inputTokens = parsed.usage.prompt_tokens ?? inputTokens;
-            outputTokens = parsed.usage.completion_tokens ?? outputTokens;
-          }
-        } catch {
-          continue;
-        }
+        await consumeLine(line);
+        if (finished) break;
       }
     }
-  } catch (error) {
-    // A watchdog abort lands here mid-stream. If tokens were already generated,
-    // finalize with the partial content rather than failing an almost-complete
-    // response; otherwise surface the error to the caller.
-    if (streamStalled && collected.trim().length > 0) {
-      promptLogger.warn({ contentLength: collected.length }, 'DeepSeek stream stalled; finalizing with partial content');
-    } else {
-      if (idleTimer) clearTimeout(idleTimer);
-      await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-      return;
+    const content = sanitizeModelOutput(collected, conversationMode);
+    if (!finished || finishReason !== 'stop') {
+      throw new Error('The AI response was interrupted or exceeded its output limit. Please try a shorter request.');
     }
+    if (!content) throw new Error('DeepSeek returned an empty enhancement');
+    result = {
+      enhancedPrompt: content,
+      model: request.model,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      processingMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    return;
   } finally {
-    if (idleTimer) clearTimeout(idleTimer);
+    clearTimeout(idleTimer);
+    clearTimeout(totalTimer);
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+    controller.abort();
   }
-
-  await callbacks.onComplete({
-    enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
-    model: request.model,
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-    processingMs: Date.now() - startedAt,
-  });
+  await callbacks.onComplete(result);
 }
 
 function buildMessages(request: ReturnType<typeof normalizeRequest>, threadAware = false): DeepSeekMessage[] {
@@ -982,7 +930,7 @@ function buildOptimizeThreadMessages(request: ReturnType<typeof normalizeRequest
   messages.push({
     role: 'user',
     content: hasPriorEnhanced && latestPriorEnhanced
-      ? buildOptimizeRefinementUserMessage(request, latestPriorEnhanced)
+      ? buildOptimizeRefinementUserMessage(request)
       : buildUserMessage(request),
   });
 
@@ -1042,20 +990,6 @@ function buildPreviousTurnRequest(turn: ThreadTurnContext): string {
   return sections.join('\n\n');
 }
 
-async function enrichRequestWithImageAnalysis<T extends EnhancePromptRequest>(request: T): Promise<T> {
-  if (!request.imageAttachment) {
-    return request;
-  }
-
-  return {
-    ...request,
-    imageAttachment: await imageAnalysisService.enrichAttachmentForPrompt(
-      request.imageAttachment,
-      request.prompt,
-      request.modality ?? detectModality(request.prompt)
-    ),
-  };
-}
 
 function getApiKey(): string {
   const apiKey = process.env['DEEPSEEK_API_KEY'];
@@ -1066,8 +1000,17 @@ function getApiKey(): string {
 }
 
 export async function enhancePrompt(request: EnhancePromptRequest): Promise<EnhancePromptResult> {
-  const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-  const normalized = normalizeRequest(enrichedRequest);
+  if (request.imageAttachment?.dataUrl) {
+    let result: EnhancePromptResult | undefined;
+    await enhancePromptInThreadVisionStream({ ...request, previousTurns: [] }, {
+      onToken: () => undefined,
+      onComplete: (value) => { result = value; },
+      onError: (error) => { throw error; },
+    });
+    if (!result) throw new Error('The AI provider did not complete the image request');
+    return result;
+  }
+  const normalized = normalizeRequest(request);
   const apiKey = getApiKey();
 
   const result = await requestCompletion(
@@ -1094,8 +1037,11 @@ export async function enhancePromptStream(
   callbacks: StreamCallbacks
 ): Promise<void> {
   try {
-    const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-    const normalized = normalizeRequest(enrichedRequest);
+    if (request.imageAttachment?.dataUrl) {
+      await enhancePromptInThreadVisionStream({ ...request, previousTurns: [] }, callbacks);
+      return;
+    }
+    const normalized = normalizeRequest(request);
     const apiKey = getApiKey();
 
     await streamCompletion(
@@ -1112,7 +1058,7 @@ export async function enhancePromptStream(
       {
         ...callbacks,
         onComplete: (result) => {
-          callbacks.onComplete({
+          return callbacks.onComplete({
             ...result,
             imageAttachment: normalized.imageAttachment,
           });
@@ -1120,7 +1066,7 @@ export async function enhancePromptStream(
       }
     );
   } catch (error) {
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -1130,7 +1076,9 @@ function hasImageContext(request: EnhancePromptInThreadRequest): boolean {
 }
 
 function selectVisionModel(mode: PromptMode): string {
-  return mode === 'max' ? OPENAI_VISION_MAX_MODEL : OPENAI_VISION_STANDARD_MODEL;
+  return mode === 'max'
+    ? process.env['OPENAI_VISION_MAX_MODEL']?.trim() || OPENAI_VISION_MAX_MODEL
+    : process.env['OPENAI_VISION_STANDARD_MODEL']?.trim() || OPENAI_VISION_STANDARD_MODEL;
 }
 
 function getOpenAIClient(): OpenAI {
@@ -1183,7 +1131,7 @@ function buildVisionThreadMessages(
   const latestText = request.conversationMode === 'chat'
     ? buildChatUserMessage(request)
     : hasPrior && latestPriorEnhanced
-      ? buildOptimizeRefinementUserMessage(request, latestPriorEnhanced)
+      ? buildOptimizeRefinementUserMessage(request)
       : buildOptimizeUserMessage(request);
 
   if (request.imageAttachment?.dataUrl) {
@@ -1216,6 +1164,9 @@ async function streamOpenAIVisionCompletion(
   let collected = '';
   let inputTokens = 0;
   let outputTokens = 0;
+  let finishReason: string | null = null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OPENAI_REQUEST_TIMEOUT_MS);
 
   try {
     const client = getOpenAIClient();
@@ -1226,9 +1177,10 @@ async function streamOpenAIVisionCompletion(
       max_tokens: maxTokens,
       stream: true,
       stream_options: { include_usage: true },
-    });
+    }, { signal: controller.signal });
 
     for await (const chunk of stream) {
+      finishReason = chunk.choices?.[0]?.finish_reason ?? finishReason;
       const delta = chunk.choices?.[0]?.delta?.content;
       if (delta) {
         collected += delta;
@@ -1240,8 +1192,13 @@ async function streamOpenAIVisionCompletion(
       }
     }
 
+    const content = sanitizeModelOutput(collected, conversationMode);
+    if (finishReason !== 'stop' || !content) {
+      throw new Error('The AI response was empty, interrupted or exceeded its output limit. Please try a shorter request.');
+    }
+    clearTimeout(timer);
     await callbacks.onComplete({
-      enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
+      enhancedPrompt: content,
       model,
       inputTokens,
       outputTokens,
@@ -1249,8 +1206,11 @@ async function streamOpenAIVisionCompletion(
       processingMs: Date.now() - startedAt,
     });
   } catch (error) {
-    promptLogger.error({ err: error }, 'OpenAI vision streaming failed');
+    promptLogger.error('OpenAI vision streaming failed');
     await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
 }
 
@@ -1258,12 +1218,31 @@ async function enhancePromptInThreadVisionStream(
   request: EnhancePromptInThreadRequest,
   callbacks: StreamCallbacks
 ): Promise<void> {
-  const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-  const normalized = normalizeRequest(enrichedRequest);
+  const normalized = normalizeRequest(request);
   const messages = buildVisionThreadMessages({
     ...normalized,
     previousTurns: request.previousTurns,
   });
+  // Flash now supports native images. Keep OpenAI as an explicit deployment
+  // option; do not silently require a second provider/key for image threads.
+  const provider = process.env['PROMPT_VISION_PROVIDER']?.trim() || 'deepseek';
+  if (provider !== 'deepseek' && provider !== 'openai') {
+    throw new Error('PROMPT_VISION_PROVIDER must be deepseek or openai');
+  }
+  if (provider === 'deepseek') {
+    await streamCompletion({
+      model: process.env['DEEPSEEK_VISION_MODEL']?.trim() || DEEPSEEK_FLASH_MODEL,
+      messages,
+      temperature: normalized.temperature,
+      max_tokens: normalized.maxTokens,
+      stream: true,
+      thinking: normalized.thinking,
+    }, getApiKey(), normalized.conversationMode, {
+      ...callbacks,
+      onComplete: (result) => callbacks.onComplete({ ...result, imageAttachment: normalized.imageAttachment }),
+    });
+    return;
+  }
   const model = selectVisionModel(normalized.mode);
 
   await streamOpenAIVisionCompletion(
@@ -1275,7 +1254,7 @@ async function enhancePromptInThreadVisionStream(
     {
       ...callbacks,
       onComplete: (result) => {
-        callbacks.onComplete({
+        return callbacks.onComplete({
           ...result,
           imageAttachment: normalized.imageAttachment,
         });
@@ -1289,17 +1268,14 @@ export async function enhancePromptInThreadStream(
   callbacks: StreamCallbacks
 ): Promise<void> {
   try {
-    // Any image anywhere in the thread (current turn or prior turn) routes
-    // through a vision-capable OpenAI model so the AI actually sees the
-    // pixels. DeepSeek is text-only and would only receive a text summary,
-    // which is why "images don't get used as context" was reported.
+    // Preserve actual pixels across image threads; a text summary is not a
+    // substitute for the source image when refining visual instructions.
     if (hasImageContext(request)) {
       await enhancePromptInThreadVisionStream(request, callbacks);
       return;
     }
 
-    const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-    const normalized = normalizeRequest(enrichedRequest);
+    const normalized = normalizeRequest(request);
     const apiKey = getApiKey();
 
     await streamCompletion(
@@ -1319,7 +1295,7 @@ export async function enhancePromptInThreadStream(
       {
         ...callbacks,
         onComplete: (result) => {
-          callbacks.onComplete({
+          return callbacks.onComplete({
             ...result,
             imageAttachment: normalized.imageAttachment,
           });
@@ -1327,7 +1303,7 @@ export async function enhancePromptInThreadStream(
       }
     );
   } catch (error) {
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
 

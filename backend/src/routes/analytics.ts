@@ -171,7 +171,7 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promi
   } catch (error) {
     logger.error({ err: error }, 'Get analytics error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to get analytics' });

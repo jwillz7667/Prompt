@@ -46,7 +46,7 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
   } catch (error) {
     logger.error({ err: error }, 'Update profile error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to update profile' });
@@ -255,7 +255,7 @@ userRouter.post('/device-token', async (req: AuthenticatedRequest, res: Response
   } catch (error) {
     logger.error({ err: error }, 'Register device token error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to register device token' });

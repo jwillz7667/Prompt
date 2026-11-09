@@ -80,7 +80,7 @@ templatesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query', details: error.errors });
+      res.status(400).json({ error: 'Invalid query', details: error.issues });
       return;
     }
     logger.error({ err: error }, 'Failed to list templates');
@@ -199,7 +199,7 @@ templatesRouter.post('/', authenticate, async (req: AuthenticatedRequest, res: R
     res.status(201).json({ template });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid template', details: error.errors });
+      res.status(400).json({ error: 'Invalid template', details: error.issues });
       return;
     }
     logger.error({ err: error }, 'Failed to create template');
@@ -235,7 +235,7 @@ templatesRouter.patch('/:id', authenticate, async (req: AuthenticatedRequest, re
     res.json({ template });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid template', details: error.errors });
+      res.status(400).json({ error: 'Invalid template', details: error.issues });
       return;
     }
     logger.error({ err: error }, 'Failed to update template');

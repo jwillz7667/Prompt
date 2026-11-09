@@ -55,7 +55,7 @@ supportRouter.post('/chat', async (req: AuthenticatedRequest, res: Response): Pr
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.issues });
       return;
     }
     logger.error({ err: error }, 'Support chat error');
@@ -145,7 +145,7 @@ supportRouter.post('/tickets/:ticketId/chat', async (req: AuthenticatedRequest, 
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.issues });
       return;
     }
     if (error instanceof Error && error.message === 'Ticket not found') {

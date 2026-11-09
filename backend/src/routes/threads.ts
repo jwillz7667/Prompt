@@ -686,7 +686,7 @@ threadRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
   } catch (error) {
     logger.error({ err: error }, 'List threads error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to list threads' });
@@ -808,7 +808,7 @@ threadRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
   } catch (error) {
     logger.error({ err: error }, 'Update thread error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to update thread' });

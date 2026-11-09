@@ -169,7 +169,7 @@ collectionRouter.post('/', async (req: AuthenticatedRequest, res: Response): Pro
   } catch (error) {
     logger.error({ err: error }, 'Create collection error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to create collection' });
@@ -211,7 +211,7 @@ collectionRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response):
   } catch (error) {
     logger.error({ err: error }, 'Update collection error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to update collection' });
@@ -312,7 +312,7 @@ collectionRouter.post('/:id/prompts', async (req: AuthenticatedRequest, res: Res
   } catch (error) {
     logger.error({ err: error }, 'Add prompts to collection error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to add prompts to collection' });

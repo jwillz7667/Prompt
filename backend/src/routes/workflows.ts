@@ -37,7 +37,7 @@ const updateWorkflowSchema = z.object({
 });
 
 const executeWorkflowSchema = z.object({
-  initialContext: z.record(z.any()).optional(),
+  initialContext: z.record(z.string(), z.unknown()).optional(),
   parallelSteps: z.boolean().optional(),
   continueOnError: z.boolean().optional(),
   maxRetries: z.number().min(1).max(5).optional()
@@ -64,7 +64,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -100,7 +100,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -203,7 +203,7 @@ router.post('/:id/execute', authenticate, enforceQuota('enhance_prompt'), async 
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -281,7 +281,7 @@ router.post('/:id/clone', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);

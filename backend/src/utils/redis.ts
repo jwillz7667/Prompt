@@ -178,6 +178,8 @@ export const cache = {
 
 // Cache type definitions
 interface SubscriptionCache {
+  isTrialing?: boolean;
+  trialEndsAt?: string | null;
   tier: string;
   status: string;
   expiresAt: string | null;

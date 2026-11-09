@@ -84,14 +84,12 @@ export async function compareEnhancements(request: CompareRequest): Promise<Comp
         processingMs: outcome.value.processingMs,
       };
     }
-    const reason = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
-    promptLogger.warn({ provider, reason }, 'Compare variant failed');
+    promptLogger.warn({ provider }, 'Compare variant failed');
     return {
       provider,
       status: 'error' as const,
-      // Upstream error bodies can contain request echoes; keep it short and
-      // provider-attributed rather than forwarding verbatim.
-      error: reason.slice(0, 200),
+      // SDK errors can embed prompt echoes or credentials in their response.
+      error: `${provider} could not complete this request. Please try again.`,
     };
   });
 }

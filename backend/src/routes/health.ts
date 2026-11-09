@@ -64,10 +64,19 @@ healthRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
 // Kubernetes readiness probe
 healthRouter.get('/ready', async (_req: Request, res: Response): Promise<void> => {
   try {
-    // Check critical dependencies
+    // A reachable database is insufficient if boot migrations failed.
+    if (getMigrationBootStatus() !== 'ok') {
+      res.status(503).json({ ready: false, reason: 'database_migrations_failed' });
+      return;
+    }
     await prisma.$queryRaw`SELECT 1`;
 
-    // Check Redis if available
+    // Configured Redis is part of readiness even during reconnects; otherwise
+    // a disconnect would silently skip the check and report a healthy rollout.
+    if (process.env['REDIS_URL'] && !isRedisAvailable()) {
+      res.status(503).json({ ready: false, reason: 'redis_unavailable' });
+      return;
+    }
     if (isRedisAvailable()) {
       const redis = getRedis() as { ping?: () => Promise<string> } | null;
       if (redis && typeof redis.ping === 'function') {

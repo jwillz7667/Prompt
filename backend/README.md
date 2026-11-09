@@ -246,7 +246,7 @@ For the full coding standard, see [`../CLAUDE.md`](../CLAUDE.md) and
   [`.github/workflows/backend.yml`](../.github/workflows/backend.yml).
 - Production target: Railway, Docker image built from [`Dockerfile`](./Dockerfile).
 - The compiled image runs as the non-root `expressjs` user on port `3000`.
-- Production URL: `https://backend-production-d538.up.railway.app`.
+- Production URL: `https://backend-production-d7487.up.railway.app`.
 
 For rollback, deploy a previous Railway build via the Railway dashboard or
 `railway redeploy <deployment-id>`.

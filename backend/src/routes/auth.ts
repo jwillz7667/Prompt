@@ -59,7 +59,7 @@ authRouter.post('/apple', async (req: Request, res: Response): Promise<void> => 
   } catch (error) {
     authLogger.error({ err: error }, 'Apple auth failed');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     const message = error instanceof Error ? error.message : 'Authentication failed';
@@ -85,7 +85,7 @@ authRouter.post('/google', async (req: Request, res: Response): Promise<void> =>
   } catch (error) {
     authLogger.error({ err: error }, 'Google auth failed');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(401).json({ error: 'Authentication failed' });

@@ -93,7 +93,7 @@ router.post('/generate', enforceQuota('enhance_prompt'), async (req: Authenticat
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors,
+        details: error.issues,
       });
     }
     logger.error({ error }, 'Failed to generate variations');
@@ -150,7 +150,7 @@ router.post('/:id/rate', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors,
+        details: error.issues,
       });
     }
     if ((error as Error).message === 'Variation not found') {
@@ -186,7 +186,7 @@ router.post('/:id/select', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors,
+        details: error.issues,
       });
     }
     if ((error as Error).message === 'Variation not found') {

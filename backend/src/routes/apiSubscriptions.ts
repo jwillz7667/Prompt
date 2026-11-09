@@ -164,7 +164,7 @@ apiSubscriptionsRouter.post('/checkout', async (req: DeveloperAuthenticatedReque
     res.json({ url: result.url });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     logger.error({ error }, 'Create checkout session error');
@@ -204,7 +204,7 @@ apiSubscriptionsRouter.post('/credits/checkout', async (req: DeveloperAuthentica
     res.json({ url: result.url });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     logger.error({ error }, 'Create API credit checkout session error');
@@ -234,7 +234,7 @@ apiSubscriptionsRouter.post('/portal', async (req: DeveloperAuthenticatedRequest
     res.json({ url: result.url });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     if (error instanceof Error && error.message.includes('No Stripe customer')) {
@@ -304,7 +304,7 @@ apiSubscriptionsRouter.get('/invoices', async (req: DeveloperAuthenticatedReques
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     logger.error({ error }, 'Get invoices error');

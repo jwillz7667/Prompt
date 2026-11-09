@@ -5,7 +5,7 @@
  * Tracks usage and blocks requests when quota is exceeded.
  */
 
-import { Response, NextFunction } from 'express';
+import { type Response, type NextFunction } from 'express';
 import { getApiSubscriptionInfo, canMakeRequest } from '../services/apiSubscriptionService.js';
 import { recordUsage, recordUsageAsync } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
@@ -37,7 +37,7 @@ export interface ApiQuotaRequest extends ApiKeyRequest {
 export const enforceApiQuota = async (
   req: ApiQuotaRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   // Skip if no API key (should be caught by auth middleware)
   if (!req.apiKey) {
@@ -53,7 +53,10 @@ export const enforceApiQuota = async (
     const quotaCheck = await canMakeRequest(developerId);
 
     if (!quotaCheck.allowed) {
-      logger.warn({ developerId, keyId: req.apiKey.id, reason: quotaCheck.reason }, 'API quota exceeded');
+      logger.warn(
+        { developerId, keyId: req.apiKey.id, reason: quotaCheck.reason },
+        'API quota exceeded',
+      );
 
       // Get full info for response
       const info = await getApiSubscriptionInfo(developerId);
@@ -69,10 +72,13 @@ export const enforceApiQuota = async (
           remaining: 0,
           periodEnd: info.currentPeriodEnd.toISOString(),
         },
-        upgrade: info.tier !== 'API_ENTERPRISE' ? {
-          message: 'Upgrade your plan for more requests',
-          url: '/developers/billing',
-        } : undefined,
+        upgrade:
+          info.tier !== 'API_ENTERPRISE'
+            ? {
+                message: 'Upgrade your plan for more requests',
+                url: '/developers/billing',
+              }
+            : undefined,
       });
       return;
     }
@@ -89,16 +95,23 @@ export const enforceApiQuota = async (
 
     // Set quota headers
     res.set({
-      'X-Quota-Limit': info.monthlyRequestLimit === -1 ? 'unlimited' : info.monthlyRequestLimit.toString(),
-      'X-Quota-Remaining': info.remainingRequests === -1 ? 'unlimited' : info.remainingRequests.toString(),
+      'X-Quota-Limit':
+        info.monthlyRequestLimit === -1 ? 'unlimited' : info.monthlyRequestLimit.toString(),
+      'X-Quota-Remaining':
+        info.remainingRequests === -1 ? 'unlimited' : info.remainingRequests.toString(),
       'X-Quota-Reset': info.currentPeriodEnd.toISOString(),
     });
 
     next();
   } catch (error) {
     logger.error({ error, keyId: req.apiKey.id }, 'Quota enforcement error');
-    // Allow request on error to avoid blocking legitimate traffic
-    next();
+    // Do not incur provider cost when entitlement/quota cannot be checked.
+    res
+      .status(503)
+      .json({
+        error: 'Usage limits are temporarily unavailable. Please retry.',
+        code: 'QUOTA_UNAVAILABLE',
+      });
   }
 };
 
@@ -113,7 +126,7 @@ export const recordApiUsage = async (
     inputTokens?: number;
     outputTokens?: number;
     modality?: string;
-  } = {}
+  } = {},
 ): Promise<void> => {
   if (!req.apiKey) {
     return;
@@ -140,11 +153,7 @@ export const recordApiUsage = async (
  * Middleware that records usage for all responses.
  * Use after routes to capture response status.
  */
-export const autoRecordUsage = (
-  req: ApiQuotaRequest,
-  res: Response,
-  next: NextFunction
-): void => {
+export const autoRecordUsage = (req: ApiQuotaRequest, res: Response, next: NextFunction): void => {
   // Hook into response finish event
   res.on('finish', () => {
     if (req.apiKey && res.statusCode < 500) {

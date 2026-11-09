@@ -169,7 +169,7 @@ publicApiRouter.post(
         res.json({
           error: 'Validation error',
           code: 'VALIDATION_ERROR',
-          details: error.errors.map((e) => ({
+          details: error.issues.map((e) => ({
             field: e.path.join('.'),
             message: e.message,
           })),
@@ -331,7 +331,7 @@ publicApiRouter.get(
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+        res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
         return;
       }
       logger.error({ error, keyId: req.apiKey?.id }, 'Get history error');

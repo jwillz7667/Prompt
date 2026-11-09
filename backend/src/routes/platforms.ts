@@ -145,7 +145,7 @@ platformRouter.post('/validate', async (req: AuthenticatedRequest, res: Response
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.issues });
       return;
     }
     logger.error({ error }, 'Failed to validate prompt');
@@ -186,7 +186,7 @@ platformRouter.post('/optimize', async (req: AuthenticatedRequest, res: Response
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.issues });
       return;
     }
     logger.error({ error }, 'Failed to optimize prompt');
@@ -227,7 +227,7 @@ platformRouter.post('/estimate-cost', async (req: AuthenticatedRequest, res: Res
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.issues });
       return;
     }
     logger.error({ error }, 'Failed to estimate costs');
@@ -276,7 +276,7 @@ platformRouter.put('/user-settings', async (req: AuthenticatedRequest, res: Resp
     res.json({ settings });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.issues });
       return;
     }
     logger.error({ error }, 'Failed to update user platform settings');
@@ -324,7 +324,7 @@ platformRouter.post('/batch-optimize', async (req: AuthenticatedRequest, res: Re
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: error.errors });
+      res.status(400).json({ error: error.issues });
       return;
     }
     logger.error({ error }, 'Failed to batch optimize');

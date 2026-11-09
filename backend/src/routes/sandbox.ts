@@ -49,7 +49,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -296,7 +296,7 @@ router.post('/batch', authenticate, enforceQuota('enhance_prompt'), async (req, 
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);

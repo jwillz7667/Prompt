@@ -118,7 +118,7 @@ apiKeysRouter.post('/', async (req: DeveloperAuthenticatedRequest, res: Response
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     logger.error({ error }, 'Create API key error');
@@ -248,7 +248,7 @@ apiKeysRouter.patch('/:id', async (req: DeveloperAuthenticatedRequest, res: Resp
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     logger.error({ error }, 'Update API key error');
@@ -277,7 +277,7 @@ apiKeysRouter.delete('/:id', async (req: DeveloperAuthenticatedRequest, res: Res
     res.json({ success: true, message: 'API key revoked' });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     logger.error({ error }, 'Revoke API key error');
@@ -356,7 +356,7 @@ apiKeysRouter.get('/:id/usage', async (req: DeveloperAuthenticatedRequest, res: 
     res.json({ usage: stats });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     logger.error({ error }, 'Get API key usage error');
@@ -416,7 +416,7 @@ apiKeysRouter.get('/:id/history', async (req: DeveloperAuthenticatedRequest, res
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     logger.error({ error }, 'Get API key history error');

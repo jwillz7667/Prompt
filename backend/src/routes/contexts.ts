@@ -65,7 +65,7 @@ router.post('/', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -101,7 +101,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -202,7 +202,7 @@ router.post('/search', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -238,7 +238,7 @@ router.post('/:id/attach', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
@@ -283,7 +283,7 @@ router.post('/merge', authenticate, async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues
       });
     }
     return next(error);
