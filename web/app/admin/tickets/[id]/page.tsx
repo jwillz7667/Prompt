@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { io, Socket } from 'socket.io-client';
 import { getTicketById, replyToTicket, updateTicketStatus, type Ticket } from '@/lib/api/admin';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app';
 
 const statusColors: Record<string, string> = {
   OPEN: 'bg-blue-500/20 text-blue-400 border-blue-500/30',

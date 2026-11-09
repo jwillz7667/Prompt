@@ -9,7 +9,7 @@ import { getSharedPrompt, modalityLabel } from './shared-prompt'
 const SITE_URL = 'https://promptomize.app'
 
 interface PageProps {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
 function truncate(value: string, max: number): string {
@@ -29,7 +29,8 @@ function formatDate(iso: string): string {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const shared = await getSharedPrompt(params.slug)
+  const { slug } = await params
+  const shared = await getSharedPrompt(slug)
 
   if (!shared) {
     return {
@@ -40,12 +41,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const title = shared.title?.trim() || 'Shared Prompt'
   const description = truncate(shared.enhancedPrompt, 150)
-  const url = `${SITE_URL}/p/${params.slug}`
+  const url = `${SITE_URL}/p/${slug}`
 
   return {
     title,
     description,
-    alternates: { canonical: `/p/${params.slug}` },
+    alternates: { canonical: `/p/${slug}` },
     openGraph: {
       type: 'article',
       url,
@@ -64,7 +65,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function SharedPromptPage({ params }: PageProps) {
-  const shared = await getSharedPrompt(params.slug)
+  const { slug } = await params
+  const shared = await getSharedPrompt(slug)
 
   if (!shared) {
     notFound()

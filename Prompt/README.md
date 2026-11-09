@@ -148,13 +148,39 @@ open Prompt.xcodeproj
 # In Xcode: select the Prompt scheme + an iPhone 16 / iPhone 16 Pro simulator → Cmd+R
 ```
 
-The app will run against the production backend by default
-(`https://backend-production-d538.up.railway.app/api/v1`). To target a local backend:
+Set the `PROMPT_API_BASE_URL` user-defined build setting on the Prompt target to
+an HTTPS backend URL ending in `/api/v1`. REST, support chat, and the keyboard
+extension all use this setting (open the containing app once after changing it).
+You can override it without editing source:
 
-1. Edit `Prompt/Services/APIClient.swift` `baseURL` for ad-hoc work, or
-2. Add a local `.xcconfig` (gitignored) overriding the configured base URL.
+```bash
+xcodebuild -scheme Prompt -destination 'generic/platform=iOS Simulator' \
+  PROMPT_API_BASE_URL=https://your-backend.example/api/v1 build
+```
+
+The committed default is `https://backend-production-d7487.up.railway.app/api/v1`.
+This is the replacement Railway deployment provisioned during the November 2026
+audit. Verify backend readiness and provider configuration before live billing
+tests. Local backends need an HTTPS development tunnel. `.xcconfig` files are not
+automatically loaded by this project.
 
 ---
+
+## Subscription regression checks
+
+These checks exercise the real configuration validator and purchase-response
+models without an App Store account, credentials, or network calls:
+
+```bash
+swiftc Prompt/Configuration/APIConfiguration.swift \
+  Prompt/Models/SubscriptionModels.swift tests/ios/SubscriptionRegressionChecks.swift \
+  -o /tmp/promptomize-ios-checks && /tmp/promptomize-ios-checks
+```
+
+A full purchase/restore test still requires a reachable configured backend and
+an App Store sandbox or TestFlight account. Xcode's local StoreKit configuration
+produces locally signed transactions; the production Apple verifier must not
+accept these as real purchases.
 
 ## Build & run
 

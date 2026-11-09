@@ -1,6 +1,6 @@
 # Promptomize Web
 
-The Next.js 14 product surface — marketing site, authenticated dashboard, admin console,
+The Next.js 16 product surface — marketing site, authenticated dashboard, admin console,
 and Enterprise developer portal — deployed to Vercel.
 
 [![Web CI/CD](https://github.com/jwillz7667/Prompt/actions/workflows/web.yml/badge.svg)](../.github/workflows/web.yml)
@@ -33,14 +33,14 @@ and Enterprise developer portal — deployed to Vercel.
 
 | Concern | Choice |
 |---------|--------|
-| Framework | Next.js 14 (App Router, RSC, route groups) |
+| Framework | Next.js 16 (App Router, RSC, route groups) |
 | Language | TypeScript 5 (strict, `noImplicitAny`, no `any`/`as` casts) |
 | UI | TailwindCSS 3 + Framer Motion + lucide-react |
 | Server state | TanStack React Query 5 |
 | Client state | Zustand 4 |
 | JWT (client-side) | `jose` 5 |
 | Payments | Stripe + `@stripe/stripe-js` |
-| PWA | `next-pwa` (Workbox runtime caching) |
+| PWA | Native service worker (immutable public assets only) |
 | Realtime | `socket.io-client` (support chat) |
 | Validation | Zod (shared with backend) |
 
@@ -84,8 +84,8 @@ web/
 │   └── utils/                   cn(), formatters, helpers
 │
 ├── public/                      Static assets (icons, OG images, generated SW)
-├── middleware.ts                Edge middleware: apex redirect + auth gate for protected paths
-├── next.config.js               Next + next-pwa + security headers + image config
+├── proxy.ts                Edge middleware: apex redirect + auth gate for protected paths
+├── next.config.js               Next + security headers + image config
 ├── tailwind.config.ts           Theme + content + plugin config
 ├── tsconfig.json                Strict TS with `@/*` path alias
 └── vercel.json                  Region pinning + extra security headers
@@ -140,7 +140,7 @@ Server-only secrets (without the `NEXT_PUBLIC_` prefix) stay on the server.
 | Script | What it does |
 |--------|--------------|
 | `npm run dev` | Next dev server with Fast Refresh |
-| `npm run build` | Production build (Next + next-pwa SW generation) |
+| `npm run build` | Production build (Next.js / Turbopack) |
 | `npm start` | Run the built app (`next start`) |
 | `npm run lint` / `npm run lint:fix` | ESLint via `next lint` |
 | `npm run typecheck` | `tsc --noEmit` |
@@ -163,7 +163,7 @@ The App Router uses route groups (`(folder)`) to share layouts without affecting
 | `admin/` | Internal admin chrome |
 | `docs/` | Documentation layout |
 
-`middleware.ts` enforces:
+`proxy.ts` enforces:
 
 1. Redirect `www.promptomize.app → promptomize.app` (308).
 2. Redirect unauthenticated users away from protected paths to `/login`.
@@ -210,13 +210,17 @@ edge middleware uses the `refreshToken` cookie as a fast-path signal only.
 
 ## PWA
 
-`next-pwa` generates a service worker at build time:
+The tracked `public/sw.js` is registered in production by
+`components/service-worker-registration.tsx`; no build plugin is required.
 
-- Workbox runtime caching is configured in `next.config.js` (CacheFirst for fonts and
-  immutable assets, StaleWhileRevalidate for CSS/JS, NetworkFirst for `/api/*`).
-- Generated artifacts (`public/sw.js`, `workbox-*`, `worker-*`) are gitignored.
-- The PWA is disabled in development to avoid stale cache pain.
-- Offline fallback is the static page at `/offline`.
+- Only same-origin immutable assets under `/_next/static/` are cached, with a
+  bounded cache of 120 files.
+- Authenticated requests, API responses, navigation HTML, prompts, and external
+  images always use the network. Account data is never persisted by the worker.
+- Activation removes the previous Workbox caches and claims existing clients.
+- Registration is disabled during development. The manifest still supports
+  installation; app data and AI requests require a network connection.
+- Privacy/cache-failure regressions are covered by `npm test`.
 
 ---
 

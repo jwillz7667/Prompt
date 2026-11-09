@@ -13,10 +13,7 @@ const protectedRoutes = [
   '/upgrade',
 ]
 
-// Public routes that should redirect to dashboard if authenticated
-const authRoutes = ['/login']
-
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host')
 
@@ -35,11 +32,6 @@ export function middleware(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(route + '/')
   )
 
-  // Check if this is an auth route
-  const isAuthRoute = authRoutes.some(
-    (route) => pathname === route || pathname.startsWith(route + '/')
-  )
-
   // For protected routes without refresh token, redirect to login
   // Note: Full auth check happens client-side with access token
   if (isProtectedRoute && !refreshToken) {
@@ -48,11 +40,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // For auth routes with refresh token, redirect to dashboard
-  if (isAuthRoute && refreshToken) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
+  // A cookie's presence does not prove that it is valid. Keep login reachable
+  // during expiration or backend outages instead of bouncing in a redirect loop.
   return NextResponse.next()
 }
 

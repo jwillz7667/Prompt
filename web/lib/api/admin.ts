@@ -1,7 +1,7 @@
 // Admin API functions for ticket management
 // Requires ADMIN_API_KEY header for authentication
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1';
 
 interface AdminRequestOptions {
   apiKey: string;

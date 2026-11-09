@@ -41,29 +41,6 @@ const toneOptions: SelectOption[] = [
   { value: 'friendly', label: 'Friendly', description: 'Warm and approachable' },
 ]
 
-// Track MAX MODE usage for free/pro users (stored in localStorage)
-const MAX_MODE_STORAGE_KEY = 'max_mode_daily_usage'
-
-function getMaxModeUsageToday(): number {
-  if (typeof window === 'undefined') return 0
-  const stored = localStorage.getItem(MAX_MODE_STORAGE_KEY)
-  if (!stored) return 0
-  try {
-    const { date, count } = JSON.parse(stored)
-    const today = new Date().toDateString()
-    return date === today ? count : 0
-  } catch {
-    return 0
-  }
-}
-
-function incrementMaxModeUsage(): void {
-  if (typeof window === 'undefined') return
-  const today = new Date().toDateString()
-  const current = getMaxModeUsageToday()
-  localStorage.setItem(MAX_MODE_STORAGE_KEY, JSON.stringify({ date: today, count: current + 1 }))
-}
-
 const lengthOptions: SelectOption[] = [
   { value: 'concise', label: 'Concise', description: 'Brief and to the point' },
   { value: 'standard', label: 'Standard', description: 'Balanced detail level' },
@@ -176,16 +153,10 @@ export default function DashboardPage() {
   const [modality, setModality] = useState<PromptModality>('text')
   const [copied, setCopied] = useState(false)
   const [maxModeEnabled, setMaxModeEnabled] = useState(false)
-  const [maxModeUsedToday, setMaxModeUsedToday] = useState(0)
   const { selectedTone, setTone, outputLength, setOutputLength, deepThinkEnabled, setDeepThink } =
     useSettingsStore()
   const { subscription, usage } = useSubscription()
-  const { isEnhancing, streamedContent, result, error, progress, enhance, reset } = useEnhance()
-
-  // Load MAX MODE usage on mount
-  useEffect(() => {
-    setMaxModeUsedToday(getMaxModeUsageToday())
-  }, [])
+  const { isEnhancing, streamedContent, result, error, warning, progress, enhance, reset, cancel } = useEnhance()
 
   // Pre-fill prompt from URL params (for re-enhance from history)
   useEffect(() => {
@@ -211,7 +182,8 @@ export default function DashboardPage() {
 
   // MAX MODE access: Premium = unlimited, Pro = 5/day, Free = none
   const hasUnlimitedMaxMode = tier === 'PREMIUM' || isTrialing
-  const maxModeLimit = tier === 'PRO' ? 5 : 0 // Pro gets 5/day, Free gets 0
+  const maxModeUsedToday = usage.maxModeUsedToday ?? 0
+  const maxModeLimit = usage.maxModeDailyLimit ?? (tier === 'PRO' ? 5 : 0)
   const maxModeRemaining = hasUnlimitedMaxMode ? Infinity : maxModeLimit - maxModeUsedToday
   const canUseMaxMode = hasUnlimitedMaxMode || (tier === 'PRO' && maxModeRemaining > 0)
   const activeModality = modalityDetails[modality]
@@ -230,7 +202,7 @@ export default function DashboardPage() {
     }
 
     // Check MAX MODE quota
-    if (maxModeEnabled && !canUseMaxMode) {
+    if ((maxModeEnabled || (canDeepThink && deepThinkEnabled)) && !canUseMaxMode) {
       if (tier === 'FREE') {
         toast.error('MAX MODE requires Pro', 'Upgrade to Pro for 5 MAX prompts/day or Premium for unlimited')
       } else {
@@ -240,27 +212,21 @@ export default function DashboardPage() {
     }
 
     try {
-      // Use 'max' tone when enabled, otherwise use selected tone
-      const effectiveTone = maxModeEnabled ? 'max' : selectedTone
-
-      await enhance(prompt, {
+      const completed = await enhance(prompt, {
         modality,
-        tone: effectiveTone as ToneType,
+        tone: selectedTone,
+        mode: maxModeEnabled ? 'max' : 'standard',
         length: outputLength,
         deepThink: canDeepThink && deepThinkEnabled,
       })
+      if (!completed) return
 
-      // Track MAX MODE usage for Pro users
-      if (maxModeEnabled && !hasUnlimitedMaxMode) {
-        incrementMaxModeUsage()
-        setMaxModeUsedToday(prev => prev + 1)
-      }
-
-      toast.success('Prompt enhanced!')
+      if (completed.isSaved) toast.success('Prompt enhanced!')
+      else toast.warning('Prompt generated; not saved', 'Copy your result before leaving this page.')
     } catch (err) {
       // Error already shown in state
     }
-  }, [prompt, modality, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, maxModeEnabled, hasUnlimitedMaxMode, canUseMaxMode, tier])
+  }, [prompt, modality, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, maxModeEnabled, canUseMaxMode, tier])
 
   const handleCopy = useCallback(async () => {
     const textToCopy = result?.enhancedPrompt || streamedContent
@@ -384,7 +350,7 @@ export default function DashboardPage() {
                   onChange={setDeepThink}
                   disabled={!canDeepThink || isEnhancing}
                 />
-                <span className="text-sm text-[var(--text-secondary)]">Deep Think</span>
+                <span className="text-sm text-[var(--text-secondary)]" title="Uses the same daily allowance as MAX mode">Deep Think · MAX quota</span>
                 {!canDeepThink && (
                   <Badge variant="pro" className="text-[10px]">
                     PRO
@@ -420,12 +386,14 @@ export default function DashboardPage() {
                 )}
                 {tier === 'PRO' && (
                   <Badge variant="outline" className="text-[10px]">
-                    {maxModeRemaining}/5
+                    {maxModeRemaining}/{maxModeLimit}
                   </Badge>
                 )}
               </div>
 
               <div className="flex-1" />
+
+              {isEnhancing && <Button variant="secondary" onClick={cancel}>Stop</Button>}
 
               <Button
                 variant="cyan"
@@ -444,12 +412,16 @@ export default function DashboardPage() {
           {/* Output Section */}
           {(hasOutput || isEnhancing || error) && (
             <div className="p-6 bg-brand-indigo/5 dark:bg-brand-cyan/5">
-              {error ? (
-                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+              {error && (
+                <div role="alert" className="mb-4 rounded-xl bg-red-500/10 border border-red-500/20 p-4">
                   <p className="text-red-500">{error}</p>
                 </div>
-              ) : (
+              )}
+              {(hasOutput || isEnhancing) && (
                 <>
+                  {warning && (
+                    <p role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-300">{warning}</p>
+                  )}
                   {/* Progress indicator */}
                   {isEnhancing && (
                     <div className="flex items-center gap-2 mb-4">

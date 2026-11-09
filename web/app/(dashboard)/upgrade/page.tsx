@@ -80,17 +80,17 @@ const plans: Plan[] = [
 
 // Stripe price IDs - replace with actual production IDs
 const PRICE_IDS = {
-  pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly',
-  pro_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL || 'price_pro_annual',
-  premium_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY || 'price_premium_monthly',
-  premium_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL || 'price_premium_annual',
+  pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY || '',
+  pro_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL || '',
+  premium_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY || '',
+  premium_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL || '',
 }
 
 export default function UpgradePage() {
   const [interval, setInterval] = useState<BillingInterval>('annual')
   const [loading, setLoading] = useState<string | null>(null)
 
-  const { subscription, trialEligible, startTrial, refreshAfterPurchase } = useSubscription()
+  const { subscription, billingProvider, trialEligible, startTrial } = useSubscription()
 
   const currentTier = subscription.tier
   const isTrialing = subscription.isTrialing
@@ -124,6 +124,8 @@ export default function UpgradePage() {
             ? PRICE_IDS.premium_monthly
             : PRICE_IDS.premium_annual
 
+        if (!priceId) throw new Error('This plan is not available yet. Please contact support.')
+
         const { url } = await createStripeCheckout({
           priceId,
           successUrl: `${window.location.origin}/dashboard?checkout=success`,
@@ -132,7 +134,7 @@ export default function UpgradePage() {
 
         window.location.href = url
       } catch (err) {
-        toast.error('Failed to start checkout')
+        toast.error(err instanceof Error ? err.message : (err as { error?: string })?.error || 'Failed to start checkout')
         setLoading(null)
       }
     },
@@ -208,7 +210,7 @@ export default function UpgradePage() {
                 </p>
                 <p className="text-sm text-[var(--text-secondary)]">
                   {subscription.expiresAt
-                    ? `${isTrialing ? 'Trial ends' : 'Renews'} on ${new Date(subscription.expiresAt).toLocaleDateString()}`
+                    ? `${isTrialing ? 'Trial ends' : subscription.autoRenewEnabled ? 'Renews' : 'Access ends'} on ${new Date(subscription.expiresAt).toLocaleDateString()}`
                     : 'Active subscription'}
                 </p>
               </div>
@@ -217,9 +219,10 @@ export default function UpgradePage() {
               variant="secondary"
               onClick={handleManageSubscription}
               isLoading={loading === 'manage'}
+              disabled={isTrialing && !billingProvider}
               rightIcon={<ExternalLink className="h-4 w-4" />}
             >
-              Manage Subscription
+              {billingProvider === 'appstore' ? 'Manage with Apple' : 'Manage Subscription'}
             </Button>
           </CardContent>
         </Card>
@@ -349,7 +352,7 @@ export default function UpgradePage() {
                   className="w-full"
                   onClick={() => handleSubscribe(plan)}
                   isLoading={loading === plan.id}
-                  disabled={isCurrentPlan || !canUpgrade}
+                  disabled={isCurrentPlan || !canUpgrade || !!loading}
                 >
                   {isCurrentPlan
                     ? 'Current Plan'

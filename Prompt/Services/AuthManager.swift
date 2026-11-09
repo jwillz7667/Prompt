@@ -137,6 +137,8 @@ final class AuthManager: NSObject {
     /// "session expired" state so chats/history can offer re-authentication.
     func handleSessionExpiration() {
         isSessionExpired = true
+        StoreKitManager.shared.clearSubscriptionState()
+        SupportSocketManager.shared.disconnect()
     }
 
     // MARK: - Session Check
@@ -150,11 +152,13 @@ final class AuthManager: NSObject {
 
         // Check if we have tokens
         let hasTokens = await APIClient.shared.isAuthenticated
+        let checkedSessionVersion = await APIClient.shared.sessionVersion
 
         // If we have tokens, try to validate with backend
         if hasTokens {
             do {
                 let response: MeResponse = try await APIClient.shared.request("/auth/me")
+                guard await APIClient.shared.sessionVersion == checkedSessionVersion else { return }
                 self.currentUser = User(from: response.user)
                 cacheUser(self.currentUser!)
                 markAsSignedIn()
@@ -163,13 +167,14 @@ final class AuthManager: NSObject {
                 #endif
                 return
             } catch let error as APIError {
+                guard await APIClient.shared.sessionVersion == checkedSessionVersion else { return }
                 // Only clear tokens on explicit auth failures (401)
                 if case .unauthorized = error {
                     #if DEBUG
                     print("[Auth] Token invalid (401), clearing session")
                     #endif
                     await APIClient.shared.clearTokens()
-                    isSessionExpired = true
+                    handleSessionExpiration()
                     // Don't clear UserDefaults - let user stay "logged in" with cached data
                 } else {
                     // Network or other transient error - use cached user
@@ -183,6 +188,7 @@ final class AuthManager: NSObject {
                     }
                 }
             } catch {
+                guard await APIClient.shared.sessionVersion == checkedSessionVersion else { return }
                 // Network error - use cached data if available
                 ErrorHandler.shared.handleSilently(error, context: "checkExistingSession")
                 if let cached = loadCachedUser() {
@@ -197,6 +203,7 @@ final class AuthManager: NSObject {
 
         // No tokens but user has signed in before - restore from cache
         if hasStoredSession {
+            if !hasTokens { handleSessionExpiration() }
             if let cached = loadCachedUser() {
                 self.currentUser = cached
                 #if DEBUG
@@ -317,6 +324,7 @@ final class AuthManager: NSObject {
         await APIClient.shared.clearTokens()
         clearSignedInState()
         StoreKitManager.shared.clearSubscriptionState()
+        SupportSocketManager.shared.disconnect()
         currentUser = nil
         isLoading = false
     }
@@ -328,6 +336,7 @@ final class AuthManager: NSObject {
         await APIClient.shared.clearTokens()
         clearSignedInState()
         StoreKitManager.shared.clearSubscriptionState()
+        SupportSocketManager.shared.disconnect()
         currentUser = nil
     }
 }

@@ -266,12 +266,14 @@ class KeyboardViewController: UIInputViewController {
     // MARK: - Enhancement API
 
     private func performEnhancement(prompt: String, token: String) async {
-        // Use stored base URL or default to production
-        let baseURL = sharedDefaults?.string(forKey: "apiBaseURL") ?? "https://api.promptomize.app"
-
-        guard let url = URL(string: "\(baseURL)/api/v1/prompts/enhance") else {
+        // The containing app supplies its configured origin through the App Group.
+        guard let baseURL = sharedDefaults?.string(forKey: "apiBaseURL"),
+              let origin = URLComponents(string: baseURL),
+              origin.scheme == "https", origin.host != nil,
+              origin.user == nil, origin.password == nil,
+              let url = URL(string: "\(baseURL)/api/v1/prompts/enhance") else {
             await MainActor.run {
-                self.statusLabel.text = "Invalid API URL"
+                self.statusLabel.text = "Open Promptomize to configure the connection"
                 self.isEnhancing = false
                 self.activityIndicator.stopAnimating()
             }

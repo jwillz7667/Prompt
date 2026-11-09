@@ -61,19 +61,24 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         }
       }
 
+      // Restore the account before polling purchase confirmation.
+      const signedIn = await checkAuth()
+      setIsInitialized(true)
+
       // Handle Stripe checkout
       if (checkout === 'success') {
-        toast.success('Subscription activated!', 'Thank you for your purchase')
-        refreshAfterPurchase()
         router.replace('/dashboard')
+        if (signedIn) {
+          toast.info('Confirming your subscription', 'This can take a few seconds.')
+          const activated = await refreshAfterPurchase()
+          if (activated) toast.success('Subscription activated!', 'Your plan is ready to use.')
+          else toast.info('Subscription confirmation pending', 'Refresh your plan shortly. Please avoid submitting another payment.')
+        }
       } else if (checkout === 'canceled') {
         toast.info('Checkout canceled', 'No charges were made')
         router.replace('/upgrade')
       }
 
-      // Now check auth (after token is stored)
-      await checkAuth()
-      setIsInitialized(true)
     }
 
     initAuth()

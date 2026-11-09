@@ -20,7 +20,7 @@ struct PaywallView: View {
     @State private var errorMessage = ""
     @State private var showSuccess = false
     @State private var showAuthGate = false
-    @State private var showSignInSuggestion = false
+    @State private var successMessage = ""
     @State private var trialEligible = false
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
@@ -68,12 +68,13 @@ struct PaywallView: View {
         }
     }
     private var selectedProductIsCurrent: Bool {
-        guard let selectedProduct else { return false }
+        guard let selectedProduct, storeKit.hasActiveSubscription,
+              ProductID(rawValue: selectedProduct.id)?.tier == storeKit.currentTier else { return false }
         return storeKit.purchasedProductIDs.contains(selectedProduct.id)
     }
 
     private var requiresAuthentication: Bool {
-        !authManager.isAuthenticated
+        !authManager.isAuthenticated || authManager.isSessionExpired
     }
 
     private var primaryActionTitle: String {
@@ -157,17 +158,7 @@ struct PaywallView: View {
                     dismiss()
                 }
             } message: {
-                Text("Premium is now unlocked on this account.")
-            }
-            .alert("Purchase Successful", isPresented: $showSignInSuggestion) {
-                Button("Sign In Now") {
-                    showAuthGate = true
-                }
-                Button("Later", role: .cancel) {
-                    dismiss()
-                }
-            } message: {
-                Text("Your subscription is active on this device. Sign in to sync your purchase across all your devices.")
+                Text(successMessage)
             }
             .fullScreenCover(isPresented: $showAuthGate) {
                 AuthView(mode: .standard) {
@@ -279,7 +270,7 @@ struct PaywallView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(accentColor)
 
-            Text("Sign in to sync purchases across devices and unlock the free trial.")
+            Text("Sign in to activate your subscription across devices and unlock the free trial.")
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -705,7 +696,7 @@ struct PaywallView: View {
 
     private func loadData() async {
         await storeKit.loadProducts()
-        if authManager.isAuthenticated {
+        if !requiresAuthentication {
             trialEligible = await storeKit.checkTrialEligibility()
         } else {
             trialEligible = false
@@ -720,6 +711,10 @@ struct PaywallView: View {
     }
 
     private func purchase() async {
+        guard !requiresAuthentication else {
+            showAuthGate = true
+            return
+        }
         guard let product = selectedProduct else { return }
 
         isProcessing = true
@@ -727,11 +722,8 @@ struct PaywallView: View {
 
         do {
             if let _ = try await storeKit.purchase(product) {
-                if authManager.isAuthenticated {
-                    showSuccess = true
-                } else {
-                    showSignInSuggestion = true
-                }
+                successMessage = "Your \(storeKit.currentTier.displayName) subscription is active on this account."
+                showSuccess = true
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -740,7 +732,7 @@ struct PaywallView: View {
     }
 
     private func startTrial() async {
-        guard authManager.isAuthenticated else {
+        guard !requiresAuthentication else {
             // Trial is account-based — sign-in is required to activate it
             showAuthGate = true
             return
@@ -751,6 +743,7 @@ struct PaywallView: View {
 
         do {
             try await storeKit.startFreeTrial()
+            successMessage = "Your Premium trial is active on this account."
             showSuccess = true
         } catch {
             errorMessage = error.localizedDescription
@@ -759,17 +752,18 @@ struct PaywallView: View {
     }
 
     private func restorePurchases() async {
+        guard !requiresAuthentication else {
+            showAuthGate = true
+            return
+        }
         isProcessing = true
         defer { isProcessing = false }
 
         do {
             try await storeKit.restorePurchases()
             if storeKit.hasActiveSubscription {
-                if authManager.isAuthenticated {
-                    showSuccess = true
-                } else {
-                    showSignInSuggestion = true
-                }
+                successMessage = "Your \(storeKit.currentTier.displayName) subscription is active on this account."
+                showSuccess = true
             } else {
                 errorMessage = "No active subscriptions found"
                 showError = true

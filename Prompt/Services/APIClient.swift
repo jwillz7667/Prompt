@@ -13,9 +13,10 @@ actor APIClient {
 
     // MARK: - Configuration
 
-    // Use production backend for all builds (change to localhost for local dev)
-    private let baseURL = "https://backend-production-d538.up.railway.app/api/v1"
+    // Configured by the PROMPT_API_BASE_URL build setting.
+    private let baseURL = APIConfiguration.baseURL.absoluteString
 
+    private(set) var sessionVersion: UInt = 0
     private var accessToken: String?
     private var refreshToken: String?
     private var isRefreshing = false
@@ -41,6 +42,11 @@ actor APIClient {
     // MARK: - Token Management
 
     func setTokens(access: String, refresh: String) async {
+        sessionVersion &+= 1
+        await storeTokens(access: access, refresh: refresh)
+    }
+
+    private func storeTokens(access: String, refresh: String) async {
         self.accessToken = access
         self.refreshToken = refresh
         // Persist tokens securely using shared keychain for extension access
@@ -61,6 +67,7 @@ actor APIClient {
     }
 
     func clearTokens() async {
+        sessionVersion &+= 1
         self.accessToken = nil
         self.refreshToken = nil
         SharedKeychainHelper.deleteAll()
@@ -181,8 +188,13 @@ actor APIClient {
             request.httpBody = try Self.makeJSONEncoder().encode(body)
         }
 
+        let requestSessionVersion = sessionVersion
+        let requestAccessToken = accessToken
         do {
             let (bytes, response) = try await urlSession.bytes(for: request)
+            guard !requiresAuth || sessionVersion == requestSessionVersion else {
+                throw APIError.unauthorized
+            }
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.invalidResponse
@@ -190,7 +202,10 @@ actor APIClient {
 
             if httpResponse.statusCode == 401 {
                 if requiresAuth && !isRetry {
-                    try await refreshAccessToken()
+                    if accessToken == requestAccessToken {
+                        try await refreshAccessToken()
+                    }
+                    guard sessionVersion == requestSessionVersion else { throw APIError.unauthorized }
                     try await streamRequest(
                         endpoint,
                         method: method,
@@ -212,6 +227,9 @@ actor APIClient {
 
             for try await line in bytes.lines {
                 try Task.checkCancellation()
+                guard !requiresAuth || sessionVersion == requestSessionVersion else {
+                    throw APIError.unauthorized
+                }
 
                 guard line.hasPrefix("data: ") else { continue }
 
@@ -317,8 +335,13 @@ actor APIClient {
             request.httpBody = try Self.makeJSONEncoder().encode(body)
         }
 
+        let requestSessionVersion = sessionVersion
+        let requestAccessToken = accessToken
         do {
             let (bytes, response) = try await urlSession.bytes(for: request)
+            guard !requiresAuth || sessionVersion == requestSessionVersion else {
+                throw APIError.unauthorized
+            }
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.invalidResponse
@@ -326,7 +349,10 @@ actor APIClient {
 
             if httpResponse.statusCode == 401 {
                 if requiresAuth && !isRetry {
-                    try await refreshAccessToken()
+                    if accessToken == requestAccessToken {
+                        try await refreshAccessToken()
+                    }
+                    guard sessionVersion == requestSessionVersion else { throw APIError.unauthorized }
                     try await rawEventStreamRequest(
                         endpoint,
                         method: method,
@@ -348,6 +374,9 @@ actor APIClient {
 
             for try await line in bytes.lines {
                 try Task.checkCancellation()
+                guard !requiresAuth || sessionVersion == requestSessionVersion else {
+                    throw APIError.unauthorized
+                }
 
                 guard line.hasPrefix("data: ") else { continue }
 
@@ -449,6 +478,8 @@ actor APIClient {
             request.httpBody = try Self.makeJSONEncoder().encode(body)
         }
 
+        let requestSessionVersion = sessionVersion
+        let requestAccessToken = accessToken
         let data: Data
         let response: URLResponse
 
@@ -458,6 +489,9 @@ actor APIClient {
             throw APIError.requestTimedOut
         }
 
+        guard !requiresAuth || sessionVersion == requestSessionVersion else {
+            throw APIError.unauthorized
+        }
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
@@ -469,7 +503,10 @@ actor APIClient {
         case 401:
             // Token expired - try refresh
             if !isRetry && requiresAuth {
-                try await refreshAccessToken()
+                if accessToken == requestAccessToken {
+                    try await refreshAccessToken()
+                }
+                guard sessionVersion == requestSessionVersion else { throw APIError.unauthorized }
                 return try await performRequest(
                     endpoint,
                     method: method,
@@ -484,6 +521,10 @@ actor APIClient {
         case 400:
             let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
             throw APIError.badRequest(errorResponse?.message ?? errorResponse?.error ?? "Bad request")
+
+        case 409, 422:
+            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+            throw APIError.serverMessage(errorResponse?.message ?? errorResponse?.error ?? "Request could not be completed", httpResponse.statusCode)
 
         case 404:
             throw APIError.notFound
@@ -533,6 +574,7 @@ actor APIClient {
         }
 
         isRefreshing = true
+        let refreshSessionVersion = sessionVersion
 
         do {
             let body = RefreshTokenRequest(refreshToken: refresh)
@@ -549,6 +591,13 @@ actor APIClient {
             request.httpBody = try JSONEncoder().encode(body)
 
             let (data, response) = try await urlSession.data(for: request)
+
+            // Actor reentrancy allows sign-out or a new sign-in while this
+            // request is in flight. An old refresh must never restore that
+            // session or clear the new account's credentials.
+            guard sessionVersion == refreshSessionVersion, refreshToken == refresh else {
+                throw APIError.unauthorized
+            }
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 isRefreshing = false
@@ -586,7 +635,7 @@ actor APIClient {
             }
 
             let tokenResponse = try JSONDecoder().decode(TokenRefreshResponse.self, from: data)
-            await setTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
+            await storeTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
 
             isRefreshing = false
             resumePendingRequests(with: nil)

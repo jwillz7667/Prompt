@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Providers } from '@/components/providers'
+import { ServiceWorkerRegistration } from '@/components/service-worker-registration'
 import './globals.css'
 
 // SEO Best Practices 2026
@@ -175,7 +176,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
         {/* DNS prefetch for API */}
-        <link rel="dns-prefetch" href="https://backend-production-d538.up.railway.app" />
+        <link rel="dns-prefetch" href="https://backend-production-d7487.up.railway.app" />
 
         {/* PWA manifest and icons */}
         <link rel="manifest" href="/manifest.json" />
@@ -257,6 +258,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         {/* End Google Tag Manager (noscript) */}
 
         <div id="main-content">
+          <ServiceWorkerRegistration />
           <Providers>{children}</Providers>
         </div>
       </body>

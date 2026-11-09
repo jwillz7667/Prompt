@@ -12,6 +12,7 @@ final class StoreKitManager {
     private(set) var purchasedProductIDs: Set<String> = []
     private(set) var subscriptionInfo: AppSubscriptionInfo?
     private(set) var usageInfo: UsageInfo?
+    private(set) var billingProvider: String?
     private(set) var isLoading = false
     private(set) var error: StoreError?
 
@@ -99,6 +100,7 @@ final class StoreKitManager {
     func clearSubscriptionState() {
         subscriptionInfo = nil
         usageInfo = nil
+        billingProvider = nil
         purchasedProductIDs = []
         SharedDataManager.shared.cachedSubscriptionData = nil
         SharedDataManager.shared.updateSubscription(tier: SubscriptionTier.free.rawValue)
@@ -133,15 +135,34 @@ final class StoreKitManager {
     // MARK: - Purchase
 
     func purchase(_ product: Product) async throws -> Transaction? {
+        guard await APIClient.shared.isAuthenticated, !AuthManager.shared.isSessionExpired else {
+            throw StoreError.signInRequired
+        }
+        guard productIds.contains(product.id) else { throw StoreError.failedVerification }
+        let purchaseSessionVersion = await APIClient.shared.sessionVersion
         isLoading = true
         error = nil
 
         do {
+            // Verify the account and backend are reachable before charging.
+            try await refreshSubscriptionStatus()
+            guard billingProvider != "stripe" || !hasActiveSubscription else {
+                throw StoreError.managedOnWeb
+            }
+            guard await APIClient.shared.sessionVersion == purchaseSessionVersion else {
+                throw StoreError.signInRequired
+            }
             let result = try await product.purchase()
 
             switch result {
             case .success(let verification):
                 let transaction = try checkVerified(verification)
+
+                // A purchase sheet can outlive the signed-in session. Never
+                // attach its result to a different account after reentrancy.
+                guard await APIClient.shared.sessionVersion == purchaseSessionVersion else {
+                    throw StoreError.activationFailed
+                }
 
                 // Sync with backend using JWS from the verification result
                 let outcome = await syncTransactionWithBackend(jwsRepresentation: verification.jwsRepresentation)
@@ -159,7 +180,8 @@ final class StoreKitManager {
                 // Refresh entitlements (also retries pending activations)
                 await checkEntitlements()
 
-                if outcome != .accepted, await APIClient.shared.isAuthenticated, !hasActiveSubscription {
+                let sessionChanged = await APIClient.shared.sessionVersion != purchaseSessionVersion
+                if outcome != .accepted || sessionChanged {
                     // Purchase succeeded at Apple but activation on the
                     // account failed and the entitlement still isn't active —
                     // surface it instead of showing success over still-locked
@@ -200,6 +222,7 @@ final class StoreKitManager {
     // MARK: - Check Entitlements
 
     func checkEntitlements() async {
+        let checkedSessionVersion = await APIClient.shared.sessionVersion
         // Purchases whose backend activation failed (offline, signed out,
         // server error) are intentionally left unfinished — retry them first
         // so the status sync below reflects the recovered entitlement.
@@ -212,7 +235,8 @@ final class StoreKitManager {
             do {
                 let transaction = try checkVerified(result)
 
-                if transaction.revocationDate == nil {
+                if productIds.contains(transaction.productID),
+                   transaction.revocationDate == nil, !transaction.isUpgraded {
                     purchasedIds.insert(transaction.productID)
                 }
             } catch {
@@ -222,6 +246,7 @@ final class StoreKitManager {
             }
         }
 
+        guard await APIClient.shared.sessionVersion == checkedSessionVersion else { return }
         self.purchasedProductIDs = purchasedIds
 
         // Sync with backend to get authoritative subscription info
@@ -247,6 +272,10 @@ final class StoreKitManager {
     // MARK: - Restore Purchases
 
     func restorePurchases() async throws {
+        guard await APIClient.shared.isAuthenticated, !AuthManager.shared.isSessionExpired else {
+            throw StoreError.signInRequired
+        }
+        let restoreSessionVersion = await APIClient.shared.sessionVersion
         isLoading = true
         error = nil
 
@@ -258,13 +287,19 @@ final class StoreKitManager {
             var signedTransactions: [String] = []
 
             for await result in Transaction.currentEntitlements {
-                if case .verified = result {
+                if case .verified(let transaction) = result,
+                   productIds.contains(transaction.productID),
+                   transaction.revocationDate == nil, !transaction.isUpgraded {
                     signedTransactions.append(result.jwsRepresentation)
                 }
             }
 
-            // Send to backend for restoration only if authenticated
-            if !signedTransactions.isEmpty, await APIClient.shared.isAuthenticated {
+            guard await APIClient.shared.sessionVersion == restoreSessionVersion else {
+                throw StoreError.signInRequired
+            }
+            guard !signedTransactions.isEmpty else { throw StoreError.noActivePurchases }
+
+            if !signedTransactions.isEmpty {
                 let request = RestorePurchasesRequest(signedTransactions: signedTransactions)
                 let response: RestoreResponse = try await APIClient.shared.request(
                     "/subscriptions/restore",
@@ -272,9 +307,13 @@ final class StoreKitManager {
                     body: request
                 )
 
-                if response.restored {
-                    await syncWithBackend()
+                guard response.success, response.restored else {
+                    throw StoreError.restoreRejected(response.message ?? "No active subscriptions found")
                 }
+                guard await APIClient.shared.sessionVersion == restoreSessionVersion else {
+                    throw StoreError.signInRequired
+                }
+                try await refreshSubscriptionStatus()
             }
 
             // Re-check entitlements (local StoreKit check + conditional backend sync)
@@ -298,39 +337,45 @@ final class StoreKitManager {
         }
 
         do {
-            let response: SubscriptionStatusResponse = try await APIClient.shared.request(
-                "/subscriptions/status",
-                method: .get
-            )
-
-            let dateFormatter = ISO8601DateFormatter()
-            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-            let expiresAt = response.subscription.expiresAt.flatMap { dateFormatter.date(from: $0) }
-            let trialEndsAt = response.subscription.trialEndsAt.flatMap { dateFormatter.date(from: $0) }
-
-            self.subscriptionInfo = AppSubscriptionInfo(
-                tier: response.subscription.tier,
-                status: response.subscription.status,
-                expiresAt: expiresAt,
-                isTrialing: response.subscription.isTrialing ?? false,
-                trialEndsAt: trialEndsAt,
-                features: response.features
-            )
-
-            self.usageInfo = response.usage
-
-            // Persist the fresh snapshot so the next cold start restores the
-            // correct tier even before the network responds.
-            persistSubscriptionCache()
-
-            // Sync to shared storage for widgets and extensions
-            syncToSharedStorage()
+            try await refreshSubscriptionStatus()
         } catch {
-            // Keep the last-known subscriptionInfo on failure — a transient
-            // network/backend error must not drop the user to FREE.
             ErrorHandler.shared.handleSilently(error, context: "syncWithBackend")
         }
+    }
+
+    private func refreshSubscriptionStatus() async throws {
+        let requestedSessionVersion = await APIClient.shared.sessionVersion
+        let response: SubscriptionStatusResponse = try await APIClient.shared.request(
+            "/subscriptions/status",
+            method: .get
+        )
+        guard await APIClient.shared.sessionVersion == requestedSessionVersion else {
+            throw APIError.unauthorized
+        }
+        applySubscription(response.subscription, features: response.features)
+        usageInfo = response.usage
+        billingProvider = response.billingProvider
+        syncToSharedStorage()
+    }
+
+    private func applySubscription(_ subscription: SubscriptionResponse, features: TierFeatures) {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let standardFormatter = ISO8601DateFormatter()
+        standardFormatter.formatOptions = [.withInternetDateTime]
+        func parseDate(_ value: String?) -> Date? {
+            value.flatMap { fractionalFormatter.date(from: $0) ?? standardFormatter.date(from: $0) }
+        }
+        subscriptionInfo = AppSubscriptionInfo(
+            tier: subscription.tier,
+            status: subscription.status,
+            expiresAt: parseDate(subscription.expiresAt),
+            isTrialing: subscription.isTrialing ?? false,
+            trialEndsAt: parseDate(subscription.trialEndsAt),
+            features: features
+        )
+        persistSubscriptionCache()
+        syncToSharedStorage()
     }
 
     // MARK: - Shared Storage Sync
@@ -461,27 +506,29 @@ final class StoreKitManager {
             return .retryLater
         }
 
+        let requestedSessionVersion = await APIClient.shared.sessionVersion
         do {
             let response: VerifyPurchaseResponse = try await APIClient.shared.request(
                 "/subscriptions/verify",
                 method: .post,
                 body: VerifyPurchaseRequest(signedTransaction: jwsRepresentation)
             )
-            return response.success ? .accepted : .rejected
-        } catch APIError.decodingError {
-            // The server returned 200 — the entitlement was granted; only the
-            // response shape drifted. Treat as accepted so the transaction
-            // finishes instead of re-verifying forever.
-            ErrorHandler.shared.handleSilently(APIError.decodingError, context: "syncTransactionWithBackend")
-            return .accepted
+            guard await APIClient.shared.sessionVersion == requestedSessionVersion else {
+                return .retryLater
+            }
+            guard response.success, let subscription = response.subscription,
+                  let features = response.features else { return .retryLater }
+            applySubscription(subscription, features: features)
+            return response.activationConfirmed ? .accepted : .rejected
         } catch let error as APIError {
             ErrorHandler.shared.handleSilently(error, context: "syncTransactionWithBackend")
             switch error {
             case .badRequest:
-                // Apple itself rejected the signed transaction — permanent.
                 return .rejected
             case .serverMessage(_, let code) where code == 400 || code == 422:
                 return .rejected
+            // An ownership conflict can be resolved by signing into the
+            // original account. Keep it unfinished for that account to retry.
             default:
                 return .retryLater
             }
@@ -533,6 +580,10 @@ enum StoreError: LocalizedError {
     case failedVerification
     case unknownPurchaseResult
     case activationFailed
+    case signInRequired
+    case managedOnWeb
+    case noActivePurchases
+    case restoreRejected(String)
     case restoreFailed(Error)
     case trialNotAvailable(String)
     case trialFailed(Error)
@@ -549,6 +600,14 @@ enum StoreError: LocalizedError {
             return "Transaction verification failed"
         case .unknownPurchaseResult:
             return "Unknown purchase result"
+        case .managedOnWeb:
+            return "This account already has a subscription billed on the web. Manage that plan on the Promptomize website to avoid a second subscription."
+        case .signInRequired:
+            return "Sign in to the account you want to use for this subscription."
+        case .noActivePurchases:
+            return "No active App Store subscriptions were found for this Apple Account."
+        case .restoreRejected(let message):
+            return message
         case .activationFailed:
             return "Your purchase went through, but we couldn't activate it on your account. It will retry automatically — or tap Restore Purchase."
         case .restoreFailed(let error):

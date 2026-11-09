@@ -20,7 +20,7 @@ const TONES = ['professional', 'casual', 'academic', 'creative', 'technical', 'f
 
 const LENGTHS = ['concise', 'standard', 'detailed'] as const
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 export default function PlaygroundPage() {
   const { data: apiKeys } = useApiKeys()
