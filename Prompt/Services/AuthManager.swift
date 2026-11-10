@@ -7,6 +7,8 @@
 
 import Foundation
 import AuthenticationServices
+import CryptoKit
+import Security
 import SwiftUI
 
 @Observable
@@ -15,16 +17,17 @@ final class AuthManager: NSObject {
     // MARK: - State
 
     var currentUser: User?
-    var isAuthenticated: Bool { currentUser != nil || hasStoredSession }
+    var isAuthenticated: Bool { currentUser != nil && !isSessionExpired }
     var isLoading = false
     var isCheckingSession = true
     var error: AuthError?
 
+    private var authAttemptVersion: UInt = 0
+    private var pendingAppleNonce: String?
+
     /// True when the stored tokens were rejected outright (refresh returned
-    /// 401/403) and cleared. Cached session data keeps `isAuthenticated` true
-    /// so the app still looks signed in — this flag is the signal feature UI
-    /// uses to surface a "sign in again" state instead of rendering as
-    /// authenticated with no data.
+    /// 401/403) and cleared. Keep cached profile details for display while
+    /// requiring a new sign-in before authenticated actions can continue.
     var isSessionExpired = false
 
     // MARK: - Persistent Session Storage (App Group for update persistence)
@@ -81,7 +84,7 @@ final class AuthManager: NSObject {
             appGroupDefaults?.set(data, forKey: cachedUserKey)
         }
         // Also update SharedDataManager for widgets/extensions
-        SharedDataManager.shared.updateAuthState(isAuthenticated: true, name: user.name, email: user.email)
+        SharedDataManager.shared.updateAuthState(isAuthenticated: isAuthenticated, name: user.name, email: user.email)
     }
 
     /// Load cached user data from App Group
@@ -137,6 +140,7 @@ final class AuthManager: NSObject {
     /// "session expired" state so chats/history can offer re-authentication.
     func handleSessionExpiration() {
         isSessionExpired = true
+        SharedDataManager.shared.updateAuthState(isAuthenticated: false, name: currentUser?.name, email: currentUser?.email)
         StoreKitManager.shared.clearSubscriptionState()
         SupportSocketManager.shared.disconnect()
     }
@@ -221,30 +225,45 @@ final class AuthManager: NSObject {
 
     // MARK: - Apple Sign In
 
-    func handleAppleSignIn(authorization: ASAuthorization) async {
-        #if DEBUG
-        print("[Auth] handleAppleSignIn called")
-        #endif
+    func prepareAppleSignIn(_ request: ASAuthorizationAppleIDRequest) {
+        authAttemptVersion &+= 1
+        error = nil
+        pendingAppleNonce = nil
+        var randomBytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes) == errSecSuccess else {
+            error = .failed
+            return
+        }
+        let rawNonce = randomBytes.map { String(format: "%02x", $0) }.joined()
+        let nonce = SHA256.hash(data: Data(rawNonce.utf8)).map { String(format: "%02x", $0) }.joined()
+        pendingAppleNonce = nonce
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = nonce
+    }
+
+    @discardableResult
+    func handleAppleSignIn(authorization: ASAuthorization) async -> Bool {
+        guard !isLoading else { return false }
+        let attempt = authAttemptVersion
+        let startingSession = await APIClient.shared.sessionVersion
         isLoading = true
         error = nil
-
-        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+        defer {
+            if authAttemptVersion == attempt {
+                isLoading = false
+                pendingAppleNonce = nil
+            }
+        }
+        guard let nonce = pendingAppleNonce,
+              let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
               let identityTokenData = credential.identityToken,
               let identityToken = String(data: identityTokenData, encoding: .utf8),
               let authCodeData = credential.authorizationCode,
-              let authCode = String(data: authCodeData, encoding: .utf8) else {
-            #if DEBUG
-            print("[Auth] Failed to extract credentials")
-            #endif
+              let authCode = String(data: authCodeData, encoding: .utf8),
+              !identityToken.isEmpty, !authCode.isEmpty else {
             error = .invalidCredential
-            isLoading = false
-            return
+            return false
         }
-
-        #if DEBUG
-        print("[Auth] Credentials extracted, calling backend...")
-        #endif
-
         do {
             let request = AppleAuthRequest(
                 identityToken: identityToken,
@@ -253,45 +272,58 @@ final class AuthManager: NSObject {
                     FullName(givenName: $0.givenName, familyName: $0.familyName)
                 },
                 deviceId: UIDevice.current.identifierForVendor?.uuidString,
-                deviceName: UIDevice.current.name
+                deviceName: UIDevice.current.name,
+                nonce: nonce
             )
-
             let response: AuthResponse = try await APIClient.shared.request(
-                "/auth/apple",
-                method: .post,
-                body: request,
-                requiresAuth: false
+                "/auth/apple", method: .post, body: request, requiresAuth: false
             )
-
-            #if DEBUG
-            print("[Auth] Backend response received, setting tokens...")
-            #endif
-
-            await APIClient.shared.setTokens(
-                access: response.accessToken,
-                refresh: response.refreshToken
-            )
-
-            currentUser = User(from: response.user)
-            cacheUser(currentUser!)
+            guard attempt == authAttemptVersion,
+                  await APIClient.shared.sessionVersion == startingSession else { return false }
+            guard !response.user.id.isEmpty, !response.accessToken.isEmpty, !response.refreshToken.isEmpty else {
+                throw APIError.invalidResponse
+            }
+            try await APIClient.shared.setTokens(access: response.accessToken, refresh: response.refreshToken)
+            guard attempt == authAttemptVersion else { return false }
+            let user = User(from: response.user)
+            currentUser = user
+            cacheUser(user)
             markAsSignedIn()
-            #if DEBUG
-            print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
-            #endif
-
-            // Activate any pending purchases and sync subscription status
-            // now that the session exists to attach them to
-            await StoreKitManager.shared.checkEntitlements()
-
-            // Track successful sign-in
             AnalyticsService.shared.trackSignIn(provider: "apple", success: true)
-        } catch {
-            ErrorHandler.shared.handle(error, context: "handleAppleSignIn")
-            AnalyticsService.shared.trackSignIn(provider: "apple", success: false, error: error)
-            self.error = .serverError(error.localizedDescription)
-        }
 
+            // Sign-in is complete once the session exists. Receipt history can
+            // take several network calls and must not hold the Apple sheet open.
+            Task { await StoreKitManager.shared.checkEntitlements() }
+            return true
+        } catch {
+            guard attempt == authAttemptVersion else { return false }
+            ErrorHandler.shared.handleSilently(error, context: "handleAppleSignIn")
+            AnalyticsService.shared.trackSignIn(provider: "apple", success: false, error: error)
+            if let apiError = error as? APIError, case .notFound = apiError {
+                self.error = .serverError("Sign-in is temporarily unavailable. Please try again shortly.")
+            } else {
+                self.error = .serverError(error.localizedDescription)
+            }
+            return false
+        }
+    }
+
+    func handleAppleSignInFailure(_ failure: Error) {
+        authAttemptVersion &+= 1
         isLoading = false
+        pendingAppleNonce = nil
+        guard let appleError = failure as? ASAuthorizationError else {
+            error = .serverError(failure.localizedDescription)
+            return
+        }
+        switch appleError.code {
+        case .canceled: error = nil
+        case .invalidResponse: error = .invalidResponse
+        case .notHandled: error = .notHandled
+        case .notInteractive: error = .notInteractive
+        default: error = .failed
+        }
+        ErrorHandler.shared.handleSilently(failure, context: "AppleSignIn")
     }
 
     // MARK: - Google Sign In
@@ -310,6 +342,7 @@ final class AuthManager: NSObject {
     // MARK: - Sign Out
 
     func signOut() async {
+        authAttemptVersion &+= 1
         isLoading = true
 
         do {
@@ -332,6 +365,7 @@ final class AuthManager: NSObject {
     // MARK: - Sign Out All Devices
 
     func signOutAllDevices() async throws {
+        authAttemptVersion &+= 1
         try await APIClient.shared.requestVoid("/auth/logout-all", method: .post)
         await APIClient.shared.clearTokens()
         clearSignedInState()
@@ -348,122 +382,14 @@ extension AuthManager: ASAuthorizationControllerDelegate {
         controller: ASAuthorizationController,
         didCompleteWithAuthorization authorization: ASAuthorization
     ) {
-        Task { @MainActor in
-            defer { isLoading = false }
-
-            #if DEBUG
-            print("[Auth] Apple Sign In delegate called")
-            #endif
-
-            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                  let identityTokenData = credential.identityToken,
-                  let identityToken = String(data: identityTokenData, encoding: .utf8),
-                  let authCodeData = credential.authorizationCode,
-                  let authCode = String(data: authCodeData, encoding: .utf8) else {
-                #if DEBUG
-                print("[Auth] Failed to extract credentials")
-                #endif
-                error = .invalidCredential
-                return
-            }
-
-            #if DEBUG
-            print("[Auth] Credentials extracted, calling backend...")
-            #endif
-
-            do {
-                let request = AppleAuthRequest(
-                    identityToken: identityToken,
-                    authorizationCode: authCode,
-                    fullName: credential.fullName.map {
-                        FullName(givenName: $0.givenName, familyName: $0.familyName)
-                    },
-                    deviceId: UIDevice.current.identifierForVendor?.uuidString,
-                    deviceName: UIDevice.current.name
-                )
-
-                let response: AuthResponse = try await APIClient.shared.request(
-                    "/auth/apple",
-                    method: .post,
-                    body: request,
-                    requiresAuth: false
-                )
-
-                #if DEBUG
-                print("[Auth] Backend response received, setting tokens...")
-                #endif
-
-                await APIClient.shared.setTokens(
-                    access: response.accessToken,
-                    refresh: response.refreshToken
-                )
-
-                currentUser = User(from: response.user)
-                cacheUser(currentUser!)
-                markAsSignedIn()
-                #if DEBUG
-                print("[Auth] User set: \(response.user.email), isAuthenticated: \(isAuthenticated)")
-                #endif
-
-                // Activate any pending purchases and sync subscription status
-                // now that the session exists to attach them to
-                await StoreKitManager.shared.checkEntitlements()
-
-                // Track successful sign-in
-                AnalyticsService.shared.trackSignIn(provider: "apple", success: true)
-            } catch {
-                ErrorHandler.shared.handle(error, context: "authorizationController")
-                AnalyticsService.shared.trackSignIn(provider: "apple", success: false, error: error)
-                self.error = .serverError(error.localizedDescription)
-            }
-        }
+        Task { @MainActor in await handleAppleSignIn(authorization: authorization) }
     }
 
     nonisolated func authorizationController(
         controller: ASAuthorizationController,
         didCompleteWithError error: Error
     ) {
-        #if DEBUG
-        print("[Auth] Error delegate called: \(error)")
-        #endif
-        // Track the auth error
-        Task { @MainActor in
-            ErrorHandler.shared.handleSilently(error, context: "authorizationController")
-        }
-
-        Task { @MainActor in
-            isLoading = false
-
-            if let authError = error as? ASAuthorizationError {
-                #if DEBUG
-                print("[Auth] ASAuthorizationError code: \(authError.code.rawValue)")
-                #endif
-                switch authError.code {
-                case .canceled:
-                    self.error = nil // User canceled, not an error
-                case .failed:
-                    self.error = .failed
-                case .invalidResponse:
-                    self.error = .invalidResponse
-                case .notHandled:
-                    self.error = .notHandled
-                case .unknown:
-                    self.error = .unknown
-                case .notInteractive:
-                    self.error = .notInteractive
-                case .credentialImport, .credentialExport, .preferSignInWithApple:
-                    self.error = .failed
-                case .matchedExcludedCredential:
-                    self.error = .failed
-                case .deviceNotConfiguredForPasskeyCreation:
-                    self.error = .failed
-                @unknown default:
-                    self.error = .unknown
-                }
-            } else {
-                self.error = .serverError(error.localizedDescription)
-            }
-        }
+        Task { @MainActor in handleAppleSignInFailure(error) }
     }
 }
 
@@ -510,6 +436,7 @@ struct AppleAuthRequest: Encodable, Sendable {
     let fullName: FullName?
     let deviceId: String?
     let deviceName: String?
+    var nonce: String? = nil
 }
 
 struct FullName: Encodable, Sendable {
@@ -545,7 +472,7 @@ enum AuthError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidCredential: return "Invalid credentials received"
-        case .failed: return "Authentication failed"
+        case .failed: return "Apple sign-in could not be completed. Please try again. If this continues, check that you are signed in to your Apple Account in Settings."
         case .invalidResponse: return "Invalid response from authentication"
         case .notHandled: return "Authentication request not handled"
         case .notInteractive: return "Interactive authentication required"

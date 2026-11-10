@@ -30,64 +30,38 @@ enum SharedKeychainHelper {
 
     // MARK: - Save
 
-    nonisolated static func save(key: Key, value: String) {
-        guard let data = value.data(using: .utf8) else {
-            #if DEBUG
-            print("[Keychain] Failed to encode value for key: \(key.rawValue)")
-            #endif
-            return
-        }
-
-        // First delete any existing item (from all possible locations)
-        deleteAllVariants(key: key)
-
-        // Add the new item with accessibility that survives app updates
-        // Using kSecAttrAccessibleAfterFirstUnlock (NOT ThisDeviceOnly) so tokens
-        // persist across app updates and can be restored from iCloud backup
-        let addQuery: [String: Any] = [
+    @discardableResult
+    nonisolated static func save(key: Key, value: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key.rawValue,
             kSecAttrService as String: serviceName,
-            kSecAttrAccessGroup as String: accessGroup,
+            kSecAttrAccessGroup as String: accessGroup
+        ]
+        let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
-
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
-        if status == errSecSuccess {
-            #if DEBUG
-            print("[Keychain] Saved \(key.rawValue) successfully")
-            #endif
-        } else if status == errSecDuplicateItem {
-            #if DEBUG
-            print("[Keychain] Duplicate item for \(key.rawValue), attempting update")
-            #endif
-            // Try update instead
-            let updateQuery: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrAccount as String: key.rawValue,
-                kSecAttrService as String: serviceName,
-                kSecAttrAccessGroup as String: accessGroup
-            ]
-            let updateAttrs: [String: Any] = [
-                kSecValueData as String: data,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-            ]
-            let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttrs as CFDictionary)
-            if updateStatus == errSecSuccess {
-                #if DEBUG
-                print("[Keychain] Updated \(key.rawValue) successfully")
-                #endif
-            } else {
-                #if DEBUG
-                print("[Keychain] Update failed for \(key.rawValue): \(updateStatus)")
-                #endif
-            }
-        } else {
-            #if DEBUG
-            print("[Keychain] Save error for \(key.rawValue): \(status) - \(securityErrorMessage(status))")
-            #endif
+        func upsert(_ query: [String: Any]) -> OSStatus {
+            let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            if status != errSecItemNotFound { return status }
+            let item = query.merging(attributes) { _, new in new }
+            return SecItemAdd(item as CFDictionary, nil)
         }
+        var status = upsert(query)
+        if status == errSecMissingEntitlement {
+            // Keep main-app sessions in its private keychain if shared access is
+            // unavailable. Tokens never move to UserDefaults or unencrypted files.
+            query.removeValue(forKey: kSecAttrAccessGroup as String)
+            status = upsert(query)
+        }
+        #if DEBUG
+        if status != errSecSuccess {
+            print("[Keychain] Could not save \(key.rawValue): \(securityErrorMessage(status))")
+        }
+        #endif
+        return status == errSecSuccess
     }
 
     // MARK: - Load
@@ -95,6 +69,20 @@ enum SharedKeychainHelper {
     nonisolated static func load(key: Key) -> String? {
         // Try loading from primary location first
         if let value = loadFromPrimary(key: key) {
+            return value
+        }
+
+        let privateQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key.rawValue,
+            kSecAttrService as String: serviceName,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        if SecItemCopyMatching(privateQuery as CFDictionary, &result) == errSecSuccess,
+           let data = result as? Data, let value = String(data: data, encoding: .utf8) {
+            save(key: key, value: value)
             return value
         }
 

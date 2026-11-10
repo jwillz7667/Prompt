@@ -132,23 +132,24 @@ struct AuthView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             SignInWithAppleButton(.signIn) { request in
-                request.requestedScopes = [.fullName, .email]
+                authManager.prepareAppleSignIn(request)
             } onCompletion: { result in
                 switch result {
                 case .success(let authorization):
                     Task {
-                        await authManager.handleAppleSignIn(authorization: authorization)
-                        if authManager.error == nil {
+                        if await authManager.handleAppleSignIn(authorization: authorization) {
                             onAuthenticated?()
                             dismiss()
                         }
                     }
                 case .failure(let error):
-                    print("[Auth] Apple Sign In failed: \(error)")
+                    authManager.handleAppleSignInFailure(error)
                 }
             }
             .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
             .frame(height: 56)
+            .disabled(authManager.isLoading)
+            .accessibilityIdentifier("auth.apple.signIn")
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if authManager.isLoading {
@@ -165,6 +166,7 @@ struct AuthView: View {
 
             if let error = authManager.error {
                 Text(error.localizedDescription)
+                    .accessibilityIdentifier("auth.error")
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(colorScheme == .dark ? Color(red: 255/255, green: 69/255, blue: 58/255) : Color(red: 0.85, green: 0.2, blue: 0.25))
                     .fixedSize(horizontal: false, vertical: true)

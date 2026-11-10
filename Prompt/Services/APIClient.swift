@@ -41,17 +41,24 @@ actor APIClient {
 
     // MARK: - Token Management
 
-    func setTokens(access: String, refresh: String) async {
+    func setTokens(access: String, refresh: String) async throws {
+        try await storeTokens(access: access, refresh: refresh)
         sessionVersion &+= 1
-        await storeTokens(access: access, refresh: refresh)
     }
 
-    private func storeTokens(access: String, refresh: String) async {
+    private func storeTokens(access: String, refresh: String) async throws {
+        let previousAccess = SharedKeychainHelper.load(key: .accessToken)
+        let previousRefresh = SharedKeychainHelper.load(key: .refreshToken)
+        guard SharedKeychainHelper.save(key: .refreshToken, value: refresh),
+              SharedKeychainHelper.save(key: .accessToken, value: access) else {
+            if let previousRefresh { SharedKeychainHelper.save(key: .refreshToken, value: previousRefresh) }
+            else { SharedKeychainHelper.delete(key: .refreshToken) }
+            if let previousAccess { SharedKeychainHelper.save(key: .accessToken, value: previousAccess) }
+            else { SharedKeychainHelper.delete(key: .accessToken) }
+            throw APIError.secureStorageUnavailable
+        }
         self.accessToken = access
         self.refreshToken = refresh
-        // Persist tokens securely using shared keychain for extension access
-        SharedKeychainHelper.save(key: .accessToken, value: access)
-        SharedKeychainHelper.save(key: .refreshToken, value: refresh)
         // Also update shared data manager
         await MainActor.run {
             SharedDataManager.shared.isAuthenticated = true
@@ -501,6 +508,10 @@ actor APIClient {
             return data
 
         case 401:
+            if !requiresAuth {
+                let failure = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+                throw APIError.serverMessage(failure?.message ?? failure?.error ?? "Sign-in could not be verified. Please try again.", 401)
+            }
             // Token expired - try refresh
             if !isRetry && requiresAuth {
                 if accessToken == requestAccessToken {
@@ -616,10 +627,8 @@ actor APIClient {
                 let isAuthRejection = httpResponse.statusCode == 401 || httpResponse.statusCode == 403
                 if isAuthRejection {
                     await clearTokens()
-                    // Converge app-level auth state: AuthManager keeps a cached
-                    // "signed in" appearance after tokens are cleared, so it
-                    // must be told the session is terminally gone or the UI
-                    // keeps rendering as authenticated with no data.
+                    // Preserve cached profile details while requiring sign-in
+                    // again throughout the app and its extensions.
                     await MainActor.run { AuthManager.shared.handleSessionExpiration() }
                     isRefreshing = false
                     resumePendingRequests(with: APIError.unauthorized)
@@ -635,7 +644,7 @@ actor APIClient {
             }
 
             let tokenResponse = try JSONDecoder().decode(TokenRefreshResponse.self, from: data)
-            await storeTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
+            try await storeTokens(access: tokenResponse.accessToken, refresh: tokenResponse.refreshToken)
 
             isRefreshing = false
             resumePendingRequests(with: nil)
@@ -724,6 +733,7 @@ enum APIError: LocalizedError, Sendable {
     case serverError(Int)
     case httpError(Int)
     case decodingError
+    case secureStorageUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -741,6 +751,7 @@ enum APIError: LocalizedError, Sendable {
         case .serverError(let code): return "Server error (\(code))"
         case .httpError(let code): return "Request failed (\(code))"
         case .decodingError: return "Failed to process response"
+        case .secureStorageUnavailable: return "Your sign-in could not be saved securely. Please restart the app and try again."
         }
     }
 

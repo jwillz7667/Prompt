@@ -30,7 +30,7 @@ const REQUIRED: EnvVarSpec[] = [
 const RECOMMENDED: EnvVarSpec[] = [
   { name: 'REDIS_URL', purpose: 'Cache, BullMQ queues, distributed rate limiting — degraded performance without it' },
   { name: 'GOOGLE_CLIENT_ID', purpose: 'Google Sign-In verification' },
-  { name: 'APPLE_PRIVATE_KEY', purpose: 'App Store Server API — StoreKit receipt/notification validation' },
+  { name: 'APPLE_PRIVATE_KEY', purpose: 'App Store Server API history/status queries; signed StoreKit transaction/notification verification does not require it' },
   { name: 'STRIPE_API_SECRET_KEY', purpose: 'Enterprise API billing (separate from app subscriptions)' },
   { name: 'RESEND_API_KEY', purpose: 'Transactional email delivery' },
   { name: 'RESEND_WEBHOOK_SECRET', purpose: 'Verifies Resend inbound-email webhooks — support-ticket email replies are rejected without it' },

@@ -370,6 +370,8 @@ final class ErrorHandler: ObservableObject {
                 return .serverError(code, nil)
             case .decodingError:
                 return .decodingFailed
+            case .secureStorageUnavailable:
+                return .unknown(apiError.localizedDescription)
             }
         }
 

@@ -175,6 +175,15 @@ struct ProfileView: View {
                             .buttonStyle(.plain)
                         }
 
+                        if authManager.isSessionExpired {
+                            Button("Sign in again") {
+                                guestSession.presentAuthenticationGate()
+                                dismiss()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("auth.signInAgain")
+                        }
+
                         if let error = profileSaveError {
                             Text(error)
                                 .font(.caption)
