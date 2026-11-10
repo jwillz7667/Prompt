@@ -1,0 +1,46 @@
+name: Locate original Promptomize infrastructure
+on:
+  push:
+    branches: [codex/audit-subscriptions-ai]
+    paths: [.github/workflows/legacy-railway-discovery.yml]
+permissions:
+  contents: read
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check original deployment credential without revealing it
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, json, urllib.request, urllib.error
+          token = os.environ.get('RAILWAY_TOKEN', '')
+          def query(document, project_token=True, variables=None):
+              headers = {'Content-Type': 'application/json', 'User-Agent': 'Promptomize migration audit'}
+              headers['Project-Access-Token' if project_token else 'Authorization'] = token if project_token else 'Bearer ' + token
+              body = json.dumps({'query': document, 'variables': variables or {}}).encode()
+              try:
+                  with urllib.request.urlopen(urllib.request.Request('https://backboard.railway.com/graphql/v2', data=body, headers=headers), timeout=20) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as error:
+                  return {'httpStatus': error.code}
+          if not token:
+              print(json.dumps({'credentialAvailable': False}))
+              raise SystemExit(0)
+          project = query('query { projectToken { projectId environmentId } }').get('data', {}).get('projectToken')
+          fields = 'id name services { edges { node { id name } } } environments { edges { node { id name } } }'
+          if project:
+              result = query('query($id:String!){ project(id:$id){' + fields + '} }', variables={'id':project['projectId']})
+              details = result.get('data', {}).get('project')
+              if details and 'prompt' in details.get('name','').lower():
+                  print(json.dumps({'credentialAvailable': True, 'scope': 'project', 'environmentId':project['environmentId'], 'project':details}))
+              else:
+                  print(json.dumps({'credentialAvailable': True, 'scope': 'project', 'promptomizeProjectFound': False, 'querySucceeded': bool(details)}))
+          else:
+              result = query('query { projects { edges { node {' + fields + '} } } }', project_token=False)
+              projects = result.get('data', {}).get('projects', {}).get('edges', [])
+              matches = [entry['node'] for entry in projects if 'prompt' in entry['node'].get('name','').lower()]
+              print(json.dumps({'credentialAvailable': True, 'scope': 'account-or-invalid', 'querySucceeded': bool(result.get('data')), 'matchingProjects': matches}))
+          PY

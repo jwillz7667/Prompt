@@ -1,0 +1,50 @@
+{
+  "model": "deepseek-flash",
+  "visionModel": "deepseek-flash",
+  "visionProvider": "deepseek",
+  "standardReasoning": "disabled",
+  "checks": [
+    "authenticated account response",
+    "text and native image streaming",
+    "image follow-up context",
+    "saved history and image attachment",
+    "quota increments exactly once",
+    "forged App Store receipt rejected",
+    "refresh rotation and logout revocation"
+  ],
+  "requests": [
+    {
+      "label": "text",
+      "elapsedMs": 1832,
+      "outputCharacters": 555,
+      "inputTokens": 921,
+      "outputTokens": 117,
+      "totalTokens": 1038,
+      "processingMs": 1698
+    },
+    {
+      "label": "native image",
+      "elapsedMs": 1849,
+      "outputCharacters": 473,
+      "inputTokens": 1172,
+      "outputTokens": 91,
+      "totalTokens": 1263,
+      "processingMs": 1737
+    },
+    {
+      "label": "image follow-up",
+      "elapsedMs": 1393,
+      "outputCharacters": 444,
+      "inputTokens": 1258,
+      "outputTokens": 88,
+      "totalTokens": 1346,
+      "processingMs": 1278
+    }
+  ],
+  "cleanedUp": true,
+  "ok": true,
+  "estimatedOffPeakCostUSD": 0.00068025,
+  "estimatedPeakCostUSD": 0.0013605,
+  "costAssumption": "Published token rates with all input treated as cache misses; excludes taxes. Actual cache hits may lower cost.",
+  "identityScope": "Temporary internal test account and real authenticated HTTP API. Personal Apple identity sign-in and real StoreKit purchases were not performed."
+}
