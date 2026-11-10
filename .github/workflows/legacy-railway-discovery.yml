@@ -29,18 +29,18 @@ jobs:
           if not token:
               print(json.dumps({'credentialAvailable': False}))
               raise SystemExit(0)
-          project = query('query { projectToken { projectId environmentId } }').get('data', {}).get('projectToken')
+          project = (query('query { projectToken { projectId environmentId } }').get('data') or {}).get('projectToken')
           fields = 'id name services { edges { node { id name } } } environments { edges { node { id name } } }'
           if project:
               result = query('query($id:String!){ project(id:$id){' + fields + '} }', variables={'id':project['projectId']})
-              details = result.get('data', {}).get('project')
+              details = (result.get('data') or {}).get('project')
               if details and 'prompt' in details.get('name','').lower():
                   print(json.dumps({'credentialAvailable': True, 'scope': 'project', 'environmentId':project['environmentId'], 'project':details}))
               else:
                   print(json.dumps({'credentialAvailable': True, 'scope': 'project', 'promptomizeProjectFound': False, 'querySucceeded': bool(details)}))
           else:
               result = query('query { projects { edges { node {' + fields + '} } } }', project_token=False)
-              projects = result.get('data', {}).get('projects', {}).get('edges', [])
+              projects = ((result.get('data') or {}).get('projects') or {}).get('edges', [])
               matches = [entry['node'] for entry in projects if 'prompt' in entry['node'].get('name','').lower()]
               print(json.dumps({'credentialAvailable': True, 'scope': 'account-or-invalid', 'querySucceeded': bool(result.get('data')), 'matchingProjects': matches}))
           PY
