@@ -10,7 +10,8 @@ import { Eye, EyeOff } from 'lucide-react'
 
 export default function DeveloperLoginPage() {
   const router = useRouter()
-  const { login, isAuthenticated, isLoading, error, clearError, checkAuth } = useDeveloperAuthStore()
+  const { login, isAuthenticated, isLoading, error, clearError, checkAuth } =
+    useDeveloperAuthStore()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,7 +47,7 @@ export default function DeveloperLoginPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-indigo" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-indigo" />
       </div>
     )
   }
@@ -55,22 +56,20 @@ export default function DeveloperLoginPage() {
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="text-2xl font-bold">Developer Sign In</h1>
-        <p className="mt-2 text-[var(--text-secondary)]">
-          Access the API and developer tools
-        </p>
+        <p className="mt-2 text-[var(--text-secondary)]">Access the API and developer tools</p>
       </div>
 
       <Card variant="elevated">
         <CardContent className="p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm text-red-500">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500">
                 {error}
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-2">
+              <label htmlFor="email" className="mb-2 block text-sm font-medium">
                 Email
               </label>
               <input
@@ -86,7 +85,7 @@ export default function DeveloperLoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2">
+              <label htmlFor="password" className="mb-2 block text-sm font-medium">
                 Password
               </label>
               <div className="relative">
@@ -126,7 +125,7 @@ export default function DeveloperLoginPage() {
       <div className="text-center text-sm">
         <p className="text-[var(--text-secondary)]">
           Don&apos;t have a developer account?{' '}
-          <Link href="/developers/signup" className="text-brand-indigo hover:underline font-medium">
+          <Link href="/developers/signup" className="font-medium text-brand-indigo hover:underline">
             Sign up
           </Link>
         </p>

@@ -99,7 +99,7 @@ function serializeVariationMetadata(metadata: VariationMetadata): Prisma.InputJs
 
 function semanticVariationStatus(
   status: VariationStatus,
-  metadata: VariationMetadata
+  metadata: VariationMetadata,
 ): VariationJobStatus {
   if (metadata.jobStatus) {
     return metadata.jobStatus;
@@ -119,10 +119,10 @@ function semanticVariationStatus(
 
 function mergeVariationMetadata(
   existing: Prisma.JsonValue | null | undefined,
-  patch: Partial<VariationMetadata>
+  patch: Partial<VariationMetadata>,
 ): Prisma.InputJsonValue {
   const sanitizedPatch = Object.fromEntries(
-    Object.entries(patch).filter(([, value]) => value !== undefined)
+    Object.entries(patch).filter(([, value]) => value !== undefined),
   );
 
   return {
@@ -139,19 +139,22 @@ function modalityFocusedVariants(modality: PromptModality): VariationVariant[] {
           label: 'Composition First',
           mode: 'standard',
           focus: 'composition',
-          customInstructions: 'Bias toward strong composition, framing, visual hierarchy, and focal clarity.',
+          customInstructions:
+            'Bias toward strong composition, framing, visual hierarchy, and focal clarity.',
         },
         {
           label: 'Style First',
           mode: 'standard',
           focus: 'style',
-          customInstructions: 'Bias toward distinctive style language, medium cues, and visual identity.',
+          customInstructions:
+            'Bias toward distinctive style language, medium cues, and visual identity.',
         },
         {
           label: 'MAX Visual Control',
           mode: 'max',
           focus: 'control',
-          customInstructions: 'Maximize composition control, subject fidelity, lighting specificity, and failure-avoidance constraints.',
+          customInstructions:
+            'Maximize composition control, subject fidelity, lighting specificity, and failure-avoidance constraints.',
         },
       ];
     case 'video':
@@ -172,7 +175,8 @@ function modalityFocusedVariants(modality: PromptModality): VariationVariant[] {
           label: 'MAX Continuity',
           mode: 'max',
           focus: 'continuity',
-          customInstructions: 'Maximize subject continuity, temporal sequencing, and motion realism.',
+          customInstructions:
+            'Maximize subject continuity, temporal sequencing, and motion realism.',
         },
       ];
     case 'audio':
@@ -193,7 +197,8 @@ function modalityFocusedVariants(modality: PromptModality): VariationVariant[] {
           label: 'MAX Sonic Detail',
           mode: 'max',
           focus: 'detail',
-          customInstructions: 'Maximize specificity in sound design, structure, performance, and production.',
+          customInstructions:
+            'Maximize specificity in sound design, structure, performance, and production.',
         },
       ];
     case 'code':
@@ -202,19 +207,22 @@ function modalityFocusedVariants(modality: PromptModality): VariationVariant[] {
           label: 'Implementation First',
           mode: 'standard',
           focus: 'implementation',
-          customInstructions: 'Bias toward concrete implementation scope, deliverables, and coding constraints.',
+          customInstructions:
+            'Bias toward concrete implementation scope, deliverables, and coding constraints.',
         },
         {
           label: 'Validation First',
           mode: 'standard',
           focus: 'validation',
-          customInstructions: 'Bias toward tests, error handling, edge cases, and verification criteria.',
+          customInstructions:
+            'Bias toward tests, error handling, edge cases, and verification criteria.',
         },
         {
           label: 'MAX Production Spec',
           mode: 'max',
           focus: 'production',
-          customInstructions: 'Maximize production-readiness, acceptance criteria, and maintainability constraints.',
+          customInstructions:
+            'Maximize production-readiness, acceptance criteria, and maintainability constraints.',
         },
       ];
     case '3d':
@@ -229,13 +237,15 @@ function modalityFocusedVariants(modality: PromptModality): VariationVariant[] {
           label: 'Material First',
           mode: 'standard',
           focus: 'materials',
-          customInstructions: 'Bias toward materials, finish quality, and physical surface characteristics.',
+          customInstructions:
+            'Bias toward materials, finish quality, and physical surface characteristics.',
         },
         {
           label: 'MAX Asset Spec',
           mode: 'max',
           focus: 'asset',
-          customInstructions: 'Maximize downstream usability constraints such as printing, rigging, or game-readiness.',
+          customInstructions:
+            'Maximize downstream usability constraints such as printing, rigging, or game-readiness.',
         },
       ];
     case 'text':
@@ -251,13 +261,15 @@ function modalityFocusedVariants(modality: PromptModality): VariationVariant[] {
           label: 'Execution First',
           mode: 'standard',
           focus: 'execution',
-          customInstructions: 'Bias toward ordered steps, clear deliverables, and practical execution guidance.',
+          customInstructions:
+            'Bias toward ordered steps, clear deliverables, and practical execution guidance.',
         },
         {
           label: 'MAX Reliability',
           mode: 'max',
           focus: 'reliability',
-          customInstructions: 'Maximize precision, constraints, ambiguity handling, and verification criteria.',
+          customInstructions:
+            'Maximize precision, constraints, ambiguity handling, and verification criteria.',
         },
       ];
   }
@@ -272,7 +284,8 @@ const BASE_VARIATION_CONFIGS: Record<string, VariationConfig> = {
         label: 'Structured',
         mode: 'standard',
         focus: 'structure',
-        customInstructions: 'Strengthen the output contract, sections, and sequencing without making the prompt bloated.',
+        customInstructions:
+          'Strengthen the output contract, sections, and sequencing without making the prompt bloated.',
       },
       {
         label: 'Precision',
@@ -290,7 +303,8 @@ const BASE_VARIATION_CONFIGS: Record<string, VariationConfig> = {
         label: 'Briefing',
         mode: 'standard',
         focus: 'briefing',
-        customInstructions: 'Reframe the request as a crisp, high-context briefing with a strong deliverable definition.',
+        customInstructions:
+          'Reframe the request as a crisp, high-context briefing with a strong deliverable definition.',
       },
       {
         label: 'Execution Plan',
@@ -303,13 +317,15 @@ const BASE_VARIATION_CONFIGS: Record<string, VariationConfig> = {
         label: 'MAX Rubric',
         mode: 'max',
         focus: 'rubric',
-        customInstructions: 'Add explicit quality bars, evaluation criteria, and self-check instructions for the target model.',
+        customInstructions:
+          'Add explicit quality bars, evaluation criteria, and self-check instructions for the target model.',
       },
       {
         label: 'MAX Edge Cases',
         mode: 'max',
         focus: 'edge-cases',
-        customInstructions: 'Bias toward ambiguity handling, fallback behavior, and edge-case coverage.',
+        customInstructions:
+          'Bias toward ambiguity handling, fallback behavior, and edge-case coverage.',
       },
     ],
     maxVariations: 6,
@@ -325,26 +341,32 @@ const BASE_VARIATION_CONFIGS: Record<string, VariationConfig> = {
         label: 'MAX Constraints',
         mode: 'max',
         focus: 'constraints',
-        customInstructions: 'Bias toward hard constraints, explicit exclusions, and acceptance criteria.',
+        customInstructions:
+          'Bias toward hard constraints, explicit exclusions, and acceptance criteria.',
       },
       {
         label: 'MAX Process',
         mode: 'max',
         focus: 'process',
-        customInstructions: 'Bias toward ordered work phases, checkpoints, and completion validation.',
+        customInstructions:
+          'Bias toward ordered work phases, checkpoints, and completion validation.',
       },
       {
         label: 'MAX Outcome',
         mode: 'max',
         focus: 'outcome',
-        customInstructions: 'Bias toward deliverable quality, audience fit, and polished final output requirements.',
+        customInstructions:
+          'Bias toward deliverable quality, audience fit, and polished final output requirements.',
       },
     ],
     maxVariations: 4,
   },
 };
 
-function resolveConfig(config: VariationConfig | string, modality: PromptModality): VariationConfig {
+function resolveConfig(
+  config: VariationConfig | string,
+  modality: PromptModality,
+): VariationConfig {
   if (typeof config !== 'string') {
     return config;
   }
@@ -373,7 +395,7 @@ async function ensurePromptSeed(
   userId: string,
   originalPrompt: string,
   promptId: string | undefined,
-  modality: PromptModality
+  modality: PromptModality,
 ): Promise<string> {
   if (promptId) {
     return promptId;
@@ -409,7 +431,7 @@ function scheduleVariationGeneration(variationId: string, reason: string): void 
       logger.error({ error, variationId, reason }, 'Variation background job crashed');
       await markVariationFailed(
         variationId,
-        error instanceof Error ? error.message : 'Unknown variation generation error'
+        error instanceof Error ? error.message : 'Unknown variation generation error',
       );
     }
   });
@@ -420,7 +442,7 @@ async function buildVariationResults(
   userId: string,
   originalPrompt: string,
   modality: PromptModality,
-  variationConfig: VariationConfig
+  variationConfig: VariationConfig,
 ): Promise<{ results: VariationResultData[]; generationErrors: string[] }> {
   const results: VariationResultData[] = [];
   const generationErrors: string[] = [];
@@ -444,56 +466,61 @@ async function buildVariationResults(
 
   const baseIndex = index;
   const generatedResults = await Promise.all(
-    variants.map((variant, variantOffset) => variationGenerationLimit(async () => {
-      const resultIndex = baseIndex + variantOffset;
+    variants.map((variant, variantOffset) =>
+      variationGenerationLimit(async () => {
+        const resultIndex = baseIndex + variantOffset;
 
-      try {
-        const enhanced = await enhancePrompt({
-          prompt: originalPrompt,
-          tier: variant.mode === 'max' ? 'advanced' : 'standard',
-          mode: variant.mode,
-          modality,
-          subModality: variant.subModality,
-          customInstructions: variant.customInstructions,
-        });
+        try {
+          const enhanced = await enhancePrompt({
+            prompt: originalPrompt,
+            tier: variant.mode === 'max' ? 'advanced' : 'standard',
+            mode: variant.mode,
+            modality,
+            subModality: variant.subModality,
+            customInstructions: variant.customInstructions,
+          });
 
-        const result: VariationResultData = {
-          index: resultIndex,
-          label: variant.label,
-          mode: variant.mode,
-          focus: variant.focus,
-          enhancedPrompt: enhanced.enhancedPrompt,
-          tokensUsed: enhanced.totalTokens,
-        };
+          const result: VariationResultData = {
+            index: resultIndex,
+            label: variant.label,
+            mode: variant.mode,
+            focus: variant.focus,
+            enhancedPrompt: enhanced.enhancedPrompt,
+            tokensUsed: enhanced.totalTokens,
+          };
 
-        await prisma.variationResult.create({
-          data: {
-            variationId,
-            sessionId: crypto.randomUUID(),
-            selected: false,
-            userId,
-            metadata: {
-              index: result.index,
-              label: result.label,
-              mode: result.mode,
-              focus: result.focus,
-              enhancedPrompt: result.enhancedPrompt,
-              tokensUsed: result.tokensUsed,
-            } as unknown as Prisma.InputJsonValue,
-          },
-        });
+          await prisma.variationResult.create({
+            data: {
+              variationId,
+              sessionId: crypto.randomUUID(),
+              selected: false,
+              userId,
+              metadata: {
+                index: result.index,
+                label: result.label,
+                mode: result.mode,
+                focus: result.focus,
+                enhancedPrompt: result.enhancedPrompt,
+                tokensUsed: result.tokensUsed,
+              } as unknown as Prisma.InputJsonValue,
+            },
+          });
 
-        return result;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown variation generation error';
-        generationErrors.push(`${variant.label}: ${message}`);
-        logger.error({ error, variationId, variant }, 'Failed to generate variation result');
-        return null;
-      }
-    }))
+          return result;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Unknown variation generation error';
+          generationErrors.push(`${variant.label}: ${message}`);
+          logger.error({ error, variationId, variant }, 'Failed to generate variation result');
+          return null;
+        }
+      }),
+    ),
   );
 
-  results.push(...generatedResults.filter((result): result is VariationResultData => result !== null));
+  results.push(
+    ...generatedResults.filter((result): result is VariationResultData => result !== null),
+  );
   results.sort((left, right) => left.index - right.index);
 
   return { results, generationErrors };
@@ -587,7 +614,7 @@ async function processVariationGenerationJob(variationId: string): Promise<void>
   const userId = freshMetadata.userId ?? freshVariation.prompt.userId;
   const variationConfig = resolveConfig(
     (freshMetadata.config as VariationConfig | string | undefined) ?? 'quick',
-    modality
+    modality,
   );
 
   await prisma.variationResult.deleteMany({
@@ -599,7 +626,7 @@ async function processVariationGenerationJob(variationId: string): Promise<void>
     userId,
     originalPrompt,
     modality,
-    variationConfig
+    variationConfig,
   );
 
   if (results.length === 0) {
@@ -660,12 +687,11 @@ function buildVariationComparison(variation: {
     originalPrompt: metadata.originalPrompt ?? variation.variantPrompt,
     status: semanticVariationStatus(variation.status, metadata),
     results,
-    winner: typeof metadata.selectedVariationIndex === 'number'
-      ? metadata.selectedVariationIndex
-      : undefined,
-    errorMessage: typeof metadata.errorMessage === 'string'
-      ? metadata.errorMessage
-      : undefined,
+    winner:
+      typeof metadata.selectedVariationIndex === 'number'
+        ? metadata.selectedVariationIndex
+        : undefined,
+    errorMessage: typeof metadata.errorMessage === 'string' ? metadata.errorMessage : undefined,
     createdAt: variation.createdAt,
     updatedAt: variation.updatedAt,
     metrics: metadata.comparisonData ?? calculateVariationMetrics(results),
@@ -676,7 +702,7 @@ export async function queueVariationGeneration(
   userId: string,
   originalPrompt: string,
   promptId: string | undefined,
-  config: VariationConfig | string = 'quick'
+  config: VariationConfig | string = 'quick',
 ): Promise<VariationComparison> {
   const modality = detectModality(originalPrompt);
   const variationConfig = resolveConfig(config, modality);
@@ -764,7 +790,9 @@ function calculateVariationMetrics(results: VariationResultData[]) {
 
   const tokens = results.map((result) => result.tokensUsed);
   const lengths = results.map((result) => result.enhancedPrompt.length);
-  const wordSets = results.map((result) => new Set(result.enhancedPrompt.toLowerCase().split(/\s+/)));
+  const wordSets = results.map(
+    (result) => new Set(result.enhancedPrompt.toLowerCase().split(/\s+/)),
+  );
 
   let diversityScore = 0;
   if (wordSets.length > 1) {
@@ -790,7 +818,10 @@ function calculateVariationMetrics(results: VariationResultData[]) {
   };
 }
 
-function extractResultData(result: { metadata: unknown; rating: number | null }): VariationResultData {
+function extractResultData(result: {
+  metadata: unknown;
+  rating: number | null;
+}): VariationResultData {
   const metadata = (result.metadata ?? {}) as Record<string, unknown>;
   return {
     index: typeof metadata.index === 'number' ? metadata.index : 0,
@@ -799,25 +830,28 @@ function extractResultData(result: { metadata: unknown; rating: number | null })
     focus: typeof metadata.focus === 'string' ? metadata.focus : undefined,
     enhancedPrompt: typeof metadata.enhancedPrompt === 'string' ? metadata.enhancedPrompt : '',
     tokensUsed: typeof metadata.tokensUsed === 'number' ? metadata.tokensUsed : 0,
-    score: typeof metadata.performanceScore === 'number'
-      ? metadata.performanceScore
-      : (result.rating ? result.rating / 5 : undefined),
+    score:
+      typeof metadata.performanceScore === 'number'
+        ? metadata.performanceScore
+        : result.rating
+          ? result.rating / 5
+          : undefined,
   };
 }
 
 export async function getVariationComparison(
   variationId: string,
-  userId?: string
+  userId?: string,
 ): Promise<VariationComparison> {
   const variation = await prisma.promptVariation.findFirst({
     where: userId
       ? {
-        id: variationId,
-        prompt: { userId },
-      }
+          id: variationId,
+          prompt: { userId },
+        }
       : {
-        id: variationId,
-      },
+          id: variationId,
+        },
     include: {
       results: {
         orderBy: { createdAt: 'asc' },
@@ -836,17 +870,17 @@ export async function rateVariation(
   variationId: string,
   index: number,
   rating: number,
-  userId?: string
+  userId?: string,
 ): Promise<void> {
   const variation = await prisma.promptVariation.findFirst({
     where: userId
       ? {
-        id: variationId,
-        prompt: { userId },
-      }
+          id: variationId,
+          prompt: { userId },
+        }
       : {
-        id: variationId,
-      },
+          id: variationId,
+        },
     select: {
       id: true,
       metadata: true,
@@ -899,17 +933,17 @@ export async function rateVariation(
 export async function selectVariationWinner(
   variationId: string,
   winnerIndex: number,
-  userId?: string
+  userId?: string,
 ): Promise<void> {
   const variation = await prisma.promptVariation.findFirst({
     where: userId
       ? {
-        id: variationId,
-        prompt: { userId },
-      }
+          id: variationId,
+          prompt: { userId },
+        }
       : {
-        id: variationId,
-      },
+          id: variationId,
+        },
     select: {
       id: true,
       metadata: true,
@@ -953,7 +987,7 @@ export async function selectVariationWinner(
 export async function getUserVariations(
   userId: string,
   limit = 20,
-  offset = 0
+  offset = 0,
 ): Promise<{
   variations: VariationListItem[];
   total: number;
@@ -985,16 +1019,16 @@ export async function getUserVariations(
 
     return {
       id: variation.id,
-      originalPrompt: typeof metadata.originalPrompt === 'string'
-        ? metadata.originalPrompt
-        : variation.variantPrompt,
+      originalPrompt:
+        typeof metadata.originalPrompt === 'string'
+          ? metadata.originalPrompt
+          : variation.variantPrompt,
       status: semanticVariationStatus(variation.status, parseVariationMetadata(variation.metadata)),
-      selectedVariationIndex: typeof metadata.selectedVariationIndex === 'number'
-        ? metadata.selectedVariationIndex
-        : undefined,
-      errorMessage: typeof metadata.errorMessage === 'string'
-        ? metadata.errorMessage
-        : undefined,
+      selectedVariationIndex:
+        typeof metadata.selectedVariationIndex === 'number'
+          ? metadata.selectedVariationIndex
+          : undefined,
+      errorMessage: typeof metadata.errorMessage === 'string' ? metadata.errorMessage : undefined,
       createdAt: variation.createdAt,
       updatedAt: variation.updatedAt,
       results: variation.results.map((result) => extractResultData(result)),
@@ -1015,7 +1049,7 @@ export async function autoSelectBestVariation(
     preferLowerTokens?: boolean;
     preferMode?: PromptMode;
     targetPlatform?: PlatformType;
-  }
+  },
 ): Promise<number> {
   const comparison = await getVariationComparison(variationId);
   let bestIndex = 0;

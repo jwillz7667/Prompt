@@ -80,17 +80,17 @@ const plans: Plan[] = [
 
 // Stripe price IDs - replace with actual production IDs
 const PRICE_IDS = {
-  pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly',
-  pro_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL || 'price_pro_annual',
-  premium_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY || 'price_premium_monthly',
-  premium_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL || 'price_premium_annual',
+  pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY || '',
+  pro_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL || '',
+  premium_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY || '',
+  premium_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL || '',
 }
 
 export default function UpgradePage() {
   const [interval, setInterval] = useState<BillingInterval>('annual')
   const [loading, setLoading] = useState<string | null>(null)
 
-  const { subscription, trialEligible, startTrial, refreshAfterPurchase } = useSubscription()
+  const { subscription, billingProvider, trialEligible, startTrial } = useSubscription()
 
   const currentTier = subscription.tier
   const isTrialing = subscription.isTrialing
@@ -121,8 +121,10 @@ export default function UpgradePage() {
               ? PRICE_IDS.pro_monthly
               : PRICE_IDS.pro_annual
             : interval === 'monthly'
-            ? PRICE_IDS.premium_monthly
-            : PRICE_IDS.premium_annual
+              ? PRICE_IDS.premium_monthly
+              : PRICE_IDS.premium_annual
+
+        if (!priceId) throw new Error('This plan is not available yet. Please contact support.')
 
         const { url } = await createStripeCheckout({
           priceId,
@@ -132,11 +134,15 @@ export default function UpgradePage() {
 
         window.location.href = url
       } catch (err) {
-        toast.error('Failed to start checkout')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : (err as { error?: string })?.error || 'Failed to start checkout',
+        )
         setLoading(null)
       }
     },
-    [interval]
+    [interval],
   )
 
   const handleManageSubscription = useCallback(async () => {
@@ -151,13 +157,11 @@ export default function UpgradePage() {
   }, [])
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="mx-auto max-w-5xl space-y-8">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">
-          Upgrade Your Experience
-        </h1>
-        <p className="mt-2 text-[var(--text-secondary)] max-w-xl mx-auto">
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Upgrade Your Experience</h1>
+        <p className="mx-auto mt-2 max-w-xl text-[var(--text-secondary)]">
           Unlock the full potential of AI prompt enhancement with more prompts, better quality, and
           advanced features.
         </p>
@@ -165,8 +169,8 @@ export default function UpgradePage() {
 
       {/* Trial banner */}
       {trialEligible && currentTier === 'FREE' && !isTrialing && (
-        <Card className="bg-brand-indigo/10 dark:bg-brand-cyan/10 border-brand-indigo/20 dark:border-brand-cyan/20">
-          <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <Card className="border-brand-indigo/20 bg-brand-indigo/10 dark:border-brand-cyan/20 dark:bg-brand-cyan/10">
+          <CardContent className="flex flex-col items-center justify-between gap-4 p-6 sm:flex-row">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/20 dark:bg-brand-cyan/20">
                 <Rocket className="h-6 w-6 text-brand-indigo dark:text-brand-cyan" />
@@ -180,11 +184,7 @@ export default function UpgradePage() {
                 </p>
               </div>
             </div>
-            <Button
-              variant="cyan"
-              onClick={handleStartTrial}
-              isLoading={loading === 'trial'}
-            >
+            <Button variant="cyan" onClick={handleStartTrial} isLoading={loading === 'trial'}>
               Start Free Trial
             </Button>
           </CardContent>
@@ -194,11 +194,11 @@ export default function UpgradePage() {
       {/* Current subscription */}
       {currentTier !== 'FREE' && (
         <Card className="border-brand-indigo/20">
-          <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <CardContent className="flex flex-col items-center justify-between gap-4 p-6 sm:flex-row">
             <div className="flex items-center gap-4">
               <Badge
                 variant={currentTier === 'PREMIUM' ? 'premium' : 'pro'}
-                className="text-base px-4 py-1.5"
+                className="px-4 py-1.5 text-base"
               >
                 {currentTier}
               </Badge>
@@ -208,7 +208,7 @@ export default function UpgradePage() {
                 </p>
                 <p className="text-sm text-[var(--text-secondary)]">
                   {subscription.expiresAt
-                    ? `${isTrialing ? 'Trial ends' : 'Renews'} on ${new Date(subscription.expiresAt).toLocaleDateString()}`
+                    ? `${isTrialing ? 'Trial ends' : subscription.autoRenewEnabled ? 'Renews' : 'Access ends'} on ${new Date(subscription.expiresAt).toLocaleDateString()}`
                     : 'Active subscription'}
                 </p>
               </div>
@@ -217,9 +217,10 @@ export default function UpgradePage() {
               variant="secondary"
               onClick={handleManageSubscription}
               isLoading={loading === 'manage'}
+              disabled={isTrialing && !billingProvider}
               rightIcon={<ExternalLink className="h-4 w-4" />}
             >
-              Manage Subscription
+              {billingProvider === 'appstore' ? 'Manage with Apple' : 'Manage Subscription'}
             </Button>
           </CardContent>
         </Card>
@@ -227,14 +228,14 @@ export default function UpgradePage() {
 
       {/* Billing toggle */}
       <div className="flex justify-center">
-        <div className="inline-flex items-center gap-4 rounded-xl bg-[var(--bg-secondary)] p-1 border border-[var(--border)]">
+        <div className="inline-flex items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-1">
           <button
             onClick={() => setInterval('monthly')}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+              'rounded-lg px-4 py-2 text-sm font-medium transition-all',
               interval === 'monthly'
                 ? 'bg-brand-indigo text-white'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
             )}
           >
             Monthly
@@ -242,10 +243,10 @@ export default function UpgradePage() {
           <button
             onClick={() => setInterval('annual')}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2',
+              'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
               interval === 'annual'
                 ? 'bg-brand-indigo text-white'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
             )}
           >
             Annual
@@ -257,38 +258,39 @@ export default function UpgradePage() {
       </div>
 
       {/* Plans */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {plans.map((plan) => {
           const price = interval === 'monthly' ? plan.monthlyPrice : plan.annualPrice
           const monthlyEquivalent =
             interval === 'annual' ? (plan.annualPrice / 12).toFixed(2) : null
           const isCurrentPlan = currentTier === plan.tier
-          const canUpgrade = currentTier === 'FREE' || (currentTier === 'PRO' && plan.tier === 'PREMIUM')
+          const canUpgrade =
+            currentTier === 'FREE' || (currentTier === 'PRO' && plan.tier === 'PREMIUM')
 
           return (
             <Card
               key={plan.id}
               className={cn(
                 'relative overflow-hidden',
-                plan.popular && 'border-brand-indigo ring-2 ring-brand-indigo/20'
+                plan.popular && 'border-brand-indigo ring-2 ring-brand-indigo/20',
               )}
             >
               {plan.popular && (
-                <div className="absolute top-0 right-0">
-                  <div className="bg-brand-indigo text-white text-xs font-medium px-3 py-1 rounded-bl-lg">
+                <div className="absolute right-0 top-0">
+                  <div className="rounded-bl-lg bg-brand-indigo px-3 py-1 text-xs font-medium text-white">
                     Most Popular
                   </div>
                 </div>
               )}
 
               <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-4">
+                <div className="mb-4 flex items-center gap-3">
                   <div
                     className={cn(
                       'flex h-12 w-12 items-center justify-center rounded-xl',
                       plan.tier === 'PREMIUM'
-                        ? 'bg-brand-indigo dark:bg-brand-cyan text-white dark:text-black'
-                        : 'bg-brand-indigo/10 text-brand-indigo dark:bg-brand-cyan/10 dark:text-brand-cyan'
+                        ? 'bg-brand-indigo text-white dark:bg-brand-cyan dark:text-black'
+                        : 'bg-brand-indigo/10 text-brand-indigo dark:bg-brand-cyan/10 dark:text-brand-cyan',
                     )}
                   >
                     {plan.icon}
@@ -315,17 +317,17 @@ export default function UpgradePage() {
                   )}
                 </div>
 
-                <ul className="space-y-3 mb-6">
+                <ul className="mb-6 space-y-3">
                   {plan.features.map((feature, index) => (
                     <li key={index} className="flex items-center gap-3">
                       <div
                         className={cn(
-                          'flex h-5 w-5 items-center justify-center rounded-full flex-shrink-0',
+                          'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full',
                           feature.included
                             ? feature.highlight
                               ? 'bg-brand-cyan/20 text-brand-cyan'
                               : 'bg-green-500/20 text-green-500'
-                            : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]'
+                            : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]',
                         )}
                       >
                         <Check className="h-3 w-3" />
@@ -335,7 +337,7 @@ export default function UpgradePage() {
                           'text-sm',
                           feature.included
                             ? 'text-[var(--text-primary)]'
-                            : 'text-[var(--text-tertiary)] line-through'
+                            : 'text-[var(--text-tertiary)] line-through',
                         )}
                       >
                         {feature.text}
@@ -349,13 +351,13 @@ export default function UpgradePage() {
                   className="w-full"
                   onClick={() => handleSubscribe(plan)}
                   isLoading={loading === plan.id}
-                  disabled={isCurrentPlan || !canUpgrade}
+                  disabled={isCurrentPlan || !canUpgrade || !!loading}
                 >
                   {isCurrentPlan
                     ? 'Current Plan'
                     : canUpgrade
-                    ? `Upgrade to ${plan.name}`
-                    : 'Downgrade in Portal'}
+                      ? `Upgrade to ${plan.name}`
+                      : 'Downgrade in Portal'}
                 </Button>
               </CardContent>
             </Card>
@@ -365,33 +367,33 @@ export default function UpgradePage() {
 
       {/* Features comparison */}
       <Card className="p-6">
-        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-6 text-center">
+        <h3 className="mb-6 text-center text-lg font-semibold text-[var(--text-primary)]">
           Why Upgrade?
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/10 mx-auto mb-3">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/10">
               <Sparkles className="h-6 w-6 text-brand-indigo" />
             </div>
-            <h4 className="font-medium text-[var(--text-primary)] mb-1">Better Quality</h4>
+            <h4 className="mb-1 font-medium text-[var(--text-primary)]">Better Quality</h4>
             <p className="text-sm text-[var(--text-secondary)]">
               Access advanced AI models for superior prompt enhancement
             </p>
           </div>
           <div className="text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cyan/10 mx-auto mb-3">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cyan/10">
               <Layers className="h-6 w-6 text-brand-cyan" />
             </div>
-            <h4 className="font-medium text-[var(--text-primary)] mb-1">More Prompts</h4>
+            <h4 className="mb-1 font-medium text-[var(--text-primary)]">More Prompts</h4>
             <p className="text-sm text-[var(--text-secondary)]">
               Enhance up to unlimited prompts daily with Premium
             </p>
           </div>
           <div className="text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/10 mx-auto mb-3">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/10">
               <Download className="h-6 w-6 text-green-500" />
             </div>
-            <h4 className="font-medium text-[var(--text-primary)] mb-1">Export & Share</h4>
+            <h4 className="mb-1 font-medium text-[var(--text-primary)]">Export & Share</h4>
             <p className="text-sm text-[var(--text-secondary)]">
               Export your enhanced prompts to PDF, TXT, or Markdown
             </p>

@@ -91,7 +91,10 @@ export default function BillingPage() {
     try {
       await cancelMutation.mutateAsync()
       setCancelConfirm(false)
-      toast.success('Subscription canceled', 'Your plan will be downgraded at the end of the billing period.')
+      toast.success(
+        'Subscription canceled',
+        'Your plan will be downgraded at the end of the billing period.',
+      )
     } catch (error) {
       toast.error('Failed to cancel subscription', (error as Error).message)
     }
@@ -101,8 +104,8 @@ export default function BillingPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-semibold text-primary">Billing</h2>
-        <p className="text-sm text-muted">Manage your API subscription and billing.</p>
+        <h2 className="text-primary text-xl font-semibold">Billing</h2>
+        <p className="text-muted text-sm">Manage your API subscription and billing.</p>
       </div>
 
       {/* Current Plan */}
@@ -110,27 +113,27 @@ export default function BillingPage() {
         <CardContent className="p-6">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-sm text-muted">Current Plan</div>
-              <div className="text-2xl font-bold text-primary mt-1">
+              <div className="text-muted text-sm">Current Plan</div>
+              <div className="text-primary mt-1 text-2xl font-bold">
                 {subLoading ? '...' : currentTier.replace('API_', '')}
               </div>
-              <div className="text-sm text-muted mt-1">
+              <div className="text-muted mt-1 text-sm">
                 {subscription?.features?.slice(0, 2).join(' • ')}
               </div>
             </div>
             {!isFreeTier && (
               <div className="text-right">
-                <div className="text-sm text-muted">Status</div>
+                <div className="text-muted text-sm">Status</div>
                 <div
                   className={cn(
-                    'font-medium mt-1',
-                    subscription?.status === 'ACTIVE' ? 'text-green-600' : 'text-yellow-600'
+                    'mt-1 font-medium',
+                    subscription?.status === 'ACTIVE' ? 'text-green-600' : 'text-yellow-600',
                   )}
                 >
                   {subscription?.status}
                 </div>
                 {subscription?.period?.end && (
-                  <div className="text-xs text-muted mt-1">
+                  <div className="text-muted mt-1 text-xs">
                     Renews {new Date(subscription.period.end).toLocaleDateString()}
                   </div>
                 )}
@@ -139,7 +142,7 @@ export default function BillingPage() {
           </div>
 
           {(hasBillingAccount || !isFreeTier) && (
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6 flex gap-3">
               <Button variant="secondary" onClick={handleManageBilling}>
                 {isFreeTier ? 'View Receipts' : 'Manage Billing'}
               </Button>
@@ -158,17 +161,19 @@ export default function BillingPage() {
         <CardContent className="p-6">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <h3 className="font-medium text-primary">Prepaid API Credits</h3>
-              <p className="text-sm text-muted mt-1">
+              <h3 className="text-primary font-medium">Prepaid API Credits</h3>
+              <p className="text-muted mt-1 text-sm">
                 Purchased credits are used after your plan&apos;s included monthly requests.
               </p>
             </div>
             <div className="text-right">
-              <div className="text-sm text-muted">Available</div>
-              <div className="text-3xl font-bold text-primary mt-1">
-                {subLoading ? '...' : (subscription?.credits?.purchasedRemaining ?? 0).toLocaleString()}
+              <div className="text-muted text-sm">Available</div>
+              <div className="text-primary mt-1 text-3xl font-bold">
+                {subLoading
+                  ? '...'
+                  : (subscription?.credits?.purchasedRemaining ?? 0).toLocaleString()}
               </div>
-              <div className="text-xs text-muted mt-1">
+              <div className="text-muted mt-1 text-xs">
                 Plan includes{' '}
                 {subscription?.credits?.monthlyIncluded === 'unlimited'
                   ? 'unlimited monthly requests'
@@ -183,29 +188,29 @@ export default function BillingPage() {
       {billing && (
         <Card>
           <CardContent className="p-6">
-            <h3 className="font-medium text-primary mb-4">Current Period</h3>
+            <h3 className="text-primary mb-4 font-medium">Current Period</h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <div className="text-sm text-muted">Included Requests</div>
-                <div className="text-xl font-bold text-primary mt-1">
+                <div className="text-muted text-sm">Included Requests</div>
+                <div className="text-primary mt-1 text-xl font-bold">
                   {billing.requests.included.toLocaleString()}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted">Used</div>
-                <div className="text-xl font-bold text-primary mt-1">
+                <div className="text-muted text-sm">Used</div>
+                <div className="text-primary mt-1 text-xl font-bold">
                   {billing.requests.used.toLocaleString()}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted">Overage</div>
-                <div className="text-xl font-bold text-primary mt-1">
+                <div className="text-muted text-sm">Overage</div>
+                <div className="text-primary mt-1 text-xl font-bold">
                   {billing.requests.overage.toLocaleString()}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted">Estimated Total</div>
-                <div className="text-xl font-bold text-primary mt-1">
+                <div className="text-muted text-sm">Estimated Total</div>
+                <div className="text-primary mt-1 text-xl font-bold">
                   ${billing.costs.total.toFixed(2)}
                 </div>
               </div>
@@ -216,39 +221,32 @@ export default function BillingPage() {
 
       {/* Credit Packs */}
       <div>
-        <h3 className="text-lg font-semibold text-primary mb-4">Buy API Credits</h3>
+        <h3 className="text-primary mb-4 text-lg font-semibold">Buy API Credits</h3>
         <div className="grid gap-4 md:grid-cols-3">
           {creditPacks?.map((pack) => (
-            <Card
-              key={pack.id}
-              className={cn(
-                pack.featured && 'border-accent/50'
-              )}
-            >
+            <Card key={pack.id} className={cn(pack.featured && 'border-accent/50')}>
               <CardContent className="p-6">
                 {pack.featured && (
-                  <span className="text-xs bg-accent text-white px-2 py-0.5 rounded mb-2 inline-block">
+                  <span className="bg-accent mb-2 inline-block rounded px-2 py-0.5 text-xs text-white">
                     Best value
                   </span>
                 )}
-                <h4 className="text-lg font-semibold text-primary">{pack.name}</h4>
+                <h4 className="text-primary text-lg font-semibold">{pack.name}</h4>
                 <div className="mt-2">
-                  <span className="text-3xl font-bold text-primary">${pack.price.toFixed(2)}</span>
+                  <span className="text-primary text-3xl font-bold">${pack.price.toFixed(2)}</span>
                 </div>
-                <p className="text-sm text-muted mt-2">{pack.description}</p>
+                <p className="text-muted mt-2 text-sm">{pack.description}</p>
 
-                <div className="mt-4 rounded-xl bg-secondary p-4">
-                  <div className="text-sm text-muted">Credits added</div>
-                  <div className="text-2xl font-bold text-primary mt-1">
+                <div className="bg-secondary mt-4 rounded-xl p-4">
+                  <div className="text-muted text-sm">Credits added</div>
+                  <div className="text-primary mt-1 text-2xl font-bold">
                     {pack.credits.toLocaleString()}
                   </div>
-                  <div className="text-xs text-muted mt-1">
-                    1 credit = 1 API request
-                  </div>
+                  <div className="text-muted mt-1 text-xs">1 credit = 1 API request</div>
                 </div>
 
                 <Button
-                  className="w-full mt-6"
+                  className="mt-6 w-full"
                   variant={pack.featured ? 'primary' : 'secondary'}
                   onClick={() => handleBuyCredits(pack.id)}
                   disabled={creditCheckoutMutation.isPending}
@@ -263,7 +261,7 @@ export default function BillingPage() {
 
       {/* Plans */}
       <div>
-        <h3 className="text-lg font-semibold text-primary mb-4">Available Plans</h3>
+        <h3 className="text-primary mb-4 text-lg font-semibold">Available Plans</h3>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {plans?.map((plan) => {
             const isCurrent = plan.id === currentTier
@@ -274,39 +272,34 @@ export default function BillingPage() {
             return (
               <Card
                 key={plan.id}
-                className={cn(
-                  isCurrent && 'border-accent',
-                  plan.recommended && 'border-accent/50'
-                )}
+                className={cn(isCurrent && 'border-accent', plan.recommended && 'border-accent/50')}
               >
                 <CardContent className="p-6">
                   {plan.recommended && (
-                    <span className="text-xs bg-accent text-white px-2 py-0.5 rounded mb-2 inline-block">
+                    <span className="bg-accent mb-2 inline-block rounded px-2 py-0.5 text-xs text-white">
                       Recommended
                     </span>
                   )}
-                  <h4 className="text-lg font-semibold text-primary">{plan.name}</h4>
+                  <h4 className="text-primary text-lg font-semibold">{plan.name}</h4>
                   <div className="mt-2">
-                    <span className="text-3xl font-bold text-primary">
-                      ${plan.priceMonthly}
-                    </span>
+                    <span className="text-primary text-3xl font-bold">${plan.priceMonthly}</span>
                     <span className="text-muted">/month</span>
                   </div>
-                  <p className="text-sm text-muted mt-2">{plan.description}</p>
+                  <p className="text-muted mt-2 text-sm">{plan.description}</p>
 
                   <ul className="mt-4 space-y-2">
-                    <li className="text-sm text-primary flex items-center gap-2">
+                    <li className="text-primary flex items-center gap-2 text-sm">
                       <span className="text-accent">✓</span>
                       {plan.monthlyRequests === 'unlimited'
                         ? 'Unlimited requests'
                         : `${plan.monthlyRequests.toLocaleString()} requests/month`}
                     </li>
-                    <li className="text-sm text-primary flex items-center gap-2">
+                    <li className="text-primary flex items-center gap-2 text-sm">
                       <span className="text-accent">✓</span>
                       {plan.requestsPerMinute} requests/minute
                     </li>
                     {plan.features.slice(2, 4).map((feature, i) => (
-                      <li key={i} className="text-sm text-primary flex items-center gap-2">
+                      <li key={i} className="text-primary flex items-center gap-2 text-sm">
                         <span className="text-accent">✓</span>
                         {feature}
                       </li>
@@ -321,16 +314,14 @@ export default function BillingPage() {
                     ) : plan.id === 'API_ENTERPRISE' ? (
                       <a
                         href="mailto:sales@promptomize.app"
-                        className="inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] h-11 px-5 text-base w-full"
+                        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] px-5 text-base font-medium text-[var(--text-primary)] transition-all duration-200 hover:bg-[var(--bg-tertiary)]"
                       >
                         Contact Sales
                       </a>
                     ) : isUpgrade ? (
                       <Button
                         className="w-full"
-                        onClick={() =>
-                          handleUpgrade(plan.id as 'API_STARTER' | 'API_PRO')
-                        }
+                        onClick={() => handleUpgrade(plan.id as 'API_STARTER' | 'API_PRO')}
                         disabled={checkoutMutation.isPending}
                       >
                         {checkoutMutation.isPending ? 'Loading...' : 'Upgrade'}
@@ -352,35 +343,33 @@ export default function BillingPage() {
       {invoices && invoices.length > 0 && (
         <Card>
           <CardContent className="p-6">
-            <h3 className="font-medium text-primary mb-4">Recent Invoices</h3>
+            <h3 className="text-primary mb-4 font-medium">Recent Invoices</h3>
             <div className="space-y-3">
               {invoices.map((invoice) => (
                 <div
                   key={invoice.id}
-                  className="flex items-center justify-between py-2 border-b border-border last:border-0"
+                  className="border-border flex items-center justify-between border-b py-2 last:border-0"
                 >
                   <div>
-                    <div className="text-sm text-primary">
+                    <div className="text-primary text-sm">
                       {invoice.number || `Invoice ${invoice.id.slice(0, 8)}`}
                     </div>
-                    <div className="text-xs text-muted">
+                    <div className="text-muted text-xs">
                       {new Date(invoice.date).toLocaleDateString()}
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <span
                       className={cn(
-                        'text-xs px-2 py-0.5 rounded',
+                        'rounded px-2 py-0.5 text-xs',
                         invoice.status === 'paid'
                           ? 'bg-green-500/10 text-green-600'
-                          : 'bg-yellow-500/10 text-yellow-600'
+                          : 'bg-yellow-500/10 text-yellow-600',
                       )}
                     >
                       {invoice.status}
                     </span>
-                    <span className="font-medium text-primary">
-                      ${invoice.amount.toFixed(2)}
-                    </span>
+                    <span className="text-primary font-medium">${invoice.amount.toFixed(2)}</span>
                     {invoice.pdfUrl && (
                       <a
                         href={invoice.pdfUrl}
@@ -402,15 +391,19 @@ export default function BillingPage() {
       {/* Cancel Confirmation Modal */}
       {cancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="w-full max-w-sm mx-4">
+          <Card className="mx-4 w-full max-w-sm">
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-primary mb-2">Cancel Subscription</h3>
-              <p className="text-sm text-muted mb-6">
+              <h3 className="text-primary mb-2 text-lg font-semibold">Cancel Subscription</h3>
+              <p className="text-muted mb-6 text-sm">
                 Your subscription will be canceled at the end of the current billing period.
                 You&apos;ll keep access until then.
               </p>
               <div className="flex gap-3">
-                <Button variant="secondary" onClick={() => setCancelConfirm(false)} className="flex-1">
+                <Button
+                  variant="secondary"
+                  onClick={() => setCancelConfirm(false)}
+                  className="flex-1"
+                >
                   Keep Plan
                 </Button>
                 <Button

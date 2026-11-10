@@ -1,0 +1,118 @@
+{
+  "observedAt": "2026-11-10T08:57:52.781906+00:00",
+  "appId": "6758075605",
+  "version": "2.1.0",
+  "build": "2026.11.10",
+  "submissionId": "cad51ed1-845d-491a-b068-53e85d5ad114",
+  "confirmation": "1 Item Submitted",
+  "approved": false,
+  "release": "automatic after approval",
+  "localesUpdated": ["en-US", "en-GB", "zh-Hans"],
+  "screenshotsUploaded": {
+    "largeDynamicIsland": 5,
+    "mediumDynamicIsland": 5
+  },
+  "ageRating": {
+    "global": "13+",
+    "vietnam": "16+",
+    "korea": "12+",
+    "legacyGlobal": "12+"
+  },
+  "screenshots": [
+    {
+      "file": "01-optimize.png",
+      "width": 1320,
+      "height": 2868,
+      "color": "RGB",
+      "sha256": "afb36eedd0cf8b434783c2f6defb2d3d11675d028d63fdef3c64d7d935544c3f"
+    },
+    {
+      "file": "02-refine.png",
+      "width": 1320,
+      "height": 2868,
+      "color": "RGB",
+      "sha256": "2cf857ddf2df8aaf32b9acd12bc1ad10fa114d734efb06ab3716803577bac731"
+    },
+    {
+      "file": "03-modalities.png",
+      "width": 1320,
+      "height": 2868,
+      "color": "RGB",
+      "sha256": "8c2ea79050481db507690909c020826a9588e0d0fc76b6247727e433630f6159"
+    },
+    {
+      "file": "04-library.png",
+      "width": 1320,
+      "height": 2868,
+      "color": "RGB",
+      "sha256": "9abb380cea7a82692987b57ab0553f7eeb02eaf6488eaa92a8a7847c807c7357"
+    },
+    {
+      "file": "05-controls.png",
+      "width": 1320,
+      "height": 2868,
+      "color": "RGB",
+      "sha256": "05667980073414b66d80a08a7fc91cccb739afb962537667762430085f7d7648"
+    },
+    {
+      "file": "01-optimize-6.3.png",
+      "width": 1206,
+      "height": 2622,
+      "color": "RGB",
+      "sha256": "fd7957e004c2a9c3a0643e1389633b066d9d55a317ce04f7ea2dbe10fc794f0a"
+    },
+    {
+      "file": "02-refine-6.3.png",
+      "width": 1206,
+      "height": 2622,
+      "color": "RGB",
+      "sha256": "ed476c6a73a4b7776de49a8db9a7040d9356f6fdcd79eada30073ca4ac5f02e1"
+    },
+    {
+      "file": "03-modalities-6.3.png",
+      "width": 1206,
+      "height": 2622,
+      "color": "RGB",
+      "sha256": "bab90fc1bbec21e411f8c85635a9b0ac63bc34061f0ffe8dac9bc09b8274571a"
+    },
+    {
+      "file": "04-library-6.3.png",
+      "width": 1206,
+      "height": 2622,
+      "color": "RGB",
+      "sha256": "7214e244ef4da53fc4c49595d61ba81335ba49ce8130321693998c5b97def32c"
+    },
+    {
+      "file": "05-controls-6.3.png",
+      "width": 1206,
+      "height": 2622,
+      "color": "RGB",
+      "sha256": "d17094b9dc199db59d43684a743a2c4ad51906e51a0704684fd4f10094848077"
+    }
+  ],
+  "nativeUiChecks": {
+    "fiveScreenCapture": "passed",
+    "savedLibrary": "passed",
+    "signOutAndRelaunch": "passed"
+  },
+  "temporaryCaptureDataCleanup": {
+    "ok": true,
+    "removedAccount": true,
+    "before": {
+      "threads": 4,
+      "prompts": 7,
+      "sessions": 3
+    },
+    "removedCacheKeys": 1,
+    "remaining": {
+      "users": 0,
+      "threads": 0,
+      "prompts": 0,
+      "sessions": 0,
+      "dailyUsage": 0
+    },
+    "privateSessionFilesRemoved": true
+  },
+  "personalAppleSignInVerified": false,
+  "genuineStoreKitSandboxPurchaseVerified": false
+}

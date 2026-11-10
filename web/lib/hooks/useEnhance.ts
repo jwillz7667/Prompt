@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { enhancePromptStream } from '@/lib/api/prompts'
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
-import type { EnhanceRequest, StreamEvent } from '@/lib/types/api'
-import type { Prompt, ToneType, OutputLength, PromptModality } from '@/lib/types/models'
+import type { EnhanceRequest, EnhancementResult } from '@/lib/types/api'
+import type { ToneType, OutputLength, PromptModality } from '@/lib/types/models'
 
 interface EnhanceOptions {
   modality?: PromptModality
@@ -13,13 +13,15 @@ interface EnhanceOptions {
   length?: OutputLength
   customInstructions?: string
   deepThink?: boolean
+  mode?: 'standard' | 'max'
 }
 
 interface EnhanceState {
   isEnhancing: boolean
   streamedContent: string
-  result: Prompt | null
+  result: EnhancementResult | null
   error: string | null
+  warning: string | null
   progress: 'idle' | 'starting' | 'streaming' | 'completing' | 'done' | 'error'
 }
 
@@ -29,12 +31,14 @@ export function useEnhance() {
     streamedContent: '',
     result: null,
     error: null,
+    warning: null,
     progress: 'idle',
   })
 
   const abortRef = useRef<AbortController | null>(null)
   const { fetchSubscription } = useSubscriptionStore()
   const settings = useSettingsStore()
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   const enhance = useCallback(
     async (prompt: string, options: EnhanceOptions = {}) => {
@@ -43,13 +47,15 @@ export function useEnhance() {
         abortRef.current.abort()
       }
 
-      abortRef.current = new AbortController()
+      const controller = new AbortController()
+      abortRef.current = controller
 
       setState({
         isEnhancing: true,
         streamedContent: '',
         result: null,
         error: null,
+        warning: null,
         progress: 'starting',
       })
 
@@ -63,16 +69,19 @@ export function useEnhance() {
         customInstructions: options.customInstructions ?? settings.customInstructions,
         deepThink: options.deepThink ?? settings.deepThinkEnabled,
         targetCharacterLength: settings.targetCharacterLength,
+        mode: options.mode,
+        maxTokens: settings.maxTokens,
       }
 
+      let content = ''
       try {
-        let content = ''
-        let finalPrompt: Prompt | null = null
+        let finalPrompt: EnhancementResult | null = null
+        let warning: string | null = null
 
-        for await (const event of enhancePromptStream(request)) {
+        for await (const event of enhancePromptStream(request, controller.signal)) {
           // Check for abort
-          if (abortRef.current?.signal.aborted) {
-            break
+          if (controller.signal.aborted || abortRef.current !== controller) {
+            return null
           }
 
           switch (event.type) {
@@ -86,7 +95,9 @@ export function useEnhance() {
               break
 
             case 'complete':
-              finalPrompt = event.prompt || null
+              finalPrompt = event.prompt
+              content = event.prompt.enhancedPrompt
+              warning = event.warning ?? null
               setState((prev) => ({
                 ...prev,
                 progress: 'completing',
@@ -94,37 +105,45 @@ export function useEnhance() {
               break
 
             case 'error':
-              throw new Error(event.error || 'Enhancement failed')
+              throw new Error(event.message)
           }
         }
 
-        // Refresh subscription to get updated usage
-        await fetchSubscription()
+        if (controller.signal.aborted || abortRef.current !== controller) return null
+        if (!finalPrompt)
+          throw new Error(
+            'The connection ended before completion. Any text below may be incomplete and has not been confirmed as saved.',
+          )
 
         setState({
           isEnhancing: false,
           streamedContent: content,
           result: finalPrompt,
           error: null,
+          warning,
           progress: 'done',
         })
 
+        // A completed result must not wait on an unrelated usage refresh.
+        void fetchSubscription()
         return finalPrompt
       } catch (err) {
+        if (controller.signal.aborted || abortRef.current !== controller) return null
         const message = err instanceof Error ? err.message : 'Enhancement failed'
         setState({
           isEnhancing: false,
-          streamedContent: '',
+          streamedContent: content,
           result: null,
           error: message,
+          warning: null,
           progress: 'error',
         })
         throw err
       } finally {
-        abortRef.current = null
+        if (abortRef.current === controller) abortRef.current = null
       }
     },
-    [settings, fetchSubscription]
+    [settings, fetchSubscription],
   )
 
   const cancel = useCallback(() => {
@@ -139,11 +158,14 @@ export function useEnhance() {
   }, [])
 
   const reset = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
     setState({
       isEnhancing: false,
       streamedContent: '',
       result: null,
       error: null,
+      warning: null,
       progress: 'idle',
     })
   }, [])

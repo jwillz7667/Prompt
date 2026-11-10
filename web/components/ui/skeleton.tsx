@@ -7,24 +7,14 @@ interface SkeletonProps {
 }
 
 export function Skeleton({ className }: SkeletonProps) {
-  return (
-    <div
-      className={cn(
-        'animate-pulse rounded-lg bg-[var(--bg-tertiary)]',
-        className
-      )}
-    />
-  )
+  return <div className={cn('animate-pulse rounded-lg bg-[var(--bg-tertiary)]', className)} />
 }
 
 export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
   return (
     <div className={cn('space-y-2', className)}>
       {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton
-          key={i}
-          className={cn('h-4', i === lines - 1 ? 'w-3/4' : 'w-full')}
-        />
+        <Skeleton key={i} className={cn('h-4', i === lines - 1 ? 'w-3/4' : 'w-full')} />
       ))}
     </div>
   )
@@ -35,10 +25,10 @@ export function SkeletonCard({ className }: SkeletonProps) {
     <div
       className={cn(
         'rounded-2xl border border-[var(--border)] bg-[var(--bg-secondary)] p-6',
-        className
+        className,
       )}
     >
-      <Skeleton className="h-6 w-1/3 mb-4" />
+      <Skeleton className="mb-4 h-6 w-1/3" />
       <SkeletonText lines={3} />
     </div>
   )

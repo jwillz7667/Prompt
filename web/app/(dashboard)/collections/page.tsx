@@ -10,18 +10,17 @@ import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ErrorDisplay } from '@/components/shared/error-boundary'
-import { useCollections, useCollection, useCreateCollection, useDeleteCollection, useRemoveFromCollection } from '@/lib/hooks/useCollections'
+import {
+  useCollections,
+  useCollection,
+  useCreateCollection,
+  useDeleteCollection,
+  useRemoveFromCollection,
+} from '@/lib/hooks/useCollections'
 import { formatDate, truncateText } from '@/lib/utils/formatters'
 import { cn } from '@/lib/utils/cn'
 import type { Collection, Prompt } from '@/lib/types/models'
-import {
-  Plus,
-  FolderOpen,
-  Folder,
-  ChevronRight,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { Plus, FolderOpen, Folder, ChevronRight, Trash2, X } from 'lucide-react'
 
 const collectionColors = [
   '#5B4CDB', // Indigo
@@ -45,7 +44,9 @@ export default function CollectionsPage() {
   const [newColor, setNewColor] = useState(collectionColors[0])
 
   const { data: collectionsData, isLoading, error, refetch } = useCollections()
-  const { data: selectedCollectionData, isLoading: loadingCollection } = useCollection(selectedCollection || '')
+  const { data: selectedCollectionData, isLoading: loadingCollection } = useCollection(
+    selectedCollection || '',
+  )
   const createCollection = useCreateCollection()
   const deleteCollection = useDeleteCollection()
   const removeFromCollection = useRemoveFromCollection()
@@ -86,18 +87,16 @@ export default function CollectionsPage() {
         promptIds: [promptId],
       })
     },
-    [selectedCollection, removeFromCollection]
+    [selectedCollection, removeFromCollection],
   )
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Collections</h1>
-          <p className="mt-1 text-[var(--text-secondary)]">
-            Organize your prompts into folders
-          </p>
+          <p className="mt-1 text-[var(--text-secondary)]">Organize your prompts into folders</p>
         </div>
 
         <Button onClick={() => setCreateModalOpen(true)} leftIcon={<Plus className="h-4 w-4" />}>
@@ -105,9 +104,9 @@ export default function CollectionsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Collections list */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="space-y-4 lg:col-span-1">
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(4)].map((_, i) => (
@@ -115,7 +114,7 @@ export default function CollectionsPage() {
                   <div className="flex items-center gap-3">
                     <Skeleton className="h-10 w-10 rounded-xl" />
                     <div className="flex-1">
-                      <Skeleton className="h-4 w-2/3 mb-2" />
+                      <Skeleton className="mb-2 h-4 w-2/3" />
                       <Skeleton className="h-3 w-1/3" />
                     </div>
                   </div>
@@ -141,8 +140,8 @@ export default function CollectionsPage() {
                   key={collection.id}
                   hover
                   className={cn(
-                    'p-4 cursor-pointer relative group',
-                    selectedCollection === collection.id && 'ring-2 ring-brand-indigo'
+                    'group relative cursor-pointer p-4',
+                    selectedCollection === collection.id && 'ring-2 ring-brand-indigo',
                   )}
                   onClick={() => setSelectedCollection(collection.id)}
                 >
@@ -151,10 +150,13 @@ export default function CollectionsPage() {
                       className="flex h-10 w-10 items-center justify-center rounded-xl"
                       style={{ backgroundColor: `${collection.color}20` }}
                     >
-                      <Folder className="h-5 w-5" style={{ color: collection.color || '#5B4CDB' }} />
+                      <Folder
+                        className="h-5 w-5"
+                        style={{ color: collection.color || '#5B4CDB' }}
+                      />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-[var(--text-primary)] truncate">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-semibold text-[var(--text-primary)]">
                         {collection.name}
                       </h3>
                       <p className="text-xs text-[var(--text-tertiary)]">
@@ -170,7 +172,7 @@ export default function CollectionsPage() {
                       e.stopPropagation()
                       setDeleteConfirm(collection)
                     }}
-                    className="absolute top-3 right-3 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"
+                    className="absolute right-3 top-3 rounded-lg bg-red-500/10 p-1.5 text-red-500 opacity-0 transition-all hover:bg-red-500/20 group-hover:opacity-100"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -189,7 +191,7 @@ export default function CollectionsPage() {
                   <div className="space-y-4">
                     <Skeleton className="h-6 w-1/3" />
                     <Skeleton className="h-4 w-2/3" />
-                    <div className="space-y-3 mt-6">
+                    <div className="mt-6 space-y-3">
                       {[...Array(3)].map((_, i) => (
                         <Skeleton key={i} className="h-20 w-full rounded-xl" />
                       ))}
@@ -197,7 +199,7 @@ export default function CollectionsPage() {
                   </div>
                 ) : selectedCollectionData ? (
                   <>
-                    <div className="flex items-center gap-3 mb-6">
+                    <div className="mb-6 flex items-center gap-3">
                       <div
                         className="flex h-12 w-12 items-center justify-center rounded-xl"
                         style={{ backgroundColor: `${selectedCollectionData.color}20` }}
@@ -230,21 +232,21 @@ export default function CollectionsPage() {
                         {selectedCollectionData.prompts?.map((prompt) => (
                           <div
                             key={prompt.id}
-                            className="p-4 rounded-xl bg-[var(--bg-tertiary)] relative group"
+                            className="group relative rounded-xl bg-[var(--bg-tertiary)] p-4"
                           >
-                            <p className="text-sm text-[var(--text-secondary)] mb-2">
+                            <p className="mb-2 text-sm text-[var(--text-secondary)]">
                               {truncateText(prompt.originalPrompt, 100)}
                             </p>
                             <p className="text-sm text-[var(--text-primary)]">
                               {truncateText(prompt.enhancedPrompt, 150)}
                             </p>
-                            <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                            <p className="mt-2 text-xs text-[var(--text-tertiary)]">
                               {formatDate(prompt.createdAt)}
                             </p>
 
                             <button
                               onClick={() => handleRemovePrompt(prompt.id)}
-                              className="absolute top-3 right-3 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"
+                              className="absolute right-3 top-3 rounded-lg bg-red-500/10 p-1.5 text-red-500 opacity-0 transition-all hover:bg-red-500/20 group-hover:opacity-100"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -257,7 +259,7 @@ export default function CollectionsPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="h-full flex items-center justify-center">
+            <Card className="flex h-full items-center justify-center">
               <EmptyState
                 icon={<FolderOpen className="h-8 w-8" />}
                 title="Select a collection"
@@ -296,14 +298,14 @@ export default function CollectionsPage() {
             <label className="mb-2 block text-sm font-medium text-[var(--text-primary)]">
               Color
             </label>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-2">
               {collectionColors.map((color) => (
                 <button
                   key={color}
                   onClick={() => setNewColor(color)}
                   className={cn(
                     'h-8 w-8 rounded-full transition-all',
-                    newColor === color && 'ring-2 ring-offset-2 ring-brand-indigo'
+                    newColor === color && 'ring-2 ring-brand-indigo ring-offset-2',
                   )}
                   style={{ backgroundColor: color }}
                 />
@@ -338,11 +340,7 @@ export default function CollectionsPage() {
           <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
             Cancel
           </Button>
-          <Button
-            variant="danger"
-            onClick={handleDelete}
-            isLoading={deleteCollection.isPending}
-          >
+          <Button variant="danger" onClick={handleDelete} isLoading={deleteCollection.isPending}>
             Delete
           </Button>
         </ModalFooter>

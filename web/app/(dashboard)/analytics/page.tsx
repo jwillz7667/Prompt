@@ -34,7 +34,16 @@ import {
   Cpu,
 } from 'lucide-react'
 
-const COLORS = ['#5B4CDB', '#00E6E6', '#F5A623', '#FF6B6B', '#4ECDC4', '#A78BFA', '#10B981', '#F472B6']
+const COLORS = [
+  '#5B4CDB',
+  '#00E6E6',
+  '#F5A623',
+  '#FF6B6B',
+  '#4ECDC4',
+  '#A78BFA',
+  '#10B981',
+  '#F472B6',
+]
 
 type Period = 7 | 30 | 90
 
@@ -59,9 +68,9 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Analytics</h1>
           <p className="mt-1 text-[var(--text-secondary)]">
@@ -84,11 +93,11 @@ export default function AnalyticsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(8)].map((_, i) => (
             <Card key={i} className="p-6">
-              <Skeleton className="h-10 w-10 rounded-xl mb-4" />
-              <Skeleton className="h-8 w-20 mb-2" />
+              <Skeleton className="mb-4 h-10 w-10 rounded-xl" />
+              <Skeleton className="mb-2 h-8 w-20" />
               <Skeleton className="h-4 w-24" />
             </Card>
           ))}
@@ -98,9 +107,9 @@ export default function AnalyticsPage() {
       ) : (
         <>
           {/* Stats Cards - Row 1 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-indigo/10">
                   <Sparkles className="h-5 w-5 text-brand-indigo" />
                 </div>
@@ -112,7 +121,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-cyan/10">
                   <Zap className="h-5 w-5 text-brand-cyan" />
                 </div>
@@ -124,7 +133,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500/10">
                   <Star className="h-5 w-5 text-yellow-500" />
                 </div>
@@ -136,7 +145,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
                   <Flame className="h-5 w-5 text-orange-500" />
                 </div>
@@ -148,7 +157,8 @@ export default function AnalyticsPage() {
                 Current Streak
                 {streak?.longestStreak && streak.longestStreak > 0 && (
                   <span className="text-[var(--text-tertiary)]">
-                    {' '}(best: {streak.longestStreak})
+                    {' '}
+                    (best: {streak.longestStreak})
                   </span>
                 )}
               </p>
@@ -156,9 +166,9 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Stats Cards - Row 2 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/10">
                   <TrendingUp className="h-5 w-5 text-green-500" />
                 </div>
@@ -170,7 +180,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10">
                   <Hash className="h-5 w-5 text-purple-500" />
                 </div>
@@ -182,7 +192,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
                   <Layers className="h-5 w-5 text-blue-500" />
                 </div>
@@ -194,7 +204,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card className="p-6">
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10">
                   <FileText className="h-5 w-5 text-pink-500" />
                 </div>
@@ -207,7 +217,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Charts Row 1 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Daily activity chart */}
             <Card>
               <CardHeader>
@@ -244,7 +254,7 @@ export default function AnalyticsPage() {
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <div className="h-64 flex items-center justify-center text-[var(--text-tertiary)]">
+                  <div className="flex h-64 items-center justify-center text-[var(--text-tertiary)]">
                     No data for this period
                   </div>
                 )}
@@ -265,7 +275,7 @@ export default function AnalyticsPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={modelUsage.map(m => ({ ...m, name: formatModelName(m.model) }))}
+                          data={modelUsage.map((m) => ({ ...m, name: formatModelName(m.model) }))}
                           dataKey="count"
                           nameKey="name"
                           cx="50%"
@@ -287,7 +297,7 @@ export default function AnalyticsPage() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="flex flex-wrap gap-2 justify-center mt-2">
+                    <div className="mt-2 flex flex-wrap justify-center gap-2">
                       {modelUsage.map((entry, index) => (
                         <Badge
                           key={entry.model}
@@ -300,7 +310,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="h-64 flex items-center justify-center text-[var(--text-tertiary)]">
+                  <div className="flex h-64 items-center justify-center text-[var(--text-tertiary)]">
                     No model data available
                   </div>
                 )}
@@ -346,13 +356,13 @@ export default function AnalyticsPage() {
 
           {/* Activity Streak Section */}
           <Card className="p-6">
-            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
               <Trophy className="h-5 w-5 text-yellow-500" />
               Activity Streak
             </h3>
             <div className="grid grid-cols-3 gap-6 text-center">
               <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500/10 mx-auto mb-3">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500/10">
                   <Flame className="h-6 w-6 text-orange-500" />
                 </div>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
@@ -361,7 +371,7 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-[var(--text-secondary)]">Current Streak</p>
               </div>
               <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500/10 mx-auto mb-3">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500/10">
                   <Trophy className="h-6 w-6 text-yellow-500" />
                 </div>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
@@ -370,7 +380,7 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-[var(--text-secondary)]">Longest Streak</p>
               </div>
               <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/10 mx-auto mb-3">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/10">
                   <Calendar className="h-6 w-6 text-green-500" />
                 </div>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
@@ -383,11 +393,11 @@ export default function AnalyticsPage() {
 
           {/* Account Summary */}
           <Card className="p-6">
-            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
               <Calendar className="h-5 w-5 text-brand-indigo" />
               Account Summary
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
               <div>
                 <p className="text-sm text-[var(--text-secondary)]">Total Prompts</p>
                 <p className="text-xl font-bold text-[var(--text-primary)]">

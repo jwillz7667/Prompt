@@ -138,6 +138,7 @@ struct SubscriptionStatusResponse: Codable {
     let subscription: SubscriptionResponse
     let usage: UsageInfo
     let features: TierFeatures
+    let billingProvider: String?
 }
 
 struct SubscriptionResponse: Codable {
@@ -157,6 +158,12 @@ struct VerifyPurchaseResponse: Codable {
     let success: Bool
     let subscription: SubscriptionResponse?
     let features: TierFeatures?
+
+    /// A successful HTTP response alone does not establish an entitlement.
+    var activationConfirmed: Bool {
+        success && subscription?.status.isActive == true
+            && subscription?.tier != .free && features != nil
+    }
 }
 
 // MARK: - Trial Response

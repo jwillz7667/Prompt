@@ -114,7 +114,7 @@ adminRouter.post('/tickets/:ticketId/reply', async (req: Request, res: Response)
     res.json({ success: true, message: 'Reply sent and user notified via email' });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -136,72 +136,78 @@ adminRouter.post('/tickets/:ticketId/reply', async (req: Request, res: Response)
 // UPDATE TICKET STATUS
 // ============================================================================
 
-adminRouter.patch('/tickets/:ticketId/status', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const ticketId = req.params['ticketId'] as string;
-    if (!ticketId) {
-      res.status(400).json({ error: 'Ticket ID required' });
-      return;
+adminRouter.patch(
+  '/tickets/:ticketId/status',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ticketId = req.params['ticketId'] as string;
+      if (!ticketId) {
+        res.status(400).json({ error: 'Ticket ID required' });
+        return;
+      }
+
+      const data = statusSchema.parse(req.body);
+
+      await updateTicketStatus(ticketId, data.status);
+
+      res.json({ success: true, status: data.status });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request', details: error.issues });
+        return;
+      }
+      logger.error({ error }, 'Admin update ticket status error');
+      res.status(500).json({ error: 'Failed to update status' });
     }
-
-    const data = statusSchema.parse(req.body);
-
-    await updateTicketStatus(ticketId, data.status);
-
-    res.json({ success: true, status: data.status });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
-      return;
-    }
-    logger.error({ error }, 'Admin update ticket status error');
-    res.status(500).json({ error: 'Failed to update status' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // DEBUG: GET DEVICE TOKENS FOR A USER
 // ============================================================================
 
-adminRouter.get('/debug/device-tokens/:userId', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const userId = req.params['userId'] as string;
-    if (!userId) {
-      res.status(400).json({ error: 'User ID required' });
-      return;
+adminRouter.get(
+  '/debug/device-tokens/:userId',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.params['userId'] as string;
+      if (!userId) {
+        res.status(400).json({ error: 'User ID required' });
+        return;
+      }
+
+      const tokens = await prisma.deviceToken.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          deviceToken: true,
+          deviceId: true,
+          deviceType: true,
+          environment: true,
+          isActive: true,
+          lastUsedAt: true,
+          createdAt: true,
+        },
+      });
+
+      // Mask the device tokens for security
+      const maskedTokens = tokens.map((t) => ({
+        ...t,
+        deviceToken: t.deviceToken.slice(0, 8) + '...' + t.deviceToken.slice(-8),
+      }));
+
+      res.json({
+        userId,
+        tokenCount: tokens.length,
+        activeCount: tokens.filter((t) => t.isActive).length,
+        tokens: maskedTokens,
+      });
+    } catch (error) {
+      logger.error({ error }, 'Admin get device tokens error');
+      res.status(500).json({ error: 'Failed to get device tokens' });
     }
-
-    const tokens = await prisma.deviceToken.findMany({
-      where: { userId },
-      select: {
-        id: true,
-        deviceToken: true,
-        deviceId: true,
-        deviceType: true,
-        environment: true,
-        isActive: true,
-        lastUsedAt: true,
-        createdAt: true,
-      },
-    });
-
-    // Mask the device tokens for security
-    const maskedTokens = tokens.map((t) => ({
-      ...t,
-      deviceToken: t.deviceToken.slice(0, 8) + '...' + t.deviceToken.slice(-8),
-    }));
-
-    res.json({
-      userId,
-      tokenCount: tokens.length,
-      activeCount: tokens.filter((t) => t.isActive).length,
-      tokens: maskedTokens,
-    });
-  } catch (error) {
-    logger.error({ error }, 'Admin get device tokens error');
-    res.status(500).json({ error: 'Failed to get device tokens' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // DEBUG: LIST ALL DEVICE TOKENS
@@ -243,43 +249,46 @@ adminRouter.get('/debug/device-tokens', async (_req: Request, res: Response): Pr
 // DEBUG: TEST PUSH NOTIFICATION
 // ============================================================================
 
-adminRouter.post('/debug/test-notification/:userId', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const userId = req.params['userId'] as string;
-    if (!userId) {
-      res.status(400).json({ error: 'User ID required' });
-      return;
-    }
+adminRouter.post(
+  '/debug/test-notification/:userId',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.params['userId'] as string;
+      if (!userId) {
+        res.status(400).json({ error: 'User ID required' });
+        return;
+      }
 
-    const { message } = req.body;
-    const testMessage = message || 'This is a test notification from Promptomize support.';
+      const { message } = req.body;
+      const testMessage = message || 'This is a test notification from Promptomize support.';
 
-    // Check if user has any device tokens
-    const tokenCount = await prisma.deviceToken.count({
-      where: { userId, isActive: true },
-    });
-
-    if (tokenCount === 0) {
-      res.status(400).json({
-        error: 'No active device tokens found for this user',
-        suggestion: 'Make sure the user has opened the app and allowed notifications',
+      // Check if user has any device tokens
+      const tokenCount = await prisma.deviceToken.count({
+        where: { userId, isActive: true },
       });
-      return;
+
+      if (tokenCount === 0) {
+        res.status(400).json({
+          error: 'No active device tokens found for this user',
+          suggestion: 'Make sure the user has opened the app and allowed notifications',
+        });
+        return;
+      }
+
+      // Send test notification
+      await sendSupportMessageNotification(userId, 'test-ticket', 'Support Team', testMessage);
+
+      res.json({
+        success: true,
+        message: `Test notification sent to ${tokenCount} device(s)`,
+        userId,
+      });
+    } catch (error) {
+      logger.error({ error }, 'Admin test notification error');
+      res.status(500).json({ error: 'Failed to send test notification', details: String(error) });
     }
-
-    // Send test notification
-    await sendSupportMessageNotification(userId, 'test-ticket', 'Support Team', testMessage);
-
-    res.json({
-      success: true,
-      message: `Test notification sent to ${tokenCount} device(s)`,
-      userId,
-    });
-  } catch (error) {
-    logger.error({ error }, 'Admin test notification error');
-    res.status(500).json({ error: 'Failed to send test notification', details: String(error) });
-  }
-});
+  },
+);
 
 // ============================================================================
 // DEBUG: CHECK APNS CONFIG
@@ -303,173 +312,182 @@ adminRouter.get('/debug/apns-config', async (_req: Request, res: Response): Prom
 // DEBUG: LOOKUP USER BY EMAIL
 // ============================================================================
 
-adminRouter.get('/debug/user-by-email/:email', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const email = req.params['email'] as string;
-    if (!email) {
-      res.status(400).json({ error: 'Email required' });
-      return;
-    }
+adminRouter.get(
+  '/debug/user-by-email/:email',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const email = req.params['email'] as string;
+      if (!email) {
+        res.status(400).json({ error: 'Email required' });
+        return;
+      }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        subscriptionTier: true,
-        isPremium: true,
-        createdAt: true,
-      },
-    });
-
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-
-    const subscription = await prisma.subscription.findUnique({
-      where: { userId: user.id },
-    });
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const dailyUsage = await prisma.dailyUsage.findUnique({
-      where: {
-        userId_date: {
-          userId: user.id,
-          date: today,
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          subscriptionTier: true,
+          isPremium: true,
+          createdAt: true,
         },
-      },
-    });
+      });
 
-    res.json({
-      user,
-      subscription,
-      dailyUsage: {
-        date: today.toISOString().split('T')[0],
-        promptCount: dailyUsage?.promptCount || 0,
-      },
-    });
-  } catch (error) {
-    logger.error({ error }, 'Admin get user by email error');
-    res.status(500).json({ error: 'Failed to get user info' });
-  }
-});
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      const subscription = await prisma.subscription.findUnique({
+        where: { userId: user.id },
+      });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const dailyUsage = await prisma.dailyUsage.findUnique({
+        where: {
+          userId_date: {
+            userId: user.id,
+            date: today,
+          },
+        },
+      });
+
+      res.json({
+        user,
+        subscription,
+        dailyUsage: {
+          date: today.toISOString().split('T')[0],
+          promptCount: dailyUsage?.promptCount || 0,
+        },
+      });
+    } catch (error) {
+      logger.error({ error }, 'Admin get user by email error');
+      res.status(500).json({ error: 'Failed to get user info' });
+    }
+  },
+);
 
 // ============================================================================
 // DEBUG: RESET QUOTA BY EMAIL
 // ============================================================================
 
-adminRouter.post('/debug/reset-quota-by-email/:email', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const email = req.params['email'] as string;
-    if (!email) {
-      res.status(400).json({ error: 'Email required' });
-      return;
+adminRouter.post(
+  '/debug/reset-quota-by-email/:email',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const email = req.params['email'] as string;
+      if (!email) {
+        res.status(400).json({ error: 'Email required' });
+        return;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      await prisma.dailyUsage.deleteMany({
+        where: { userId: user.id },
+      });
+
+      res.json({
+        success: true,
+        message: 'Daily quota reset for user',
+        email,
+        userId: user.id,
+      });
+    } catch (error) {
+      logger.error({ error }, 'Admin reset quota by email error');
+      res.status(500).json({ error: 'Failed to reset quota' });
     }
-
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-
-    await prisma.dailyUsage.deleteMany({
-      where: { userId: user.id },
-    });
-
-    res.json({
-      success: true,
-      message: 'Daily quota reset for user',
-      email,
-      userId: user.id,
-    });
-  } catch (error) {
-    logger.error({ error }, 'Admin reset quota by email error');
-    res.status(500).json({ error: 'Failed to reset quota' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // DEBUG: SET TIER BY EMAIL
 // ============================================================================
 
-adminRouter.post('/debug/set-tier-by-email/:email', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const email = req.params['email'] as string;
-    const { tier } = req.body;
+adminRouter.post(
+  '/debug/set-tier-by-email/:email',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const email = req.params['email'] as string;
+      const { tier } = req.body;
 
-    if (!email) {
-      res.status(400).json({ error: 'Email required' });
-      return;
-    }
+      if (!email) {
+        res.status(400).json({ error: 'Email required' });
+        return;
+      }
 
-    if (!['FREE', 'PRO', 'PREMIUM'].includes(tier)) {
-      res.status(400).json({ error: 'Invalid tier. Must be FREE, PRO, or PREMIUM' });
-      return;
-    }
+      if (!['FREE', 'PRO', 'PREMIUM'].includes(tier)) {
+        res.status(400).json({ error: 'Invalid tier. Must be FREE, PRO, or PREMIUM' });
+        return;
+      }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
 
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
 
-    // Update user's tier
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        subscriptionTier: tier,
-        isPremium: tier !== 'FREE',
-      },
-    });
+      // Update user's tier
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          subscriptionTier: tier,
+          isPremium: tier !== 'FREE',
+        },
+      });
 
-    // Update or create subscription
-    const expiresAt = new Date();
-    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+      // Update or create subscription
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-    await prisma.subscription.upsert({
-      where: { userId: user.id },
-      update: {
-        tier,
-        status: 'ACTIVE',
-        expiresAt: tier === 'FREE' ? null : expiresAt,
-      },
-      create: {
+      await prisma.subscription.upsert({
+        where: { userId: user.id },
+        update: {
+          tier,
+          status: 'ACTIVE',
+          expiresAt: tier === 'FREE' ? null : expiresAt,
+        },
+        create: {
+          userId: user.id,
+          tier,
+          status: 'ACTIVE',
+          expiresAt: tier === 'FREE' ? null : expiresAt,
+        },
+      });
+
+      // The subscription cache (sub:${userId}, TTL 300s) would otherwise serve
+      // the previous tier for up to 5 minutes, so the client keeps seeing the
+      // stale tier right after an admin change.
+      await invalidateSubscriptionCaches(user.id);
+
+      res.json({
+        success: true,
+        message: `User tier set to ${tier}`,
+        email,
         userId: user.id,
         tier,
-        status: 'ACTIVE',
-        expiresAt: tier === 'FREE' ? null : expiresAt,
-      },
-    });
-
-    // The subscription cache (sub:${userId}, TTL 300s) would otherwise serve
-    // the previous tier for up to 5 minutes, so the client keeps seeing the
-    // stale tier right after an admin change.
-    await invalidateSubscriptionCaches(user.id);
-
-    res.json({
-      success: true,
-      message: `User tier set to ${tier}`,
-      email,
-      userId: user.id,
-      tier,
-    });
-  } catch (error) {
-    logger.error({ error }, 'Admin set tier by email error');
-    res.status(500).json({ error: 'Failed to set tier' });
-  }
-});
+      });
+    } catch (error) {
+      logger.error({ error }, 'Admin set tier by email error');
+      res.status(500).json({ error: 'Failed to set tier' });
+    }
+  },
+);
 
 // ============================================================================
 // DEBUG: GET USER SUBSCRIPTION & QUOTA INFO
@@ -534,31 +552,34 @@ adminRouter.get('/debug/user/:userId', async (req: Request, res: Response): Prom
 // DEBUG: RESET USER DAILY QUOTA
 // ============================================================================
 
-adminRouter.post('/debug/reset-quota/:userId', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const userId = req.params['userId'] as string;
-    if (!userId) {
-      res.status(400).json({ error: 'User ID required' });
-      return;
+adminRouter.post(
+  '/debug/reset-quota/:userId',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.params['userId'] as string;
+      if (!userId) {
+        res.status(400).json({ error: 'User ID required' });
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      await prisma.dailyUsage.deleteMany({
+        where: { userId },
+      });
+
+      res.json({
+        success: true,
+        message: 'Daily quota reset for user',
+        userId,
+      });
+    } catch (error) {
+      logger.error({ error }, 'Admin reset quota error');
+      res.status(500).json({ error: 'Failed to reset quota' });
     }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    await prisma.dailyUsage.deleteMany({
-      where: { userId },
-    });
-
-    res.json({
-      success: true,
-      message: 'Daily quota reset for user',
-      userId,
-    });
-  } catch (error) {
-    logger.error({ error }, 'Admin reset quota error');
-    res.status(500).json({ error: 'Failed to reset quota' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // DEBUG: SET USER SUBSCRIPTION TIER
@@ -628,12 +649,14 @@ adminRouter.post('/debug/set-tier/:userId', async (req: Request, res: Response):
 // Community templates stay private until an admin approves them here.
 // ============================================================================
 
-const moderateTemplateSchema = z.object({
-  isPublic: z.boolean().optional(),
-  isBuiltIn: z.boolean().optional(),
-}).refine((value) => value.isPublic !== undefined || value.isBuiltIn !== undefined, {
-  message: 'At least one of isPublic or isBuiltIn is required',
-});
+const moderateTemplateSchema = z
+  .object({
+    isPublic: z.boolean().optional(),
+    isBuiltIn: z.boolean().optional(),
+  })
+  .refine((value) => value.isPublic !== undefined || value.isBuiltIn !== undefined, {
+    message: 'At least one of isPublic or isBuiltIn is required',
+  });
 
 // User-submitted templates awaiting review (private, non-built-in).
 adminRouter.get('/templates/pending', async (_req: Request, res: Response): Promise<void> => {
@@ -660,7 +683,7 @@ adminRouter.patch('/templates/:id', async (req: Request, res: Response): Promise
     res.json({ template });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.issues });
       return;
     }
     logger.error({ error }, 'Admin moderate template error');

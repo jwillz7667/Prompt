@@ -2,9 +2,16 @@ import crypto from 'crypto';
 import { Request } from 'express';
 
 const GUEST_SESSION_TTL_SECONDS = 60 * 60 * 24 * 365;
-const GUEST_SESSION_SECRET = process.env['GUEST_SESSION_SECRET'] || process.env['JWT_ACCESS_SECRET'] || 'dev-guest-session-secret-change-in-production';
+const GUEST_SESSION_SECRET =
+  process.env['GUEST_SESSION_SECRET'] ||
+  process.env['JWT_ACCESS_SECRET'] ||
+  'dev-guest-session-secret-change-in-production';
 
-if (process.env['NODE_ENV'] === 'production' && !process.env['GUEST_SESSION_SECRET'] && !process.env['JWT_ACCESS_SECRET']) {
+if (
+  process.env['NODE_ENV'] === 'production' &&
+  !process.env['GUEST_SESSION_SECRET'] &&
+  !process.env['JWT_ACCESS_SECRET']
+) {
   throw new Error('GUEST_SESSION_SECRET or JWT_ACCESS_SECRET must be set in production');
 }
 
@@ -61,7 +68,9 @@ function verifyGuestSession(token: string, fingerprint: string): GuestSessionPay
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')) as GuestSessionPayload;
+    const payload = JSON.parse(
+      Buffer.from(encodedPayload, 'base64url').toString('utf8'),
+    ) as GuestSessionPayload;
     if (!payload.sid || payload.fp !== fingerprint || payload.exp < Math.floor(Date.now() / 1000)) {
       return null;
     }

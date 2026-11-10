@@ -20,7 +20,8 @@ const TONES = ['professional', 'casual', 'academic', 'creative', 'technical', 'f
 
 const LENGTHS = ['concise', 'standard', 'detailed'] as const
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 export default function PlaygroundPage() {
   const { data: apiKeys } = useApiKeys()
@@ -150,23 +151,23 @@ console.log(enhancedPrompt);`
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-semibold text-primary">API Playground</h2>
-        <p className="text-sm text-muted">Test the API interactively and generate code examples.</p>
+        <h2 className="text-primary text-xl font-semibold">API Playground</h2>
+        <p className="text-muted text-sm">Test the API interactively and generate code examples.</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Request Builder */}
         <div className="space-y-4">
           <Card>
-            <CardContent className="p-6 space-y-4">
+            <CardContent className="space-y-4 p-6">
               {/* API Key Selection */}
               <div>
-                <label className="block text-sm font-medium text-primary mb-1">API Key</label>
+                <label className="text-primary mb-1 block text-sm font-medium">API Key</label>
                 {activeKeys.length > 0 ? (
                   <select
                     value={selectedKeyId}
                     onChange={(e) => setSelectedKeyId(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-primary"
+                    className="border-border bg-secondary text-primary w-full rounded-lg border px-3 py-2 text-sm"
                   >
                     <option value="">Select an API key</option>
                     {activeKeys.map((key) => (
@@ -176,7 +177,7 @@ console.log(enhancedPrompt);`
                     ))}
                   </select>
                 ) : (
-                  <p className="text-sm text-muted">
+                  <p className="text-muted text-sm">
                     No API keys found.{' '}
                     <a href="/developers/keys" className="text-accent hover:underline">
                       Create one
@@ -188,29 +189,29 @@ console.log(enhancedPrompt);`
 
               {/* Prompt */}
               <div>
-                <label className="block text-sm font-medium text-primary mb-1">Prompt</label>
+                <label className="text-primary mb-1 block text-sm font-medium">Prompt</label>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   rows={4}
                   placeholder="Enter your prompt to enhance..."
-                  className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-primary placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent resize-none"
+                  className="border-border bg-secondary text-primary placeholder:text-muted focus:ring-accent w-full resize-none rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2"
                 />
               </div>
 
               {/* Modality */}
               <div>
-                <label className="block text-sm font-medium text-primary mb-1">Modality</label>
+                <label className="text-primary mb-1 block text-sm font-medium">Modality</label>
                 <div className="grid grid-cols-3 gap-2">
                   {MODALITIES.map((m) => (
                     <button
                       key={m.id}
                       onClick={() => setModality(m.id)}
                       className={cn(
-                        'px-3 py-2 rounded text-sm border transition-colors',
+                        'rounded border px-3 py-2 text-sm transition-colors',
                         modality === m.id
                           ? 'border-accent bg-accent/10 text-accent'
-                          : 'border-border bg-secondary text-primary hover:border-accent/50'
+                          : 'border-border bg-secondary text-primary hover:border-accent/50',
                       )}
                     >
                       {m.name}
@@ -221,17 +222,17 @@ console.log(enhancedPrompt);`
 
               {/* Tone (Optional) */}
               <div>
-                <label className="block text-sm font-medium text-primary mb-1">
+                <label className="text-primary mb-1 block text-sm font-medium">
                   Tone <span className="text-muted font-normal">(optional)</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setTone('')}
                     className={cn(
-                      'px-3 py-1 rounded text-xs border transition-colors',
+                      'rounded border px-3 py-1 text-xs transition-colors',
                       !tone
                         ? 'border-accent bg-accent/10 text-accent'
-                        : 'border-border bg-secondary text-primary hover:border-accent/50'
+                        : 'border-border bg-secondary text-primary hover:border-accent/50',
                     )}
                   >
                     Auto
@@ -241,10 +242,10 @@ console.log(enhancedPrompt);`
                       key={t}
                       onClick={() => setTone(t)}
                       className={cn(
-                        'px-3 py-1 rounded text-xs border transition-colors capitalize',
+                        'rounded border px-3 py-1 text-xs capitalize transition-colors',
                         tone === t
                           ? 'border-accent bg-accent/10 text-accent'
-                          : 'border-border bg-secondary text-primary hover:border-accent/50'
+                          : 'border-border bg-secondary text-primary hover:border-accent/50',
                       )}
                     >
                       {t}
@@ -255,17 +256,17 @@ console.log(enhancedPrompt);`
 
               {/* Length (Optional) */}
               <div>
-                <label className="block text-sm font-medium text-primary mb-1">
+                <label className="text-primary mb-1 block text-sm font-medium">
                   Length <span className="text-muted font-normal">(optional)</span>
                 </label>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setLength('')}
                     className={cn(
-                      'px-3 py-1 rounded text-xs border transition-colors',
+                      'rounded border px-3 py-1 text-xs transition-colors',
                       !length
                         ? 'border-accent bg-accent/10 text-accent'
-                        : 'border-border bg-secondary text-primary hover:border-accent/50'
+                        : 'border-border bg-secondary text-primary hover:border-accent/50',
                     )}
                   >
                     Auto
@@ -275,10 +276,10 @@ console.log(enhancedPrompt);`
                       key={l}
                       onClick={() => setLength(l)}
                       className={cn(
-                        'px-3 py-1 rounded text-xs border transition-colors capitalize',
+                        'rounded border px-3 py-1 text-xs capitalize transition-colors',
                         length === l
                           ? 'border-accent bg-accent/10 text-accent'
-                          : 'border-border bg-secondary text-primary hover:border-accent/50'
+                          : 'border-border bg-secondary text-primary hover:border-accent/50',
                       )}
                     >
                       {l}
@@ -301,29 +302,29 @@ console.log(enhancedPrompt);`
           {/* Code Examples */}
           <Card>
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium text-primary">Code Example</h3>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-primary font-medium">Code Example</h3>
                 <Button size="sm" variant="secondary" onClick={copyCode}>
                   Copy
                 </Button>
               </div>
-              <div className="flex gap-2 mb-3">
+              <div className="mb-3 flex gap-2">
                 {(['curl', 'python', 'javascript'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setCodeTab(tab)}
                     className={cn(
-                      'px-3 py-1 rounded text-xs transition-colors capitalize',
+                      'rounded px-3 py-1 text-xs capitalize transition-colors',
                       codeTab === tab
                         ? 'bg-accent text-white'
-                        : 'bg-secondary text-muted hover:text-primary'
+                        : 'bg-secondary text-muted hover:text-primary',
                     )}
                   >
                     {tab}
                   </button>
                 ))}
               </div>
-              <pre className="bg-secondary rounded-lg p-4 text-xs text-primary overflow-x-auto font-mono">
+              <pre className="bg-secondary text-primary overflow-x-auto rounded-lg p-4 font-mono text-xs">
                 {codeExamples[codeTab]}
               </pre>
             </CardContent>
@@ -333,25 +334,27 @@ console.log(enhancedPrompt);`
         {/* Response Panel */}
         <Card className="h-fit">
           <CardContent className="p-6">
-            <h3 className="font-medium text-primary mb-4">Response</h3>
+            <h3 className="text-primary mb-4 font-medium">Response</h3>
 
             {!response && !isLoading && (
-              <div className="text-center py-12 text-muted">
-                <div className="text-4xl mb-3">🎮</div>
-                <p>Configure your request and click &quot;Enhance Prompt&quot; to see the response.</p>
+              <div className="text-muted py-12 text-center">
+                <div className="mb-3 text-4xl">🎮</div>
+                <p>
+                  Configure your request and click &quot;Enhance Prompt&quot; to see the response.
+                </p>
               </div>
             )}
 
             {isLoading && (
-              <div className="text-center py-12 text-muted">
-                <div className="animate-spin text-2xl mb-3">⏳</div>
+              <div className="text-muted py-12 text-center">
+                <div className="mb-3 animate-spin text-2xl">⏳</div>
                 <p>Enhancing your prompt...</p>
               </div>
             )}
 
             {response?.error && (
-              <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4">
-                <div className="font-medium text-red-600 mb-1">Error</div>
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4">
+                <div className="mb-1 font-medium text-red-600">Error</div>
                 <div className="text-sm text-red-500">{response.error}</div>
               </div>
             )}
@@ -359,35 +362,35 @@ console.log(enhancedPrompt);`
             {response?.enhancedPrompt && (
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-muted">Enhanced Prompt</label>
-                  <div className="mt-1 rounded-lg bg-secondary p-4 text-sm text-primary whitespace-pre-wrap">
+                  <label className="text-muted text-sm font-medium">Enhanced Prompt</label>
+                  <div className="bg-secondary text-primary mt-1 whitespace-pre-wrap rounded-lg p-4 text-sm">
                     {response.enhancedPrompt}
                   </div>
                 </div>
 
                 {response.usage && (
-                  <div className="grid grid-cols-4 gap-4 pt-4 border-t border-border">
+                  <div className="border-border grid grid-cols-4 gap-4 border-t pt-4">
                     <div>
-                      <div className="text-xs text-muted">Input</div>
-                      <div className="text-sm font-medium text-primary">
+                      <div className="text-muted text-xs">Input</div>
+                      <div className="text-primary text-sm font-medium">
                         {response.usage.inputTokens}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted">Output</div>
-                      <div className="text-sm font-medium text-primary">
+                      <div className="text-muted text-xs">Output</div>
+                      <div className="text-primary text-sm font-medium">
                         {response.usage.outputTokens}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted">Total</div>
-                      <div className="text-sm font-medium text-primary">
+                      <div className="text-muted text-xs">Total</div>
+                      <div className="text-primary text-sm font-medium">
                         {response.usage.totalTokens}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted">Latency</div>
-                      <div className="text-sm font-medium text-primary">
+                      <div className="text-muted text-xs">Latency</div>
+                      <div className="text-primary text-sm font-medium">
                         {response.usage.processingMs}ms
                       </div>
                     </div>

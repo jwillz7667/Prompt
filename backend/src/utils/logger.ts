@@ -141,11 +141,7 @@ export function logWarn(message: string, context?: LogContext) {
 export function logError(message: string, error?: Error | unknown, context?: LogContext) {
   const errorContext = {
     ...context,
-    ...(error instanceof Error
-      ? { err: error }
-      : error
-        ? { errorDetails: String(error) }
-        : {}),
+    ...(error instanceof Error ? { err: error } : error ? { errorDetails: String(error) } : {}),
   };
 
   if (Object.keys(errorContext).length > 0) {

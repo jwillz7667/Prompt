@@ -1,217 +1,96 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
-const BACKEND_WEBHOOK_SECRET = process.env.BACKEND_WEBHOOK_SECRET || ''
-const PRICE_IDS = {
-  pro: new Set([
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL,
-  ].filter(Boolean)),
-  premium: new Set([
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY,
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL,
-  ].filter(Boolean)),
-}
-
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2025-02-24.acacia',
-  })
-}
-
-function getTierFromPriceId(priceId?: string | null): 'PRO' | 'PREMIUM' | null {
-  if (!priceId) {
-    return null
-  }
-
-  if (PRICE_IDS.premium.has(priceId)) {
-    return 'PREMIUM'
-  }
-
-  if (PRICE_IDS.pro.has(priceId)) {
-    return 'PRO'
-  }
-
-  return null
-}
+import type Stripe from 'stripe'
+import {
+  backendURL,
+  invoiceSubscriptionID,
+  stripeClient,
+  stripeID,
+  subscriptionPeriodEnd,
+  tierForPrice,
+} from '@/lib/stripe/server'
 
 export async function POST(request: NextRequest) {
+  const signature = request.headers.get('stripe-signature')
+  if (!signature) return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  const relaySecret = process.env.BACKEND_WEBHOOK_SECRET
+  if (!webhookSecret || !relaySecret) {
+    return NextResponse.json({ error: 'Billing webhook is not configured' }, { status: 503 })
+  }
   try {
-    const stripe = getStripe()
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ''
-    const body = await request.text()
-    const signature = request.headers.get('stripe-signature')
-
-    if (!signature) {
-      return NextResponse.json(
-        { error: 'Missing signature' },
-        { status: 400 }
-      )
-    }
-
-    // Verify webhook signature
+    const stripe = stripeClient()
     let event: Stripe.Event
     try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-    } catch (err) {
-      console.error('Webhook signature verification failed:', err)
-      return NextResponse.json(
-        { error: 'Invalid signature' },
-        { status: 400 }
-      )
+      event = stripe.webhooks.constructEvent(await request.text(), signature, webhookSecret)
+    } catch {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
     }
 
-    const stripeEventContext = { stripeEventId: event.id, stripeEventType: event.type }
-
-    // Handle the event
+    let subscriptionId: string | null = null
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
         const session = event.data.object as Stripe.Checkout.Session
-        await handleCheckoutComplete(session)
+        if (session.mode !== 'subscription' || !session.metadata?.userId) break
+        subscriptionId = stripeID(session.subscription)
         break
       }
-
-      case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription
-        await handleSubscriptionUpdate(subscription)
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted':
+      case 'customer.subscription.paused':
+      case 'customer.subscription.resumed':
+        subscriptionId = (event.data.object as Stripe.Subscription).id
         break
-      }
-
-      case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription
-        await handleSubscriptionDeleted(subscription)
+      case 'invoice.paid':
+      case 'invoice.payment_failed':
+        subscriptionId = invoiceSubscriptionID(event.data.object as Stripe.Invoice)
         break
-      }
-
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice
-        await handlePaymentFailed(invoice)
-        break
-      }
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`)
     }
 
+    if (subscriptionId) {
+      // Stripe does not guarantee event ordering. Always reconcile current state,
+      // including after payment recovery, instead of replaying an old snapshot.
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+      const userId = subscription.metadata?.userId
+      if (userId) {
+        const item = subscription.items.data.find((item) => tierForPrice(item.price.id))
+        if (!item) throw new Error('Unrecognized consumer subscription price')
+        const customerId = stripeID(subscription.customer)
+        if (!customerId) throw new Error('Missing subscription customer')
+        const deleted = subscription.status === 'canceled'
+        const response = await fetch(`${backendURL}/webhooks/stripe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': relaySecret },
+          body: JSON.stringify({
+            event: deleted ? 'subscription.deleted' : 'subscription.updated',
+            data: {
+              stripeEventId: event.id,
+              eventCreated: event.created,
+              userId,
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: subscription.id,
+              stripePriceId: item.price.id,
+              tier: tierForPrice(item.price.id),
+              status: subscription.status,
+              ...(!deleted
+                ? {
+                    currentPeriodEnd: new Date(
+                      subscriptionPeriodEnd(subscription) * 1000,
+                    ).toISOString(),
+                  }
+                : {}),
+              cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            },
+          }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        // Acknowledge only after persistence. A 5xx asks Stripe to redeliver.
+        if (!response.ok) throw new Error('Subscription persistence failed')
+      }
+    }
     return NextResponse.json({ received: true })
-  } catch (error) {
-    console.error('Webhook error:', error)
-    return NextResponse.json(
-      { error: 'Webhook handler failed' },
-      { status: 500 }
-    )
-  }
-}
-
-async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
-  const stripe = getStripe()
-  const userId = session.metadata?.userId
-  const subscriptionId = session.subscription as string
-  const customerId = session.customer as string
-
-  if (!userId || !subscriptionId) {
-    console.error('Missing userId or subscriptionId in checkout session')
-    return
-  }
-
-  // Get subscription details
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-  const priceId = subscription.items.data[0]?.price.id
-
-  const tier = getTierFromPriceId(priceId)
-  if (!tier) {
-    console.error('Unknown Stripe price ID in checkout completion:', priceId)
-    return
-  }
-
-  // Notify backend
-  await notifyBackend('subscription.created', {
-    stripeEventId: session.id,
-    userId,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscriptionId,
-    stripePriceId: priceId,
-    tier,
-    status: subscription.status,
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
-  })
-}
-
-async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
-  const userId = subscription.metadata?.userId
-  const priceId = subscription.items.data[0]?.price.id
-
-  if (!userId) {
-    console.error('Missing userId in subscription metadata')
-    return
-  }
-
-  const tier = getTierFromPriceId(priceId)
-  if (!tier) {
-    console.error('Unknown Stripe price ID in subscription update:', priceId)
-    return
-  }
-
-  await notifyBackend('subscription.updated', {
-    userId,
-    stripeSubscriptionId: subscription.id,
-    stripePriceId: priceId,
-    tier,
-    status: subscription.status,
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
-  })
-}
-
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  const userId = subscription.metadata?.userId
-
-  if (!userId) {
-    console.error('Missing userId in subscription metadata')
-    return
-  }
-
-  await notifyBackend('subscription.deleted', {
-    userId,
-    stripeSubscriptionId: subscription.id,
-  })
-}
-
-async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  const stripe = getStripe()
-  const customerId = invoice.customer as string
-
-  // Get customer to find userId
-  const customer = await stripe.customers.retrieve(customerId)
-  if (customer.deleted) return
-
-  const userId = (customer as Stripe.Customer).metadata?.userId
-
-  if (!userId) {
-    console.error('Missing userId in customer metadata')
-    return
-  }
-
-  await notifyBackend('payment.failed', {
-    userId,
-    invoiceId: invoice.id,
-  })
-}
-
-async function notifyBackend(event: string, data: Record<string, unknown>) {
-  const response = await fetch(`${API_BASE_URL}/webhooks/stripe`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Webhook-Secret': BACKEND_WEBHOOK_SECRET,
-      },
-      body: JSON.stringify({ event, data }),
-  })
-
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`Failed to notify backend (${response.status}): ${body}`)
+  } catch {
+    return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

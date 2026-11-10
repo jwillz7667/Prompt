@@ -17,16 +17,12 @@ export interface AuthenticatedRequest extends Request {
 // message so current clients keep working. iOS keys its session-expired UX off
 // these: TOKEN_EXPIRED → silent refresh; TOKEN_INVALID / SESSION_REVOKED →
 // sign out; TOKEN_MISSING → not authenticated at all.
-export type AuthErrorCode =
-  | 'TOKEN_MISSING'
-  | 'TOKEN_EXPIRED'
-  | 'TOKEN_INVALID'
-  | 'SESSION_REVOKED';
+export type AuthErrorCode = 'TOKEN_MISSING' | 'TOKEN_EXPIRED' | 'TOKEN_INVALID' | 'SESSION_REVOKED';
 
 export const authenticate = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
@@ -50,7 +46,13 @@ export const authenticate = async (
       logger.debug({ userId: decoded.userId }, 'User cache miss - querying database');
       const dbUser = await prisma.user.findUnique({
         where: { id: decoded.userId },
-        select: { id: true, email: true, isActive: true, tokenVersion: true, subscriptionTier: true },
+        select: {
+          id: true,
+          email: true,
+          isActive: true,
+          tokenVersion: true,
+          subscriptionTier: true,
+        },
       });
 
       if (!dbUser) {
@@ -114,18 +116,20 @@ export const authenticate = async (
       });
       return;
     }
-    // Not a token problem (e.g. DB unreachable mid-lookup). Keep the historical
-    // body — deliberately WITHOUT a code — so clients do not force a sign-out
-    // over an infrastructure blip, and log it since it was previously silent.
-    logger.error({ err: error }, 'Authentication failed for a non-token reason');
-    res.status(401).json({ error: 'Invalid token' });
+    // Database/cache outages do not invalidate the identity token. iOS must
+    // retain its keychain session so retrying after recovery restores the app.
+    logger.error({ err: error }, 'Authentication infrastructure unavailable');
+    res.status(503).json({
+      error: 'Sign-in is temporarily unavailable. Please try again shortly.',
+      code: 'AUTH_UNAVAILABLE',
+    });
   }
 };
 
 export const optionalAuth = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
@@ -141,7 +145,13 @@ export const optionalAuth = async (
         // Cache miss - query database
         const dbUser = await prisma.user.findUnique({
           where: { id: decoded.userId },
-          select: { id: true, email: true, isActive: true, tokenVersion: true, subscriptionTier: true },
+          select: {
+            id: true,
+            email: true,
+            isActive: true,
+            tokenVersion: true,
+            subscriptionTier: true,
+          },
         });
 
         if (dbUser) {

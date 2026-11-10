@@ -46,7 +46,7 @@ export function requestLogger() {
         userAgent: req.headers['user-agent'],
         ip: req.ip,
       },
-      'Request started'
+      'Request started',
     );
 
     // Capture response finish

@@ -370,6 +370,8 @@ final class ErrorHandler: ObservableObject {
                 return .serverError(code, nil)
             case .decodingError:
                 return .decodingFailed
+            case .secureStorageUnavailable:
+                return .unknown(apiError.localizedDescription)
             }
         }
 
@@ -388,6 +390,10 @@ final class ErrorHandler: ObservableObject {
                 return .purchaseFailed("Unknown purchase result")
             case .activationFailed:
                 return .purchaseFailed("Your purchase went through, but we couldn't activate it on your account. It will retry automatically — or tap Restore Purchase.")
+            case .signInRequired:
+                return .notAuthenticated
+            case .managedOnWeb, .noActivePurchases, .restoreRejected:
+                return .purchaseFailed(storeError.localizedDescription)
             case .restoreFailed:
                 return .restoreFailed
             case .trialNotAvailable(let message):

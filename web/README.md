@@ -1,6 +1,6 @@
 # Promptomize Web
 
-The Next.js 14 product surface — marketing site, authenticated dashboard, admin console,
+The Next.js 16 product surface — marketing site, authenticated dashboard, admin console,
 and Enterprise developer portal — deployed to Vercel.
 
 [![Web CI/CD](https://github.com/jwillz7667/Prompt/actions/workflows/web.yml/badge.svg)](../.github/workflows/web.yml)
@@ -31,18 +31,18 @@ and Enterprise developer portal — deployed to Vercel.
 
 ## Stack
 
-| Concern | Choice |
-|---------|--------|
-| Framework | Next.js 14 (App Router, RSC, route groups) |
-| Language | TypeScript 5 (strict, `noImplicitAny`, no `any`/`as` casts) |
-| UI | TailwindCSS 3 + Framer Motion + lucide-react |
-| Server state | TanStack React Query 5 |
-| Client state | Zustand 4 |
-| JWT (client-side) | `jose` 5 |
-| Payments | Stripe + `@stripe/stripe-js` |
-| PWA | `next-pwa` (Workbox runtime caching) |
-| Realtime | `socket.io-client` (support chat) |
-| Validation | Zod (shared with backend) |
+| Concern           | Choice                                                      |
+| ----------------- | ----------------------------------------------------------- |
+| Framework         | Next.js 16 (App Router, RSC, route groups)                  |
+| Language          | TypeScript 5 (strict, `noImplicitAny`, no `any`/`as` casts) |
+| UI                | TailwindCSS 3 + Framer Motion + lucide-react                |
+| Server state      | TanStack React Query 5                                      |
+| Client state      | Zustand 4                                                   |
+| JWT (client-side) | `jose` 5                                                    |
+| Payments          | Stripe + `@stripe/stripe-js`                                |
+| PWA               | Native service worker (immutable public assets only)        |
+| Realtime          | `socket.io-client` (support chat)                           |
+| Validation        | Zod (shared with backend)                                   |
 
 ---
 
@@ -84,8 +84,8 @@ web/
 │   └── utils/                   cn(), formatters, helpers
 │
 ├── public/                      Static assets (icons, OG images, generated SW)
-├── middleware.ts                Edge middleware: apex redirect + auth gate for protected paths
-├── next.config.js               Next + next-pwa + security headers + image config
+├── proxy.ts                Edge middleware: apex redirect + auth gate for protected paths
+├── next.config.js               Next + security headers + image config
 ├── tailwind.config.ts           Theme + content + plugin config
 ├── tsconfig.json                Strict TS with `@/*` path alias
 └── vercel.json                  Region pinning + extra security headers
@@ -120,15 +120,15 @@ NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
 
 Full inventory in [`.env.example`](./.env.example). Required:
 
-| Variable | Purpose |
-|----------|---------|
-| `NEXT_PUBLIC_API_URL` | Express backend base URL (`/api/v1`) |
-| `NEXT_PUBLIC_APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In (web service ID) |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe |
-| `NEXT_PUBLIC_STRIPE_PRICE_*` | Stripe price IDs (Pro/Premium × monthly/annual) |
-| `BACKEND_WEBHOOK_SECRET` | HMAC for Next.js → Express webhook forwarding |
-| `NEXTAUTH_URL` / `NEXTAUTH_SECRET` | Cookie / session secret |
+| Variable                                                                               | Purpose                                         |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`                                                                  | Express backend base URL (`/api/v1`)            |
+| `NEXT_PUBLIC_APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In (web service ID)                  |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                                | Google OAuth                                    |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`   | Stripe                                          |
+| `NEXT_PUBLIC_STRIPE_PRICE_*`                                                           | Stripe price IDs (Pro/Premium × monthly/annual) |
+| `BACKEND_WEBHOOK_SECRET`                                                               | HMAC for Next.js → Express webhook forwarding   |
+| `NEXTAUTH_URL` / `NEXTAUTH_SECRET`                                                     | Cookie / session secret                         |
 
 All `NEXT_PUBLIC_*` variables are inlined at build time and visible to the client.
 Server-only secrets (without the `NEXT_PUBLIC_` prefix) stay on the server.
@@ -137,15 +137,15 @@ Server-only secrets (without the `NEXT_PUBLIC_` prefix) stay on the server.
 
 ## Scripts
 
-| Script | What it does |
-|--------|--------------|
-| `npm run dev` | Next dev server with Fast Refresh |
-| `npm run build` | Production build (Next + next-pwa SW generation) |
-| `npm start` | Run the built app (`next start`) |
-| `npm run lint` / `npm run lint:fix` | ESLint via `next lint` |
-| `npm run typecheck` | `tsc --noEmit` |
+| Script                                    | What it does                             |
+| ----------------------------------------- | ---------------------------------------- |
+| `npm run dev`                             | Next dev server with Fast Refresh        |
+| `npm run build`                           | Production build (Next.js / Turbopack)   |
+| `npm start`                               | Run the built app (`next start`)         |
+| `npm run lint` / `npm run lint:fix`       | ESLint via `next lint`                   |
+| `npm run typecheck`                       | `tsc --noEmit`                           |
 | `npm run format` / `npm run format:check` | Prettier (Tailwind class-sorting plugin) |
-| `npm run clean` | Remove `.next/`, `out/`, `.turbo/` |
+| `npm run clean`                           | Remove `.next/`, `out/`, `.turbo/`       |
 
 ---
 
@@ -153,17 +153,17 @@ Server-only secrets (without the `NEXT_PUBLIC_` prefix) stay on the server.
 
 The App Router uses route groups (`(folder)`) to share layouts without affecting URLs:
 
-| Group | Layout responsibilities |
-|-------|--------------------------|
-| `(marketing)` | Public header, footer, marketing nav |
-| `(auth)` | Centered minimal layout for sign-in screens |
-| `(dashboard)` | Authenticated chrome — sidebar, profile menu, command palette |
-| `developers/(auth)` | Developer sign-in / register surface |
-| `developers/(portal)` | Authenticated developer dashboard |
-| `admin/` | Internal admin chrome |
-| `docs/` | Documentation layout |
+| Group                 | Layout responsibilities                                       |
+| --------------------- | ------------------------------------------------------------- |
+| `(marketing)`         | Public header, footer, marketing nav                          |
+| `(auth)`              | Centered minimal layout for sign-in screens                   |
+| `(dashboard)`         | Authenticated chrome — sidebar, profile menu, command palette |
+| `developers/(auth)`   | Developer sign-in / register surface                          |
+| `developers/(portal)` | Authenticated developer dashboard                             |
+| `admin/`              | Internal admin chrome                                         |
+| `docs/`               | Documentation layout                                          |
 
-`middleware.ts` enforces:
+`proxy.ts` enforces:
 
 1. Redirect `www.promptomize.app → promptomize.app` (308).
 2. Redirect unauthenticated users away from protected paths to `/login`.
@@ -210,13 +210,17 @@ edge middleware uses the `refreshToken` cookie as a fast-path signal only.
 
 ## PWA
 
-`next-pwa` generates a service worker at build time:
+The tracked `public/sw.js` is registered in production by
+`components/service-worker-registration.tsx`; no build plugin is required.
 
-- Workbox runtime caching is configured in `next.config.js` (CacheFirst for fonts and
-  immutable assets, StaleWhileRevalidate for CSS/JS, NetworkFirst for `/api/*`).
-- Generated artifacts (`public/sw.js`, `workbox-*`, `worker-*`) are gitignored.
-- The PWA is disabled in development to avoid stale cache pain.
-- Offline fallback is the static page at `/offline`.
+- Only same-origin immutable assets under `/_next/static/` are cached, with a
+  bounded cache of 120 files.
+- Authenticated requests, API responses, navigation HTML, prompts, and external
+  images always use the network. Account data is never persisted by the worker.
+- Activation removes the previous Workbox caches and claims existing clients.
+- Registration is disabled during development. The manifest still supports
+  installation; app data and AI requests require a network connection.
+- Privacy/cache-failure regressions are covered by `npm test`.
 
 ---
 

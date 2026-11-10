@@ -66,7 +66,8 @@ const openApiSpec = {
       post: {
         tags: ['Enhance'],
         summary: 'Enhance a prompt',
-        description: 'Optimize a prompt using AI-powered enhancement. Supports multiple modalities and customization options.',
+        description:
+          'Optimize a prompt using AI-powered enhancement. Supports multiple modalities and customization options.',
         operationId: 'enhancePrompt',
         security: [{ ApiKeyAuth: [] }],
         requestBody: {
@@ -196,7 +197,8 @@ const openApiSpec = {
       get: {
         tags: ['History'],
         summary: 'Get enhancement history',
-        description: 'Returns paginated list of past prompt enhancements. Requires read_history permission.',
+        description:
+          'Returns paginated list of past prompt enhancements. Requires read_history permission.',
         operationId: 'getHistory',
         security: [{ ApiKeyAuth: [] }],
         parameters: [
@@ -249,7 +251,8 @@ const openApiSpec = {
         type: 'apiKey',
         in: 'header',
         name: 'X-API-Key',
-        description: 'API key for authentication. Get yours at https://promptomize.app/developers/keys',
+        description:
+          'API key for authentication. Get yours at https://promptomize.app/developers/keys',
       },
     },
     schemas: {
@@ -528,7 +531,8 @@ const gptActionSpec = {
                 code: {
                   summary: 'Code prompt enhancement',
                   value: {
-                    prompt: 'Build a SwiftUI settings screen with account, billing, and notifications sections.',
+                    prompt:
+                      'Build a SwiftUI settings screen with account, billing, and notifications sections.',
                     modality: 'code',
                     mode: 'max',
                     customInstructions: 'Target iOS 17+, MVVM, and production-quality structure.',

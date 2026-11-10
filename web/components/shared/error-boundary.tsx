@@ -39,14 +39,14 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 mb-4">
+        <div className="flex min-h-[400px] flex-col items-center justify-center p-8 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
             <AlertTriangle className="h-8 w-8" />
           </div>
-          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
+          <h2 className="mb-2 text-xl font-semibold text-[var(--text-primary)]">
             Something went wrong
           </h2>
-          <p className="text-sm text-[var(--text-secondary)] max-w-md mb-6">
+          <p className="mb-6 max-w-md text-sm text-[var(--text-secondary)]">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
           <Button onClick={this.handleReset} leftIcon={<RefreshCw className="h-4 w-4" />}>
@@ -74,11 +74,11 @@ export function ErrorDisplay({
 }: ErrorDisplayProps) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 mb-4">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-500">
         <AlertTriangle className="h-8 w-8" />
       </div>
-      <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">{title}</h2>
-      <p className="text-sm text-[var(--text-secondary)] max-w-md mb-6">{message}</p>
+      <h2 className="mb-2 text-xl font-semibold text-[var(--text-primary)]">{title}</h2>
+      <p className="mb-6 max-w-md text-sm text-[var(--text-secondary)]">{message}</p>
       {onRetry && (
         <Button onClick={onRetry} leftIcon={<RefreshCw className="h-4 w-4" />}>
           Try Again

@@ -8,7 +8,8 @@
 import { useDeveloperAuthStore } from '@/lib/stores/developerAuthStore'
 import type { APIError } from '@/lib/types/api'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -36,7 +37,7 @@ async function refreshDeveloperTokens(): Promise<string | null> {
 // Main developer API client
 export async function developerApiClient<T>(
   endpoint: string,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
 ): Promise<T> {
   const { method = 'GET', body, headers = {} } = options
 

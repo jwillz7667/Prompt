@@ -21,14 +21,17 @@ const DEFAULT_RATE_LIMIT = parseInt(process.env['API_DEFAULT_RATE_LIMIT'] || '60
 const memoryStore = new Map<string, { count: number; resetAt: number }>();
 
 // Cleanup interval for memory store (every 5 minutes)
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of memoryStore.entries()) {
-    if (value.resetAt < now) {
-      memoryStore.delete(key);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, value] of memoryStore.entries()) {
+      if (value.resetAt < now) {
+        memoryStore.delete(key);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  },
+  5 * 60 * 1000,
+);
 
 // ============================================================================
 // RATE LIMIT HEADERS
@@ -55,7 +58,7 @@ function setRateLimitHeaders(res: Response, info: RateLimitInfo): void {
 
 async function checkRateLimitRedis(
   keyId: string,
-  limit: number
+  limit: number,
 ): Promise<{ allowed: boolean; info: RateLimitInfo }> {
   const redis = getRedis() as ReturnType<typeof import('redis').createClient>;
   const now = Date.now();
@@ -82,7 +85,7 @@ async function checkRateLimitRedis(
     const results = await pipeline.exec();
 
     // Get count from second command result (zCard returns a number)
-    const count = typeof results?.[1] === 'number' ? results[1] : (Number(results?.[1]) || 0);
+    const count = typeof results?.[1] === 'number' ? results[1] : Number(results?.[1]) || 0;
     const resetAt = Math.ceil((now + WINDOW_SIZE_MS) / 1000);
 
     if (count >= limit) {
@@ -119,7 +122,7 @@ async function checkRateLimitRedis(
 
 function checkRateLimitMemory(
   keyId: string,
-  limit: number
+  limit: number,
 ): { allowed: boolean; info: RateLimitInfo } {
   const now = Date.now();
   const resetAt = Math.ceil((now + WINDOW_SIZE_MS) / 1000);
@@ -161,7 +164,7 @@ function checkRateLimitMemory(
 export const apiRateLimit = async (
   req: ApiKeyRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   // Skip if no API key (should be caught by auth middleware)
   if (!req.apiKey) {
@@ -202,11 +205,7 @@ export const apiRateLimit = async (
  * Factory for custom rate limits on specific endpoints.
  */
 export const customRateLimit = (requestsPerMinute: number) => {
-  return async (
-    req: ApiKeyRequest,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  return async (req: ApiKeyRequest, res: Response, next: NextFunction): Promise<void> => {
     if (!req.apiKey) {
       next();
       return;

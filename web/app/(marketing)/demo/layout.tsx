@@ -39,10 +39,6 @@ export const metadata: Metadata = {
   },
 }
 
-export default function DemoLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function DemoLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }

@@ -47,10 +47,10 @@ class SandboxService {
   private anthropic: Anthropic | null = null;
   private googleAI: GoogleGenerativeAI | null = null;
   private perplexityClient: any = null;
-  
+
   // Rate limiting
   private concurrencyLimit = pLimit(3); // Max 3 concurrent platform tests
-  
+
   constructor() {
     this.initializeClients();
   }
@@ -59,14 +59,14 @@ class SandboxService {
     // Initialize OpenAI
     if (process.env.OPENAI_API_KEY) {
       this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
+        apiKey: process.env.OPENAI_API_KEY,
       });
     }
 
     // Initialize Anthropic
     if (process.env.ANTHROPIC_API_KEY) {
       this.anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY
+        apiKey: process.env.ANTHROPIC_API_KEY,
       });
     }
 
@@ -79,7 +79,7 @@ class SandboxService {
     if (process.env.PERPLEXITY_API_KEY) {
       this.perplexityClient = new OpenAI({
         apiKey: process.env.PERPLEXITY_API_KEY,
-        baseURL: 'https://api.perplexity.ai'
+        baseURL: 'https://api.perplexity.ai',
       });
     }
   }
@@ -97,13 +97,13 @@ class SandboxService {
           platforms: data.platforms,
           parameters: data.parameters as unknown as Prisma.InputJsonValue,
           scheduledFor: data.scheduledFor,
-          status: data.scheduledFor ? 'scheduled' : 'pending'
-        }
+          status: data.scheduledFor ? 'scheduled' : 'pending',
+        },
       });
 
       // If not scheduled, start test immediately
       if (!data.scheduledFor) {
-        this.executeTest(test.id).catch(error => {
+        this.executeTest(test.id).catch((error) => {
           logger.error({ error, testId: test.id }, 'Failed to execute test');
         });
       }
@@ -126,19 +126,19 @@ class SandboxService {
         where: { id: testId },
         data: {
           status: 'processing',
-          startedAt: new Date()
-        }
+          startedAt: new Date(),
+        },
       });
 
       if (!test) {
         throw new Error('Test not found');
       }
 
-      const parameters = test.parameters as TestParameters || {};
-      
+      const parameters = (test.parameters as TestParameters) || {};
+
       // Execute tests on all platforms in parallel with concurrency limit
-      const testPromises = test.platforms.map(platform =>
-        this.concurrencyLimit(() => this.testOnPlatform(platform, test.testPrompt, parameters))
+      const testPromises = test.platforms.map((platform) =>
+        this.concurrencyLimit(() => this.testOnPlatform(platform, test.testPrompt, parameters)),
       );
 
       const results = await Promise.allSettled(testPromises);
@@ -156,7 +156,7 @@ class SandboxService {
           testResult = {
             platform,
             error: (result as PromiseRejectedResult).reason?.message || 'Unknown error',
-            latencyMs: 0
+            latencyMs: 0,
           };
         }
 
@@ -168,24 +168,26 @@ class SandboxService {
         where: { id: testId },
         data: {
           status: 'completed',
-          completedAt: new Date()
+          completedAt: new Date(),
         },
         include: {
-          results: true
-        }
+          results: true,
+        },
       });
 
       logger.info({ testId }, 'Sandbox test completed');
       return updatedTest;
     } catch (error) {
       logger.error({ error, testId }, 'Failed to execute sandbox test');
-      
+
       // Mark test as failed
-      await prisma.sandboxTest.update({
-        where: { id: testId },
-        data: { status: 'failed' }
-      }).catch(() => {});
-      
+      await prisma.sandboxTest
+        .update({
+          where: { id: testId },
+          data: { status: 'failed' },
+        })
+        .catch(() => {});
+
       throw error;
     }
   }
@@ -196,10 +198,10 @@ class SandboxService {
   private async testOnPlatform(
     platform: PlatformType,
     prompt: string,
-    parameters: TestParameters
+    parameters: TestParameters,
   ): Promise<TestResult> {
     const startTime = Date.now();
-    
+
     try {
       let response: string;
       let tokenCount: number | undefined;
@@ -265,15 +267,15 @@ class SandboxService {
         latencyMs,
         tokenCount,
         cost,
-        metadata
+        metadata,
       };
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;
-      
+
       return {
         platform,
         error: error.message || 'Unknown error',
-        latencyMs
+        latencyMs,
       };
     }
   }
@@ -287,11 +289,11 @@ class SandboxService {
     }
 
     const messages: any[] = [];
-    
+
     if (parameters.systemPrompt) {
       messages.push({ role: 'system', content: parameters.systemPrompt });
     }
-    
+
     messages.push({ role: 'user', content: prompt });
 
     const completion = await this.openai.chat.completions.create({
@@ -301,15 +303,15 @@ class SandboxService {
       max_tokens: parameters.maxTokens || 2000,
       top_p: parameters.topP || 1,
       frequency_penalty: parameters.frequencyPenalty || 0,
-      presence_penalty: parameters.presencePenalty || 0
+      presence_penalty: parameters.presencePenalty || 0,
     });
 
     const response = completion.choices[0]?.message.content || '';
     const tokenCount = completion.usage?.total_tokens;
 
     // Estimate cost (GPT-4 Turbo pricing)
-    const inputCost = (completion.usage?.prompt_tokens || 0) * 0.01 / 1000;
-    const outputCost = (completion.usage?.completion_tokens || 0) * 0.03 / 1000;
+    const inputCost = ((completion.usage?.prompt_tokens || 0) * 0.01) / 1000;
+    const outputCost = ((completion.usage?.completion_tokens || 0) * 0.03) / 1000;
     const cost = inputCost + outputCost;
 
     return {
@@ -318,8 +320,8 @@ class SandboxService {
       cost,
       metadata: {
         model: completion.model,
-        finishReason: completion.choices[0]?.finish_reason
-      }
+        finishReason: completion.choices[0]?.finish_reason,
+      },
     };
   }
 
@@ -332,23 +334,21 @@ class SandboxService {
     }
 
     const systemPrompt = parameters.systemPrompt || 'You are a helpful AI assistant.';
-    
+
     const message = await this.anthropic.messages.create({
       model: 'claude-3-opus-20240229',
       max_tokens: parameters.maxTokens || 2000,
       temperature: parameters.temperature || 0.7,
       system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }]
+      messages: [{ role: 'user', content: prompt }],
     });
 
     const firstContent = message.content[0];
-    const response = firstContent && firstContent.type === 'text'
-      ? firstContent.text
-      : '';
+    const response = firstContent && firstContent.type === 'text' ? firstContent.text : '';
 
     // Estimate token count and cost
     const tokenCount = Math.ceil((prompt.length + response.length) / 4);
-    const cost = tokenCount * 0.015 / 1000; // Claude 3 Opus pricing estimate
+    const cost = (tokenCount * 0.015) / 1000; // Claude 3 Opus pricing estimate
 
     return {
       response,
@@ -356,8 +356,8 @@ class SandboxService {
       cost,
       metadata: {
         model: message.model,
-        stopReason: message.stop_reason
-      }
+        stopReason: message.stop_reason,
+      },
     };
   }
 
@@ -370,13 +370,13 @@ class SandboxService {
     }
 
     const model = this.googleAI.getGenerativeModel({ model: 'gemini-pro' });
-    
+
     const chat = model.startChat({
       generationConfig: {
         temperature: parameters.temperature || 0.7,
         maxOutputTokens: parameters.maxTokens || 2000,
-        topP: parameters.topP || 1
-      }
+        topP: parameters.topP || 1,
+      },
     });
 
     if (parameters.systemPrompt) {
@@ -385,10 +385,10 @@ class SandboxService {
 
     const result = await chat.sendMessage(prompt);
     const response = result.response.text();
-    
+
     // Estimate token count
     const tokenCount = Math.ceil((prompt.length + response.length) / 4);
-    
+
     // Gemini is currently free during preview
     const cost = 0;
 
@@ -398,8 +398,8 @@ class SandboxService {
       cost,
       metadata: {
         model: 'gemini-pro',
-        candidates: result.response.candidates?.length
-      }
+        candidates: result.response.candidates?.length,
+      },
     };
   }
 
@@ -412,11 +412,11 @@ class SandboxService {
     }
 
     const messages: any[] = [];
-    
+
     if (parameters.systemPrompt) {
       messages.push({ role: 'system', content: parameters.systemPrompt });
     }
-    
+
     messages.push({ role: 'user', content: prompt });
 
     const completion = await this.perplexityClient.chat.completions.create({
@@ -424,14 +424,14 @@ class SandboxService {
       messages,
       temperature: parameters.temperature || 0.7,
       max_tokens: parameters.maxTokens || 2000,
-      top_p: parameters.topP || 1
+      top_p: parameters.topP || 1,
     });
 
     const response = completion.choices[0].message.content || '';
     const tokenCount = completion.usage?.total_tokens;
-    
+
     // Estimate cost (Perplexity pricing)
-    const cost = (tokenCount || 0) * 0.001 / 1000;
+    const cost = ((tokenCount || 0) * 0.001) / 1000;
 
     return {
       response,
@@ -439,8 +439,8 @@ class SandboxService {
       cost,
       metadata: {
         model: completion.model,
-        citations: completion.choices[0].message.citations || []
-      }
+        citations: completion.choices[0].message.citations || [],
+      },
     };
   }
 
@@ -453,8 +453,8 @@ class SandboxService {
         where: {
           testId_platform: {
             testId,
-            platform: result.platform
-          }
+            platform: result.platform,
+          },
         },
         create: {
           testId,
@@ -464,7 +464,7 @@ class SandboxService {
           latencyMs: result.latencyMs,
           tokenCount: result.tokenCount,
           cost: result.cost,
-          metadata: result.metadata as unknown as Prisma.InputJsonValue
+          metadata: result.metadata as unknown as Prisma.InputJsonValue,
         },
         update: {
           response: result.response,
@@ -472,8 +472,8 @@ class SandboxService {
           latencyMs: result.latencyMs,
           tokenCount: result.tokenCount,
           cost: result.cost,
-          metadata: result.metadata as unknown as Prisma.InputJsonValue
-        }
+          metadata: result.metadata as unknown as Prisma.InputJsonValue,
+        },
       });
     } catch (error) {
       logger.error({ error, testId, platform: result.platform }, 'Failed to save test result');
@@ -489,9 +489,9 @@ class SandboxService {
         where: { id: testId, userId },
         include: {
           results: {
-            orderBy: { platform: 'asc' }
-          }
-        }
+            orderBy: { platform: 'asc' },
+          },
+        },
       });
     } catch (error) {
       logger.error({ error, testId }, 'Failed to get test');
@@ -510,9 +510,9 @@ class SandboxService {
         take: limit,
         include: {
           results: {
-            orderBy: { platform: 'asc' }
-          }
-        }
+            orderBy: { platform: 'asc' },
+          },
+        },
       });
     } catch (error) {
       logger.error({ error, userId }, 'Failed to list tests');
@@ -526,7 +526,7 @@ class SandboxService {
   async deleteTest(testId: string, userId: string): Promise<boolean> {
     try {
       const result = await prisma.sandboxTest.deleteMany({
-        where: { id: testId, userId }
+        where: { id: testId, userId },
       });
 
       return result.count > 0;
@@ -543,7 +543,7 @@ class SandboxService {
     try {
       const test = await prisma.sandboxTest.findUnique({
         where: { id: testId },
-        include: { results: true }
+        include: { results: true },
       });
 
       if (!test) {
@@ -559,7 +559,7 @@ class SandboxService {
         averageLatency: 0,
         averageCost: 0,
         successRate: 0,
-        platformComparison: [] as any[]
+        platformComparison: [] as any[],
       };
 
       let minLatency = Infinity;
@@ -570,14 +570,14 @@ class SandboxService {
       let totalCost = 0;
       let successCount = 0;
 
-      test.results.forEach(result => {
+      test.results.forEach((result) => {
         const comparison = {
           platform: result.platform,
           success: !result.error,
           latencyMs: result.latencyMs,
           cost: result.cost,
           responseLength: result.response?.length || 0,
-          error: result.error
+          error: result.error,
         };
 
         stats.platformComparison.push(comparison);
@@ -600,7 +600,7 @@ class SandboxService {
 
         if (result.cost !== null && result.cost !== undefined) {
           totalCost += result.cost;
-          
+
           if (result.cost < minCost) {
             minCost = result.cost;
             stats.cheapestPlatform = result.platform;
@@ -613,17 +613,12 @@ class SandboxService {
         }
       });
 
-      stats.averageLatency = test.results.length > 0 
-        ? Math.round(totalLatency / test.results.length) 
-        : 0;
-        
-      stats.averageCost = test.results.length > 0 
-        ? totalCost / test.results.length 
-        : 0;
-        
-      stats.successRate = test.results.length > 0 
-        ? (successCount / test.results.length) * 100 
-        : 0;
+      stats.averageLatency =
+        test.results.length > 0 ? Math.round(totalLatency / test.results.length) : 0;
+
+      stats.averageCost = test.results.length > 0 ? totalCost / test.results.length : 0;
+
+      stats.successRate = test.results.length > 0 ? (successCount / test.results.length) * 100 : 0;
 
       return {
         test: {
@@ -632,9 +627,9 @@ class SandboxService {
           platforms: test.platforms,
           status: test.status,
           createdAt: test.createdAt,
-          completedAt: test.completedAt
+          completedAt: test.completedAt,
         },
-        statistics: stats
+        statistics: stats,
       };
     } catch (error) {
       logger.error({ error, testId }, 'Failed to compare results');
@@ -651,14 +646,14 @@ class SandboxService {
         where: {
           status: 'scheduled',
           scheduledFor: {
-            lte: new Date()
-          }
+            lte: new Date(),
+          },
         },
-        take: 10 // Process up to 10 scheduled tests at a time
+        take: 10, // Process up to 10 scheduled tests at a time
       });
 
       for (const test of tests) {
-        this.executeTest(test.id).catch(error => {
+        this.executeTest(test.id).catch((error) => {
           logger.error({ error, testId: test.id }, 'Failed to execute scheduled test');
         });
       }

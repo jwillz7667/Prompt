@@ -29,7 +29,7 @@ export function reportDegradedBootIfNeeded(): void {
 
   logger.fatal(
     { deployOutputTail },
-    'DEGRADED_BOOT: prisma migrate deploy failed at startup; serving with a potentially stale schema. INVESTIGATE IMMEDIATELY.'
+    'DEGRADED_BOOT: prisma migrate deploy failed at startup; serving with a potentially stale schema. INVESTIGATE IMMEDIATELY.',
   );
   captureError(new Error('DEGRADED_BOOT: prisma migrate deploy failed at startup'), {
     deployOutputTail,

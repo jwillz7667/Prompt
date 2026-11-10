@@ -350,17 +350,19 @@ export function buildPlatformGuidance(platform: TargetPlatform): string {
     return '';
   }
 
-  const syntaxSection = adapter.syntaxRules.length > 0
-    ? `<platform_syntax platform="${platform}">
+  const syntaxSection =
+    adapter.syntaxRules.length > 0
+      ? `<platform_syntax platform="${platform}">
 ${adapter.syntaxRules.map((rule) => `- ${rule}`).join('\n')}
 </platform_syntax>`
-    : '';
+      : '';
 
-  const hintsSection = adapter.formatHints.length > 0
-    ? `<format_hints>
+  const hintsSection =
+    adapter.formatHints.length > 0
+      ? `<format_hints>
 ${adapter.formatHints.map((hint) => `- ${hint}`).join('\n')}
 </format_hints>`
-    : '';
+      : '';
 
   return `${syntaxSection}\n\n${hintsSection}`.trim();
 }
@@ -371,7 +373,7 @@ ${adapter.formatHints.map((hint) => `- ${hint}`).join('\n')}
 export function applyPlatformParameters(
   prompt: string,
   platform: TargetPlatform,
-  options?: Record<string, string | number>
+  options?: Record<string, string | number>,
 ): string {
   const adapter = platformAdapters[platform];
   if (adapter?.appendParameters) {

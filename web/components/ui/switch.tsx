@@ -22,9 +22,9 @@ export function Switch({
   return (
     <label
       className={cn(
-        'flex items-center gap-3 cursor-pointer',
+        'flex cursor-pointer items-center gap-3',
         disabled && 'cursor-not-allowed opacity-50',
-        className
+        className,
       )}
     >
       <button
@@ -36,21 +36,19 @@ export function Switch({
         className={cn(
           'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-indigo focus-visible:ring-offset-2',
-          checked ? 'bg-brand-indigo' : 'bg-[var(--border)]'
+          checked ? 'bg-brand-indigo' : 'bg-[var(--border)]',
         )}
       >
         <span
           className={cn(
             'inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200',
-            checked ? 'translate-x-6' : 'translate-x-1'
+            checked ? 'translate-x-6' : 'translate-x-1',
           )}
         />
       </button>
       {(label || description) && (
         <div className="flex flex-col">
-          {label && (
-            <span className="text-sm font-medium text-[var(--text-primary)]">{label}</span>
-          )}
+          {label && <span className="text-sm font-medium text-[var(--text-primary)]">{label}</span>}
           {description && (
             <span className="text-xs text-[var(--text-tertiary)]">{description}</span>
           )}

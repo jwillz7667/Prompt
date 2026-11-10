@@ -1,19 +1,7 @@
-/**
- * Central DeepSeek model configuration.
- *
- * The legacy `deepseek-chat` / `deepseek-reasoner` model names are deprecated
- * upstream on 2026-07-24 and now alias to `deepseek-v4-flash` non-thinking /
- * thinking modes. V4 Flash defaults thinking ON and bills thinking as output
- * tokens (`usage.completion_tokens` includes reasoning), so EVERY request must
- * set the `thinking` parameter explicitly — omitting it silently enables
- * thinking and inflates output-token spend on paths that never read the CoT.
- *
- * API shape (chat completions): `"thinking": {"type": "enabled" | "disabled"}`;
- * when enabled, the chain-of-thought is returned in `reasoning_content`
- * alongside `content`.
- */
-
-export const DEEPSEEK_V4_FLASH_MODEL = 'deepseek-v4-flash';
+/** Central provider model selection. Thinking must be explicit to avoid hidden reasoning spend. */
+export const DEEPSEEK_FLASH_MODEL = 'deepseek-flash';
+// Compatibility export used by older route definitions.
+export const DEEPSEEK_V4_FLASH_MODEL = DEEPSEEK_FLASH_MODEL;
 
 export interface DeepSeekThinkingConfig {
   type: 'enabled' | 'disabled';
@@ -26,7 +14,16 @@ export const DEEPSEEK_THINKING_DISABLED: DeepSeekThinkingConfig = { type: 'disab
 // deploy. Read at call time (not module scope) so dotenv load order and test
 // overrides both work.
 export function getDeepseekModel(): string {
-  return process.env['DEEPSEEK_MODEL'] || DEEPSEEK_V4_FLASH_MODEL;
+  const configured = process.env['DEEPSEEK_MODEL']?.trim();
+  return !configured ||
+    [
+      'deepseek-chat',
+      'deepseek-reasoner',
+      'deepseek-v4-flash',
+      'deepseek-v4-flash-vision-exp',
+    ].includes(configured)
+    ? DEEPSEEK_FLASH_MODEL
+    : configured;
 }
 
 export interface DeepSeekModelSelection {
@@ -47,7 +44,7 @@ const LEGACY_NON_THINKING_MODELS: ReadonlySet<string> = new Set(['deepseek-chat'
  */
 export function resolveDeepseekModel(
   requestedModel: string | undefined,
-  shouldThink: boolean
+  shouldThink: boolean,
 ): DeepSeekModelSelection {
   if (requestedModel && LEGACY_THINKING_MODELS.has(requestedModel)) {
     return { model: getDeepseekModel(), thinking: DEEPSEEK_THINKING_ENABLED };
@@ -56,7 +53,11 @@ export function resolveDeepseekModel(
     return { model: getDeepseekModel(), thinking: DEEPSEEK_THINKING_DISABLED };
   }
   return {
-    model: requestedModel ?? getDeepseekModel(),
+    model:
+      !requestedModel?.trim() ||
+      ['deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'].includes(requestedModel)
+        ? getDeepseekModel()
+        : requestedModel.trim(),
     thinking: shouldThink ? DEEPSEEK_THINKING_ENABLED : DEEPSEEK_THINKING_DISABLED,
   };
 }

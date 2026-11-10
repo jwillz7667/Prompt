@@ -373,7 +373,8 @@ sort(users, (a, b) => a.age - b.age)  // Sorted by age
 - Handle edge cases: empty array, single element, already sorted
 - Include JSDoc with time/space complexity
 - Generic implementation with optional comparator`,
-    explanation: 'Vague requests produce vague code. Specify language, input/output types, algorithm choice, and expected behavior with examples.',
+    explanation:
+      'Vague requests produce vague code. Specify language, input/output types, algorithm choice, and expected behavior with examples.',
   },
   {
     badInput: 'build me a website',
@@ -391,7 +392,8 @@ Each task should specify:
 - Input/output types
 - Specific functionality
 - Expected behavior with examples`,
-    explanation: 'Project-level requests fail because they lack specificity. Code generation works best with single, focused tasks that have clear requirements.',
+    explanation:
+      'Project-level requests fail because they lack specificity. Code generation works best with single, focused tasks that have clear requirements.',
   },
 ];
 

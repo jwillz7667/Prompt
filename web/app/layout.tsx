@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Providers } from '@/components/providers'
+import { ServiceWorkerRegistration } from '@/components/service-worker-registration'
 import './globals.css'
 
 // SEO Best Practices 2026
@@ -12,7 +13,8 @@ import './globals.css'
 
 const siteUrl = 'https://promptomize.app'
 const siteName = 'Promptomize'
-const siteDescription = 'Transform your prompts into powerful, optimized instructions for any AI platform with advanced prompt engineering.'
+const siteDescription =
+  'Transform your prompts into powerful, optimized instructions for any AI platform with advanced prompt engineering.'
 
 export const metadata: Metadata = {
   // Basic metadata
@@ -150,11 +152,7 @@ export const viewport: Viewport = {
   colorScheme: 'dark light',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -175,7 +173,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
         {/* DNS prefetch for API */}
-        <link rel="dns-prefetch" href="https://backend-production-d538.up.railway.app" />
+        <link rel="dns-prefetch" href="https://backend-production-d7487.up.railway.app" />
 
         {/* PWA manifest and icons */}
         <link rel="manifest" href="/manifest.json" />
@@ -195,9 +193,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
               url: siteUrl,
               logo: `${siteUrl}/logo.png`,
               description: siteDescription,
-              sameAs: [
-                'https://apps.apple.com/us/app/promptomize/id6758075605',
-              ],
+              sameAs: ['https://apps.apple.com/us/app/promptomize/id6758075605'],
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'customer support',
@@ -239,7 +235,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         {/* Skip to main content for accessibility */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-[var(--brand-accent)] focus:text-[var(--text-on-accent)] focus:rounded-lg focus:outline-none"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-[var(--brand-accent)] focus:px-4 focus:py-2 focus:text-[var(--text-on-accent)] focus:outline-none"
         >
           Skip to main content
         </a>
@@ -257,6 +253,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         {/* End Google Tag Manager (noscript) */}
 
         <div id="main-content">
+          <ServiceWorkerRegistration />
           <Providers>{children}</Providers>
         </div>
       </body>

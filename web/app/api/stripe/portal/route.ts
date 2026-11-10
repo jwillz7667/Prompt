@@ -1,64 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
-
-function appOrigin(request: NextRequest): string {
-  return process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
-}
-
-function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2025-02-24.acacia',
-  })
-}
+import { appOrigin, fetchAccount, stripeClient } from '@/lib/stripe/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const stripe = getStripe()
-    const accessToken = request.headers.get('authorization')?.replace('Bearer ', '')
-
-    if (!accessToken) {
+    const token = request.headers.get('authorization')?.match(/^Bearer (\S+)$/i)?.[1]
+    if (!token)
+      return NextResponse.json({ error: 'Please sign in to manage billing' }, { status: 401 })
+    const response = await fetchAccount('/subscriptions/status', token)
+    if (!response.ok)
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Unable to verify your billing account' },
+        { status: response.status === 401 ? 401 : 503 },
       )
+    const status = await response.json()
+    if (status.billingProvider === 'appstore') {
+      return NextResponse.json({ url: 'https://apps.apple.com/account/subscriptions' })
     }
-
-    // Get subscription status to find Stripe customer ID
-    const subscriptionResponse = await fetch(`${API_BASE_URL}/subscriptions/status`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+    if (!status.stripeCustomerId)
+      return NextResponse.json({ error: 'No web billing account found' }, { status: 400 })
+    const session = await stripeClient().billingPortal.sessions.create({
+      customer: status.stripeCustomerId,
+      return_url: `${appOrigin(request)}/upgrade`,
     })
-
-    if (!subscriptionResponse.ok) {
-      return NextResponse.json(
-        { error: 'Failed to get subscription info' },
-        { status: 400 }
-      )
-    }
-
-    const subscriptionData = await subscriptionResponse.json()
-    const customerId = subscriptionData.stripeCustomerId
-
-    if (!customerId) {
-      return NextResponse.json(
-        { error: 'No subscription found' },
-        { status: 400 }
-      )
-    }
-
-    // Create portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: `${request.nextUrl.origin}/upgrade`,
-    })
-
     return NextResponse.json({ url: session.url })
-  } catch (error) {
-    console.error('Stripe portal error:', error)
+  } catch {
     return NextResponse.json(
-      { error: 'Failed to create portal session' },
-      { status: 500 }
+      { error: 'Unable to open billing. Please try again shortly.' },
+      { status: 503 },
     )
   }
 }

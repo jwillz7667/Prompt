@@ -1,4 +1,4 @@
-import { api, getAccessToken } from './client'
+import { api } from './client'
 import type {
   SubscriptionStatusResponse,
   TrialEligibilityResponse,
@@ -27,39 +27,11 @@ export async function getProducts(): Promise<{ products: StripeProduct[] }> {
 
 // Stripe-specific endpoints (called via Next.js API routes)
 export async function createStripeCheckout(
-  request: StripeCheckoutRequest
+  request: StripeCheckoutRequest,
 ): Promise<StripeCheckoutResponse> {
-  const token = getAccessToken()
-  const response = await fetch('/api/stripe/checkout', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(request),
-    credentials: 'include',
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw error
-  }
-
-  return response.json()
+  return api.post<StripeCheckoutResponse>('/api/stripe/checkout', request, { local: true })
 }
 
 export async function createStripePortalSession(): Promise<StripePortalResponse> {
-  const token = getAccessToken()
-  const response = await fetch('/api/stripe/portal', {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    credentials: 'include',
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw error
-  }
-
-  return response.json()
+  return api.post<StripePortalResponse>('/api/stripe/portal', undefined, { local: true })
 }

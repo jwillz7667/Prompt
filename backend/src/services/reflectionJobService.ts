@@ -168,7 +168,11 @@ let reflectionQueue: Queue<ReflectionJobRequest, ReflectionJobResult> | null = n
 let reflectionWorker: Worker<ReflectionJobRequest, ReflectionJobResult> | null = null;
 let reflectionQueueEvents: QueueEvents | null = null;
 
-function resolveRedisConnection(): { host: string; port: number; password: string | undefined } | null {
+function resolveRedisConnection(): {
+  host: string;
+  port: number;
+  password: string | undefined;
+} | null {
   const redisUrl = process.env['REDIS_URL'];
   const redisHost = process.env['REDIS_HOST'];
   if (!redisUrl && !redisHost) {
@@ -220,20 +224,23 @@ export async function initReflectionQueue(): Promise<void> {
         processReflectionJob(job.data, async (events) => {
           await job.updateProgress(events);
         }),
-      { connection, concurrency: REFLECTION_WORKER_CONCURRENCY }
+      { connection, concurrency: REFLECTION_WORKER_CONCURRENCY },
     );
 
     reflectionQueueEvents = new QueueEvents(REFLECTION_QUEUE_NAME, { connection });
     reflectionQueueEvents.on('completed', ({ jobId }: { jobId: string }) => {
       promptLogger.info({ jobId }, 'Reflection optimization job completed');
     });
-    reflectionQueueEvents.on('failed', ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
-      promptLogger.error({ jobId, failedReason }, 'Reflection optimization job failed');
-    });
+    reflectionQueueEvents.on(
+      'failed',
+      ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
+        promptLogger.error({ jobId, failedReason }, 'Reflection optimization job failed');
+      },
+    );
 
     promptLogger.info(
       { queue: REFLECTION_QUEUE_NAME, concurrency: REFLECTION_WORKER_CONCURRENCY },
-      'Reflection queue initialized'
+      'Reflection queue initialized',
     );
   } catch (error) {
     reflectionQueue = null;
@@ -334,7 +341,10 @@ async function runInlineJob(record: InlineJobRecord, request: ReflectionJobReque
   } catch (error) {
     record.status = 'failed';
     record.error = GENERIC_FAILURE_MESSAGE;
-    promptLogger.error({ err: error, jobId: record.jobId, userId: record.userId }, 'Inline reflection job failed');
+    promptLogger.error(
+      { err: error, jobId: record.jobId, userId: record.userId },
+      'Inline reflection job failed',
+    );
     emitToListeners(record, { type: 'error', message: GENERIC_FAILURE_MESSAGE });
   } finally {
     record.listeners.clear();
@@ -437,7 +447,12 @@ export async function getReflectionJob(jobId: string): Promise<ReflectionJobSnap
 }
 
 function progressMessage(event: ReflectionProgressUpdate): ReflectionJobStreamMessage {
-  return { type: 'progress', phase: event.phase, label: event.label, rolloutsUsed: event.rolloutsUsed };
+  return {
+    type: 'progress',
+    phase: event.phase,
+    label: event.label,
+    rolloutsUsed: event.rolloutsUsed,
+  };
 }
 
 /**
@@ -448,7 +463,7 @@ function progressMessage(event: ReflectionProgressUpdate): ReflectionJobStreamMe
  */
 export async function subscribeToReflectionJob(
   jobId: string,
-  listener: (message: ReflectionJobStreamMessage) => void
+  listener: (message: ReflectionJobStreamMessage) => void,
 ): Promise<(() => void) | null> {
   const record = inlineJobs.get(jobId);
   if (record) {
@@ -550,7 +565,7 @@ type ProgressReporter = (events: ReflectionProgressUpdate[]) => void | Promise<v
 
 function composeUserGoal(
   goal: string | undefined,
-  targetModelFamily: TargetModelFamily | undefined
+  targetModelFamily: TargetModelFamily | undefined,
 ): string | undefined {
   const parts: string[] = [];
   if (goal?.trim()) {
@@ -568,13 +583,18 @@ function composeUserGoal(
 
 async function processReflectionJob(
   request: ReflectionJobRequest,
-  reportProgress: ProgressReporter
+  reportProgress: ProgressReporter,
 ): Promise<ReflectionJobResult> {
   const startedAt = Date.now();
   const events: ReflectionProgressUpdate[] = [];
 
   const emit = (phase: ReflectionProgressPhase, rolloutsUsed: number): void => {
-    events.push({ phase, label: PROGRESS_LABELS[phase], rolloutsUsed, at: new Date().toISOString() });
+    events.push({
+      phase,
+      label: PROGRESS_LABELS[phase],
+      rolloutsUsed,
+      at: new Date().toISOString(),
+    });
     void Promise.resolve(reportProgress([...events])).catch((error) => {
       promptLogger.warn({ error }, 'Failed to report reflection job progress');
     });
@@ -595,7 +615,7 @@ async function processReflectionJob(
             singlePassTier: request.singlePassTier,
             onProgress: (event) => emit(event.phase, event.rolloutsUsed),
           }).optimize(jobInput),
-          request.targetModelFamily
+          request.targetModelFamily,
         );
 
   return finalizeJobResult(request, result, Date.now() - startedAt);
@@ -614,7 +634,7 @@ function toReceipt(candidate: ScoredCandidate): ReflectionCandidateReceipt {
 
 function toJobResult(
   outcome: ReflectionOutcome,
-  requestedTargetModelFamily: TargetModelFamily | undefined
+  requestedTargetModelFamily: TargetModelFamily | undefined,
 ): ReflectionJobResult {
   switch (outcome.status) {
     case 'refused':
@@ -650,7 +670,7 @@ function toJobResult(
         // inputs, so the client sees exactly the family the winner targets.
         requestedTargetModelFamily: resolveTargetModelFamily(
           requestedTargetModelFamily,
-          outcome.intake.target_model_family
+          outcome.intake.target_model_family,
         ),
         usage: outcome.usage,
         promptId: null,
@@ -704,7 +724,7 @@ function parseJsonObject(content: string): unknown {
 async function classifyIntakeGate(
   llm: ReflectionLlmCall,
   jobInput: OptimizeJobInput,
-  usage: ReflectionUsage
+  usage: ReflectionUsage,
 ): Promise<Intake | null> {
   const baseMessage = buildIntakeUserMessage({
     rawPrompt: jobInput.rawPrompt,
@@ -744,7 +764,10 @@ async function classifyIntakeGate(
     if (validated.success) {
       return validated.data;
     }
-    promptLogger.warn({ attempt, issues: validated.error.issues }, 'Free-tier intake failed schema validation');
+    promptLogger.warn(
+      { attempt, issues: validated.error.issues },
+      'Free-tier intake failed schema validation',
+    );
   }
 
   return null;
@@ -753,7 +776,7 @@ async function classifyIntakeGate(
 async function runFreeTierFastPath(
   jobInput: OptimizeJobInput,
   singlePassTier: EnhancementTier,
-  emit: (phase: ReflectionProgressPhase, rolloutsUsed: number) => void
+  emit: (phase: ReflectionProgressPhase, rolloutsUsed: number) => void,
 ): Promise<ReflectionJobResult> {
   const usage: ReflectionUsage = { inputTokens: 0, outputTokens: 0, llmCalls: 0 };
 
@@ -793,7 +816,7 @@ async function runFreeTierFastPath(
 async function persistReflectionPrompt(
   request: ReflectionJobRequest,
   result: Extract<ReflectionJobResult, { status: 'fast_path' | 'optimized' }>,
-  processingMs: number
+  processingMs: number,
 ): Promise<string> {
   const created = await prisma.prompt.create({
     data: {
@@ -801,7 +824,8 @@ async function persistReflectionPrompt(
       originalPrompt: request.rawPrompt,
       // The winner text from code is the source of truth; the packager's
       // template_text is a model restatement and may drift.
-      enhancedPrompt: result.status === 'optimized' ? result.winner.promptText : result.enhancedPrompt,
+      enhancedPrompt:
+        result.status === 'optimized' ? result.winner.promptText : result.enhancedPrompt,
       model: result.status === 'fast_path' ? result.model : getDeepseekModel(),
       modality: 'text',
       tags: ['reflection-loop'],
@@ -819,7 +843,7 @@ async function persistReflectionPrompt(
 async function finalizeJobResult(
   request: ReflectionJobRequest,
   result: ReflectionJobResult,
-  processingMs: number
+  processingMs: number,
 ): Promise<ReflectionJobResult> {
   // A refusal produced no enhancement: no quota charge, nothing to persist.
   if (result.status === 'refused') {
@@ -831,7 +855,10 @@ async function finalizeJobResult(
   try {
     await recordUsage(request.userId);
   } catch (error) {
-    promptLogger.error({ err: error, userId: request.userId }, 'Failed to record usage for reflection job');
+    promptLogger.error(
+      { err: error, userId: request.userId },
+      'Failed to record usage for reflection job',
+    );
   }
 
   // Persistence is best-effort — a DB hiccup must never turn a completed
@@ -841,7 +868,7 @@ async function finalizeJobResult(
   } catch (error) {
     promptLogger.error(
       { err: error, userId: request.userId },
-      'Failed to persist reflection optimization; returning result unsaved'
+      'Failed to persist reflection optimization; returning result unsaved',
     );
     return result;
   }

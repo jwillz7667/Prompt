@@ -78,7 +78,7 @@ export function MobileNav() {
 
       {/* Drawer */}
       <aside
-        className="fixed inset-y-0 left-0 z-50 w-80 bg-[var(--bg-secondary)] shadow-2xl lg:hidden animate-in slide-in-from-left duration-300"
+        className="animate-in slide-in-from-left fixed inset-y-0 left-0 z-50 w-80 bg-[var(--bg-secondary)] shadow-2xl duration-300 lg:hidden"
         role="dialog"
         aria-modal="true"
         aria-label="Mobile navigation menu"
@@ -92,7 +92,7 @@ export function MobileNav() {
             aria-label="Promptomize Dashboard"
           >
             <Logo size={40} className="rounded-xl" />
-            <span className="text-lg font-bold gradient-text">Promptomize</span>
+            <span className="gradient-text text-lg font-bold">Promptomize</span>
           </Link>
           <button
             onClick={closeMobileMenu}
@@ -105,7 +105,7 @@ export function MobileNav() {
 
         {/* User info */}
         <div className="flex items-center gap-3 border-b border-[var(--border)] p-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden bg-brand-indigo dark:bg-brand-cyan">
+          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-brand-indigo dark:bg-brand-cyan">
             {user?.avatarUrl ? (
               <img
                 src={user.avatarUrl}
@@ -118,9 +118,11 @@ export function MobileNav() {
               </span>
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-[var(--text-primary)] truncate">{user?.name || 'User'}</p>
-            <p className="text-sm text-[var(--text-secondary)] truncate">{user?.email}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-medium text-[var(--text-primary)]">
+              {user?.name || 'User'}
+            </p>
+            <p className="truncate text-sm text-[var(--text-secondary)]">{user?.email}</p>
           </div>
           <Badge
             variant={tier === 'PREMIUM' ? 'premium' : tier === 'PRO' ? 'pro' : 'outline'}
@@ -147,14 +149,20 @@ export function MobileNav() {
                       isActive
                         ? 'bg-brand-indigo text-white shadow-lg shadow-brand-indigo/25'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]',
-                      isPremiumLocked && 'opacity-60'
+                      isPremiumLocked && 'opacity-60',
                     )}
                     aria-current={isActive ? 'page' : undefined}
                   >
-                    <item.icon className={cn('h-5 w-5', isActive && 'text-white')} aria-hidden="true" />
+                    <item.icon
+                      className={cn('h-5 w-5', isActive && 'text-white')}
+                      aria-hidden="true"
+                    />
                     <span className="flex-1">{item.name}</span>
                     {item.premium && (
-                      <Badge variant={isPremiumLocked ? 'outline' : 'premium'} className="text-[10px]">
+                      <Badge
+                        variant={isPremiumLocked ? 'outline' : 'premium'}
+                        className="text-[10px]"
+                      >
                         {isPremiumLocked ? 'PRO' : <Crown className="h-3 w-3" aria-hidden="true" />}
                       </Badge>
                     )}
@@ -169,11 +177,14 @@ export function MobileNav() {
             <Link
               href="/upgrade"
               onClick={closeMobileMenu}
-              className="mt-4 block rounded-xl bg-brand-indigo/10 dark:bg-brand-cyan/10 border border-brand-indigo/20 dark:border-brand-cyan/20 p-4 hover:border-brand-indigo/40 dark:hover:border-brand-cyan/40 transition-colors"
+              className="mt-4 block rounded-xl border border-brand-indigo/20 bg-brand-indigo/10 p-4 transition-colors hover:border-brand-indigo/40 dark:border-brand-cyan/20 dark:bg-brand-cyan/10 dark:hover:border-brand-cyan/40"
               aria-label="Upgrade to Pro for more features"
             >
-              <div className="flex items-center gap-2 mb-2">
-                <Crown className="h-5 w-5 text-brand-indigo dark:text-brand-cyan" aria-hidden="true" />
+              <div className="mb-2 flex items-center gap-2">
+                <Crown
+                  className="h-5 w-5 text-brand-indigo dark:text-brand-cyan"
+                  aria-hidden="true"
+                />
                 <span className="font-semibold text-[var(--text-primary)]">Upgrade to Pro</span>
               </div>
               <p className="text-xs text-[var(--text-secondary)]">
@@ -187,7 +198,7 @@ export function MobileNav() {
         <div className="border-t border-[var(--border)] p-4">
           <Button
             variant="ghost"
-            className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+            className="w-full justify-start gap-3 text-red-500 hover:bg-red-500/10 hover:text-red-600"
             onClick={() => {
               logout()
               closeMobileMenu()

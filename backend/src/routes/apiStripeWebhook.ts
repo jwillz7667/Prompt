@@ -5,18 +5,24 @@
  * Separate from the main app subscription webhooks.
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import Stripe from 'stripe';
 import { logger } from '../utils/logger.js';
 import {
   updateApiSubscription,
   resetPeriodUsage,
-  addPurchasedCredits,
+  getCreditPackById,
+  API_TIER_CONFIG,
   ApiTier,
 } from '../services/apiSubscriptionService.js';
 import { sendApiPaymentFailed } from '../services/emailService.js';
-import { ApiSubscriptionStatus, IdempotencyStatus, Prisma } from '@prisma/client';
+import { ApiSubscriptionStatus, IdempotencyStatus, type Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma.js';
+import { cache } from '../utils/redis.js';
+import {
+  getInvoiceSubscriptionId,
+  getSubscriptionPeriod,
+} from '../services/stripeBillingPayloads.js';
 
 export const apiStripeWebhookRouter = Router();
 
@@ -36,43 +42,35 @@ const PRICE_TO_TIER: Record<string, ApiTier> = {
 };
 
 function getTierFromPriceId(priceId: string): ApiTier {
-  return PRICE_TO_TIER[priceId] || ApiTier.API_FREE;
+  const tier = priceId ? PRICE_TO_TIER[priceId] : undefined;
+  if (!tier) throw new Error('Unknown Stripe API subscription price');
+  return tier;
 }
 
-async function beginWebhookProcessing(event: Stripe.Event): Promise<'process' | 'skip'> {
+async function beginWebhookProcessing(event: Stripe.Event): Promise<'process' | 'skip' | 'busy'> {
   const idempotencyKey = `api-stripe:${event.id}`;
-
-  const existing = await prisma.webhookIdempotencyKey.findUnique({
-    where: { idempotencyKey },
-  });
-
-  if (existing?.status === IdempotencyStatus.COMPLETED) {
-    logger.info({ eventId: event.id, eventType: event.type }, 'Skipping previously processed API Stripe webhook');
-    return 'skip';
-  }
-
-  if (existing?.status === IdempotencyStatus.PROCESSING) {
-    logger.warn({ eventId: event.id, eventType: event.type }, 'API Stripe webhook already processing');
-    return 'skip';
-  }
-
-  if (existing) {
-    await prisma.webhookIdempotencyKey.delete({
-      where: { id: existing.id },
-    });
-  }
-
-  await prisma.webhookIdempotencyKey.create({
-    data: {
-      idempotencyKey,
-      endpoint: '/api/v1/webhooks/api-stripe',
-      payload: event as unknown as Prisma.InputJsonValue,
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${idempotencyKey}, 0))`;
+    const existing = await tx.webhookIdempotencyKey.findUnique({ where: { idempotencyKey } });
+    if (existing?.status === IdempotencyStatus.COMPLETED) return 'skip';
+    if (existing?.status === IdempotencyStatus.PROCESSING && existing.expiresAt > new Date())
+      return 'busy';
+    const data = {
       status: IdempotencyStatus.PROCESSING,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    },
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    };
+    await tx.webhookIdempotencyKey.upsert({
+      where: { idempotencyKey },
+      update: data,
+      create: {
+        idempotencyKey,
+        endpoint: '/api/v1/webhooks/api-stripe',
+        payload: { eventId: event.id, type: event.type },
+        ...data,
+      },
+    });
+    return 'process';
   });
-
-  return 'process';
 }
 
 async function completeWebhookProcessing(event: Stripe.Event): Promise<void> {
@@ -83,6 +81,7 @@ async function completeWebhookProcessing(event: Stripe.Event): Promise<void> {
       statusCode: 200,
       responseBody: { received: true } as Prisma.InputJsonValue,
       completedAt: new Date(),
+      expiresAt: new Date(Date.now() + 30 * 86400000),
     },
   });
 }
@@ -134,11 +133,7 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
   try {
     // Use raw body for signature verification
     const rawBody = (req as Request & { rawBody?: Buffer | string }).rawBody || req.body;
-    event = stripe.webhooks.constructEvent(
-      rawBody,
-      sig,
-      webhookSecret
-    );
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
     logger.error({ err }, 'Stripe webhook signature verification failed');
     res.status(400).json({ error: 'Invalid signature' });
@@ -150,6 +145,10 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
   try {
     const idempotencyState = await beginWebhookProcessing(event);
 
+    if (idempotencyState === 'busy') {
+      res.status(503).json({ error: 'Webhook is being processed. Retry later.' });
+      return;
+    }
     if (idempotencyState === 'skip') {
       res.json({ received: true });
       return;
@@ -163,7 +162,9 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdate(event.data.object as Stripe.Subscription);
+        await handleSubscriptionUpdate(
+          await stripe.subscriptions.retrieve((event.data.object as Stripe.Subscription).id),
+        );
         break;
 
       case 'customer.subscription.deleted':
@@ -185,7 +186,9 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
     await completeWebhookProcessing(event);
     res.json({ received: true });
   } catch (error) {
-    await failWebhookProcessing(event);
+    await failWebhookProcessing(event).catch((failure) =>
+      logger.error({ failure }, 'Failed to release webhook claim'),
+    );
     logger.error({ error, eventType: event.type }, 'Error processing webhook');
     res.status(500).json({ error: 'Webhook processing failed' });
   }
@@ -197,7 +200,7 @@ apiStripeWebhookRouter.post('/', async (req: Request, res: Response): Promise<vo
 
 async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Promise<void> {
   const metadata = subscription.metadata || {};
-  const userId = metadata['userId'];
+  const userId = await resolveDeveloperId(subscription);
 
   if (!userId) {
     logger.warn({ subscriptionId: subscription.id }, 'No userId in subscription metadata');
@@ -212,7 +215,7 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Prom
 
   // Get the price ID from the first item
   const priceId = subscription.items.data[0]?.price.id || '';
-  const tier = metadata['tier'] as ApiTier || getTierFromPriceId(priceId);
+  const tier = getTierFromPriceId(priceId);
 
   // Map Stripe status to our status
   let status: ApiSubscriptionStatus;
@@ -232,25 +235,14 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Prom
       status = ApiSubscriptionStatus.SUSPENDED;
   }
 
-  // Extract period dates from subscription object (using type assertion for Stripe API compatibility)
-  const subData = subscription as unknown as {
-    current_period_start?: number;
-    current_period_end?: number;
-  };
-  const periodStart = subData.current_period_start
-    ? new Date(subData.current_period_start * 1000)
-    : new Date();
-  const periodEnd = subData.current_period_end
-    ? new Date(subData.current_period_end * 1000)
-    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const { start: periodStart, end: periodEnd } = getSubscriptionPeriod(subscription);
 
   await updateApiSubscription(userId, {
     tier,
     status,
     stripeSubscriptionId: subscription.id,
-    stripeCustomerId: typeof subscription.customer === 'string'
-      ? subscription.customer
-      : subscription.customer.id,
+    stripeCustomerId:
+      typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
     stripePriceId: priceId,
     currentPeriodStart: periodStart,
     currentPeriodEnd: periodEnd,
@@ -259,110 +251,102 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Prom
 
   logger.info(
     { userId, tier, status, subscriptionId: subscription.id },
-    'API subscription updated'
+    'API subscription updated',
   );
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
   const metadata = session.metadata || {};
   const developerId = metadata['developerId'];
-
-  if (!developerId) {
-    logger.warn({ sessionId: session.id }, 'No developerId in API Stripe checkout metadata');
+  if (
+    !developerId ||
+    metadata['type'] !== 'api_credit_purchase' ||
+    session.mode !== 'payment' ||
+    session.payment_status !== 'paid'
+  )
     return;
+  const pack = getCreditPackById(metadata['creditPackId'] || '');
+  if (
+    !pack ||
+    metadata['credits'] !== String(pack.credits) ||
+    session.currency !== 'usd' ||
+    session.amount_total !== pack.priceCents
+  ) {
+    throw new Error('API credit checkout does not match the configured credit pack');
   }
-
-  if (metadata['type'] !== 'api_credit_purchase') {
-    logger.debug({ sessionId: session.id }, 'Checkout session is not an API credit purchase');
-    return;
-  }
-
-  if (session.mode !== 'payment') {
-    logger.debug({ sessionId: session.id, mode: session.mode }, 'Ignoring non-payment API credit checkout session');
-    return;
-  }
-
-  if (session.payment_status !== 'paid') {
-    logger.info({ sessionId: session.id, paymentStatus: session.payment_status }, 'API credit checkout not paid yet');
-    return;
-  }
-
+  const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+  if (!customerId) throw new Error('API credit checkout is missing its customer');
   const fulfillmentKey = `api-credit-session:${session.id}`;
-  const existingFulfillment = await prisma.webhookIdempotencyKey.findUnique({
-    where: { idempotencyKey: fulfillmentKey },
-  });
-
-  if (existingFulfillment?.status === IdempotencyStatus.COMPLETED) {
-    logger.info({ sessionId: session.id }, 'API credit checkout session already fulfilled');
-    return;
-  }
-
-  if (!existingFulfillment) {
-    try {
-      await prisma.webhookIdempotencyKey.create({
-        data: {
-          idempotencyKey: fulfillmentKey,
-          endpoint: '/api/v1/webhooks/api-stripe/credits',
-          payload: session as unknown as Prisma.InputJsonValue,
-          status: IdempotencyStatus.PROCESSING,
-          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        },
-      });
-    } catch (error) {
-      logger.warn({ error, sessionId: session.id }, 'API credit checkout fulfillment is already being processed');
-      return;
+  // Credit changes and fulfillment must commit together, even across distinct
+  // checkout completion events or a crash immediately after the balance write.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`api-subscription:${developerId}`}, 0))`;
+    const fulfilled = await tx.webhookIdempotencyKey.findUnique({
+      where: { idempotencyKey: fulfillmentKey },
+    });
+    if (fulfilled?.status === IdempotencyStatus.COMPLETED) return;
+    const subscription = await tx.apiSubscription.findUnique({ where: { developerId } });
+    if (subscription?.stripeCustomerId && subscription.stripeCustomerId !== customerId) {
+      throw new Error('API credit checkout customer does not match developer');
     }
-  }
-
-  const credits = Number.parseInt(metadata['credits'] || '0', 10);
-
-  if (!Number.isFinite(credits) || credits <= 0) {
-    logger.warn({ sessionId: session.id, credits: metadata['credits'] }, 'Invalid API credit amount in checkout metadata');
-    return;
-  }
-
-  await addPurchasedCredits(developerId, credits);
-
-  if (typeof session.customer === 'string') {
-    await prisma.apiSubscription.upsert({
+    await tx.apiSubscription.upsert({
       where: { developerId },
       update: {
-        stripeCustomerId: session.customer,
+        stripeCustomerId: customerId,
+        includedRequests: subscription?.includedRequests === -1 ? -1 : { increment: pack.credits },
       },
       create: {
         developerId,
         tier: ApiTier.API_FREE,
         status: ApiSubscriptionStatus.ACTIVE,
-        stripeCustomerId: session.customer,
-        includedRequests: 100 + credits,
+        stripeCustomerId: customerId,
+        includedRequests: API_TIER_CONFIG.API_FREE.monthlyRequests + pack.credits,
         overageRateCents: 0,
         currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        currentPeriodEnd: new Date(Date.now() + 30 * 86400000),
         currentPeriodUsage: 0,
       },
     });
-  }
-
-  await prisma.webhookIdempotencyKey.update({
-    where: { idempotencyKey: fulfillmentKey },
-    data: {
+    const record = {
       status: IdempotencyStatus.COMPLETED,
-      statusCode: 200,
-      responseBody: { credits } as Prisma.InputJsonValue,
       completedAt: new Date(),
-      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date('9999-12-31T00:00:00Z'),
+      statusCode: 200,
+      responseBody: { credits: pack.credits },
+    };
+    await tx.webhookIdempotencyKey.upsert({
+      where: { idempotencyKey: fulfillmentKey },
+      update: record,
+      create: {
+        idempotencyKey: fulfillmentKey,
+        endpoint: '/api/v1/webhooks/api-stripe/credits',
+        payload: { sessionId: session.id, developerId },
+        ...record,
+      },
+    });
+  });
+  await cache.del(`api-subscription:${developerId}`);
+}
+
+async function resolveDeveloperId(subscription: Stripe.Subscription): Promise<string | undefined> {
+  if (subscription.metadata['type'] !== 'api_subscription') return undefined;
+  const customerId =
+    typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
+  const existing = await prisma.apiSubscription.findFirst({
+    where: {
+      OR: [{ stripeSubscriptionId: subscription.id }, { stripeCustomerId: customerId }],
     },
   });
-
-  logger.info(
-    { developerId, sessionId: session.id, credits, packId: metadata['creditPackId'] },
-    'API credit purchase applied'
-  );
+  // Checkout writes developerId. userId supports existing legacy subscriptions.
+  const metadataId = subscription.metadata['developerId'] || subscription.metadata['userId'];
+  if (existing && metadataId && existing.developerId !== metadataId)
+    throw new Error('Stripe subscription owner mismatch');
+  return existing?.developerId || metadataId;
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
   const metadata = subscription.metadata || {};
-  const userId = metadata['userId'];
+  const userId = await resolveDeveloperId(subscription);
 
   if (!userId) {
     logger.warn({ subscriptionId: subscription.id }, 'No userId in subscription metadata');
@@ -373,23 +357,23 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
     return;
   }
 
+  const current = await prisma.apiSubscription.findUnique({ where: { developerId: userId } });
+  if (current?.stripeSubscriptionId !== subscription.id) return;
   // Downgrade to free tier
   await updateApiSubscription(userId, {
     tier: ApiTier.API_FREE,
     status: ApiSubscriptionStatus.CANCELED,
-    stripeSubscriptionId: undefined,
-    stripePriceId: undefined,
+    stripeSubscriptionId: null,
+    stripePriceId: null,
+    cancelAtPeriodEnd: false,
   });
 
   logger.info({ userId, subscriptionId: subscription.id }, 'API subscription canceled');
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
-  // Extract subscription ID from invoice (handle different Stripe API versions)
-  const invoiceData = invoice as unknown as { subscription?: string | { id: string } | null };
-  const subscriptionId = typeof invoiceData.subscription === 'string'
-    ? invoiceData.subscription
-    : invoiceData.subscription?.id;
+  if (!stripe) throw new Error('Stripe is not configured');
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
 
   if (!subscriptionId) {
     return;
@@ -397,26 +381,15 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
 
   // Get subscription to find userId
   try {
-    // Note: stripe is verified non-null in the main handler before calling this function
-    const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
     const metadata = subscription.metadata || {};
-    const userId = metadata['userId'];
+    const userId = await resolveDeveloperId(subscription);
 
     if (!userId || metadata['type'] !== 'api_subscription') {
       return;
     }
 
-    // Extract period dates (using type assertion for Stripe API compatibility)
-    const subData = subscription as unknown as {
-      current_period_start?: number;
-      current_period_end?: number;
-    };
-    const periodStart = subData.current_period_start
-      ? new Date(subData.current_period_start * 1000)
-      : new Date();
-    const periodEnd = subData.current_period_end
-      ? new Date(subData.current_period_end * 1000)
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const { start: periodStart, end: periodEnd } = getSubscriptionPeriod(subscription);
 
     // Reset period usage on successful payment (new billing cycle)
     if (invoice.billing_reason === 'subscription_cycle') {
@@ -424,7 +397,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
 
       logger.info(
         { userId, subscriptionId, periodStart, periodEnd },
-        'API subscription period reset after payment'
+        'API subscription period reset after payment',
       );
     }
 
@@ -439,30 +412,28 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
     }
   } catch (error) {
     logger.error({ error, subscriptionId }, 'Error handling invoice.paid');
+    throw error;
   }
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-  // Extract subscription ID from invoice (handle different Stripe API versions)
-  const invoiceData = invoice as unknown as { subscription?: string | { id: string } | null };
-  const subscriptionId = typeof invoiceData.subscription === 'string'
-    ? invoiceData.subscription
-    : invoiceData.subscription?.id;
+  if (!stripe) throw new Error('Stripe is not configured');
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
 
   if (!subscriptionId) {
     return;
   }
 
   try {
-    // Note: stripe is verified non-null in the main handler before calling this function
-    const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
     const metadata = subscription.metadata || {};
-    const userId = metadata['userId'];
+    const userId = await resolveDeveloperId(subscription);
 
     if (!userId || metadata['type'] !== 'api_subscription') {
       return;
     }
 
+    if (subscription.status !== 'past_due' && subscription.status !== 'unpaid') return;
     // Mark subscription as past due
     await updateApiSubscription(userId, {
       tier: getTierFromPriceId(subscription.items.data[0]?.price.id || ''),
@@ -471,7 +442,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
 
     logger.warn(
       { userId, subscriptionId, invoiceId: invoice.id },
-      'API subscription payment failed'
+      'API subscription payment failed',
     );
 
     // Send payment failed email notification
@@ -484,10 +455,11 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
       sendApiPaymentFailed(
         developer.email,
         developer.name,
-        getTierFromPriceId(subscription.items.data[0]?.price.id || '')
+        getTierFromPriceId(subscription.items.data[0]?.price.id || ''),
       ).catch((err) => logger.error({ err }, 'Failed to send payment failed email'));
     }
   } catch (error) {
     logger.error({ error, subscriptionId }, 'Error handling payment failed');
+    throw error;
   }
 }

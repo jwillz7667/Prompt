@@ -42,13 +42,21 @@ const fastPathResult: ReflectionJobResult = {
   promptId: null,
 };
 
-function snapshotFor(userId: string, overrides: Partial<ReflectionJobSnapshot> = {}): ReflectionJobSnapshot {
+function snapshotFor(
+  userId: string,
+  overrides: Partial<ReflectionJobSnapshot> = {},
+): ReflectionJobSnapshot {
   return {
     jobId: 'opt_11111111-2222-3333-4444-555555555555',
     userId,
     status: 'completed',
     progress: [
-      { phase: 'testing_candidates', label: 'Testing candidates…', rolloutsUsed: 0, at: new Date().toISOString() },
+      {
+        phase: 'testing_candidates',
+        label: 'Testing candidates…',
+        rolloutsUsed: 0,
+        at: new Date().toISOString(),
+      },
     ],
     result: fastPathResult,
     error: null,
@@ -114,9 +122,7 @@ describe('reflection optimize routes', () => {
 
   describe('POST /api/v1/optimize', () => {
     it('requires auth', async () => {
-      const res = await request(app)
-        .post('/api/v1/optimize')
-        .send({ raw_prompt: 'improve this' });
+      const res = await request(app).post('/api/v1/optimize').send({ raw_prompt: 'improve this' });
 
       expect(res.status).toBe(401);
       expect(enqueueMock).not.toHaveBeenCalled();
@@ -151,7 +157,7 @@ describe('reflection optimize routes', () => {
           singlePassTier: 'basic',
           rawPrompt: 'write a poem about the sea',
           goal: 'evocative imagery',
-        })
+        }),
       );
     });
 
@@ -179,7 +185,7 @@ describe('reflection optimize routes', () => {
       expect(res.status).toBe(202);
       expect(res.body.mode).toBe('fast_path');
       expect(enqueueMock).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: freeUser.id, targetModelFamily: 'unknown' })
+        expect.objectContaining({ userId: freeUser.id, targetModelFamily: 'unknown' }),
       );
     });
 
@@ -208,13 +214,13 @@ describe('reflection optimize routes', () => {
           mode: 'full_loop',
           singlePassTier: 'standard',
           targetModelFamily: 'claude',
-        })
+        }),
       );
     });
 
     it('returns 403 when the daily quota is exhausted', async () => {
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      today.setUTCHours(0, 0, 0, 0);
       await prisma.dailyUsage.create({
         data: { userId: quotaUser.id, date: today, promptCount: 10 },
       });
@@ -281,8 +287,18 @@ describe('reflection optimize routes', () => {
     it('streams replayed progress, the result, and [DONE] for a finished job', async () => {
       getJobMock.mockResolvedValue(snapshotFor(proUser.id));
       subscribeMock.mockImplementation(async (_jobId, listener) => {
-        listener({ type: 'progress', phase: 'testing_candidates', label: 'Testing candidates…', rolloutsUsed: 0 });
-        listener({ type: 'progress', phase: 'packaging', label: 'Packaging results…', rolloutsUsed: 3 });
+        listener({
+          type: 'progress',
+          phase: 'testing_candidates',
+          label: 'Testing candidates…',
+          rolloutsUsed: 0,
+        });
+        listener({
+          type: 'progress',
+          phase: 'packaging',
+          label: 'Packaging results…',
+          rolloutsUsed: 3,
+        });
         listener({ type: 'result', result: fastPathResult });
         return () => undefined;
       });

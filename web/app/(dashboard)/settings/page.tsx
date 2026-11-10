@@ -12,16 +12,7 @@ import { useSettingsStore } from '@/lib/stores/settingsStore'
 import { useIsPro } from '@/lib/hooks/useSubscription'
 import { toast } from '@/lib/stores/uiStore'
 import type { ToneType, OutputLength, AppearanceMode, DeepseekModel } from '@/lib/types/models'
-import {
-  Palette,
-  Sliders,
-  Brain,
-  RotateCcw,
-  Crown,
-  Sun,
-  Moon,
-  Monitor,
-} from 'lucide-react'
+import { Palette, Sliders, Brain, RotateCcw, Crown, Sun, Moon, Monitor } from 'lucide-react'
 
 const toneOptions: SelectOption[] = [
   { value: 'professional', label: 'Professional', description: 'Clear and business-appropriate' },
@@ -89,7 +80,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -118,7 +109,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <label className="text-sm font-medium text-[var(--text-primary)] mb-3 block">
+            <label className="mb-3 block text-sm font-medium text-[var(--text-primary)]">
               Theme
             </label>
             <div className="flex gap-3">
@@ -126,7 +117,7 @@ export default function SettingsPage() {
                 <button
                   key={option.value}
                   onClick={() => setAppearance(option.value)}
-                  className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
+                  className={`flex flex-1 flex-col items-center gap-2 rounded-xl border p-4 transition-all ${
                     appearanceMode === option.value
                       ? 'border-brand-indigo bg-brand-indigo/5'
                       : 'border-[var(--border)] hover:border-brand-indigo/50'
@@ -134,14 +125,18 @@ export default function SettingsPage() {
                 >
                   <div
                     className={`${
-                      appearanceMode === option.value ? 'text-brand-indigo' : 'text-[var(--text-tertiary)]'
+                      appearanceMode === option.value
+                        ? 'text-brand-indigo'
+                        : 'text-[var(--text-tertiary)]'
                     }`}
                   >
                     {option.icon}
                   </div>
                   <span
                     className={`text-sm font-medium ${
-                      appearanceMode === option.value ? 'text-brand-indigo' : 'text-[var(--text-secondary)]'
+                      appearanceMode === option.value
+                        ? 'text-brand-indigo'
+                        : 'text-[var(--text-secondary)]'
                     }`}
                   >
                     {option.label}
@@ -257,7 +252,7 @@ export default function SettingsPage() {
           />
 
           {!isPro && (
-            <div className="rounded-xl bg-brand-indigo/5 border border-brand-indigo/20 p-4">
+            <div className="rounded-xl border border-brand-indigo/20 bg-brand-indigo/5 p-4">
               <p className="text-sm text-[var(--text-secondary)]">
                 Upgrade to Pro to unlock advanced models, higher token limits, and Deep Think mode.
               </p>

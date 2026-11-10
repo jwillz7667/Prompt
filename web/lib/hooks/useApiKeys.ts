@@ -90,7 +90,7 @@ export function useApiKey(id: string | undefined) {
  */
 export function useApiKeyUsage(
   id: string | undefined,
-  options?: { startDate?: string; endDate?: string }
+  options?: { startDate?: string; endDate?: string },
 ) {
   return useQuery({
     queryKey: apiKeyQueryKeys.usage(id!),
@@ -107,7 +107,7 @@ export function useApiKeyUsage(
  */
 export function useApiKeyHistory(
   id: string | undefined,
-  options?: { page?: number; limit?: number; startDate?: string; endDate?: string }
+  options?: { page?: number; limit?: number; startDate?: string; endDate?: string },
 ) {
   return useQuery({
     queryKey: apiKeyQueryKeys.history(id!, options),
@@ -155,8 +155,7 @@ export function useUpdateApiKey() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) =>
-      updateApiKey(id, data),
+    mutationFn: ({ id, data }: { id: string; data: UpdateApiKeyRequest }) => updateApiKey(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: apiKeyQueryKeys.detail(id) })
       queryClient.invalidateQueries({ queryKey: apiKeyQueryKeys.lists() })
@@ -171,8 +170,7 @@ export function useRevokeApiKey() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
-      revokeApiKey(id, reason),
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => revokeApiKey(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: apiKeyQueryKeys.lists() })
     },

@@ -28,9 +28,9 @@ export const DEFAULT_PERMISSIONS = ['enhance'] as const;
 
 // All available permissions
 export const AVAILABLE_PERMISSIONS = [
-  'enhance',      // Can use /enhance endpoint
+  'enhance', // Can use /enhance endpoint
   'read_history', // Can read enhancement history
-  'models',       // Can query available models
+  'models', // Can query available models
 ] as const;
 
 export type ApiKeyPermission = (typeof AVAILABLE_PERMISSIONS)[number];
@@ -40,14 +40,14 @@ export type ApiKeyPermission = (typeof AVAILABLE_PERMISSIONS)[number];
 // ============================================================================
 
 export interface ApiKeyCreateResult {
-  key: string;        // Full raw key (shown only once)
-  apiKey: ApiKey;     // Database record
+  key: string; // Full raw key (shown only once)
+  apiKey: ApiKey; // Database record
 }
 
 export interface ApiKeyRotateResult {
-  newKey: string;             // New raw key
-  oldKeyValidUntil: Date;     // When old key expires
-  apiKey: ApiKey;             // Updated database record
+  newKey: string; // New raw key
+  oldKeyValidUntil: Date; // When old key expires
+  apiKey: ApiKey; // Updated database record
 }
 
 export interface ValidatedApiKey {
@@ -90,7 +90,7 @@ export async function generateApiKey(
     environment?: 'production' | 'test';
     expiresAt?: Date;
     rateLimit?: number;
-  } = {}
+  } = {},
 ): Promise<ApiKeyCreateResult> {
   const {
     permissions = [...DEFAULT_PERMISSIONS],
@@ -102,7 +102,7 @@ export async function generateApiKey(
 
   // Validate permissions
   const validPermissions = permissions.filter((p) =>
-    AVAILABLE_PERMISSIONS.includes(p as ApiKeyPermission)
+    AVAILABLE_PERMISSIONS.includes(p as ApiKeyPermission),
   );
 
   if (validPermissions.length === 0) {
@@ -141,7 +141,7 @@ export async function generateApiKey(
 
   logger.info(
     { developerId, keyId: apiKey.id, environment, permissions: validPermissions },
-    'API key generated'
+    'API key generated',
   );
 
   return {
@@ -325,13 +325,11 @@ export async function updateApiKey(
     permissions?: ApiKeyPermission[];
     rateLimit?: number;
     expiresAt?: Date | null;
-  }
+  },
 ): Promise<ApiKey> {
   // Validate permissions if provided
   if (data.permissions) {
-    const validPermissions = data.permissions.filter((p) =>
-      AVAILABLE_PERMISSIONS.includes(p)
-    );
+    const validPermissions = data.permissions.filter((p) => AVAILABLE_PERMISSIONS.includes(p));
     if (validPermissions.length === 0) {
       throw new Error('At least one valid permission is required');
     }
@@ -366,7 +364,7 @@ export async function updateApiKey(
 export async function revokeApiKey(
   keyId: string,
   developerId: string,
-  reason?: string
+  reason?: string,
 ): Promise<void> {
   const apiKey = await prisma.apiKey.update({
     where: {
@@ -392,7 +390,7 @@ export async function revokeApiKey(
  */
 export async function rotateApiKey(
   keyId: string,
-  developerId: string
+  developerId: string,
 ): Promise<ApiKeyRotateResult> {
   // Get the existing key
   const oldKey = await prisma.apiKey.findFirst({
@@ -433,8 +431,13 @@ export async function rotateApiKey(
   await cache.del(`apikey:${oldKey.keyPrefix}`);
 
   logger.info(
-    { developerId, oldKeyId: keyId, newKeyId: newApiKey.id, graceHours: ROTATION_GRACE_PERIOD_HOURS },
-    'API key rotated'
+    {
+      developerId,
+      oldKeyId: keyId,
+      newKeyId: newApiKey.id,
+      graceHours: ROTATION_GRACE_PERIOD_HOURS,
+    },
+    'API key rotated',
   );
 
   return {
@@ -451,10 +454,7 @@ export async function rotateApiKey(
 /**
  * Check if a key has a specific permission.
  */
-export function hasPermission(
-  apiKey: ValidatedApiKey,
-  permission: ApiKeyPermission
-): boolean {
+export function hasPermission(apiKey: ValidatedApiKey, permission: ApiKeyPermission): boolean {
   return apiKey.permissions.includes(permission);
 }
 

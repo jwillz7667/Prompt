@@ -79,7 +79,11 @@ optimizeRouter.post(
       // accepted value. Body matches the MODALITY/MAX_MODE/COMPARE gates in
       // routes/prompts.ts. No quota is consumed: recordUsage runs on job
       // completion, not in enforceQuota.
-      if (tier === 'FREE' && data.target_model_family !== undefined && data.target_model_family !== 'unknown') {
+      if (
+        tier === 'FREE' &&
+        data.target_model_family !== undefined &&
+        data.target_model_family !== 'unknown'
+      ) {
         res.status(403).json({
           error: 'Subscription required',
           code: 'TARGET_MODEL_REQUIRES_SUBSCRIPTION',
@@ -101,13 +105,16 @@ optimizeRouter.post(
       res.status(202).json({ jobId, mode });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
-      promptLogger.error({ err: error, userId: req.user?.id }, 'Failed to start reflection optimization');
+      promptLogger.error(
+        { err: error, userId: req.user?.id },
+        'Failed to start reflection optimization',
+      );
       res.status(500).json({ error: 'Failed to start optimization' });
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -229,46 +236,45 @@ optimizeRouter.get(
         res.status(500).json({ error: 'Failed to stream optimization' });
         return;
       }
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to stream optimization' })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({ type: 'error', message: 'Failed to stream optimization' })}\n\n`,
+      );
       res.end();
     }
-  }
+  },
 );
 
 // ============================================================================
 // POLL JOB STATE (fallback for clients without SSE)
 // ============================================================================
 
-optimizeRouter.get(
-  '/:jobId',
-  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
-      const jobId = req.params['jobId'];
-      if (!jobId) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-
-      const snapshot = await getReflectionJob(jobId);
-      if (!snapshot || snapshot.userId !== req.user.id) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-
-      res.json({
-        jobId: snapshot.jobId,
-        status: snapshot.status,
-        progress: snapshot.progress,
-        result: snapshot.result,
-        error: snapshot.error,
-      });
-    } catch (error) {
-      promptLogger.error({ err: error }, 'Failed to read reflection job');
-      res.status(500).json({ error: 'Failed to read optimization job' });
+optimizeRouter.get('/:jobId', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
     }
+    const jobId = req.params['jobId'];
+    if (!jobId) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const snapshot = await getReflectionJob(jobId);
+    if (!snapshot || snapshot.userId !== req.user.id) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    res.json({
+      jobId: snapshot.jobId,
+      status: snapshot.status,
+      progress: snapshot.progress,
+      result: snapshot.result,
+      error: snapshot.error,
+    });
+  } catch (error) {
+    promptLogger.error({ err: error }, 'Failed to read reflection job');
+    res.status(500).json({ error: 'Failed to read optimization job' });
   }
-);
+});

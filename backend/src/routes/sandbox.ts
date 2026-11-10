@@ -13,15 +13,17 @@ const createTestSchema = z.object({
   promptId: z.string().optional(),
   testPrompt: z.string().min(1).max(10000),
   platforms: z.array(z.nativeEnum(PlatformType)).min(1),
-  parameters: z.object({
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().min(1).max(32000).optional(),
-    topP: z.number().min(0).max(1).optional(),
-    frequencyPenalty: z.number().min(-2).max(2).optional(),
-    presencePenalty: z.number().min(-2).max(2).optional(),
-    systemPrompt: z.string().optional()
-  }).optional(),
-  scheduledFor: z.string().datetime().optional()
+  parameters: z
+    .object({
+      temperature: z.number().min(0).max(2).optional(),
+      maxTokens: z.number().min(1).max(32000).optional(),
+      topP: z.number().min(0).max(1).optional(),
+      frequencyPenalty: z.number().min(-2).max(2).optional(),
+      presencePenalty: z.number().min(-2).max(2).optional(),
+      systemPrompt: z.string().optional(),
+    })
+    .optional(),
+  scheduledFor: z.string().datetime().optional(),
 });
 
 /**
@@ -30,26 +32,26 @@ const createTestSchema = z.object({
 router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
   try {
     const validatedData = createTestSchema.parse(req.body);
-    
+
     const test = await sandboxService.createTest({
       userId: req.user!.id,
       promptId: validatedData.promptId,
       testPrompt: validatedData.testPrompt,
       platforms: validatedData.platforms,
       parameters: validatedData.parameters,
-      scheduledFor: validatedData.scheduledFor ? new Date(validatedData.scheduledFor) : undefined
+      scheduledFor: validatedData.scheduledFor ? new Date(validatedData.scheduledFor) : undefined,
     });
 
     return res.status(201).json({
       success: true,
-      data: test
+      data: test,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues,
       });
     }
     return next(error);
@@ -67,14 +69,14 @@ router.post('/:id/execute', authenticate, async (req, res, next) => {
     if (!test) {
       return res.status(404).json({
         success: false,
-        error: 'Test not found'
+        error: 'Test not found',
       });
     }
 
     if (test.status !== 'scheduled' && test.status !== 'pending') {
       return res.status(400).json({
         success: false,
-        error: 'Test cannot be executed in current status'
+        error: 'Test cannot be executed in current status',
       });
     }
 
@@ -82,7 +84,7 @@ router.post('/:id/execute', authenticate, async (req, res, next) => {
 
     return res.json({
       success: true,
-      data: result
+      data: result,
     });
   } catch (error) {
     return next(error);
@@ -99,13 +101,13 @@ router.get('/:id', authenticate, async (req, res, next) => {
     if (!test) {
       return res.status(404).json({
         success: false,
-        error: 'Test not found'
+        error: 'Test not found',
       });
     }
 
     return res.json({
       success: true,
-      data: test
+      data: test,
     });
   } catch (error) {
     return next(error);
@@ -118,12 +120,12 @@ router.get('/:id', authenticate, async (req, res, next) => {
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-    
+
     const tests = await sandboxService.listTests(req.user!.id, limit);
 
     return res.json({
       success: true,
-      data: tests
+      data: tests,
     });
   } catch (error) {
     return next(error);
@@ -136,17 +138,17 @@ router.get('/', authenticate, async (req, res, next) => {
 router.delete('/:id', authenticate, async (req, res, next) => {
   try {
     const deleted = await sandboxService.deleteTest(req.params.id!, req.user!.id);
-    
+
     if (!deleted) {
       return res.status(404).json({
         success: false,
-        error: 'Test not found'
+        error: 'Test not found',
       });
     }
 
     return res.json({
       success: true,
-      message: 'Test deleted successfully'
+      message: 'Test deleted successfully',
     });
   } catch (error) {
     return next(error);
@@ -164,7 +166,7 @@ router.get('/:id/compare', authenticate, async (req, res, next) => {
     if (!test) {
       return res.status(404).json({
         success: false,
-        error: 'Test not found'
+        error: 'Test not found',
       });
     }
 
@@ -172,7 +174,7 @@ router.get('/:id/compare', authenticate, async (req, res, next) => {
 
     return res.json({
       success: true,
-      data: comparison
+      data: comparison,
     });
   } catch (error) {
     return next(error);
@@ -186,12 +188,12 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
   try {
     // Return platforms that have API keys configured
     const availablePlatforms = [];
-    
+
     if (process.env.OPENAI_API_KEY) {
       availablePlatforms.push({
         platform: PlatformType.CHATGPT,
         name: 'AI Chat',
-        models: ['gpt-4-turbo-preview', 'gpt-4', 'gpt-3.5-turbo']
+        models: ['gpt-4-turbo-preview', 'gpt-4', 'gpt-3.5-turbo'],
       });
     }
 
@@ -199,7 +201,7 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       availablePlatforms.push({
         platform: PlatformType.CLAUDE,
         name: 'AI Assistant',
-        models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']
+        models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
       });
     }
 
@@ -207,7 +209,7 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       availablePlatforms.push({
         platform: PlatformType.GEMINI,
         name: 'AI Search',
-        models: ['gemini-pro', 'gemini-pro-vision']
+        models: ['gemini-pro', 'gemini-pro-vision'],
       });
     }
 
@@ -215,7 +217,7 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       availablePlatforms.push({
         platform: PlatformType.PERPLEXITY,
         name: 'AI Research',
-        models: ['pplx-70b-online', 'pplx-7b-online']
+        models: ['pplx-70b-online', 'pplx-7b-online'],
       });
     }
 
@@ -225,31 +227,31 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
         platform: PlatformType.MIDJOURNEY,
         name: 'Image Generator',
         models: ['v6'],
-        simulated: true
+        simulated: true,
       },
       {
         platform: PlatformType.DALLE,
         name: 'Image Creator',
         models: ['dall-e-3'],
-        simulated: true
+        simulated: true,
       },
       {
         platform: PlatformType.STABLE_DIFFUSION,
         name: 'Diffusion Model',
         models: ['sdxl'],
-        simulated: true
+        simulated: true,
       },
       {
         platform: PlatformType.GITHUB_COPILOT,
         name: 'Code Assistant',
         models: ['copilot'],
-        simulated: true
-      }
+        simulated: true,
+      },
     );
 
     return res.json({
       success: true,
-      data: availablePlatforms
+      data: availablePlatforms,
     });
   } catch (error) {
     return next(error);
@@ -264,39 +266,41 @@ router.post('/batch', authenticate, enforceQuota('enhance_prompt'), async (req, 
     const schema = z.object({
       prompts: z.array(z.string().min(1).max(10000)).min(1).max(10),
       platforms: z.array(z.nativeEnum(PlatformType)).min(1),
-      parameters: z.object({
-        temperature: z.number().min(0).max(2).optional(),
-        maxTokens: z.number().min(1).max(32000).optional(),
-        topP: z.number().min(0).max(1).optional(),
-        frequencyPenalty: z.number().min(-2).max(2).optional(),
-        presencePenalty: z.number().min(-2).max(2).optional(),
-        systemPrompt: z.string().optional()
-      }).optional()
+      parameters: z
+        .object({
+          temperature: z.number().min(0).max(2).optional(),
+          maxTokens: z.number().min(1).max(32000).optional(),
+          topP: z.number().min(0).max(1).optional(),
+          frequencyPenalty: z.number().min(-2).max(2).optional(),
+          presencePenalty: z.number().min(-2).max(2).optional(),
+          systemPrompt: z.string().optional(),
+        })
+        .optional(),
     });
 
     const validatedData = schema.parse(req.body);
-    
+
     const tests = await Promise.all(
-      validatedData.prompts.map(prompt =>
+      validatedData.prompts.map((prompt) =>
         sandboxService.createTest({
           userId: req.user!.id,
           testPrompt: prompt,
           platforms: validatedData.platforms,
-          parameters: validatedData.parameters
-        })
-      )
+          parameters: validatedData.parameters,
+        }),
+      ),
     );
 
     return res.status(201).json({
       success: true,
-      data: tests
+      data: tests,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.errors
+        details: error.issues,
       });
     }
     return next(error);

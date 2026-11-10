@@ -454,7 +454,8 @@ Vocals drop to chest voice. Add soft piano, sustained string quartet.
 Melody ascends then falls, unresolved. "And I still..." hook.
 
 Production: Minimal, raw recording. Breath sounds audible. Room reverb, no artificial effects. Fragile and exposed.`,
-    explanation: 'Repeating "sad" provides no musical direction. Specify genre, tempo, key (minor), instrumentation, vocal style, dynamics, and reference artists to achieve the emotional target.',
+    explanation:
+      'Repeating "sad" provides no musical direction. Specify genre, tempo, key (minor), instrumentation, vocal style, dynamics, and reference artists to achieve the emotional target.',
   },
   {
     badInput: 'epic music',
@@ -480,7 +481,8 @@ Main theme at fff. Cymbal crashes on downbeats. Piccolo and high strings soar ab
 Sustain final chord. Gradual decay with bell tolls.
 
 Production: Wide orchestral staging. Brass center, strings LR, percussion behind. Cinematic reverb. Modern trailer sound.`,
-    explanation: '"Epic" is meaningless without structure. Specify orchestration, dynamics arc, tempo changes, key, choir elements, and reference the trailer music genre conventions.',
+    explanation:
+      '"Epic" is meaningless without structure. Specify orchestration, dynamics arc, tempo changes, key, choir elements, and reference the trailer music genre conventions.',
   },
   {
     badInput: 'write me some lyrics',
@@ -504,7 +506,8 @@ Of everything you said to me
 Static where the silence lives
 I'm tuning in to what you give
 Oh-oh, tuning in...`,
-    explanation: 'Generic lyrics without structure tags, imagery, or emotional specificity produce flat output. Use [Section Tags], vivid metaphors, consistent imagery, 8-12 syllables per line, clear rhyme scheme (ABAB/AABB), and punctuation for pacing (ellipses for pauses, dashes for emphasis).',
+    explanation:
+      'Generic lyrics without structure tags, imagery, or emotional specificity produce flat output. Use [Section Tags], vivid metaphors, consistent imagery, 8-12 syllables per line, clear rhyme scheme (ABAB/AABB), and punctuation for pacing (ellipses for pauses, dashes for emphasis).',
   },
 ];
 

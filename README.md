@@ -47,7 +47,7 @@ Diffusion, Runway, ElevenLabs, Suno, and many more). It ships as:
 - **A native iOS app** with widget and keyboard extensions, Live Activities, and on-device
   history (SwiftUI + StoreKit 2 + SwiftData).
 - **A web product** providing a marketing site, dashboard, admin console, and developer portal
-  (Next.js 14 App Router + PWA).
+  (Next.js 16 App Router + PWA).
 - **An Express REST API** that orchestrates multi-provider AI enhancement with strict tier
   gating, idempotent webhooks, real-time chat, and background jobs (TypeScript + Prisma +
   PostgreSQL + Redis + BullMQ + Socket.IO).
@@ -76,7 +76,7 @@ the conventions documented in [`CLAUDE.md`](./CLAUDE.md), [`AGENTS.md`](./AGENTS
 │   ├── Dockerfile                 Multi-stage Debian build with non-root runtime user
 │   └── railway.json               Railway deployment config
 │
-├── web/                           Next.js 14 App Router product surface
+├── web/                           Next.js 16 App Router product surface
 │   ├── app/
 │   │   ├── (marketing)/           Public landing pages
 │   │   ├── (auth)/                Apple/Google sign-in flows
@@ -130,7 +130,7 @@ the conventions documented in [`CLAUDE.md`](./CLAUDE.md), [`AGENTS.md`](./AGENTS
 | Tool | Version | Notes |
 |------|---------|-------|
 | Node.js | `>= 20.0.0` | Pinned in [`.nvmrc`](./.nvmrc); use `nvm use` |
-| npm | `>= 10` | Ships with Node 20 |
+| npm | `>= 10` | Ships with Node 24 |
 | PostgreSQL | `>= 14` | Local instance or Docker |
 | Redis | `>= 6` (optional in dev) | Required for BullMQ queues, Socket.IO scaling |
 | Xcode | `>= 16` | iOS 17 SDK or higher |
@@ -176,9 +176,9 @@ cd web && PORT=3001 npm run dev
 # Xcode — iOS app (Cmd+R targeting an iPhone 16 simulator)
 ```
 
-The iOS app expects the backend at the URL hardcoded in
-`Prompt/Services/APIClient.swift`. Override it locally by setting
-`Prompt/Configuration/Local.xcconfig` (gitignored) and rebuilding.
+The iOS app reads its endpoint from the `PROMPT_API_BASE_URL` build setting.
+Override it in Xcode or pass `PROMPT_API_BASE_URL=https://your-api.example/api/v1`
+to `xcodebuild`, then rebuild the app and extensions.
 
 ---
 
@@ -194,7 +194,7 @@ The iOS app expects the backend at the URL hardcoded in
                                       │
 ┌──────────────┐                      ▼                     ┌──────────────┐
 │   Web App    │ ◀──── Stripe ────▶ ┌─────────────────────┐ │ ChatGPT App  │
-│  Next.js 14  │ ───────────────▶   │   Express API       │ │   MCP + UI   │
+│  Next.js 16  │ ───────────────▶   │   Express API       │ │   MCP + UI   │
 │   PWA · SSR  │                    │   /api/v1/*         │ ├──────────────┘
 └──────────────┘                    │                     │
                                     │  Auth · Quota ·     │
@@ -239,7 +239,7 @@ pipeline, see **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 ## Tech Stack
 
 ### Backend
-- **Runtime:** Node.js 20 (ESM, NodeNext module resolution)
+- **Runtime:** Node.js 24 (ESM, NodeNext module resolution)
 - **Language:** TypeScript 5.6 (strict, `noUncheckedIndexedAccess`)
 - **Framework:** Express 4
 - **Database:** PostgreSQL 16 via Prisma 5
@@ -253,7 +253,7 @@ pipeline, see **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 - **Validation:** Zod at every route boundary
 
 ### Web
-- **Framework:** Next.js 14 (App Router, route groups, RSC)
+- **Framework:** Next.js 16 (App Router, route groups, RSC)
 - **UI:** TailwindCSS 3, Framer Motion, lucide-react
 - **State:** Zustand (client) + TanStack React Query (server) + `jose` (JWT)
 - **PWA:** `next-pwa` with Workbox runtime caching
@@ -317,7 +317,7 @@ pipeline, see **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 
 Production endpoints:
 
-- API: `https://backend-production-d538.up.railway.app/api/v1`
+- API: `https://backend-production-d7487.up.railway.app/api/v1`
 - Web: `https://promptomize.app`
 - iOS: [App Store listing](https://apps.apple.com/us/app/promptomize/id6758075605)
 - ChatGPT App: `https://promptomize-chatgpt-app-production.up.railway.app`

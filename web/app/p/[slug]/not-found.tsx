@@ -3,14 +3,14 @@ import { LinkIcon, Zap } from 'lucide-react'
 
 export default function SharedPromptNotFound() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col">
       <header className="border-b border-[var(--border)]">
         <div className="mx-auto flex h-16 max-w-3xl items-center px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-indigo dark:bg-brand-cyan">
               <Zap className="h-4 w-4 text-white dark:text-black" />
             </div>
-            <span className="text-lg font-bold gradient-text">Promptomize</span>
+            <span className="gradient-text text-lg font-bold">Promptomize</span>
           </Link>
         </div>
       </header>
@@ -24,8 +24,7 @@ export default function SharedPromptNotFound() {
             This link is no longer available
           </h1>
           <p className="mt-3 text-sm text-[var(--text-secondary)]">
-            The shared prompt you&apos;re looking for may have been removed or
-            the link has expired.
+            The shared prompt you&apos;re looking for may have been removed or the link has expired.
           </p>
           <Link
             href="/"

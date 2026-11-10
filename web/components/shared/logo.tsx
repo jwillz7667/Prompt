@@ -19,12 +19,7 @@ interface LogoProps {
  * - logo.png: Cyan/teal stars for dark backgrounds
  * - logo-light.png: Purple stars for light backgrounds
  */
-export function Logo({
-  className = '',
-  size = 40,
-  priority = false,
-  variant = 'auto'
-}: LogoProps) {
+export function Logo({ className = '', size = 40, priority = false, variant = 'auto' }: LogoProps) {
   const { appearanceMode } = useSettingsStore()
   const [isDark, setIsDark] = useState(true)
 
@@ -78,14 +73,12 @@ export function LogoBrand({
   size = 40,
   showText = true,
   className = '',
-  textClassName = 'text-lg font-bold gradient-text'
+  textClassName = 'text-lg font-bold gradient-text',
 }: LogoProps & { showText?: boolean; textClassName?: string }) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <Logo size={size} />
-      {showText && (
-        <span className={textClassName}>Promptomize</span>
-      )}
+      {showText && <span className={textClassName}>Promptomize</span>}
     </div>
   )
 }

@@ -19,21 +19,50 @@ interface EnvVarSpec {
 
 // Without these, a core user-facing capability is broken.
 const REQUIRED: EnvVarSpec[] = [
-  { name: 'DATABASE_URL', purpose: 'Postgres connection — all persistence (chat history, subscriptions)' },
-  { name: 'JWT_ACCESS_SECRET', purpose: 'Signs/verifies access tokens — authentication fails without it' },
-  { name: 'JWT_REFRESH_SECRET', purpose: 'Signs/verifies refresh tokens — sessions cannot be renewed' },
-  { name: 'DEEPSEEK_API_KEY', purpose: 'Upstream model provider — prompt enhancement returns errors without it' },
-  { name: 'BACKEND_WEBHOOK_SECRET', purpose: 'Authenticates internal Stripe webhooks — subscription tier goes stale without it' },
+  {
+    name: 'DATABASE_URL',
+    purpose: 'Postgres connection — all persistence (chat history, subscriptions)',
+  },
+  {
+    name: 'JWT_ACCESS_SECRET',
+    purpose: 'Signs/verifies access tokens — authentication fails without it',
+  },
+  {
+    name: 'JWT_REFRESH_SECRET',
+    purpose: 'Signs/verifies refresh tokens — sessions cannot be renewed',
+  },
+  {
+    name: 'DEEPSEEK_API_KEY',
+    purpose: 'Upstream model provider — prompt enhancement returns errors without it',
+  },
+  {
+    name: 'BACKEND_WEBHOOK_SECRET',
+    purpose: 'Authenticates internal Stripe webhooks — subscription tier goes stale without it',
+  },
 ];
 
 // Absence degrades the service but does not break the core loop.
 const RECOMMENDED: EnvVarSpec[] = [
-  { name: 'REDIS_URL', purpose: 'Cache, BullMQ queues, distributed rate limiting — degraded performance without it' },
+  {
+    name: 'REDIS_URL',
+    purpose: 'Cache, BullMQ queues, distributed rate limiting — degraded performance without it',
+  },
   { name: 'GOOGLE_CLIENT_ID', purpose: 'Google Sign-In verification' },
-  { name: 'APPLE_PRIVATE_KEY', purpose: 'App Store Server API — StoreKit receipt/notification validation' },
-  { name: 'STRIPE_API_SECRET_KEY', purpose: 'Enterprise API billing (separate from app subscriptions)' },
+  {
+    name: 'APPLE_PRIVATE_KEY',
+    purpose:
+      'App Store Server API history/status queries; signed StoreKit transaction/notification verification does not require it',
+  },
+  {
+    name: 'STRIPE_API_SECRET_KEY',
+    purpose: 'Enterprise API billing (separate from app subscriptions)',
+  },
   { name: 'RESEND_API_KEY', purpose: 'Transactional email delivery' },
-  { name: 'RESEND_WEBHOOK_SECRET', purpose: 'Verifies Resend inbound-email webhooks — support-ticket email replies are rejected without it' },
+  {
+    name: 'RESEND_WEBHOOK_SECRET',
+    purpose:
+      'Verifies Resend inbound-email webhooks — support-ticket email replies are rejected without it',
+  },
 ];
 
 function isPresent(name: string): boolean {
@@ -60,7 +89,10 @@ export function validateEnvAtBoot(): void {
       'BOOT: required environment variables are missing — core capabilities will fail until they are set',
     );
     for (const spec of missingRequired) {
-      logger.error({ envVar: spec.name, purpose: spec.purpose }, `BOOT: missing required env var ${spec.name}`);
+      logger.error(
+        { envVar: spec.name, purpose: spec.purpose },
+        `BOOT: missing required env var ${spec.name}`,
+      );
     }
   }
 
@@ -79,6 +111,8 @@ export function validateEnvAtBoot(): void {
   // on in production; jwt.ts throws in production, this just makes the dev case
   // visible so a missing secret is never silently masked.
   if (!isProduction && (!isPresent('JWT_ACCESS_SECRET') || !isPresent('JWT_REFRESH_SECRET'))) {
-    logger.warn('BOOT: using development JWT fallback secrets — set JWT_ACCESS_SECRET/JWT_REFRESH_SECRET');
+    logger.warn(
+      'BOOT: using development JWT fallback secrets — set JWT_ACCESS_SECRET/JWT_REFRESH_SECRET',
+    );
   }
 }

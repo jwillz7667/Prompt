@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { UserSettings, ToneType, OutputLength, AppearanceMode, DeepseekModel } from '@/lib/types/models'
+import type {
+  UserSettings,
+  ToneType,
+  OutputLength,
+  AppearanceMode,
+  DeepseekModel,
+} from '@/lib/types/models'
 
 interface SettingsState extends UserSettings {
   // Actions
@@ -47,8 +53,8 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'settings-storage',
       storage: createJSONStorage(() => localStorage),
-    }
-  )
+    },
+  ),
 )
 
 // Apply appearance mode to document

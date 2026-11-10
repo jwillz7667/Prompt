@@ -47,15 +47,15 @@ class ContextService {
   private redis: Redis | null = null;
   private embeddingModel = 'text-embedding-3-small';
   private embeddingDimensions = 1536;
-  
+
   constructor() {
     // Initialize OpenAI if API key is available
     if (process.env.OPENAI_API_KEY) {
       this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
+        apiKey: process.env.OPENAI_API_KEY,
       });
     }
-    
+
     // Initialize Redis for caching embeddings
     if (process.env.REDIS_URL) {
       this.redis = new Redis(process.env.REDIS_URL);
@@ -75,8 +75,8 @@ class ContextService {
           description: data.description,
           contextData: data.contextData as Prisma.InputJsonValue,
           tags: data.tags || [],
-          isGlobal: data.isGlobal || false
-        }
+          isGlobal: data.isGlobal || false,
+        },
       });
 
       // Generate and store embedding if OpenAI is configured
@@ -98,12 +98,12 @@ class ContextService {
   async updateContext(
     contextId: string,
     userId: string,
-    data: ContextUpdateData
+    data: ContextUpdateData,
   ): Promise<ProjectContext | null> {
     try {
       // Verify ownership
       const existing = await prisma.projectContext.findFirst({
-        where: { id: contextId, userId }
+        where: { id: contextId, userId },
       });
 
       if (!existing) {
@@ -118,8 +118,8 @@ class ContextService {
           ...(data.description !== undefined && { description: data.description }),
           ...(data.contextData && { contextData: data.contextData as Prisma.JsonValue }),
           ...(data.tags && { tags: data.tags }),
-          ...(data.isGlobal !== undefined && { isGlobal: data.isGlobal })
-        }
+          ...(data.isGlobal !== undefined && { isGlobal: data.isGlobal }),
+        },
       });
 
       // Regenerate embedding if content changed
@@ -141,7 +141,7 @@ class ContextService {
   async deleteContext(contextId: string, userId: string): Promise<boolean> {
     try {
       const result = await prisma.projectContext.deleteMany({
-        where: { id: contextId, userId }
+        where: { id: contextId, userId },
       });
 
       if (result.count === 0) {
@@ -169,17 +169,14 @@ class ContextService {
       return await prisma.projectContext.findFirst({
         where: {
           id: contextId,
-          OR: [
-            { userId },
-            { isGlobal: true }
-          ]
+          OR: [{ userId }, { isGlobal: true }],
         },
         include: {
           usages: {
             take: 5,
-            orderBy: { usedAt: 'desc' }
-          }
-        }
+            orderBy: { usedAt: 'desc' },
+          },
+        },
       });
     } catch (error) {
       logger.error({ error, contextId }, 'Failed to get context');
@@ -194,10 +191,7 @@ class ContextService {
     try {
       const where: Prisma.ProjectContextWhereInput = includeGlobal
         ? {
-            OR: [
-              { userId },
-              { isGlobal: true }
-            ]
+            OR: [{ userId }, { isGlobal: true }],
           }
         : { userId };
 
@@ -206,9 +200,9 @@ class ContextService {
         orderBy: { updatedAt: 'desc' },
         include: {
           _count: {
-            select: { usages: true }
-          }
-        }
+            select: { usages: true },
+          },
+        },
       });
     } catch (error) {
       logger.error({ error, userId }, 'Failed to list contexts');
@@ -228,28 +222,25 @@ class ContextService {
     try {
       // Generate embedding for search query
       const queryEmbedding = await this.generateEmbedding(options.query);
-      
+
       // Get all contexts for the user
       const contexts = await prisma.projectContext.findMany({
         where: {
-          OR: [
-            { userId: options.userId },
-            ...(options.includeGlobal ? [{ isGlobal: true }] : [])
-          ],
+          OR: [{ userId: options.userId }, ...(options.includeGlobal ? [{ isGlobal: true }] : [])],
           ...(options.tags?.length && {
-            tags: { hasSome: options.tags }
-          })
-        }
+            tags: { hasSome: options.tags },
+          }),
+        },
       });
 
       // Calculate similarities
       const similarities: SimilarContext[] = [];
-      
+
       for (const context of contexts) {
         const contextEmbedding = await this.getOrGenerateEmbedding(context);
         if (contextEmbedding) {
           const similarity = this.cosineSimilarity(queryEmbedding, contextEmbedding);
-          
+
           if (similarity >= (options.minSimilarity || 0.7)) {
             similarities.push({ context, similarity });
           }
@@ -258,7 +249,7 @@ class ContextService {
 
       // Sort by similarity and limit results
       similarities.sort((a, b) => b.similarity - a.similarity);
-      
+
       return similarities.slice(0, options.limit || 10);
     } catch (error) {
       logger.error({ error, options }, 'Failed to search similar contexts');
@@ -273,7 +264,7 @@ class ContextService {
   async attachContextToPrompt(
     contextId: string,
     promptId: string,
-    userId: string
+    userId: string,
   ): Promise<boolean> {
     try {
       // Verify context access
@@ -287,24 +278,24 @@ class ContextService {
         where: {
           contextId_promptId: {
             contextId,
-            promptId
-          }
+            promptId,
+          },
         },
         create: {
           contextId,
           promptId,
           metadata: {
             attachedBy: userId,
-            attachedAt: new Date().toISOString()
-          }
+            attachedAt: new Date().toISOString(),
+          },
         },
         update: {
           usedAt: new Date(),
           metadata: {
             lastUsedBy: userId,
-            lastUsedAt: new Date().toISOString()
-          }
-        }
+            lastUsedAt: new Date().toISOString(),
+          },
+        },
       });
 
       logger.info({ contextId, promptId }, 'Context attached to prompt');
@@ -323,10 +314,10 @@ class ContextService {
       const usages = await prisma.contextUsage.findMany({
         where: { promptId },
         include: { context: true },
-        orderBy: { usedAt: 'desc' }
+        orderBy: { usedAt: 'desc' },
       });
 
-      return usages.map(u => u.context);
+      return usages.map((u) => u.context);
     } catch (error) {
       logger.error({ error, promptId }, 'Failed to get prompt contexts');
       throw error;
@@ -339,18 +330,15 @@ class ContextService {
   async mergeContexts(
     contextIds: string[],
     userId: string,
-    newName: string
+    newName: string,
   ): Promise<ProjectContext> {
     try {
       // Get all contexts
       const contexts = await prisma.projectContext.findMany({
         where: {
           id: { in: contextIds },
-          OR: [
-            { userId },
-            { isGlobal: true }
-          ]
-        }
+          OR: [{ userId }, { isGlobal: true }],
+        },
       });
 
       if (contexts.length !== contextIds.length) {
@@ -359,24 +347,24 @@ class ContextService {
 
       // Merge context data
       const mergedData: any = {
-        sources: contexts.map(c => ({
+        sources: contexts.map((c) => ({
           id: c.id,
           name: c.name,
-          data: c.contextData
+          data: c.contextData,
         })),
-        mergedAt: new Date().toISOString()
+        mergedAt: new Date().toISOString(),
       };
 
-      const mergedTags = [...new Set(contexts.flatMap(c => c.tags))];
+      const mergedTags = [...new Set(contexts.flatMap((c) => c.tags))];
 
       // Create new merged context
       return await this.createContext({
         userId,
         name: newName,
-        description: `Merged from: ${contexts.map(c => c.name).join(', ')}`,
+        description: `Merged from: ${contexts.map((c) => c.name).join(', ')}`,
         contextData: mergedData,
         tags: mergedTags,
-        isGlobal: false
+        isGlobal: false,
       });
     } catch (error) {
       logger.error({ error, contextIds }, 'Failed to merge contexts');
@@ -394,7 +382,7 @@ class ContextService {
     const response = await this.openai.embeddings.create({
       model: this.embeddingModel,
       input: text,
-      dimensions: this.embeddingDimensions
+      dimensions: this.embeddingDimensions,
     });
 
     return response.data[0]!.embedding;
@@ -407,7 +395,7 @@ class ContextService {
         context.name,
         context.description || '',
         JSON.stringify(context.contextData),
-        context.tags.join(' ')
+        context.tags.join(' '),
       ].join(' ');
 
       const embedding = await this.generateEmbedding(textToEmbed);
@@ -419,7 +407,7 @@ class ContextService {
           key,
           JSON.stringify(embedding),
           'EX',
-          86400 * 7 // Cache for 7 days
+          86400 * 7, // Cache for 7 days
         );
       }
     } catch (error) {
@@ -443,7 +431,7 @@ class ContextService {
         context.name,
         context.description || '',
         JSON.stringify(context.contextData),
-        context.tags.join(' ')
+        context.tags.join(' '),
       ].join(' ');
 
       return await this.generateEmbedding(textToEmbed);
@@ -481,47 +469,51 @@ class ContextService {
   private async keywordSearch(options: ContextSearchOptions): Promise<SimilarContext[]> {
     try {
       const searchTerms = options.query.toLowerCase().split(' ');
-      
+
       const contexts = await prisma.projectContext.findMany({
         where: {
-          OR: [
-            { userId: options.userId },
-            ...(options.includeGlobal ? [{ isGlobal: true }] : [])
-          ],
+          OR: [{ userId: options.userId }, ...(options.includeGlobal ? [{ isGlobal: true }] : [])],
           AND: [
             {
-              OR: searchTerms.map(term => ({
+              OR: searchTerms.map((term) => ({
                 OR: [
                   { name: { contains: term, mode: 'insensitive' as const } },
                   { description: { contains: term, mode: 'insensitive' as const } },
-                  { tags: { has: term } }
-                ]
-              }))
+                  { tags: { has: term } },
+                ],
+              })),
             },
-            ...(options.tags?.length ? [{
-              tags: { hasSome: options.tags }
-            }] : [])
-          ]
+            ...(options.tags?.length
+              ? [
+                  {
+                    tags: { hasSome: options.tags },
+                  },
+                ]
+              : []),
+          ],
         },
-        take: options.limit || 10
+        take: options.limit || 10,
       });
 
       // Calculate simple relevance score
-      return contexts.map(context => {
-        let score = 0;
-        const contextText = `${context.name} ${context.description || ''} ${context.tags.join(' ')}`.toLowerCase();
-        
-        searchTerms.forEach(term => {
-          if (contextText.includes(term)) {
-            score += 1;
-          }
-        });
+      return contexts
+        .map((context) => {
+          let score = 0;
+          const contextText =
+            `${context.name} ${context.description || ''} ${context.tags.join(' ')}`.toLowerCase();
 
-        return {
-          context,
-          similarity: Math.min(score / searchTerms.length, 1)
-        };
-      }).sort((a, b) => b.similarity - a.similarity);
+          searchTerms.forEach((term) => {
+            if (contextText.includes(term)) {
+              score += 1;
+            }
+          });
+
+          return {
+            context,
+            similarity: Math.min(score / searchTerms.length, 1),
+          };
+        })
+        .sort((a, b) => b.similarity - a.similarity);
     } catch (error) {
       logger.error({ error, options }, 'Keyword search failed');
       return [];

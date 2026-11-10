@@ -9,7 +9,7 @@ import { getSharedPrompt, modalityLabel } from './shared-prompt'
 const SITE_URL = 'https://promptomize.app'
 
 interface PageProps {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
 function truncate(value: string, max: number): string {
@@ -29,7 +29,8 @@ function formatDate(iso: string): string {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const shared = await getSharedPrompt(params.slug)
+  const { slug } = await params
+  const shared = await getSharedPrompt(slug)
 
   if (!shared) {
     return {
@@ -40,12 +41,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const title = shared.title?.trim() || 'Shared Prompt'
   const description = truncate(shared.enhancedPrompt, 150)
-  const url = `${SITE_URL}/p/${params.slug}`
+  const url = `${SITE_URL}/p/${slug}`
 
   return {
     title,
     description,
-    alternates: { canonical: `/p/${params.slug}` },
+    alternates: { canonical: `/p/${slug}` },
     openGraph: {
       type: 'article',
       url,
@@ -64,7 +65,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function SharedPromptPage({ params }: PageProps) {
-  const shared = await getSharedPrompt(params.slug)
+  const { slug } = await params
+  const shared = await getSharedPrompt(slug)
 
   if (!shared) {
     notFound()
@@ -74,19 +76,16 @@ export default async function SharedPromptPage({ params }: PageProps) {
   const sharedDate = formatDate(shared.sharedAt)
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col">
       <header className="border-b border-[var(--border)]">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-indigo dark:bg-brand-cyan">
               <Zap className="h-4 w-4 text-white dark:text-black" />
             </div>
-            <span className="text-lg font-bold gradient-text">Promptomize</span>
+            <span className="gradient-text text-lg font-bold">Promptomize</span>
           </Link>
-          <Link
-            href="/"
-            className="btn-cyan rounded-xl px-4 py-2 text-sm font-medium"
-          >
+          <Link href="/" className="btn-cyan rounded-xl px-4 py-2 text-sm font-medium">
             Try it free
           </Link>
         </div>
@@ -106,9 +105,7 @@ export default async function SharedPromptPage({ params }: PageProps) {
           </h1>
 
           {sharedDate ? (
-            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
-              Shared on {sharedDate}
-            </p>
+            <p className="mt-2 text-sm text-[var(--text-tertiary)]">Shared on {sharedDate}</p>
           ) : null}
 
           <section className="mt-8">
@@ -134,15 +131,15 @@ export default async function SharedPromptPage({ params }: PageProps) {
 
           <aside className="mt-10 overflow-hidden rounded-2xl border border-[var(--border)] bg-gradient-brand p-[1px]">
             <div className="rounded-2xl bg-[var(--bg-secondary)] px-6 py-6 sm:px-8 sm:py-7">
-              <p className="text-sm font-semibold uppercase tracking-wide gradient-text">
+              <p className="gradient-text text-sm font-semibold uppercase tracking-wide">
                 Enhanced with Promptomize
               </p>
               <h3 className="mt-2 text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
                 Turn your rough ideas into powerful AI prompts.
               </h3>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Promptomize rewrites and optimizes your prompts for any AI
-                platform, so you get better results in seconds.
+                Promptomize rewrites and optimizes your prompts for any AI platform, so you get
+                better results in seconds.
               </p>
               <Link
                 href={SITE_URL}

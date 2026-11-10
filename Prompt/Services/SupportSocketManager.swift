@@ -28,7 +28,7 @@ final class SupportSocketManager: ObservableObject {
     var onMessageReceived: ((SupportMessage) -> Void)?
     var onTypingUpdate: ((Bool) -> Void)?
 
-    private let apiURL = "https://backend-production-d538.up.railway.app"
+    private let apiURL = APIConfiguration.origin.absoluteString
 
     private init() {}
 
@@ -59,7 +59,8 @@ final class SupportSocketManager: ObservableObject {
         disconnect()
         currentTicketId = ticketId
 
-        guard let url = URL(string: apiURL) else {
+        guard let token = SharedKeychainHelper.load(key: .accessToken),
+              let url = URL(string: apiURL) else {
             print("[SupportSocket] Invalid URL")
             return
         }
@@ -69,6 +70,7 @@ final class SupportSocketManager: ObservableObject {
             socketURL: url,
             config: [
                 .log(false),
+                .extraHeaders(["Authorization": "Bearer \(token)"]),
                 .compress,
                 .reconnects(true),
                 .reconnectAttempts(5),

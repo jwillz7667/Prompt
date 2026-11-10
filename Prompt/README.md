@@ -148,13 +148,39 @@ open Prompt.xcodeproj
 # In Xcode: select the Prompt scheme + an iPhone 16 / iPhone 16 Pro simulator → Cmd+R
 ```
 
-The app will run against the production backend by default
-(`https://backend-production-d538.up.railway.app/api/v1`). To target a local backend:
+Set the `PROMPT_API_BASE_URL` user-defined build setting on the Prompt target to
+an HTTPS backend URL ending in `/api/v1`. REST, support chat, and the keyboard
+extension all use this setting (open the containing app once after changing it).
+You can override it without editing source:
 
-1. Edit `Prompt/Services/APIClient.swift` `baseURL` for ad-hoc work, or
-2. Add a local `.xcconfig` (gitignored) overriding the configured base URL.
+```bash
+xcodebuild -scheme Prompt -destination 'generic/platform=iOS Simulator' \
+  PROMPT_API_BASE_URL=https://your-backend.example/api/v1 build
+```
+
+The committed default is `https://backend-production-d7487.up.railway.app/api/v1`.
+This is the replacement Railway deployment provisioned during the November 2026
+audit. Verify backend readiness and provider configuration before live billing
+tests. Local backends need an HTTPS development tunnel. `.xcconfig` files are not
+automatically loaded by this project.
 
 ---
+
+## Subscription regression checks
+
+These checks exercise the real configuration validator and purchase-response
+models without an App Store account, credentials, or network calls:
+
+```bash
+swiftc Prompt/Configuration/APIConfiguration.swift \
+  Prompt/Models/SubscriptionModels.swift tests/ios/SubscriptionRegressionChecks.swift \
+  -o /tmp/promptomize-ios-checks && /tmp/promptomize-ios-checks
+```
+
+A full purchase/restore test still requires a reachable configured backend and
+an App Store sandbox or TestFlight account. Xcode's local StoreKit configuration
+produces locally signed transactions; the production Apple verifier must not
+accept these as real purchases.
 
 ## Build & run
 
@@ -224,7 +250,7 @@ Auth state must be shared across the main app, widget extension, and keyboard ex
 - `StoreKitManager.swift` is the single source of truth for product loading, purchase,
   refund detection, and entitlement caching.
 - After a successful StoreKit transaction, the app calls
-  `POST /api/v1/subscriptions/verify-purchase` with the JWS payload. The backend
+  `POST /api/v1/subscriptions/verify` with the JWS payload. The backend
   verifies with Apple and returns the canonical `Subscription` row.
 - Apple App Store Server Notifications are received by the **backend** webhook with
   idempotent processing — never trust client state alone.
@@ -239,8 +265,8 @@ Auth state must be shared across the main app, widget extension, and keyboard ex
   per Apple's data-collection rules. The widget extension has its own manifest.
 - **App Tracking Transparency** is **not** required (we do not track users across
   third-party apps and websites).
-- **Sign-in-required content** is gated by `AuthManager.isAuthenticated`. The IAP flow
-  is intentionally reachable without sign-in (per App Store guideline 5.1.1(v)).
+- **Sign-in-required content** is gated by `AuthManager.isAuthenticated`. Purchases require
+  a valid authenticated account and a reachable backend before StoreKit begins payment.
 
 ---
 
@@ -248,8 +274,9 @@ Auth state must be shared across the main app, widget extension, and keyboard ex
 
 - `PromptUITests/` runs XCUITest snapshot tests via Fastlane (`fastlane snapshot`).
 - The CI workflow ([`../.github/workflows/ios.yml`](../.github/workflows/ios.yml)) runs
-  the test step with `continue-on-error: true` because we do not yet have a unit-test
-  framework wired up. Manual verification is required for non-trivial changes.
+  a simulator build and standalone configuration/subscription regression checks. Build
+  failures propagate through the formatter. Real Apple sign-in and sandbox purchase
+  acceptance are required in addition to these automated checks.
 
 ---
 
