@@ -26,11 +26,7 @@ export interface RequestWithSubscription extends AuthenticatedRequest {
  * Middleware factory to enforce quota for specific actions
  */
 export function enforceQuota(action: QuotaAction) {
-  return async (
-    req: RequestWithSubscription,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  return async (req: RequestWithSubscription, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Not authenticated' });
@@ -54,9 +50,12 @@ export function enforceQuota(action: QuotaAction) {
                 user.email,
                 user.name,
                 subscriptionInfo.tier,
-                subscriptionInfo.dailyPromptsLimit
+                subscriptionInfo.dailyPromptsLimit,
               ).catch((err) => {
-                subscriptionLogger.warn({ err, userId: req.user?.id }, 'Failed to send daily limit email');
+                subscriptionLogger.warn(
+                  { err, userId: req.user?.id },
+                  'Failed to send daily limit email',
+                );
               });
             }
           }
@@ -84,7 +83,10 @@ export function enforceQuota(action: QuotaAction) {
 
       next();
     } catch (error) {
-      subscriptionLogger.error({ err: error, userId: req.user?.id, action }, 'Quota enforcement error');
+      subscriptionLogger.error(
+        { err: error, userId: req.user?.id, action },
+        'Quota enforcement error',
+      );
       res.status(500).json({ error: 'Failed to check quota' });
     }
   };
@@ -95,11 +97,7 @@ export function enforceQuota(action: QuotaAction) {
  * Should be called AFTER the response is sent
  */
 export function recordPromptUsage() {
-  return async (
-    req: RequestWithSubscription,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  return async (req: RequestWithSubscription, res: Response, next: NextFunction): Promise<void> => {
     // Store original res.json to intercept successful responses
     const originalJson = res.json.bind(res);
 
@@ -123,7 +121,7 @@ export function recordPromptUsage() {
 export async function attachSubscriptionInfo(
   req: RequestWithSubscription,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   try {
     if (!req.user) {
@@ -143,7 +141,10 @@ export async function attachSubscriptionInfo(
 
     next();
   } catch (error) {
-    subscriptionLogger.warn({ err: error, userId: req.user?.id }, 'Failed to attach subscription info');
+    subscriptionLogger.warn(
+      { err: error, userId: req.user?.id },
+      'Failed to attach subscription info',
+    );
     // Don't block the request if subscription check fails
     next();
   }

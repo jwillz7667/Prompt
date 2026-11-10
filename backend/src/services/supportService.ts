@@ -1,7 +1,11 @@
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import type { TicketCategory, TicketPriority, TicketStatus } from '@prisma/client';
-import { sendTicketCreated, sendTicketNotificationToSupport, sendTicketResponse } from './emailService.js';
+import {
+  sendTicketCreated,
+  sendTicketNotificationToSupport,
+  sendTicketResponse,
+} from './emailService.js';
 import { DEEPSEEK_THINKING_DISABLED, getDeepseekModel } from './deepseekModels.js';
 import { emitNewMessage } from '../utils/socket.js';
 import { sendSupportMessageNotification } from './notificationService.js';
@@ -151,7 +155,14 @@ function parseTicketCategory(response: string): TicketCategory | null {
   if (!match || !match[1]) return null;
 
   const category = match[1].toUpperCase();
-  const validCategories: TicketCategory[] = ['ACCOUNT', 'BILLING', 'TECHNICAL', 'FEATURE_REQUEST', 'BUG_REPORT', 'OTHER'];
+  const validCategories: TicketCategory[] = [
+    'ACCOUNT',
+    'BILLING',
+    'TECHNICAL',
+    'FEATURE_REQUEST',
+    'BUG_REPORT',
+    'OTHER',
+  ];
 
   return validCategories.includes(category as TicketCategory)
     ? (category as TicketCategory)
@@ -246,7 +257,7 @@ export async function chatWithSupport(request: ChatRequest): Promise<ChatRespons
       throw new Error(`Support AI error: ${response.status}`);
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       choices: Array<{ message: { content: string } }>;
     };
 
@@ -295,7 +306,8 @@ interface CreateTicketParams {
 }
 
 export async function createTicket(params: CreateTicketParams): Promise<Ticket> {
-  const { userId, subject, category, priority, initialMessage, aiSummary, conversationHistory } = params;
+  const { userId, subject, category, priority, initialMessage, aiSummary, conversationHistory } =
+    params;
 
   // Create ticket with messages in a transaction
   const ticket = await prisma.$transaction(async (tx) => {
@@ -361,7 +373,8 @@ export async function createTicket(params: CreateTicketParams): Promise<Ticket> 
 
   if (user) {
     // Build messages array for email
-    const messages: Array<{ role: string; content: string; createdAt: Date; isFromAI: boolean }> = [];
+    const messages: Array<{ role: string; content: string; createdAt: Date; isFromAI: boolean }> =
+      [];
 
     if (conversationHistory) {
       for (const msg of conversationHistory) {
@@ -402,19 +415,28 @@ export async function createTicket(params: CreateTicketParams): Promise<Ticket> 
 
     // Send confirmation email to user
     sendTicketCreated(user.email, user.name, ticketDetails).catch((err) => {
-      logger.warn({ error: err, ticketId: ticket.id }, 'Failed to send ticket created email to user');
+      logger.warn(
+        { error: err, ticketId: ticket.id },
+        'Failed to send ticket created email to user',
+      );
     });
 
     // Send notification email to support team
     sendTicketNotificationToSupport(user.email, user.name, ticketDetails).catch((err) => {
-      logger.warn({ error: err, ticketId: ticket.id }, 'Failed to send ticket notification to support');
+      logger.warn(
+        { error: err, ticketId: ticket.id },
+        'Failed to send ticket notification to support',
+      );
     });
   }
 
   return ticket;
 }
 
-export async function getTicket(ticketId: string, userId: string): Promise<TicketWithMessages | null> {
+export async function getTicket(
+  ticketId: string,
+  userId: string,
+): Promise<TicketWithMessages | null> {
   const ticket = await prisma.supportTicket.findFirst({
     where: {
       id: ticketId,
@@ -444,7 +466,7 @@ export async function addMessageToTicket(
   userId: string,
   content: string,
   role: 'user' | 'assistant' | 'agent',
-  isFromAI: boolean = false
+  isFromAI: boolean = false,
 ): Promise<void> {
   // Verify ticket belongs to user (skip for agent messages)
   if (role !== 'agent') {
@@ -493,10 +515,7 @@ export async function addMessageToTicket(
 }
 
 // Agent reply to a ticket - sends email notification to user
-export async function addAgentReplyToTicket(
-  ticketId: string,
-  agentMessage: string
-): Promise<void> {
+export async function addAgentReplyToTicket(ticketId: string, agentMessage: string): Promise<void> {
   // Get ticket with user info
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: ticketId },
@@ -592,7 +611,7 @@ export async function addAgentReplyToTicket(
       ticket.userId,
       ticketId,
       ticket.assignedAgentName || 'Support Agent',
-      agentMessage
+      agentMessage,
     ).catch((err) => {
       logger.warn({ error: err, ticketId }, 'Failed to send push notification to user');
     });
@@ -633,10 +652,7 @@ export async function getAllTickets(status?: string): Promise<TicketWithUser[]> 
         },
       },
     },
-    orderBy: [
-      { priority: 'desc' },
-      { createdAt: 'desc' },
-    ],
+    orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
   });
 
   return tickets as TicketWithUser[];
@@ -666,7 +682,7 @@ export async function getTicketById(ticketId: string): Promise<TicketWithMessage
 // Update ticket status
 export async function updateTicketStatus(
   ticketId: string,
-  status: 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED'
+  status: 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED',
 ): Promise<void> {
   await prisma.supportTicket.update({
     where: { id: ticketId },
@@ -683,7 +699,7 @@ export async function updateTicketStatus(
 export async function continueTicketChat(
   ticketId: string,
   userId: string,
-  message: string
+  message: string,
 ): Promise<ChatResponse> {
   // Get ticket with messages
   const ticket = await getTicket(ticketId, userId);

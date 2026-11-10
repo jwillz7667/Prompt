@@ -2,7 +2,11 @@ import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions.js';
 import { type TierFeatures } from './subscriptionService.js';
 import type { PromptImageAttachment } from './imageAnalysisService.js';
-import { DEEPSEEK_FLASH_MODEL, getDeepseekModel, type DeepSeekThinkingConfig } from './deepseekModels.js';
+import {
+  DEEPSEEK_FLASH_MODEL,
+  getDeepseekModel,
+  type DeepSeekThinkingConfig,
+} from './deepseekModels.js';
 import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
@@ -165,9 +169,11 @@ const QUALITY_PROFILES: Record<EnhancementTier, string> = {
 
 const CHAT_MODALITY_GUIDANCE: Record<PromptModality, string> = {
   text: '- answer clearly and directly; use structure only when it improves comprehension',
-  image: '- help the user iterate on visual direction, prompt wording, composition, and generation tradeoffs',
+  image:
+    '- help the user iterate on visual direction, prompt wording, composition, and generation tradeoffs',
   video: '- speak concretely about scene progression, motion, camera language, and continuity',
-  audio: '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
+  audio:
+    '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
   code: '- give production-minded technical help, explain tradeoffs precisely, and include code only when useful',
   '3d': '- respond with concrete guidance on form, materials, topology, technical constraints, and downstream use',
 };
@@ -256,15 +262,21 @@ function normalizeRequest(request: EnhancePromptRequest) {
   const model = getDeepseekModel();
   // The server-authorized mode controls paid reasoning, never a legacy model ID.
   const thinking: DeepSeekThinkingConfig = { type: mode === 'max' ? 'enabled' : 'disabled' };
-  const temperature = request.temperature ?? (mode === 'max' ? MAX_TEMPERATURE : STANDARD_TEMPERATURE);
+  const temperature =
+    request.temperature ?? (mode === 'max' ? MAX_TEMPERATURE : STANDARD_TEMPERATURE);
   const maxTokens = Math.min(
     request.maxTokens ?? (mode === 'max' ? MAX_MAX_TOKENS : STANDARD_MAX_TOKENS),
-    mode === 'max' ? 8192 : 4096
+    mode === 'max' ? 8192 : 4096,
   );
 
   return {
     ...request,
-    prompt: normalizePromptText(request.prompt, modality, request.imageAttachment, conversationMode),
+    prompt: normalizePromptText(
+      request.prompt,
+      modality,
+      request.imageAttachment,
+      conversationMode,
+    ),
     mode,
     conversationMode,
     modality,
@@ -279,7 +291,7 @@ function normalizePromptText(
   prompt: string,
   modality: PromptModality,
   imageAttachment: PromptImageAttachment | undefined,
-  conversationMode: ConversationMode
+  conversationMode: ConversationMode,
 ): string {
   const trimmed = prompt.trim();
   if (trimmed) {
@@ -311,25 +323,29 @@ function normalizePromptText(
   }
 }
 
-function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
-  const modeGuidance = request.mode === 'max'
-    ? [
-        'MAX mode objective:',
-        '- produce a materially stronger prompt than standard mode by tightening instruction hierarchy, constraints, decomposition, and evaluation criteria',
-        '- include only high-signal structure; do not add verbose fluff or generic persona filler',
-        '- when the task is complex, build a reliable execution plan into the rewritten prompt',
-      ].join('\n')
-    : [
-        'Standard mode objective:',
-        '- produce a clean, concise, reliable prompt that is clearly better than the raw user request',
-        '- improve structure and clarity without over-engineering the result',
-      ].join('\n');
+function buildOptimizeSystemPrompt(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): string {
+  const modeGuidance =
+    request.mode === 'max'
+      ? [
+          'MAX mode objective:',
+          '- produce a materially stronger prompt than standard mode by tightening instruction hierarchy, constraints, decomposition, and evaluation criteria',
+          '- include only high-signal structure; do not add verbose fluff or generic persona filler',
+          '- when the task is complex, build a reliable execution plan into the rewritten prompt',
+        ].join('\n')
+      : [
+          'Standard mode objective:',
+          '- produce a clean, concise, reliable prompt that is clearly better than the raw user request',
+          '- improve structure and clarity without over-engineering the result',
+        ].join('\n');
 
   const threadGuidance = threadAware
     ? [
         'Thread / refinement handling (CRITICAL):',
-        '- when prior turns exist, the user\'s newest message is almost always a REFINEMENT INSTRUCTION for the most recent enhanced prompt — NOT a brand-new raw request',
-        '- start from the most recent assistant output (the prior enhanced prompt) and apply the user\'s new instruction to it',
+        "- when prior turns exist, the user's newest message is almost always a REFINEMENT INSTRUCTION for the most recent enhanced prompt — NOT a brand-new raw request",
+        "- start from the most recent assistant output (the prior enhanced prompt) and apply the user's new instruction to it",
         '- preserve ALL prior decisions, structure, tone, constraints, and style unless the user explicitly asks to change them',
         '- when the user input is wrapped in <refinement_request>, treat <prior_enhanced_prompt> as the base and apply <user_refinement_instruction> as a targeted edit',
         '- only start from scratch if the user clearly changes topic, says "new prompt", or asks for something unrelated to the existing thread',
@@ -341,11 +357,11 @@ function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>,
   const modalityGuidance = MODALITY_GUIDANCE[request.modality][request.mode];
 
   return [
-    'You are Promptomize\'s production prompt transformation engine.',
-    'Rewrite the user\'s raw request into a better prompt for another AI system.',
+    "You are Promptomize's production prompt transformation engine.",
+    "Rewrite the user's raw request into a better prompt for another AI system.",
     '',
     'Core rules:',
-    '- preserve the user\'s actual intent',
+    "- preserve the user's actual intent",
     '- do not answer the task',
     '- do not explain what you changed',
     '- return only the rewritten prompt',
@@ -369,18 +385,22 @@ function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>,
   ].join('\n');
 }
 
-function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
-  const modeGuidance = request.mode === 'max'
-    ? [
-        'MAX mode objective:',
-        '- provide a materially stronger answer by reasoning carefully, tightening structure, and surfacing tradeoffs explicitly',
-        '- stay concise unless the user asks for more depth',
-      ].join('\n')
-    : [
-        'Standard mode objective:',
-        '- provide a direct, helpful answer quickly',
-        '- stay clear, concrete, and easy to use',
-      ].join('\n');
+function buildChatSystemPrompt(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): string {
+  const modeGuidance =
+    request.mode === 'max'
+      ? [
+          'MAX mode objective:',
+          '- provide a materially stronger answer by reasoning carefully, tightening structure, and surfacing tradeoffs explicitly',
+          '- stay concise unless the user asks for more depth',
+        ].join('\n')
+      : [
+          'Standard mode objective:',
+          '- provide a direct, helpful answer quickly',
+          '- stay clear, concrete, and easy to use',
+        ].join('\n');
 
   const threadGuidance = threadAware
     ? [
@@ -396,12 +416,12 @@ function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, thr
   const subModalityGuidance = buildSubModalityGuidance(request.modality, request.subModality);
 
   return [
-    'You are Promptomize\'s collaborative AI assistant inside a prompt-building workspace.',
+    "You are Promptomize's collaborative AI assistant inside a prompt-building workspace.",
     'Answer the user directly and help them continue the conversation.',
     '',
     'Core rules:',
     '- answer the user instead of rewriting their request into a prompt unless they explicitly ask for a rewrite',
-    '- keep the reply actionable and grounded in the user\'s latest message',
+    "- keep the reply actionable and grounded in the user's latest message",
     '- when the user asks to improve or rewrite a prompt, provide the improved prompt directly and keep commentary minimal unless asked',
     '- respect explicit constraints, tone, length, and formatting requirements',
     ...(request.imageAttachment
@@ -419,7 +439,10 @@ function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, thr
   ].join('\n');
 }
 
-function buildSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
+function buildSystemPrompt(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): string {
   if (request.conversationMode === 'chat') {
     return buildChatSystemPrompt(request, threadAware);
   }
@@ -455,19 +478,23 @@ function buildLengthConstraint(prompt: string, customInstructions?: string): str
   const matches: string[] = [];
   const patterns: Array<{ regex: RegExp; formatter: (value: string) => string }> = [
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*(?:char(?:acter)?s?)\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*(?:char(?:acter)?s?)\b/gi,
       formatter: (value) => `Maximum ${value.replace(/,/g, '')} characters.`,
     },
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*words?\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*words?\b/gi,
       formatter: (value) => `Maximum ${value.replace(/,/g, '')} words.`,
     },
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to)|in)\s+(\d+)\s*sentences?\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to)|in)\s+(\d+)\s*sentences?\b/gi,
       formatter: (value) => `Maximum ${value} sentences.`,
     },
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*lines?\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*lines?\b/gi,
       formatter: (value) => `Maximum ${value} lines.`,
     },
   ];
@@ -502,10 +529,7 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
     sections.push('</custom_instructions>');
   }
 
-  const lengthConstraint = buildLengthConstraint(
-    request.prompt,
-    request.customInstructions
-  );
+  const lengthConstraint = buildLengthConstraint(request.prompt, request.customInstructions);
 
   if (lengthConstraint) {
     sections.push('<hard_length_constraint>');
@@ -516,7 +540,9 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
   if (request.imageAttachment) {
     sections.push('<source_image>');
     sections.push(`<mime_type>${request.imageAttachment.mimeType}</mime_type>`);
-    sections.push(`<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`);
+    sections.push(
+      `<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`,
+    );
     if (request.imageAttachment.analysis?.trim()) {
       sections.push('<visual_analysis>');
       sections.push(request.imageAttachment.analysis.trim());
@@ -530,15 +556,15 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
   sections.push('</raw_user_request>');
   sections.push('</prompt_transformation_request>');
   sections.push('');
-  sections.push('Rewrite the raw user request into a polished prompt that another AI system can execute immediately.');
+  sections.push(
+    'Rewrite the raw user request into a polished prompt that another AI system can execute immediately.',
+  );
   sections.push('Return only the rewritten prompt.');
 
   return sections.join('\n');
 }
 
-function buildOptimizeRefinementUserMessage(
-  request: ReturnType<typeof normalizeRequest>,
-): string {
+function buildOptimizeRefinementUserMessage(request: ReturnType<typeof normalizeRequest>): string {
   const sections = [
     '<refinement_request>',
     `<conversation_mode>${request.conversationMode}</conversation_mode>`,
@@ -557,10 +583,7 @@ function buildOptimizeRefinementUserMessage(
     sections.push('</custom_instructions>');
   }
 
-  const lengthConstraint = buildLengthConstraint(
-    request.prompt,
-    request.customInstructions
-  );
+  const lengthConstraint = buildLengthConstraint(request.prompt, request.customInstructions);
 
   if (lengthConstraint) {
     sections.push('<hard_length_constraint>');
@@ -571,7 +594,9 @@ function buildOptimizeRefinementUserMessage(
   if (request.imageAttachment) {
     sections.push('<source_image>');
     sections.push(`<mime_type>${request.imageAttachment.mimeType}</mime_type>`);
-    sections.push(`<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`);
+    sections.push(
+      `<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`,
+    );
     if (request.imageAttachment.analysis?.trim()) {
       sections.push('<visual_analysis>');
       sections.push(request.imageAttachment.analysis.trim());
@@ -587,7 +612,9 @@ function buildOptimizeRefinementUserMessage(
   sections.push('</user_refinement_instruction>');
   sections.push('</refinement_request>');
   sections.push('');
-  sections.push('Apply the <user_refinement_instruction> to the most recent assistant prompt. Preserve its structure, intent, and all prior constraints unless the user explicitly asks to change them. Do not start from scratch. Return only the full revised prompt — no explanation, no preamble, no diff.');
+  sections.push(
+    'Apply the <user_refinement_instruction> to the most recent assistant prompt. Preserve its structure, intent, and all prior constraints unless the user explicitly asks to change them. Do not start from scratch. Return only the full revised prompt — no explanation, no preamble, no diff.',
+  );
 
   return sections.join('\n');
 }
@@ -598,7 +625,9 @@ function buildChatUserMessage(request: ReturnType<typeof normalizeRequest>): str
   if (request.imageAttachment) {
     sections.push('Source image context:');
     sections.push(`- MIME type: ${request.imageAttachment.mimeType}`);
-    sections.push(`- Dimensions: ${request.imageAttachment.width}x${request.imageAttachment.height}`);
+    sections.push(
+      `- Dimensions: ${request.imageAttachment.width}x${request.imageAttachment.height}`,
+    );
     if (request.imageAttachment.analysis?.trim()) {
       sections.push(`- Visual analysis: ${request.imageAttachment.analysis.trim()}`);
     }
@@ -611,10 +640,7 @@ function buildChatUserMessage(request: ReturnType<typeof normalizeRequest>): str
     sections.push('');
   }
 
-  const lengthConstraint = buildLengthConstraint(
-    request.prompt,
-    request.customInstructions
-  );
+  const lengthConstraint = buildLengthConstraint(request.prompt, request.customInstructions);
 
   if (lengthConstraint) {
     sections.push(`Length constraint: ${lengthConstraint}`);
@@ -664,7 +690,7 @@ function mayRetry(error: unknown): boolean {
 export async function requestCompletion(
   request: DeepSeekRequest,
   apiKey: string,
-  conversationMode: ConversationMode
+  conversationMode: ConversationMode,
 ): Promise<EnhancePromptResult> {
   const startedAt = Date.now();
   for (let attempt = 0; ; attempt++) {
@@ -685,7 +711,9 @@ export async function requestCompletion(
       const parsed = (await response.json()) as DeepSeekResponse;
       const choice = parsed.choices?.[0];
       if (choice?.finish_reason && choice.finish_reason !== 'stop') {
-        throw new Error('The AI response was interrupted or exceeded its output limit. Please try a shorter request.');
+        throw new Error(
+          'The AI response was interrupted or exceeded its output limit. Please try a shorter request.',
+        );
       }
       const content = sanitizeModelOutput(choice?.message?.content ?? '', conversationMode);
       if (!content) throw new Error('DeepSeek returned an empty enhancement');
@@ -702,7 +730,10 @@ export async function requestCompletion(
     } catch (error) {
       if (attempt >= DEEPSEEK_MAX_RETRIES || !mayRetry(error)) throw error;
       // Do not log upstream response bodies: they can echo user prompts.
-      promptLogger.warn({ attempt, status: error instanceof DeepseekResponseError ? error.status : undefined }, 'Retrying DeepSeek completion');
+      promptLogger.warn(
+        { attempt, status: error instanceof DeepseekResponseError ? error.status : undefined },
+        'Retrying DeepSeek completion',
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -715,7 +746,7 @@ export async function streamCompletion(
   request: DeepSeekRequest,
   apiKey: string,
   conversationMode: ConversationMode,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   const startedAt = Date.now();
   let response: Response | undefined;
@@ -743,7 +774,10 @@ export async function streamCompletion(
         await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
         return;
       }
-      promptLogger.warn({ attempt, status: error instanceof DeepseekResponseError ? error.status : undefined }, 'Retrying DeepSeek stream connection');
+      promptLogger.warn(
+        { attempt, status: error instanceof DeepseekResponseError ? error.status : undefined },
+        'Retrying DeepSeek stream connection',
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -774,14 +808,18 @@ export async function streamCompletion(
     if (!line.startsWith('data:')) return;
     const payload = line.slice(5).trim();
     if (!payload) return;
-    if (payload === '[DONE]') { finished = true; return; }
+    if (payload === '[DONE]') {
+      finished = true;
+      return;
+    }
     // Invalid data is an upstream error, not a successful truncated answer.
     const parsed = JSON.parse(payload) as {
       choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
       error?: unknown;
     };
-    if (parsed.error) throw new Error('The AI provider interrupted the response. Please try again.');
+    if (parsed.error)
+      throw new Error('The AI provider interrupted the response. Please try again.');
     const choice = parsed.choices?.[0];
     if (choice?.finish_reason) finishReason = choice.finish_reason;
     const delta = choice?.delta?.content;
@@ -815,7 +853,9 @@ export async function streamCompletion(
     }
     const content = sanitizeModelOutput(collected, conversationMode);
     if (!finished || finishReason !== 'stop') {
-      throw new Error('The AI response was interrupted or exceeded its output limit. Please try a shorter request.');
+      throw new Error(
+        'The AI response was interrupted or exceeded its output limit. Please try a shorter request.',
+      );
     }
     if (!content) throw new Error('DeepSeek returned an empty enhancement');
     result = {
@@ -839,14 +879,19 @@ export async function streamCompletion(
   await callbacks.onComplete(result);
 }
 
-function buildMessages(request: ReturnType<typeof normalizeRequest>, threadAware = false): DeepSeekMessage[] {
+function buildMessages(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): DeepSeekMessage[] {
   return [
     { role: 'system', content: buildSystemPrompt(request, threadAware) },
     { role: 'user', content: buildUserMessage(request) },
   ];
 }
 
-function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+function buildThreadMessages(
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
+): DeepSeekMessage[] {
   if (request.conversationMode === 'chat') {
     return buildChatThreadMessages(request);
   }
@@ -865,7 +910,7 @@ function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { pr
  */
 function selectTurnsWithinBudget(
   previousTurns: ThreadTurnContext[],
-  alreadyUsedChars: number
+  alreadyUsedChars: number,
 ): ThreadTurnContext[] {
   if (previousTurns.length === 0) return [];
 
@@ -876,10 +921,7 @@ function selectTurnsWithinBudget(
     64;
 
   // Fast path: if every turn fits, keep them all in order.
-  const totalRequired = previousTurns.reduce(
-    (sum, turn) => sum + charCost(turn),
-    alreadyUsedChars
-  );
+  const totalRequired = previousTurns.reduce((sum, turn) => sum + charCost(turn), alreadyUsedChars);
   if (totalRequired <= THREAD_CONTEXT_CHAR_BUDGET) {
     return [...previousTurns];
   }
@@ -903,7 +945,9 @@ function selectTurnsWithinBudget(
   return [foundation, ...recentTurns];
 }
 
-function buildOptimizeThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+function buildOptimizeThreadMessages(
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
+): DeepSeekMessage[] {
   const messages: DeepSeekMessage[] = [
     { role: 'system', content: buildSystemPrompt(request, true) },
   ];
@@ -924,20 +968,23 @@ function buildOptimizeThreadMessages(request: ReturnType<typeof normalizeRequest
 
   const hasPriorEnhanced = turnsToInclude.length > 0;
   const latestPriorEnhanced = hasPriorEnhanced
-    ? turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? ''
+    ? (turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? '')
     : '';
 
   messages.push({
     role: 'user',
-    content: hasPriorEnhanced && latestPriorEnhanced
-      ? buildOptimizeRefinementUserMessage(request)
-      : buildUserMessage(request),
+    content:
+      hasPriorEnhanced && latestPriorEnhanced
+        ? buildOptimizeRefinementUserMessage(request)
+        : buildUserMessage(request),
   });
 
   return messages;
 }
 
-function buildChatThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+function buildChatThreadMessages(
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
+): DeepSeekMessage[] {
   const messages: DeepSeekMessage[] = [
     { role: 'system', content: buildSystemPrompt(request, true) },
   ];
@@ -990,7 +1037,6 @@ function buildPreviousTurnRequest(turn: ThreadTurnContext): string {
   return sections.join('\n\n');
 }
 
-
 function getApiKey(): string {
   const apiKey = process.env['DEEPSEEK_API_KEY'];
   if (!apiKey) {
@@ -1002,11 +1048,18 @@ function getApiKey(): string {
 export async function enhancePrompt(request: EnhancePromptRequest): Promise<EnhancePromptResult> {
   if (request.imageAttachment?.dataUrl) {
     let result: EnhancePromptResult | undefined;
-    await enhancePromptInThreadVisionStream({ ...request, previousTurns: [] }, {
-      onToken: () => undefined,
-      onComplete: (value) => { result = value; },
-      onError: (error) => { throw error; },
-    });
+    await enhancePromptInThreadVisionStream(
+      { ...request, previousTurns: [] },
+      {
+        onToken: () => undefined,
+        onComplete: (value) => {
+          result = value;
+        },
+        onError: (error) => {
+          throw error;
+        },
+      },
+    );
     if (!result) throw new Error('The AI provider did not complete the image request');
     return result;
   }
@@ -1023,7 +1076,7 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
       thinking: normalized.thinking,
     },
     apiKey,
-    normalized.conversationMode
+    normalized.conversationMode,
   );
 
   return {
@@ -1034,7 +1087,7 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
 
 export async function enhancePromptStream(
   request: EnhancePromptRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   try {
     if (request.imageAttachment?.dataUrl) {
@@ -1063,7 +1116,7 @@ export async function enhancePromptStream(
             imageAttachment: normalized.imageAttachment,
           });
         },
-      }
+      },
     );
   } catch (error) {
     await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
@@ -1094,12 +1147,10 @@ function getOpenAIClient(): OpenAI {
 }
 
 function buildVisionThreadMessages(
-  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
 ): ChatCompletionMessageParam[] {
   const systemContent = buildSystemPrompt(request, true);
-  const messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemContent },
-  ];
+  const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: systemContent }];
 
   const turnsToInclude = selectTurnsWithinBudget(request.previousTurns, systemContent.length);
 
@@ -1125,14 +1176,15 @@ function buildVisionThreadMessages(
 
   const hasPrior = turnsToInclude.length > 0;
   const latestPriorEnhanced = hasPrior
-    ? turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? ''
+    ? (turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? '')
     : '';
 
-  const latestText = request.conversationMode === 'chat'
-    ? buildChatUserMessage(request)
-    : hasPrior && latestPriorEnhanced
-      ? buildOptimizeRefinementUserMessage(request)
-      : buildOptimizeUserMessage(request);
+  const latestText =
+    request.conversationMode === 'chat'
+      ? buildChatUserMessage(request)
+      : hasPrior && latestPriorEnhanced
+        ? buildOptimizeRefinementUserMessage(request)
+        : buildOptimizeUserMessage(request);
 
   if (request.imageAttachment?.dataUrl) {
     messages.push({
@@ -1158,7 +1210,7 @@ async function streamOpenAIVisionCompletion(
   temperature: number,
   maxTokens: number,
   conversationMode: ConversationMode,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   const startedAt = Date.now();
   let collected = '';
@@ -1170,14 +1222,17 @@ async function streamOpenAIVisionCompletion(
 
   try {
     const client = getOpenAIClient();
-    const stream = await client.chat.completions.create({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-      stream: true,
-      stream_options: { include_usage: true },
-    }, { signal: controller.signal });
+    const stream = await client.chat.completions.create(
+      {
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        stream: true,
+        stream_options: { include_usage: true },
+      },
+      { signal: controller.signal },
+    );
 
     for await (const chunk of stream) {
       finishReason = chunk.choices?.[0]?.finish_reason ?? finishReason;
@@ -1194,7 +1249,9 @@ async function streamOpenAIVisionCompletion(
 
     const content = sanitizeModelOutput(collected, conversationMode);
     if (finishReason !== 'stop' || !content) {
-      throw new Error('The AI response was empty, interrupted or exceeded its output limit. Please try a shorter request.');
+      throw new Error(
+        'The AI response was empty, interrupted or exceeded its output limit. Please try a shorter request.',
+      );
     }
     clearTimeout(timer);
     await callbacks.onComplete({
@@ -1216,7 +1273,7 @@ async function streamOpenAIVisionCompletion(
 
 async function enhancePromptInThreadVisionStream(
   request: EnhancePromptInThreadRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   const normalized = normalizeRequest(request);
   const messages = buildVisionThreadMessages({
@@ -1230,17 +1287,23 @@ async function enhancePromptInThreadVisionStream(
     throw new Error('PROMPT_VISION_PROVIDER must be deepseek or openai');
   }
   if (provider === 'deepseek') {
-    await streamCompletion({
-      model: process.env['DEEPSEEK_VISION_MODEL']?.trim() || DEEPSEEK_FLASH_MODEL,
-      messages,
-      temperature: normalized.temperature,
-      max_tokens: normalized.maxTokens,
-      stream: true,
-      thinking: normalized.thinking,
-    }, getApiKey(), normalized.conversationMode, {
-      ...callbacks,
-      onComplete: (result) => callbacks.onComplete({ ...result, imageAttachment: normalized.imageAttachment }),
-    });
+    await streamCompletion(
+      {
+        model: process.env['DEEPSEEK_VISION_MODEL']?.trim() || DEEPSEEK_FLASH_MODEL,
+        messages,
+        temperature: normalized.temperature,
+        max_tokens: normalized.maxTokens,
+        stream: true,
+        thinking: normalized.thinking,
+      },
+      getApiKey(),
+      normalized.conversationMode,
+      {
+        ...callbacks,
+        onComplete: (result) =>
+          callbacks.onComplete({ ...result, imageAttachment: normalized.imageAttachment }),
+      },
+    );
     return;
   }
   const model = selectVisionModel(normalized.mode);
@@ -1259,13 +1322,13 @@ async function enhancePromptInThreadVisionStream(
           imageAttachment: normalized.imageAttachment,
         });
       },
-    }
+    },
   );
 }
 
 export async function enhancePromptInThreadStream(
   request: EnhancePromptInThreadRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   try {
     // Preserve actual pixels across image threads; a text summary is not a
@@ -1300,7 +1363,7 @@ export async function enhancePromptInThreadStream(
             imageAttachment: normalized.imageAttachment,
           });
         },
-      }
+      },
     );
   } catch (error) {
     await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
@@ -1321,7 +1384,11 @@ export function getPromptTierFromSubscription(features: TierFeatures): Enhanceme
 export function detectModality(prompt: string): PromptModality {
   const text = prompt.toLowerCase();
 
-  if (/(image|illustration|photo|poster|render|midjourney|dall[- ]?e|stable diffusion|flux)/.test(text)) {
+  if (
+    /(image|illustration|photo|poster|render|midjourney|dall[- ]?e|stable diffusion|flux)/.test(
+      text,
+    )
+  ) {
     return 'image';
   }
 
@@ -1333,7 +1400,9 @@ export function detectModality(prompt: string): PromptModality {
     return 'audio';
   }
 
-  if (/(code|function|class|typescript|swift|python|react|bug|refactor|api endpoint|sql)/.test(text)) {
+  if (
+    /(code|function|class|typescript|swift|python|react|bug|refactor|api endpoint|sql)/.test(text)
+  ) {
     return 'code';
   }
 

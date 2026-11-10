@@ -377,7 +377,8 @@ const negativeExamples: NegativeExample[] = [
 - Wheels rigged for rotation/steering
 - Doors, hood, trunk as separate animated pieces
 - Interior visible through windows`,
-    explanation: '"A car" is too vague. Specify: vehicle type/model, era, purpose (game/viz/print), poly budget, level of detail, and material requirements.',
+    explanation:
+      '"A car" is too vague. Specify: vehicle type/model, era, purpose (game/viz/print), poly budget, level of detail, and material requirements.',
   },
   {
     badInput: 'make a 3D model',
@@ -394,7 +395,8 @@ const negativeExamples: NegativeExample[] = [
 
 Example specific request:
 "Low-poly stylized tree for mobile game, 500 triangles, hand-painted texture, 3m tall, includes LODs"`,
-    explanation: 'Without subject and purpose, no meaningful 3D prompt can be generated. Purpose determines every technical decision: poly count, topology, materials, and export format.',
+    explanation:
+      'Without subject and purpose, no meaningful 3D prompt can be generated. Purpose determines every technical decision: poly count, topology, materials, and export format.',
   },
 ];
 

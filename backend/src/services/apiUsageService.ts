@@ -138,7 +138,7 @@ export async function getKeyUsageStats(
     startDate?: Date;
     endDate?: Date;
     limit?: number;
-  } = {}
+  } = {},
 ): Promise<UsageStats> {
   const { startDate, endDate, limit = 1000 } = options;
 
@@ -168,7 +168,7 @@ export async function getUserUsageStats(
     startDate?: Date;
     endDate?: Date;
     limit?: number;
-  } = {}
+  } = {},
 ): Promise<UsageStats> {
   const { startDate, endDate, limit = 1000 } = options;
 
@@ -307,12 +307,12 @@ export async function getMonthlyUsage(developerId: string): Promise<MonthlyUsage
 
   const totalRequests = subscription.currentPeriodUsage;
   const totalTokens = usageRecords.reduce((sum, r) => sum + r.totalTokens, 0);
-  const overageRequests = subscription.includedRequests < 0
-    ? 0
-    : Math.max(0, totalRequests - subscription.includedRequests);
-  const estimatedCostCents = overageRequests > 0
-    ? Math.ceil(overageRequests / 100) * subscription.overageRateCents
-    : 0;
+  const overageRequests =
+    subscription.includedRequests < 0
+      ? 0
+      : Math.max(0, totalRequests - subscription.includedRequests);
+  const estimatedCostCents =
+    overageRequests > 0 ? Math.ceil(overageRequests / 100) * subscription.overageRateCents : 0;
 
   return {
     periodStart: subscription.currentPeriodStart,
@@ -331,7 +331,7 @@ export async function getMonthlyUsage(developerId: string): Promise<MonthlyUsage
 export async function calculateBilling(
   developerId: string,
   periodStart: Date,
-  periodEnd: Date
+  periodEnd: Date,
 ): Promise<BillingCalculation> {
   const subscription = await prisma.apiSubscription.findUnique({
     where: { developerId },
@@ -351,7 +351,8 @@ export async function calculateBilling(
   const includedRequests = subscription?.includedRequests || 100;
   const overageRateCents = subscription?.overageRateCents || 1;
   const overageRequests = includedRequests < 0 ? 0 : Math.max(0, requestCount - includedRequests);
-  const overageCostCents = overageRequests > 0 ? Math.ceil(overageRequests / 100) * overageRateCents : 0;
+  const overageCostCents =
+    overageRequests > 0 ? Math.ceil(overageRequests / 100) * overageRateCents : 0;
 
   // Base price based on tier
   const basePriceCents = getBasePriceCents(subscription?.tier || 'API_FREE');
@@ -398,7 +399,7 @@ export async function getUsageHistory(
     limit?: number;
     startDate?: Date;
     endDate?: Date;
-  } = {}
+  } = {},
 ): Promise<{
   records: ApiUsage[];
   total: number;
@@ -437,10 +438,7 @@ export async function getUsageHistory(
 /**
  * Get recent usage for display purposes.
  */
-export async function getRecentUsage(
-  developerId: string,
-  limit: number = 10
-): Promise<ApiUsage[]> {
+export async function getRecentUsage(developerId: string, limit: number = 10): Promise<ApiUsage[]> {
   return prisma.apiUsage.findMany({
     where: { developerId },
     orderBy: { createdAt: 'desc' },
@@ -479,9 +477,7 @@ export async function getHourlyDistribution(developerId: string): Promise<number
   const now = new Date();
 
   for (const record of usage) {
-    const hoursAgo = Math.floor(
-      (now.getTime() - record.createdAt.getTime()) / (1000 * 60 * 60)
-    );
+    const hoursAgo = Math.floor((now.getTime() - record.createdAt.getTime()) / (1000 * 60 * 60));
     if (hoursAgo >= 0 && hoursAgo < 24) {
       hourly[23 - hoursAgo]++;
     }
@@ -494,7 +490,7 @@ export async function getHourlyDistribution(developerId: string): Promise<number
  * Get latency percentiles for the last 24 hours.
  */
 export async function getLatencyPercentiles(
-  developerId: string
+  developerId: string,
 ): Promise<{ p50: number; p90: number; p95: number; p99: number }> {
   const twentyFourHoursAgo = new Date();
   twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);

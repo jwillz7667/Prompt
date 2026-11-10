@@ -1,6 +1,6 @@
 /**
  * Platform Presets API Routes
- * 
+ *
  * Endpoints for platform-specific optimizations and presets
  */
 
@@ -30,8 +30,16 @@ platformRouter.use(authenticate);
 // ============================================================================
 
 const platformTypeSchema = z.enum([
-  'CHATGPT', 'CLAUDE', 'GEMINI', 'MIDJOURNEY', 'DALLE', 
-  'STABLE_DIFFUSION', 'SORA', 'RUNWAY', 'SUNO', 'UDIO'
+  'CHATGPT',
+  'CLAUDE',
+  'GEMINI',
+  'MIDJOURNEY',
+  'DALLE',
+  'STABLE_DIFFUSION',
+  'SORA',
+  'RUNWAY',
+  'SUNO',
+  'UDIO',
 ]);
 
 const validatePromptSchema = z.object({
@@ -42,11 +50,13 @@ const validatePromptSchema = z.object({
 const optimizePromptSchema = z.object({
   prompt: z.string().min(1).max(100000),
   platform: platformTypeSchema,
-  options: z.object({
-    tone: z.string().optional(),
-    style: z.string().optional(),
-    quality: z.enum(['draft', 'standard', 'high']).optional(),
-  }).optional(),
+  options: z
+    .object({
+      tone: z.string().optional(),
+      style: z.string().optional(),
+      quality: z.enum(['draft', 'standard', 'high']).optional(),
+    })
+    .optional(),
 });
 
 const estimateCostSchema = z.object({
@@ -71,8 +81,8 @@ const userSettingsSchema = z.object({
 platformRouter.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const platforms = getAvailablePlatforms();
-    const platformsWithCapabilities = platforms.map(platform => 
-      getPlatformCapabilities(platform as any)
+    const platformsWithCapabilities = platforms.map((platform) =>
+      getPlatformCapabilities(platform as any),
     );
 
     res.json({
@@ -160,16 +170,16 @@ platformRouter.post('/validate', async (req: AuthenticatedRequest, res: Response
 platformRouter.post('/optimize', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { prompt, platform, options } = optimizePromptSchema.parse(req.body);
-    
+
     // Validate original prompt
     const validation = validatePromptForPlatform(prompt, platform);
-    
+
     // Optimize the prompt
     const optimizedPrompt = optimizePromptForPlatform(prompt, platform, options);
-    
+
     // Validate optimized prompt
     const optimizedValidation = validatePromptForPlatform(optimizedPrompt, platform);
-    
+
     // Estimate cost
     const cost = estimatePlatformCost(optimizedPrompt, platform);
 
@@ -201,11 +211,11 @@ platformRouter.post('/optimize', async (req: AuthenticatedRequest, res: Response
 platformRouter.post('/estimate-cost', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { prompt, platforms } = estimateCostSchema.parse(req.body);
-    
-    const estimates = platforms.map(platform => {
+
+    const estimates = platforms.map((platform) => {
       const cost = estimatePlatformCost(prompt, platform);
       const validation = validatePromptForPlatform(prompt, platform);
-      
+
       return {
         platform,
         ...cost,
@@ -290,17 +300,21 @@ platformRouter.put('/user-settings', async (req: AuthenticatedRequest, res: Resp
  */
 platformRouter.post('/batch-optimize', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { prompt, platforms, options } = z.object({
-      prompt: z.string().min(1).max(100000),
-      platforms: z.array(platformTypeSchema),
-      options: z.object({
-        tone: z.string().optional(),
-        style: z.string().optional(),
-        quality: z.enum(['draft', 'standard', 'high']).optional(),
-      }).optional(),
-    }).parse(req.body);
+    const { prompt, platforms, options } = z
+      .object({
+        prompt: z.string().min(1).max(100000),
+        platforms: z.array(platformTypeSchema),
+        options: z
+          .object({
+            tone: z.string().optional(),
+            style: z.string().optional(),
+            quality: z.enum(['draft', 'standard', 'high']).optional(),
+          })
+          .optional(),
+      })
+      .parse(req.body);
 
-    const results = platforms.map(platform => {
+    const results = platforms.map((platform) => {
       const optimizedPrompt = optimizePromptForPlatform(prompt, platform, options);
       const validation = validatePromptForPlatform(optimizedPrompt, platform);
       const cost = estimatePlatformCost(optimizedPrompt, platform);
@@ -318,7 +332,7 @@ platformRouter.post('/batch-optimize', async (req: AuthenticatedRequest, res: Re
       results,
       summary: {
         totalPlatforms: results.length,
-        validPlatforms: results.filter(r => r.validation.isValid).length,
+        validPlatforms: results.filter((r) => r.validation.isValid).length,
         averageCost: results.reduce((sum, r) => sum + r.cost.estimatedCost, 0) / results.length,
       },
     });

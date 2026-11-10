@@ -106,12 +106,10 @@ export const enforceApiQuota = async (
   } catch (error) {
     logger.error({ error, keyId: req.apiKey.id }, 'Quota enforcement error');
     // Do not incur provider cost when entitlement/quota cannot be checked.
-    res
-      .status(503)
-      .json({
-        error: 'Usage limits are temporarily unavailable. Please retry.',
-        code: 'QUOTA_UNAVAILABLE',
-      });
+    res.status(503).json({
+      error: 'Usage limits are temporarily unavailable. Please retry.',
+      code: 'QUOTA_UNAVAILABLE',
+    });
   }
 };
 

@@ -14,33 +14,37 @@ const workflowStepSchema = z.object({
   promptTemplate: z.string().min(1).max(10000),
   contextRequired: z.array(z.string()).optional(),
   outputFormat: z.enum(['json', 'markdown', 'plain', 'code']).optional(),
-  validationRules: z.array(z.object({
-    type: z.enum(['required', 'minLength', 'maxLength', 'regex', 'json', 'number']),
-    value: z.any().optional(),
-    message: z.string().optional()
-  })).optional(),
-  metadata: z.any().optional()
+  validationRules: z
+    .array(
+      z.object({
+        type: z.enum(['required', 'minLength', 'maxLength', 'regex', 'json', 'number']),
+        value: z.any().optional(),
+        message: z.string().optional(),
+      }),
+    )
+    .optional(),
+  metadata: z.any().optional(),
 });
 
 const createWorkflowSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
   steps: z.array(workflowStepSchema).min(1),
-  metadata: z.any().optional()
+  metadata: z.any().optional(),
 });
 
 const updateWorkflowSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().optional(),
   steps: z.array(workflowStepSchema).min(1).optional(),
-  metadata: z.any().optional()
+  metadata: z.any().optional(),
 });
 
 const executeWorkflowSchema = z.object({
   initialContext: z.record(z.string(), z.unknown()).optional(),
   parallelSteps: z.boolean().optional(),
   continueOnError: z.boolean().optional(),
-  maxRetries: z.number().min(1).max(5).optional()
+  maxRetries: z.number().min(1).max(5).optional(),
 });
 
 /**
@@ -49,22 +53,22 @@ const executeWorkflowSchema = z.object({
 router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
   try {
     const validatedData = createWorkflowSchema.parse(req.body);
-    
+
     const workflow = await workflowService.createWorkflow({
       userId: req.user!.id,
-      ...validatedData
+      ...validatedData,
     });
 
     return res.status(201).json({
       success: true,
-      data: workflow
+      data: workflow,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.issues
+        details: error.issues,
       });
     }
     return next(error);
@@ -77,30 +81,30 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
 router.put('/:id', authenticate, async (req, res, next) => {
   try {
     const validatedData = updateWorkflowSchema.parse(req.body);
-    
+
     const workflow = await workflowService.updateWorkflow(
       req.params.id!,
       req.user!.id,
-      validatedData
+      validatedData,
     );
 
     if (!workflow) {
       return res.status(404).json({
         success: false,
-        error: 'Workflow not found'
+        error: 'Workflow not found',
       });
     }
 
     return res.json({
       success: true,
-      data: workflow
+      data: workflow,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.issues
+        details: error.issues,
       });
     }
     return next(error);
@@ -112,21 +116,18 @@ router.put('/:id', authenticate, async (req, res, next) => {
  */
 router.delete('/:id', authenticate, async (req, res, next) => {
   try {
-    const deleted = await workflowService.deleteWorkflow(
-      req.params.id!,
-      req.user!.id
-    );
+    const deleted = await workflowService.deleteWorkflow(req.params.id!, req.user!.id);
 
     if (!deleted) {
       return res.status(404).json({
         success: false,
-        error: 'Workflow not found'
+        error: 'Workflow not found',
       });
     }
 
     return res.json({
       success: true,
-      message: 'Workflow deleted successfully'
+      message: 'Workflow deleted successfully',
     });
   } catch (error) {
     return next(error);
@@ -138,21 +139,18 @@ router.delete('/:id', authenticate, async (req, res, next) => {
  */
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
-    const workflow = await workflowService.getWorkflow(
-      req.params.id!,
-      req.user!.id
-    );
+    const workflow = await workflowService.getWorkflow(req.params.id!, req.user!.id);
 
     if (!workflow) {
       return res.status(404).json({
         success: false,
-        error: 'Workflow not found'
+        error: 'Workflow not found',
       });
     }
 
     return res.json({
       success: true,
-      data: workflow
+      data: workflow,
     });
   } catch (error) {
     return next(error);
@@ -165,15 +163,12 @@ router.get('/:id', authenticate, async (req, res, next) => {
 router.get('/', authenticate, async (req, res, next) => {
   try {
     const status = req.query.status as WorkflowStatus | undefined;
-    
-    const workflows = await workflowService.listWorkflows(
-      req.user!.id,
-      status
-    );
+
+    const workflows = await workflowService.listWorkflows(req.user!.id, status);
 
     return res.json({
       success: true,
-      data: workflows
+      data: workflows,
     });
   } catch (error) {
     return next(error);
@@ -183,53 +178,55 @@ router.get('/', authenticate, async (req, res, next) => {
 /**
  * Execute a workflow
  */
-router.post('/:id/execute', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
-  try {
-    const validatedData = executeWorkflowSchema.parse(req.body);
-    
-    const execution = await workflowService.executeWorkflow(
-      req.params.id!,
-      req.user!.id,
-      validatedData
-    );
+router.post(
+  '/:id/execute',
+  authenticate,
+  enforceQuota('enhance_prompt'),
+  async (req, res, next) => {
+    try {
+      const validatedData = executeWorkflowSchema.parse(req.body);
 
-    return res.status(202).json({
-      success: true,
-      data: execution,
-      message: 'Workflow execution started'
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request data',
-        details: error.issues
+      const execution = await workflowService.executeWorkflow(
+        req.params.id!,
+        req.user!.id,
+        validatedData,
+      );
+
+      return res.status(202).json({
+        success: true,
+        data: execution,
+        message: 'Workflow execution started',
       });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid request data',
+          details: error.issues,
+        });
+      }
+      return next(error);
     }
-    return next(error);
-  }
-});
+  },
+);
 
 /**
  * Get workflow execution details
  */
 router.get('/executions/:executionId', authenticate, async (req, res, next) => {
   try {
-    const execution = await workflowService.getExecution(
-      req.params.executionId!,
-      req.user!.id
-    );
+    const execution = await workflowService.getExecution(req.params.executionId!, req.user!.id);
 
     if (!execution) {
       return res.status(404).json({
         success: false,
-        error: 'Execution not found'
+        error: 'Execution not found',
       });
     }
 
     return res.json({
       success: true,
-      data: execution
+      data: execution,
     });
   } catch (error) {
     return next(error);
@@ -241,14 +238,11 @@ router.get('/executions/:executionId', authenticate, async (req, res, next) => {
  */
 router.get('/:id/executions', authenticate, async (req, res, next) => {
   try {
-    const executions = await workflowService.listExecutions(
-      req.params.id!,
-      req.user!.id
-    );
+    const executions = await workflowService.listExecutions(req.params.id!, req.user!.id);
 
     return res.json({
       success: true,
-      data: executions
+      data: executions,
     });
   } catch (error) {
     return next(error);
@@ -261,27 +255,27 @@ router.get('/:id/executions', authenticate, async (req, res, next) => {
 router.post('/:id/clone', authenticate, async (req, res, next) => {
   try {
     const schema = z.object({
-      newName: z.string().min(1).max(100)
+      newName: z.string().min(1).max(100),
     });
 
     const validatedData = schema.parse(req.body);
-    
+
     const clonedWorkflow = await workflowService.cloneWorkflow(
       req.params.id!,
       req.user!.id,
-      validatedData.newName
+      validatedData.newName,
     );
 
     return res.status(201).json({
       success: true,
-      data: clonedWorkflow
+      data: clonedWorkflow,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: error.issues
+        details: error.issues,
       });
     }
     return next(error);
@@ -293,14 +287,11 @@ router.post('/:id/clone', authenticate, async (req, res, next) => {
  */
 router.get('/:id/export', authenticate, async (req, res, next) => {
   try {
-    const workflowData = await workflowService.exportWorkflow(
-      req.params.id!,
-      req.user!.id
-    );
+    const workflowData = await workflowService.exportWorkflow(req.params.id!, req.user!.id);
 
     return res.json({
       success: true,
-      data: workflowData
+      data: workflowData,
     });
   } catch (error) {
     return next(error);
@@ -312,14 +303,11 @@ router.get('/:id/export', authenticate, async (req, res, next) => {
  */
 router.post('/import', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
   try {
-    const importedWorkflow = await workflowService.importWorkflow(
-      req.user!.id,
-      req.body
-    );
+    const importedWorkflow = await workflowService.importWorkflow(req.user!.id, req.body);
 
     return res.status(201).json({
       success: true,
-      data: importedWorkflow
+      data: importedWorkflow,
     });
   } catch (error) {
     return next(error);

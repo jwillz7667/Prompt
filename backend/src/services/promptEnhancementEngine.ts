@@ -19,21 +19,20 @@
  */
 
 import { requestCompletion, streamCompletion, type DeepSeekRequest } from './deepseekService.js';
-import {
-  DEEPSEEK_THINKING_DISABLED,
-  getDeepseekModel,
-} from './deepseekModels.js';
-import {
-  MetaPromptBuilder,
-  type SubModality,
-  type TargetPlatform,
-} from './metaPrompts/index.js';
+import { DEEPSEEK_THINKING_DISABLED, getDeepseekModel } from './deepseekModels.js';
+import { MetaPromptBuilder, type SubModality, type TargetPlatform } from './metaPrompts/index.js';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type PromptTone = 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
+export type PromptTone =
+  | 'professional'
+  | 'casual'
+  | 'academic'
+  | 'creative'
+  | 'technical'
+  | 'friendly';
 export type OutputLength = 'concise' | 'standard' | 'detailed';
 export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
 export type EnhancementTier = 'basic' | 'standard' | 'advanced';
@@ -70,7 +69,7 @@ export interface EnhancementResult {
 function buildEnhancementSystemPrompt(
   tier: EnhancementTier,
   modality: PromptModality,
-  request?: EnhancementRequest
+  request?: EnhancementRequest,
 ): string {
   // Always use V3 meta-prompt builder for all requests
   // V3 system has modality-aware, research-backed prompts that work well
@@ -546,7 +545,17 @@ NEVER:
 // ============================================================================
 
 function buildUserMessage(request: EnhancementRequest): string {
-  const { prompt, tier, modality = 'text', tone, length, customInstructions, subModality, targetPlatform, includeNegativeExamples } = request;
+  const {
+    prompt,
+    tier,
+    modality = 'text',
+    tone,
+    length,
+    customInstructions,
+    subModality,
+    targetPlatform,
+    includeNegativeExamples,
+  } = request;
 
   // Always use V3 meta-prompt builder for all requests
   // V3 system provides better modality-aware examples and constraints
@@ -689,7 +698,7 @@ export interface StreamCallbacks {
 
 export async function enhancePromptV2Stream(
   request: EnhancementRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   const apiKey = process.env['DEEPSEEK_API_KEY'];
   if (!apiKey) {
@@ -722,11 +731,12 @@ export async function enhancePromptV2Stream(
 
   await streamCompletion(deepseekRequest, apiKey, 'chat', {
     ...callbacks,
-    onComplete: (result) => callbacks.onComplete({
-      ...result,
-      enhancedPrompt: cleanEnhancedPrompt(result.enhancedPrompt),
-      techniqueApplied: `v2-${tier}-${modality}`,
-    }),
+    onComplete: (result) =>
+      callbacks.onComplete({
+        ...result,
+        enhancedPrompt: cleanEnhancedPrompt(result.enhancedPrompt),
+        techniqueApplied: `v2-${tier}-${modality}`,
+      }),
   });
 }
 
@@ -793,7 +803,11 @@ export function detectModality(prompt: string): PromptModality {
   const lower = prompt.toLowerCase();
 
   // Image indicators
-  if (/\b(image|photo|picture|illustration|render|portrait|landscape|draw|paint|art|visual)\b/.test(lower)) {
+  if (
+    /\b(image|photo|picture|illustration|render|portrait|landscape|draw|paint|art|visual)\b/.test(
+      lower,
+    )
+  ) {
     return 'image';
   }
 

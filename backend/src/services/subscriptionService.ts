@@ -85,7 +85,6 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
   const cachedSub = await cache.getSubscription(userId);
   const cachedUsage = await cache.getDailyUsage(userId, dateKey);
 
-
   if (cachedSub && cachedUsage) {
     // A subscription can expire *during* the 300s cache TTL. Serving the cached
     // tier in that window would keep a lapsed user on a paid tier and, worse,

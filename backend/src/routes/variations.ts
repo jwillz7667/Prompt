@@ -30,25 +30,33 @@ router.use(authenticate);
 const generateVariationsSchema = z.object({
   prompt: z.string().min(1).max(100000),
   promptId: z.string().min(1).optional(),
-  strategy: z.enum([
-    'quick',
-    'comprehensive',
-    'modality_focus',
-    'max_compare',
-    'platform_test',
-    'creative_exploration',
-  ]).optional(),
-  config: z.object({
-    variants: z.array(z.object({
-      label: z.string(),
-      mode: z.enum(['standard', 'max']),
-      focus: z.string().optional(),
-      customInstructions: z.string().optional(),
-      subModality: z.string().optional(),
-    })).optional(),
-    includeOriginal: z.boolean().optional(),
-    maxVariations: z.number().min(1).max(20).optional(),
-  }).optional(),
+  strategy: z
+    .enum([
+      'quick',
+      'comprehensive',
+      'modality_focus',
+      'max_compare',
+      'platform_test',
+      'creative_exploration',
+    ])
+    .optional(),
+  config: z
+    .object({
+      variants: z
+        .array(
+          z.object({
+            label: z.string(),
+            mode: z.enum(['standard', 'max']),
+            focus: z.string().optional(),
+            customInstructions: z.string().optional(),
+            subModality: z.string().optional(),
+          }),
+        )
+        .optional(),
+      includeOriginal: z.boolean().optional(),
+      maxVariations: z.number().min(1).max(20).optional(),
+    })
+    .optional(),
 });
 
 const rateVariationSchema = z.object({
@@ -68,41 +76,46 @@ const selectWinnerSchema = z.object({
  * POST /api/v1/variations/generate
  * Generate variations for a prompt
  */
-router.post('/generate', enforceQuota('enhance_prompt'), async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { prompt, promptId, strategy, config } = generateVariationsSchema.parse(req.body);
-    const normalizedStrategy = strategy === 'platform_test'
-      ? 'modality_focus'
-      : strategy === 'creative_exploration'
-        ? 'max_compare'
-        : (strategy || 'quick');
+router.post(
+  '/generate',
+  enforceQuota('enhance_prompt'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { prompt, promptId, strategy, config } = generateVariationsSchema.parse(req.body);
+      const normalizedStrategy =
+        strategy === 'platform_test'
+          ? 'modality_focus'
+          : strategy === 'creative_exploration'
+            ? 'max_compare'
+            : strategy || 'quick';
 
-    const comparison = await queueVariationGeneration(
-      req.user!.id,
-      prompt,
-      promptId,
-      config ? (config as VariationConfig) : normalizedStrategy
-    );
+      const comparison = await queueVariationGeneration(
+        req.user!.id,
+        prompt,
+        promptId,
+        config ? (config as VariationConfig) : normalizedStrategy,
+      );
 
-    return res.status(202).json({
-      success: true,
-      data: comparison,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
+      return res.status(202).json({
+        success: true,
+        data: comparison,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid request data',
+          details: error.issues,
+        });
+      }
+      logger.error({ error }, 'Failed to generate variations');
+      return res.status(500).json({
         success: false,
-        error: 'Invalid request data',
-        details: error.issues,
+        error: 'Failed to generate variations',
       });
     }
-    logger.error({ error }, 'Failed to generate variations');
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to generate variations',
-    });
-  }
-});
+  },
+);
 
 /**
  * GET /api/v1/variations/:id

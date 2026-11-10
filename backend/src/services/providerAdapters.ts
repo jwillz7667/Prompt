@@ -58,26 +58,27 @@ export function getAvailableProviders(): CompareProvider[] {
 
 async function completeDeepseek(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   // Compare is a non-thinking surface; a legacy id in DEEPSEEK_COMPARE_MODEL
   // is remapped, and thinking is always sent explicitly (V4 Flash defaults it
   // ON and bills the CoT as output tokens).
-  const { model } = resolveDeepseekModel(
-    process.env['DEEPSEEK_COMPARE_MODEL'] || undefined,
-    false
+  const { model } = resolveDeepseekModel(process.env['DEEPSEEK_COMPARE_MODEL'] || undefined, false);
+  const result = await requestCompletion(
+    {
+      model,
+      messages: [
+        { role: 'system', content: request.systemPrompt },
+        { role: 'user', content: request.userMessage },
+      ],
+      temperature: request.temperature,
+      max_tokens: request.maxTokens,
+      stream: false,
+      thinking: DEEPSEEK_THINKING_DISABLED,
+    },
+    apiKey,
+    'chat',
   );
-  const result = await requestCompletion({
-    model,
-    messages: [
-      { role: 'system', content: request.systemPrompt },
-      { role: 'user', content: request.userMessage },
-    ],
-    temperature: request.temperature,
-    max_tokens: request.maxTokens,
-    stream: false,
-    thinking: DEEPSEEK_THINKING_DISABLED,
-  }, apiKey, 'chat');
   return {
     content: result.enhancedPrompt,
     model: result.model,
@@ -88,7 +89,7 @@ async function completeDeepseek(
 
 async function completeAnthropic(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   const model = process.env['ANTHROPIC_COMPARE_MODEL'] || 'claude-sonnet-5';
   const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
@@ -117,7 +118,7 @@ async function completeAnthropic(
 
 async function completeOpenai(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   const model = process.env['OPENAI_COMPARE_MODEL'] || 'gpt-4.1';
   const client = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
@@ -145,7 +146,7 @@ async function completeOpenai(
 
 async function completeGemini(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   const model = process.env['GEMINI_COMPARE_MODEL'] || 'gemini-2.5-flash';
   const client = new GoogleGenerativeAI(apiKey);
@@ -174,7 +175,7 @@ async function completeGemini(
 
 export async function completeWithProvider(
   provider: CompareProvider,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<ProviderCompletionResult> {
   const apiKey = apiKeyFor(provider);
   if (!apiKey) {
@@ -201,7 +202,7 @@ export async function completeWithProvider(
   const processingMs = Date.now() - startTime;
   promptLogger.info(
     { provider, model: result.model, processingMs, outputTokens: result.outputTokens },
-    'Provider completion finished'
+    'Provider completion finished',
   );
   return { ...result, processingMs };
 }

@@ -62,7 +62,8 @@ export async function initQueues(): Promise<void> {
     const connection = {
       host: redisHost || new URL(redisUrl!).hostname,
       port: parseInt(process.env['REDIS_PORT'] || new URL(redisUrl!).port || '6379'),
-      password: process.env['REDIS_PASSWORD'] || (redisUrl ? new URL(redisUrl).password : undefined),
+      password:
+        process.env['REDIS_PASSWORD'] || (redisUrl ? new URL(redisUrl).password : undefined),
     };
 
     // Prompt enhancement queue (high priority)
@@ -116,9 +117,12 @@ export async function initQueues(): Promise<void> {
       logger.info({ jobId }, 'Prompt enhancement job completed');
     });
 
-    promptQueueEvents.on('failed', ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
-      logger.error({ jobId, failedReason }, 'Prompt enhancement job failed');
-    });
+    promptQueueEvents.on(
+      'failed',
+      ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
+        logger.error({ jobId, failedReason }, 'Prompt enhancement job failed');
+      },
+    );
 
     queuesAvailable = true;
     logger.info('Job queues initialized');
@@ -143,7 +147,7 @@ async function scheduleCleanupJobs(): Promise<void> {
           pattern: '0 3 * * *', // Daily at 3 AM
         },
         jobId: 'cleanup-sessions-daily',
-      }
+      },
     );
 
     // Clean old idempotency keys hourly
@@ -155,7 +159,7 @@ async function scheduleCleanupJobs(): Promise<void> {
           pattern: '0 * * * *', // Every hour
         },
         jobId: 'cleanup-idempotency-hourly',
-      }
+      },
     );
 
     // Clean old daily usage records weekly
@@ -167,7 +171,7 @@ async function scheduleCleanupJobs(): Promise<void> {
           pattern: '0 4 * * 0', // Sundays at 4 AM
         },
         jobId: 'cleanup-usage-weekly',
-      }
+      },
     );
 
     logger.info('Cleanup jobs scheduled');

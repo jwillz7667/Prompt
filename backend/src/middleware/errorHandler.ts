@@ -11,7 +11,7 @@ export const errorHandler = (
   err: AppError,
   req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ): void => {
   logger.error({ err, statusCode: err.statusCode, code: err.code }, 'Unhandled error');
 

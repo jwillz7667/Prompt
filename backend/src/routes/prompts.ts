@@ -57,7 +57,7 @@ const imageAttachmentSchema = z.object({
 
 function requirePromptOrImage(
   value: { prompt?: string; originalPrompt?: string; imageAttachment?: unknown },
-  ctx: z.RefinementCtx
+  ctx: z.RefinementCtx,
 ) {
   const prompt = value.prompt ?? value.originalPrompt ?? '';
   if (prompt.trim().length > 0 || value.imageAttachment) {
@@ -71,15 +71,13 @@ function requirePromptOrImage(
   });
 }
 
-function toImageAttachmentJson(
-  attachment?: {
-    dataUrl: string;
-    mimeType: string;
-    width: number;
-    height: number;
-    analysis?: string | null;
-  }
-): Prisma.InputJsonValue | undefined {
+function toImageAttachmentJson(attachment?: {
+  dataUrl: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  analysis?: string | null;
+}): Prisma.InputJsonValue | undefined {
   if (!attachment) {
     return undefined;
   }
@@ -118,7 +116,7 @@ function promptSelect(includeImageAttachment: boolean) {
 // user degrades to a 404-equivalent error rather than cross-tenant linkage.
 async function resolveVersionFields(
   userId: string,
-  parentPromptId?: string
+  parentPromptId?: string,
 ): Promise<{ version: number; rootPromptId: string } | Record<string, never>> {
   if (!parentPromptId) {
     return {};
@@ -142,7 +140,10 @@ async function resolveVersionFields(
 }
 
 class HttpError extends Error {
-  constructor(readonly statusCode: number, message: string) {
+  constructor(
+    readonly statusCode: number,
+    message: string,
+  ) {
     super(message);
     this.name = 'HttpError';
   }
@@ -153,30 +154,29 @@ function createHttpError(statusCode: number, message: string): HttpError {
 }
 
 // Validation schemas
-const createPromptSchema = z.object({
-  originalPrompt: z.string().max(100000).default(''),
-  enhancedPrompt: z.string().min(1).max(500000),
-  model: z.string().default(DEEPSEEK_V4_FLASH_MODEL),
-  temperature: z.number().min(0).max(2).default(0.7),
-  maxTokens: z.preprocess(
-    (value) => {
+const createPromptSchema = z
+  .object({
+    originalPrompt: z.string().max(100000).default(''),
+    enhancedPrompt: z.string().min(1).max(500000),
+    model: z.string().default(DEEPSEEK_V4_FLASH_MODEL),
+    temperature: z.number().min(0).max(2).default(0.7),
+    maxTokens: z.preprocess((value) => {
       if (typeof value === 'number' && value < 1) {
         return undefined;
       }
       return value;
-    },
-    z.number().int().min(1).max(100000).default(8192)
-  ),
-  inputTokens: z.number().int().min(0).default(0),
-  outputTokens: z.number().int().min(0).default(0),
-  totalTokens: z.number().int().min(0).default(0),
-  processingMs: z.number().int().min(0).default(0),
-  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
-  imageAttachment: imageAttachmentSchema.optional(),
-  title: z.string().max(200).optional(),
-  tags: z.array(z.string().max(50)).max(20).default([]),
-  parentPromptId: z.string().cuid().optional(),
-}).superRefine(requirePromptOrImage);
+    }, z.number().int().min(1).max(100000).default(8192)),
+    inputTokens: z.number().int().min(0).default(0),
+    outputTokens: z.number().int().min(0).default(0),
+    totalTokens: z.number().int().min(0).default(0),
+    processingMs: z.number().int().min(0).default(0),
+    modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+    imageAttachment: imageAttachmentSchema.optional(),
+    title: z.string().max(200).optional(),
+    tags: z.array(z.string().max(50)).max(20).default([]),
+    parentPromptId: z.string().cuid().optional(),
+  })
+  .superRefine(requirePromptOrImage);
 
 const updatePromptSchema = z.object({
   title: z.string().max(200).optional(),
@@ -199,15 +199,12 @@ const enhancePromptSchemaBase = z.object({
   prompt: z.string().max(100000).default(''),
   model: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.preprocess(
-    (value) => {
-      if (typeof value === 'number' && value < 1) {
-        return undefined;
-      }
-      return value;
-    },
-    z.number().int().min(1).max(100000).optional()
-  ),
+  maxTokens: z.preprocess((value) => {
+    if (typeof value === 'number' && value < 1) {
+      return undefined;
+    }
+    return value;
+  }, z.number().int().min(1).max(100000).optional()),
   mode: z.enum(['standard', 'max']).default('standard'),
   conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
   modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
@@ -219,20 +216,22 @@ const enhancePromptSchemaBase = z.object({
 
 const enhancePromptSchema = enhancePromptSchemaBase.superRefine(requirePromptOrImage);
 
-const guestEnhancePromptSchema = enhancePromptSchemaBase.extend({
-  previousTurns: z.array(
-    z.object({
-      originalPrompt: z.string().max(100000).default(''),
-      enhancedPrompt: z.string().min(1).max(500000),
-      imageAttachment: imageAttachmentSchema.optional(),
-    })
-  ).max(20).default([]),
-}).superRefine(requirePromptOrImage);
+const guestEnhancePromptSchema = enhancePromptSchemaBase
+  .extend({
+    previousTurns: z
+      .array(
+        z.object({
+          originalPrompt: z.string().max(100000).default(''),
+          enhancedPrompt: z.string().min(1).max(500000),
+          imageAttachment: imageAttachmentSchema.optional(),
+        }),
+      )
+      .max(20)
+      .default([]),
+  })
+  .superRefine(requirePromptOrImage);
 
-function writeSSEEvent(
-  res: Response,
-  payload: Record<string, unknown>
-) {
+function writeSSEEvent(res: Response, payload: Record<string, unknown>) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
@@ -244,10 +243,7 @@ function beginSSE(res: Response) {
   res.flushHeaders();
 }
 
-function guestQuotaMessage(
-  mode: 'standard' | 'max',
-  quota: GuestQuotaSnapshot
-): string {
+function guestQuotaMessage(mode: 'standard' | 'max', quota: GuestQuotaSnapshot): string {
   if (quota.standardRemaining === 0 && quota.maxRemaining === 0) {
     return 'Sign in to keep optimizing prompts and unlock your 7-day Premium trial.';
   }
@@ -259,110 +255,113 @@ function guestQuotaMessage(
   return `Your guest MAX prompt is already used. You still have ${quota.standardRemaining} Standard prompts left.`;
 }
 
-promptRouter.post(
-  '/guest/enhance/stream',
-  async (req, res): Promise<void> => {
-    beginSSE(res);
+promptRouter.post('/guest/enhance/stream', async (req, res): Promise<void> => {
+  beginSSE(res);
 
+  try {
+    const guestIdentity = resolveGuestIdentity(req);
+    const data = guestEnhancePromptSchema.parse(req.body);
+    const maxTokens = Math.min(data.maxTokens ?? 4096, data.mode === 'max' ? 6144 : 4096);
+
+    await ensureGuestQuotaAvailable(guestIdentity.quotaKey, data.mode);
+    const reservedQuota = await recordGuestPromptUsage(guestIdentity.quotaKey, data.mode);
+
+    await enhancePromptInThreadStream(
+      {
+        prompt: data.prompt,
+        tier: 'basic',
+        maxTokens,
+        mode: data.mode,
+        conversationMode: data.conversationMode,
+        modality: data.modality,
+        subModality: data.subModality,
+        customInstructions: data.customInstructions,
+        previousTurns: data.previousTurns,
+        imageAttachment: data.imageAttachment,
+      },
+      {
+        onToken: (token) => {
+          writeSSEEvent(res, { type: 'token', content: token });
+        },
+        onComplete: async (result) => {
+          writeSSEEvent(res, {
+            type: 'complete',
+            usage: {
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+              totalTokens: result.totalTokens,
+              processingMs: result.processingMs,
+            },
+            imageAttachment: result.imageAttachment,
+            guestQuota: reservedQuota,
+            guestSession: guestIdentity.sessionToken,
+          });
+          res.write('data: [DONE]\n\n');
+          res.end();
+        },
+        onError: async (error) => {
+          const quota = await getGuestQuota(guestIdentity.quotaKey);
+          writeSSEEvent(res, {
+            type: 'error',
+            message: error.message,
+            guestQuota: quota,
+            guestSession: guestIdentity.sessionToken,
+          });
+          res.end();
+        },
+      },
+    );
+  } catch (error) {
+    let quota: GuestQuotaSnapshot | null = null;
+    let guestSession: string | undefined;
     try {
       const guestIdentity = resolveGuestIdentity(req);
-      const data = guestEnhancePromptSchema.parse(req.body);
-      const maxTokens = Math.min(data.maxTokens ?? 4096, data.mode === 'max' ? 6144 : 4096);
+      quota = await getGuestQuota(guestIdentity.quotaKey);
+      guestSession = guestIdentity.sessionToken;
+    } catch {
+      quota = null;
+    }
 
-      await ensureGuestQuotaAvailable(guestIdentity.quotaKey, data.mode);
-      const reservedQuota = await recordGuestPromptUsage(guestIdentity.quotaKey, data.mode);
-
-      await enhancePromptInThreadStream(
-        {
-          prompt: data.prompt,
-          tier: 'basic',
-          maxTokens,
-          mode: data.mode,
-          conversationMode: data.conversationMode,
-          modality: data.modality,
-          subModality: data.subModality,
-          customInstructions: data.customInstructions,
-          previousTurns: data.previousTurns,
-          imageAttachment: data.imageAttachment,
-        },
-        {
-          onToken: (token) => {
-            writeSSEEvent(res, { type: 'token', content: token });
-          },
-          onComplete: async (result) => {
-            writeSSEEvent(res, {
-              type: 'complete',
-              usage: {
-                inputTokens: result.inputTokens,
-                outputTokens: result.outputTokens,
-                totalTokens: result.totalTokens,
-                processingMs: result.processingMs,
-              },
-              imageAttachment: result.imageAttachment,
-              guestQuota: reservedQuota,
-              guestSession: guestIdentity.sessionToken,
-            });
-            res.write('data: [DONE]\n\n');
-            res.end();
-          },
-          onError: async (error) => {
-            const quota = await getGuestQuota(guestIdentity.quotaKey);
-            writeSSEEvent(res, {
-              type: 'error',
-              message: error.message,
-              guestQuota: quota,
-              guestSession: guestIdentity.sessionToken,
-            });
-            res.end();
-          },
-        }
-      );
-    } catch (error) {
-      let quota: GuestQuotaSnapshot | null = null;
-      let guestSession: string | undefined;
-      try {
-        const guestIdentity = resolveGuestIdentity(req);
-        quota = await getGuestQuota(guestIdentity.quotaKey);
-        guestSession = guestIdentity.sessionToken;
-      } catch {
-        quota = null;
-      }
-
-      if (error instanceof z.ZodError) {
-        writeSSEEvent(res, {
-          type: 'error',
-          message: 'Invalid request data.',
-          guestQuota: quota,
-          guestSession,
-        });
-        res.end();
-        return;
-      }
-
-      if (error instanceof Error &&
-        (error.message === 'GUEST_STANDARD_LIMIT_REACHED' || error.message === 'GUEST_MAX_LIMIT_REACHED')) {
-        writeSSEEvent(res, {
-          type: 'error',
-          message: quota
-            ? guestQuotaMessage(error.message === 'GUEST_STANDARD_LIMIT_REACHED' ? 'standard' : 'max', quota)
-            : 'Guest prompt limit reached. Sign in to keep optimizing prompts.',
-          guestQuota: quota,
-          guestSession,
-        });
-        res.end();
-        return;
-      }
-
+    if (error instanceof z.ZodError) {
       writeSSEEvent(res, {
         type: 'error',
-        message: 'Failed to enhance prompt',
+        message: 'Invalid request data.',
         guestQuota: quota,
         guestSession,
       });
       res.end();
+      return;
     }
+
+    if (
+      error instanceof Error &&
+      (error.message === 'GUEST_STANDARD_LIMIT_REACHED' ||
+        error.message === 'GUEST_MAX_LIMIT_REACHED')
+    ) {
+      writeSSEEvent(res, {
+        type: 'error',
+        message: quota
+          ? guestQuotaMessage(
+              error.message === 'GUEST_STANDARD_LIMIT_REACHED' ? 'standard' : 'max',
+              quota,
+            )
+          : 'Guest prompt limit reached. Sign in to keep optimizing prompts.',
+        guestQuota: quota,
+        guestSession,
+      });
+      res.end();
+      return;
+    }
+
+    writeSSEEvent(res, {
+      type: 'error',
+      message: 'Failed to enhance prompt',
+      guestQuota: quota,
+      guestSession,
+    });
+    res.end();
   }
-);
+});
 
 // All authenticated prompt routes require a user session
 promptRouter.use(authenticate);
@@ -370,7 +369,7 @@ promptRouter.use(authenticate);
 function buildSubscriptionPayload(
   subscription: RequestWithSubscription['subscription'] | undefined,
   maxModeQuota: Awaited<ReturnType<typeof getMaxModeQuota>>,
-  incrementDailyPromptUsage = false
+  incrementDailyPromptUsage = false,
 ) {
   if (!subscription) return undefined;
 
@@ -407,14 +406,15 @@ promptRouter.post(
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       // Enforce subscription gates: MAX mode and non-text modalities require a subscription
       ensureModalityAvailable(data.modality, subscriptionInfo.tier);
-      const maxModeQuotaBeforeUse = data.mode === 'max'
-        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
-        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
+      const maxModeQuotaBeforeUse =
+        data.mode === 'max'
+          ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+          : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       // Apply tier-based max tokens limit
       const maxTokens = Math.min(
         data.maxTokens || subscriptionInfo.features.maxTokensPerPrompt,
-        subscriptionInfo.features.maxTokensPerPrompt
+        subscriptionInfo.features.maxTokensPerPrompt,
       );
 
       // Enhance the prompt using DeepSeek
@@ -446,7 +446,9 @@ promptRouter.post(
           temperature: data.temperature || 0.7,
           maxTokens,
           modality: data.modality,
-          ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
+          ...(supportsImageAttachment
+            ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
+            : {}),
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           totalTokens: result.totalTokens,
@@ -490,9 +492,10 @@ promptRouter.post(
 
       // Record usage for quota tracking
       await recordUsage(req.user.id);
-      const maxModeQuota = data.mode === 'max'
-        ? await recordMaxModeUsage(req.user.id, subscriptionInfo.tier)
-        : maxModeQuotaBeforeUse;
+      const maxModeQuota =
+        data.mode === 'max'
+          ? await recordMaxModeUsage(req.user.id, subscriptionInfo.tier)
+          : maxModeQuotaBeforeUse;
 
       // Return enhanced prompt with subscription info
       res.status(200).json({
@@ -500,7 +503,7 @@ promptRouter.post(
         prompt: {
           ...savedPrompt,
           imageAttachment:
-            'imageAttachment' in savedPrompt ? savedPrompt.imageAttachment ?? null : null,
+            'imageAttachment' in savedPrompt ? (savedPrompt.imageAttachment ?? null) : null,
         },
         usage: {
           inputTokens: result.inputTokens,
@@ -526,7 +529,8 @@ promptRouter.post(
           res.status(403).json({
             error: 'Subscription required',
             code: 'MODALITY_REQUIRES_SUBSCRIPTION',
-            message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.',
+            message:
+              'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.',
           });
           return;
         }
@@ -544,7 +548,7 @@ promptRouter.post(
       }
       res.status(500).json({ error: 'Failed to enhance prompt' });
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -577,13 +581,14 @@ promptRouter.post(
 
       // Enforce subscription gates: MAX mode and non-text modalities require a subscription
       ensureModalityAvailable(data.modality, subscriptionInfo.tier);
-      const maxModeQuotaBeforeUse = data.mode === 'max'
-        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
-        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
+      const maxModeQuotaBeforeUse =
+        data.mode === 'max'
+          ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+          : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       const maxTokens = Math.min(
         data.maxTokens || subscriptionInfo.features.maxTokensPerPrompt,
-        subscriptionInfo.features.maxTokensPerPrompt
+        subscriptionInfo.features.maxTokensPerPrompt,
       );
 
       let savedPromptId: string | null = null;
@@ -619,7 +624,10 @@ promptRouter.post(
             try {
               await recordUsage(req.user!.id);
             } catch (usageError) {
-              promptLogger.error({ err: usageError, userId: req.user!.id }, 'Failed to record daily usage for prompt');
+              promptLogger.error(
+                { err: usageError, userId: req.user!.id },
+                'Failed to record daily usage for prompt',
+              );
             }
 
             let maxModeQuota = maxModeQuotaBeforeUse;
@@ -630,8 +638,10 @@ promptRouter.post(
               // Mid-stream there is no way to surface a 404 for a bad parent
               // id (headers are already sent), and failing here would drop the
               // whole enhancement — degrade to saving an unversioned original.
-              const versionFields = await resolveVersionFields(req.user!.id, data.parentPromptId)
-                .catch(() => ({}));
+              const versionFields = await resolveVersionFields(
+                req.user!.id,
+                data.parentPromptId,
+              ).catch(() => ({}));
               const baseData = {
                 userId: req.user!.id,
                 originalPrompt: data.prompt,
@@ -652,7 +662,9 @@ promptRouter.post(
                 savedPrompt = await prisma.prompt.create({
                   data: {
                     ...baseData,
-                    ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
+                    ...(supportsImageAttachment
+                      ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
+                      : {}),
                   },
                   select: { id: true },
                 });
@@ -664,7 +676,7 @@ promptRouter.post(
                   resetSchemaCompatibilityCache();
                   promptLogger.warn(
                     { err: createError, userId: req.user!.id },
-                    'imageAttachment column missing; retrying prompt persist without it'
+                    'imageAttachment column missing; retrying prompt persist without it',
                   );
                   savedPrompt = await prisma.prompt.create({
                     data: baseData,
@@ -704,13 +716,14 @@ promptRouter.post(
                   },
                 }),
               ]);
-              maxModeQuota = data.mode === 'max'
-                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-                : maxModeQuotaBeforeUse;
+              maxModeQuota =
+                data.mode === 'max'
+                  ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                  : maxModeQuotaBeforeUse;
             } catch (persistError) {
               promptLogger.error(
                 { err: persistError, userId: req.user!.id },
-                'Failed to persist enhanced prompt; returning result to client without saving'
+                'Failed to persist enhanced prompt; returning result to client without saving',
               );
             }
 
@@ -727,7 +740,7 @@ promptRouter.post(
                 },
                 imageAttachment: result.imageAttachment,
                 subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
-              })}\n\n`
+              })}\n\n`,
             );
             res.write('data: [DONE]\n\n');
             res.end();
@@ -737,93 +750,104 @@ promptRouter.post(
             res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
             res.end();
           },
-        }
+        },
       );
     } catch (error) {
       promptLogger.error({ err: error }, 'Stream enhance error');
       if (error instanceof z.ZodError) {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`,
+        );
       } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
-        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`,
+        );
       } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`,
+        );
       } else {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to enhance prompt' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'Failed to enhance prompt' })}\n\n`,
+        );
       }
       res.end();
     }
-  }
+  },
 );
 
 // ============================================================================
 // SAVE AN EXISTING PROMPT (generation endpoints account for AI usage)
 // ============================================================================
 
-promptRouter.post(
-  '/',
-  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
-
-      const data = createPromptSchema.parse(req.body);
-      const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
-      const versionFields = await resolveVersionFields(req.user.id, data.parentPromptId);
-
-      const prompt = await prisma.prompt.create({
-        data: {
-          userId: req.user.id,
-          originalPrompt: data.originalPrompt,
-          enhancedPrompt: data.enhancedPrompt,
-          model: data.model,
-          temperature: data.temperature,
-          maxTokens: data.maxTokens,
-          modality: data.modality,
-          ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(data.imageAttachment) } : {}),
-          inputTokens: data.inputTokens,
-          outputTokens: data.outputTokens,
-          totalTokens: data.totalTokens,
-          processingMs: data.processingMs,
-          title: data.title,
-          tags: data.tags,
-          ...versionFields,
-        },
-        select: promptSelect(supportsImageAttachment),
-      });
-
-      // Thread generation has already charged quota and analytics. Saving its
-      // result must remain available even after the last daily generation.
-      const subscription = await getSubscriptionInfo(req.user.id);
-
-      // Include subscription info in response for client-side prompt quality selection
-      res.status(201).json({
-        prompt: {
-          ...prompt,
-          imageAttachment: supportsImageAttachment ? ('imageAttachment' in prompt ? prompt.imageAttachment ?? null : null) : data.imageAttachment ?? null,
-        },
-        subscription: {
-          tier: subscription.tier,
-          promptQuality: subscription.features.promptQuality,
-          dailyPromptsUsed: subscription.dailyPromptsUsed,
-          dailyPromptsLimit: subscription.dailyPromptsLimit,
-        },
-      });
-    } catch (error) {
-      promptLogger.error({ err: error }, 'Create prompt error');
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.issues });
-        return;
-      }
-      if (error instanceof HttpError) {
-        res.status(error.statusCode).json({ error: error.message });
-        return;
-      }
-      res.status(500).json({ error: 'Failed to create prompt' });
+promptRouter.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
     }
+
+    const data = createPromptSchema.parse(req.body);
+    const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
+    const versionFields = await resolveVersionFields(req.user.id, data.parentPromptId);
+
+    const prompt = await prisma.prompt.create({
+      data: {
+        userId: req.user.id,
+        originalPrompt: data.originalPrompt,
+        enhancedPrompt: data.enhancedPrompt,
+        model: data.model,
+        temperature: data.temperature,
+        maxTokens: data.maxTokens,
+        modality: data.modality,
+        ...(supportsImageAttachment
+          ? { imageAttachment: toImageAttachmentJson(data.imageAttachment) }
+          : {}),
+        inputTokens: data.inputTokens,
+        outputTokens: data.outputTokens,
+        totalTokens: data.totalTokens,
+        processingMs: data.processingMs,
+        title: data.title,
+        tags: data.tags,
+        ...versionFields,
+      },
+      select: promptSelect(supportsImageAttachment),
+    });
+
+    // Thread generation has already charged quota and analytics. Saving its
+    // result must remain available even after the last daily generation.
+    const subscription = await getSubscriptionInfo(req.user.id);
+
+    // Include subscription info in response for client-side prompt quality selection
+    res.status(201).json({
+      prompt: {
+        ...prompt,
+        imageAttachment: supportsImageAttachment
+          ? 'imageAttachment' in prompt
+            ? (prompt.imageAttachment ?? null)
+            : null
+          : (data.imageAttachment ?? null),
+      },
+      subscription: {
+        tier: subscription.tier,
+        promptQuality: subscription.features.promptQuality,
+        dailyPromptsUsed: subscription.dailyPromptsUsed,
+        dailyPromptsLimit: subscription.dailyPromptsLimit,
+      },
+    });
+  } catch (error) {
+    promptLogger.error({ err: error }, 'Create prompt error');
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
+      return;
+    }
+    if (error instanceof HttpError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    res.status(500).json({ error: 'Failed to create prompt' });
   }
-);
+});
 
 // ============================================================================
 // LIST PROMPTS (with pagination, search, filters)
@@ -882,7 +906,7 @@ promptRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
     res.json({
       prompts: prompts.map((prompt) => ({
         ...prompt,
-        imageAttachment: 'imageAttachment' in prompt ? prompt.imageAttachment ?? null : null,
+        imageAttachment: 'imageAttachment' in prompt ? (prompt.imageAttachment ?? null) : null,
       })),
       pagination: {
         page: query.page,
@@ -935,7 +959,7 @@ promptRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
     res.json({
       prompt: {
         ...prompt,
-        imageAttachment: 'imageAttachment' in prompt ? prompt.imageAttachment ?? null : null,
+        imageAttachment: 'imageAttachment' in prompt ? (prompt.imageAttachment ?? null) : null,
       },
     });
   } catch (error) {
@@ -981,7 +1005,8 @@ promptRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
       prompt: updated
         ? {
             ...updated,
-            imageAttachment: 'imageAttachment' in updated ? updated.imageAttachment ?? null : null,
+            imageAttachment:
+              'imageAttachment' in updated ? (updated.imageAttachment ?? null) : null,
           }
         : null,
     });
@@ -1030,157 +1055,169 @@ promptRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pr
 // BULK OPERATIONS
 // ============================================================================
 
-promptRouter.post('/bulk/favorite', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+promptRouter.post(
+  '/bulk/favorite',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const { ids, isFavorite } = z
+        .object({
+          ids: z.array(z.string()).min(1).max(100),
+          isFavorite: z.boolean(),
+        })
+        .parse(req.body);
+
+      await prisma.prompt.updateMany({
+        where: {
+          id: { in: ids },
+          userId: req.user.id,
+        },
+        data: { isFavorite },
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      promptLogger.error({ err: error }, 'Bulk favorite error');
+      res.status(500).json({ error: 'Failed to update prompts' });
     }
+  },
+);
 
-    const { ids, isFavorite } = z
-      .object({
-        ids: z.array(z.string()).min(1).max(100),
-        isFavorite: z.boolean(),
-      })
-      .parse(req.body);
+promptRouter.post(
+  '/bulk/delete',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
 
-    await prisma.prompt.updateMany({
-      where: {
-        id: { in: ids },
-        userId: req.user.id,
-      },
-      data: { isFavorite },
-    });
+      const { ids } = z
+        .object({
+          ids: z.array(z.string()).min(1).max(100),
+        })
+        .parse(req.body);
 
-    res.json({ success: true });
-  } catch (error) {
-    promptLogger.error({ err: error }, 'Bulk favorite error');
-    res.status(500).json({ error: 'Failed to update prompts' });
-  }
-});
+      await prisma.prompt.deleteMany({
+        where: {
+          id: { in: ids },
+          userId: req.user.id,
+        },
+      });
 
-promptRouter.post('/bulk/delete', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+      res.json({ success: true });
+    } catch (error) {
+      promptLogger.error({ err: error }, 'Bulk delete error');
+      res.status(500).json({ error: 'Failed to delete prompts' });
     }
-
-    const { ids } = z
-      .object({
-        ids: z.array(z.string()).min(1).max(100),
-      })
-      .parse(req.body);
-
-    await prisma.prompt.deleteMany({
-      where: {
-        id: { in: ids },
-        userId: req.user.id,
-      },
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    promptLogger.error({ err: error }, 'Bulk delete error');
-    res.status(500).json({ error: 'Failed to delete prompts' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // VERSION HISTORY
 // ============================================================================
 
-promptRouter.get('/:id/versions', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+promptRouter.get(
+  '/:id/versions',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const anchor = await prisma.prompt.findFirst({
+        where: { id: req.params['id'] as string, userId: req.user.id },
+        select: { id: true, rootPromptId: true },
+      });
+      if (!anchor) {
+        res.status(404).json({ error: 'Prompt not found' });
+        return;
+      }
+
+      const rootPromptId = anchor.rootPromptId ?? anchor.id;
+      const versions = await prisma.prompt.findMany({
+        where: {
+          userId: req.user.id,
+          OR: [{ id: rootPromptId }, { rootPromptId }],
+        },
+        select: {
+          id: true,
+          version: true,
+          title: true,
+          originalPrompt: true,
+          enhancedPrompt: true,
+          model: true,
+          modality: true,
+          createdAt: true,
+        },
+        orderBy: { version: 'desc' },
+      });
+
+      res.json({ rootPromptId, versions });
+    } catch (error) {
+      promptLogger.error({ err: error }, 'List prompt versions error');
+      res.status(500).json({ error: 'Failed to list versions' });
     }
-
-    const anchor = await prisma.prompt.findFirst({
-      where: { id: req.params['id'] as string, userId: req.user.id },
-      select: { id: true, rootPromptId: true },
-    });
-    if (!anchor) {
-      res.status(404).json({ error: 'Prompt not found' });
-      return;
-    }
-
-    const rootPromptId = anchor.rootPromptId ?? anchor.id;
-    const versions = await prisma.prompt.findMany({
-      where: {
-        userId: req.user.id,
-        OR: [{ id: rootPromptId }, { rootPromptId }],
-      },
-      select: {
-        id: true,
-        version: true,
-        title: true,
-        originalPrompt: true,
-        enhancedPrompt: true,
-        model: true,
-        modality: true,
-        createdAt: true,
-      },
-      orderBy: { version: 'desc' },
-    });
-
-    res.json({ rootPromptId, versions });
-  } catch (error) {
-    promptLogger.error({ err: error }, 'List prompt versions error');
-    res.status(500).json({ error: 'Failed to list versions' });
-  }
-});
+  },
+);
 
 // Restore = copy an older version's content to a NEW head version. History is
 // append-only; nothing is overwritten, so a restore is itself restorable.
-promptRouter.post('/:id/restore', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
+promptRouter.post(
+  '/:id/restore',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
 
-    const source = await prisma.prompt.findFirst({
-      where: { id: req.params['id'] as string, userId: req.user.id },
-    });
-    if (!source) {
-      res.status(404).json({ error: 'Prompt not found' });
-      return;
-    }
+      const source = await prisma.prompt.findFirst({
+        where: { id: req.params['id'] as string, userId: req.user.id },
+      });
+      if (!source) {
+        res.status(404).json({ error: 'Prompt not found' });
+        return;
+      }
 
-    const versionFields = await resolveVersionFields(req.user.id, source.id);
-    const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
-    const restored = await prisma.prompt.create({
-      data: {
-        userId: req.user.id,
-        originalPrompt: source.originalPrompt,
-        enhancedPrompt: source.enhancedPrompt,
-        model: source.model,
-        temperature: source.temperature,
-        maxTokens: source.maxTokens,
-        modality: source.modality,
-        inputTokens: source.inputTokens,
-        outputTokens: source.outputTokens,
-        totalTokens: source.totalTokens,
-        processingMs: source.processingMs,
-        title: source.title,
-        tags: source.tags,
-        ...versionFields,
-      },
-      select: promptSelect(supportsImageAttachment),
-    });
+      const versionFields = await resolveVersionFields(req.user.id, source.id);
+      const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
+      const restored = await prisma.prompt.create({
+        data: {
+          userId: req.user.id,
+          originalPrompt: source.originalPrompt,
+          enhancedPrompt: source.enhancedPrompt,
+          model: source.model,
+          temperature: source.temperature,
+          maxTokens: source.maxTokens,
+          modality: source.modality,
+          inputTokens: source.inputTokens,
+          outputTokens: source.outputTokens,
+          totalTokens: source.totalTokens,
+          processingMs: source.processingMs,
+          title: source.title,
+          tags: source.tags,
+          ...versionFields,
+        },
+        select: promptSelect(supportsImageAttachment),
+      });
 
-    res.status(201).json({ prompt: restored });
-  } catch (error) {
-    promptLogger.error({ err: error }, 'Restore prompt version error');
-    if (error instanceof HttpError) {
-      res.status(error.statusCode).json({ error: error.message });
-      return;
+      res.status(201).json({ prompt: restored });
+    } catch (error) {
+      promptLogger.error({ err: error }, 'Restore prompt version error');
+      if (error instanceof HttpError) {
+        res.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to restore version' });
     }
-    res.status(500).json({ error: 'Failed to restore version' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // SHARING
@@ -1229,32 +1266,35 @@ promptRouter.post('/:id/share', async (req: AuthenticatedRequest, res: Response)
   }
 });
 
-promptRouter.delete('/:id/share', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
+promptRouter.delete(
+  '/:id/share',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
 
-    const result = await prisma.sharedPrompt.updateMany({
-      where: {
-        promptId: req.params['id'] as string,
-        userId: req.user.id,
-        isRevoked: false,
-      },
-      data: { isRevoked: true, revokedAt: new Date() },
-    });
-    if (result.count === 0) {
-      res.status(404).json({ error: 'No active share for this prompt' });
-      return;
-    }
+      const result = await prisma.sharedPrompt.updateMany({
+        where: {
+          promptId: req.params['id'] as string,
+          userId: req.user.id,
+          isRevoked: false,
+        },
+        data: { isRevoked: true, revokedAt: new Date() },
+      });
+      if (result.count === 0) {
+        res.status(404).json({ error: 'No active share for this prompt' });
+        return;
+      }
 
-    res.json({ revoked: result.count });
-  } catch (error) {
-    promptLogger.error({ err: error }, 'Revoke share link error');
-    res.status(500).json({ error: 'Failed to revoke share link' });
-  }
-});
+      res.json({ revoked: result.count });
+    } catch (error) {
+      promptLogger.error({ err: error }, 'Revoke share link error');
+      res.status(500).json({ error: 'Failed to revoke share link' });
+    }
+  },
+);
 
 // ============================================================================
 // MULTI-PROVIDER COMPARE (PRO/PREMIUM)
@@ -1273,13 +1313,16 @@ const compareSchema = z.object({
   customInstructions: z.string().max(2000).optional(),
 });
 
-promptRouter.get('/compare/providers', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  if (!req.user) {
-    res.status(401).json({ error: 'Not authenticated' });
-    return;
-  }
-  res.json({ providers: getAvailableProviders() });
-});
+promptRouter.get(
+  '/compare/providers',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    res.json({ providers: getAvailableProviders() });
+  },
+);
 
 promptRouter.post(
   '/compare',
@@ -1317,7 +1360,7 @@ promptRouter.post(
       // (enforced above); token accounting still records real upstream usage.
       const totalTokens = results.reduce(
         (sum, r) => sum + (r.inputTokens ?? 0) + (r.outputTokens ?? 0),
-        0
+        0,
       );
       await Promise.all([
         recordUsage(req.user.id),
@@ -1343,5 +1386,5 @@ promptRouter.post(
       }
       res.status(500).json({ error: 'Failed to compare providers' });
     }
-  }
+  },
 );

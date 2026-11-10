@@ -50,7 +50,7 @@ export function createDeepseekReflectionLlmCall(): ReflectionLlmCall {
         thinking: request.thinking,
       },
       getDeepseekApiKey(),
-      'chat'
+      'chat',
     );
 
     return {
@@ -97,7 +97,7 @@ export interface ProductionReflectionEngineOptions {
 }
 
 export function createProductionReflectionEngine(
-  options?: ProductionReflectionEngineOptions
+  options?: ProductionReflectionEngineOptions,
 ): ReflectionEngine {
   return createReflectionEngine({
     llm: createDeepseekReflectionLlmCall(),

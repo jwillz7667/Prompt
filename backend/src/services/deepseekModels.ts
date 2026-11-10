@@ -15,7 +15,13 @@ export const DEEPSEEK_THINKING_DISABLED: DeepSeekThinkingConfig = { type: 'disab
 // overrides both work.
 export function getDeepseekModel(): string {
   const configured = process.env['DEEPSEEK_MODEL']?.trim();
-  return !configured || ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'].includes(configured)
+  return !configured ||
+    [
+      'deepseek-chat',
+      'deepseek-reasoner',
+      'deepseek-v4-flash',
+      'deepseek-v4-flash-vision-exp',
+    ].includes(configured)
     ? DEEPSEEK_FLASH_MODEL
     : configured;
 }
@@ -38,7 +44,7 @@ const LEGACY_NON_THINKING_MODELS: ReadonlySet<string> = new Set(['deepseek-chat'
  */
 export function resolveDeepseekModel(
   requestedModel: string | undefined,
-  shouldThink: boolean
+  shouldThink: boolean,
 ): DeepSeekModelSelection {
   if (requestedModel && LEGACY_THINKING_MODELS.has(requestedModel)) {
     return { model: getDeepseekModel(), thinking: DEEPSEEK_THINKING_ENABLED };
@@ -47,9 +53,11 @@ export function resolveDeepseekModel(
     return { model: getDeepseekModel(), thinking: DEEPSEEK_THINKING_DISABLED };
   }
   return {
-    model: !requestedModel?.trim() || ['deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'].includes(requestedModel)
-      ? getDeepseekModel()
-      : requestedModel.trim(),
+    model:
+      !requestedModel?.trim() ||
+      ['deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'].includes(requestedModel)
+        ? getDeepseekModel()
+        : requestedModel.trim(),
     thinking: shouldThink ? DEEPSEEK_THINKING_ENABLED : DEEPSEEK_THINKING_DISABLED,
   };
 }

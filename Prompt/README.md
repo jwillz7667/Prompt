@@ -250,7 +250,7 @@ Auth state must be shared across the main app, widget extension, and keyboard ex
 - `StoreKitManager.swift` is the single source of truth for product loading, purchase,
   refund detection, and entitlement caching.
 - After a successful StoreKit transaction, the app calls
-  `POST /api/v1/subscriptions/verify-purchase` with the JWS payload. The backend
+  `POST /api/v1/subscriptions/verify` with the JWS payload. The backend
   verifies with Apple and returns the canonical `Subscription` row.
 - Apple App Store Server Notifications are received by the **backend** webhook with
   idempotent processing — never trust client state alone.
@@ -265,8 +265,8 @@ Auth state must be shared across the main app, widget extension, and keyboard ex
   per Apple's data-collection rules. The widget extension has its own manifest.
 - **App Tracking Transparency** is **not** required (we do not track users across
   third-party apps and websites).
-- **Sign-in-required content** is gated by `AuthManager.isAuthenticated`. The IAP flow
-  is intentionally reachable without sign-in (per App Store guideline 5.1.1(v)).
+- **Sign-in-required content** is gated by `AuthManager.isAuthenticated`. Purchases require
+  a valid authenticated account and a reachable backend before StoreKit begins payment.
 
 ---
 
@@ -274,8 +274,9 @@ Auth state must be shared across the main app, widget extension, and keyboard ex
 
 - `PromptUITests/` runs XCUITest snapshot tests via Fastlane (`fastlane snapshot`).
 - The CI workflow ([`../.github/workflows/ios.yml`](../.github/workflows/ios.yml)) runs
-  the test step with `continue-on-error: true` because we do not yet have a unit-test
-  framework wired up. Manual verification is required for non-trivial changes.
+  a simulator build and standalone configuration/subscription regression checks. Build
+  failures propagate through the formatter. Real Apple sign-in and sandbox purchase
+  acceptance are required in addition to these automated checks.
 
 ---
 

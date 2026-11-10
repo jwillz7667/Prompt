@@ -160,34 +160,37 @@ userRouter.get('/sessions', async (req: AuthenticatedRequest, res: Response): Pr
 // REVOKE SESSION
 // ============================================================================
 
-userRouter.delete('/sessions/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+userRouter.delete(
+  '/sessions/:id',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const sessionId = req.params.id as string;
+
+      // Don't allow revoking current session via this endpoint
+      if (sessionId === req.user.sessionId) {
+        res.status(400).json({ error: 'Cannot revoke current session. Use logout instead.' });
+        return;
+      }
+
+      await prisma.session.deleteMany({
+        where: {
+          id: sessionId,
+          userId: req.user.id,
+        },
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error }, 'Revoke session error');
+      res.status(500).json({ error: 'Failed to revoke session' });
     }
-
-    const sessionId = req.params.id as string;
-
-    // Don't allow revoking current session via this endpoint
-    if (sessionId === req.user.sessionId) {
-      res.status(400).json({ error: 'Cannot revoke current session. Use logout instead.' });
-      return;
-    }
-
-    await prisma.session.deleteMany({
-      where: {
-        id: sessionId,
-        userId: req.user.id,
-      },
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({ err: error }, 'Revoke session error');
-    res.status(500).json({ error: 'Failed to revoke session' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // DELETE ACCOUNT
@@ -235,51 +238,52 @@ const registerDeviceTokenSchema = z.object({
   environment: z.enum(['production', 'sandbox']).default('production'),
 });
 
-userRouter.post('/device-token', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+userRouter.post(
+  '/device-token',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const data = registerDeviceTokenSchema.parse(req.body);
+
+      await registerDeviceToken(req.user.id, data.deviceToken, data.deviceId, data.environment);
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error }, 'Register device token error');
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to register device token' });
     }
+  },
+);
 
-    const data = registerDeviceTokenSchema.parse(req.body);
+userRouter.delete(
+  '/device-token',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
 
-    await registerDeviceToken(
-      req.user.id,
-      data.deviceToken,
-      data.deviceId,
-      data.environment
-    );
+      const { deviceToken } = req.body;
+      if (!deviceToken) {
+        res.status(400).json({ error: 'Device token required' });
+        return;
+      }
 
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({ err: error }, 'Register device token error');
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.issues });
-      return;
+      await unregisterDeviceToken(deviceToken);
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error }, 'Unregister device token error');
+      res.status(500).json({ error: 'Failed to unregister device token' });
     }
-    res.status(500).json({ error: 'Failed to register device token' });
-  }
-});
-
-userRouter.delete('/device-token', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    const { deviceToken } = req.body;
-    if (!deviceToken) {
-      res.status(400).json({ error: 'Device token required' });
-      return;
-    }
-
-    await unregisterDeviceToken(deviceToken);
-
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({ err: error }, 'Unregister device token error');
-    res.status(500).json({ error: 'Failed to unregister device token' });
-  }
-});
+  },
+);

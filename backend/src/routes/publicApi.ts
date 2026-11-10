@@ -9,9 +9,18 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { apiKeyAuth, requirePermission, type ApiKeyRequest } from '../middleware/apiKeyAuth.js';
 import { apiRateLimit } from '../middleware/apiRateLimit.js';
-import { enforceApiQuota, recordApiUsage, getQuotaInfo, type ApiQuotaRequest } from '../middleware/apiQuotaEnforcement.js';
+import {
+  enforceApiQuota,
+  recordApiUsage,
+  getQuotaInfo,
+  type ApiQuotaRequest,
+} from '../middleware/apiQuotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
-import { enhancePrompt, enhancePromptStream, getPromptTierFromSubscription } from '../services/deepseekService.js';
+import {
+  enhancePrompt,
+  enhancePromptStream,
+  getPromptTierFromSubscription,
+} from '../services/deepseekService.js';
 import { getApiSubscriptionInfo, getTierConfig } from '../services/apiSubscriptionService.js';
 import { getRecentUsage } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
@@ -115,7 +124,7 @@ publicApiRouter.post(
                     processingMs: result.processingMs,
                   },
                   quota: quotaInfo.quota,
-                })}\n\n`
+                })}\n\n`,
               );
               res.write('data: [DONE]\n\n');
               res.end();
@@ -125,7 +134,7 @@ publicApiRouter.post(
               res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
               res.end();
             },
-          }
+          },
         );
       } else {
         // Regular response
@@ -185,7 +194,7 @@ publicApiRouter.post(
         message: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -249,7 +258,11 @@ publicApiRouter.get('/models', async (req: ApiKeyRequest, res: Response): Promis
       ],
       modes: [
         { id: 'standard', name: 'Standard', description: 'Fast, high-quality prompt enhancement' },
-        { id: 'max', name: 'MAX', description: 'Highest-quality prompt enhancement with deeper planning and validation' },
+        {
+          id: 'max',
+          name: 'MAX',
+          description: 'Highest-quality prompt enhancement with deeper planning and validation',
+        },
       ],
       limits: {
         maxPromptLength: 100000,
@@ -337,7 +350,7 @@ publicApiRouter.get(
       logger.error({ error, keyId: req.apiKey?.id }, 'Get history error');
       res.status(500).json({ error: 'Failed to get history' });
     }
-  }
+  },
 );
 
 // ============================================================================

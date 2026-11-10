@@ -46,13 +46,15 @@ export class CompareValidationError extends Error {
 // call costs up to this many upstream completions.
 export const MAX_COMPARE_PROVIDERS = 4;
 
-export async function compareEnhancements(request: CompareRequest): Promise<CompareVariantResult[]> {
+export async function compareEnhancements(
+  request: CompareRequest,
+): Promise<CompareVariantResult[]> {
   const available = getAvailableProviders();
   const unavailable = request.providers.filter((provider) => !available.includes(provider));
   if (unavailable.length > 0) {
     throw new CompareValidationError(
       `Providers not configured: ${unavailable.join(', ')}`,
-      available
+      available,
     );
   }
 
@@ -68,7 +70,7 @@ export async function compareEnhancements(request: CompareRequest): Promise<Comp
   // batching machinery is needed. allSettled: one provider failing must not
   // sink the comparison; the client renders per-provider errors inline.
   const settled = await Promise.allSettled(
-    request.providers.map((provider) => completeWithProvider(provider, messages))
+    request.providers.map((provider) => completeWithProvider(provider, messages)),
   );
 
   return settled.map((outcome, index) => {

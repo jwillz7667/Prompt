@@ -1,0 +1,16 @@
+{
+  "verifiedAt": "2026-11-10",
+  "backend": "https://backend-production-d7487.up.railway.app/api/v1",
+  "deployment": "ce6c06e9-461f-4006-8ca7-d3bcc2ed2d8b",
+  "model": "deepseek-flash",
+  "authenticatedTestAccount": true,
+  "generations": 4,
+  "historySaves": 4,
+  "dailyUsageBefore": 0,
+  "dailyUsageAfterGeneration": 4,
+  "dailyUsageAfterSave": 4,
+  "quotaChargedOnce": true,
+  "automatedPostgresRegressionTests": 3,
+  "personalAppleSignInVerified": false,
+  "sandboxStoreKitPurchaseVerified": false
+}

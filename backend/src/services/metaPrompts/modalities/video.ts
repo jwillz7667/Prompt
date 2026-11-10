@@ -129,7 +129,8 @@ Camera: Low angle static shot, dog running from background to foreground, passin
 Motion physics: Realistic paw impacts with grass compression and slight dirt spray. Fur ripples along body with each stride. Consistent running speed of approximately 25 km/h. Dog maintains rigid anatomical structure throughout.
 
 Lighting: Afternoon sun from rear, creating rim light on fur. Soft shadows on grass.`,
-    explanation: 'Video prompts must describe motion with physics language, specify camera behavior, and include rigidity cues to prevent morphing. Static descriptions produce static or distorted results.',
+    explanation:
+      'Video prompts must describe motion with physics language, specify camera behavior, and include rigidity cues to prevent morphing. Static descriptions produce static or distorted results.',
   },
   {
     badInput: 'beautiful waterfall',
@@ -145,7 +146,8 @@ CAMERA: Locked static shot from pool level, slight upward angle capturing full h
 SOUND DESIGN: Constant white noise of falling water, deeper bass from impact zone, lighter high frequencies from mist spray.
 
 Technical: Consistent water color and clarity throughout. Rock faces maintain fixed position. 60fps for smooth water motion.`,
-    explanation: 'Adjectives like "beautiful" and "majestic" don\'t translate to video. Describe the physics of water motion, camera position, environmental elements, and technical specifications.',
+    explanation:
+      'Adjectives like "beautiful" and "majestic" don\'t translate to video. Describe the physics of water motion, camera position, environmental elements, and technical specifications.',
   },
 ];
 
