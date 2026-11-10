@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
-import { backendURL, invoiceSubscriptionID, stripeClient, stripeID, subscriptionPeriodEnd, tierForPrice } from '@/lib/stripe/server'
+import {
+  backendURL,
+  invoiceSubscriptionID,
+  stripeClient,
+  stripeID,
+  subscriptionPeriodEnd,
+  tierForPrice,
+} from '@/lib/stripe/server'
 
 export async function POST(request: NextRequest) {
   const signature = request.headers.get('stripe-signature')
@@ -47,7 +54,7 @@ export async function POST(request: NextRequest) {
       const subscription = await stripe.subscriptions.retrieve(subscriptionId)
       const userId = subscription.metadata?.userId
       if (userId) {
-        const item = subscription.items.data.find(item => tierForPrice(item.price.id))
+        const item = subscription.items.data.find((item) => tierForPrice(item.price.id))
         if (!item) throw new Error('Unrecognized consumer subscription price')
         const customerId = stripeID(subscription.customer)
         if (!customerId) throw new Error('Missing subscription customer')
@@ -66,7 +73,13 @@ export async function POST(request: NextRequest) {
               stripePriceId: item.price.id,
               tier: tierForPrice(item.price.id),
               status: subscription.status,
-              ...(!deleted ? { currentPeriodEnd: new Date(subscriptionPeriodEnd(subscription) * 1000).toISOString() } : {}),
+              ...(!deleted
+                ? {
+                    currentPeriodEnd: new Date(
+                      subscriptionPeriodEnd(subscription) * 1000,
+                    ).toISOString(),
+                  }
+                : {}),
               cancelAtPeriodEnd: subscription.cancel_at_period_end,
             },
           }),

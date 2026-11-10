@@ -45,18 +45,23 @@ export function buildEnhancePayload(request: EnhanceRequest) {
   const lengthInstructions = {
     concise: 'Keep the enhanced prompt brief and focused; include only essential instructions.',
     standard: 'Use a balanced level of detail in the enhanced prompt.',
-    detailed: 'Make the enhanced prompt comprehensive, with explicit constraints and output requirements.',
+    detailed:
+      'Make the enhanced prompt comprehensive, with explicit constraints and output requirements.',
   }
   if (request.length) instructions.push(lengthInstructions[request.length])
   if (request.targetCharacterLength !== undefined) {
     if (!Number.isSafeInteger(request.targetCharacterLength) || request.targetCharacterLength < 1) {
       throw new Error('Target length must be a positive whole number of characters.')
     }
-    instructions.push(`Aim for approximately ${request.targetCharacterLength} characters in the enhanced prompt without dropping essential requirements.`)
+    instructions.push(
+      `Aim for approximately ${request.targetCharacterLength} characters in the enhanced prompt without dropping essential requirements.`,
+    )
   }
   const customInstructions = instructions.join('\n')
   if (customInstructions.length > 2000) {
-    throw new Error('Custom instructions and style settings must fit within 2,000 characters. Please shorten your instructions.')
+    throw new Error(
+      'Custom instructions and style settings must fit within 2,000 characters. Please shorten your instructions.',
+    )
   }
   return {
     prompt: request.prompt,
@@ -81,24 +86,29 @@ interface BackendStreamEvent {
 
 export async function* enhancePromptStream(
   request: EnhanceRequest,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent, void, unknown> {
   const stream = api.stream('/prompts/enhance/stream', buildEnhancePayload(request), signal)
   let content = ''
   for await (const data of stream) {
     const event = JSON.parse(data) as BackendStreamEvent
     if (event?.type === 'token') {
-      if (typeof event.content !== 'string') throw new Error('The enhancement stream contained an invalid response.')
+      if (typeof event.content !== 'string')
+        throw new Error('The enhancement stream contained an invalid response.')
       content += event.content
       yield { type: 'token', content: event.content }
     } else if (event?.type === 'error') {
-      yield { type: 'error', message: event.message || event.error || 'Enhancement failed. Please try again.' }
+      yield {
+        type: 'error',
+        message: event.message || event.error || 'Enhancement failed. Please try again.',
+      }
     } else if (event?.type === 'complete') {
       // The backend returns promptId (nullable), not a whole Prompt object.
       // Use the streamed output immediately, without another network dependency.
       const id = event.prompt?.id || event.promptId || null
       const enhancedPrompt = event.prompt?.enhancedPrompt || content
-      if (!enhancedPrompt.trim()) throw new Error('The enhancement finished without any output. Please try again.')
+      if (!enhancedPrompt.trim())
+        throw new Error('The enhancement finished without any output. Please try again.')
       const prompt: EnhancementResult = {
         id,
         originalPrompt: event.prompt?.originalPrompt ?? request.prompt,
@@ -110,8 +120,16 @@ export async function* enhancePromptStream(
         isSaved: id !== null,
       }
       yield {
-        type: 'complete', prompt, usage: event.usage, subscription: event.subscription,
-        ...(!id ? { warning: 'Your prompt was generated but could not be saved to history. Copy it before leaving this page.' } : {}),
+        type: 'complete',
+        prompt,
+        usage: event.usage,
+        subscription: event.subscription,
+        ...(!id
+          ? {
+              warning:
+                'Your prompt was generated but could not be saved to history. Copy it before leaving this page.',
+            }
+          : {}),
       }
       return
     } else {
@@ -137,7 +155,7 @@ export async function createPrompt(data: {
 
 export async function updatePrompt(
   id: string,
-  data: Partial<Pick<Prompt, 'isFavorite' | 'tags'>>
+  data: Partial<Pick<Prompt, 'isFavorite' | 'tags'>>,
 ): Promise<Prompt> {
   const { prompt } = await api.patch<{ prompt: Prompt }>(`/prompts/${id}`, data)
   return prompt

@@ -3,7 +3,9 @@ import { NextRequest } from 'next/server'
 import { proxy } from '@/proxy'
 
 it('keeps login reachable when an unverified refresh cookie exists', () => {
-  const response = proxy(new NextRequest('https://app.test/login', { headers: { cookie: 'refreshToken=expired' } }))
+  const response = proxy(
+    new NextRequest('https://app.test/login', { headers: { cookie: 'refreshToken=expired' } }),
+  )
   expect(response.headers.get('location')).toBeNull()
 })
 it('continues protecting the dashboard without a session cookie', () => {

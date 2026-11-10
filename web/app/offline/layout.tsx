@@ -5,10 +5,6 @@ export const metadata: Metadata = {
   description: 'You are currently offline. Please check your internet connection.',
 }
 
-export default function OfflineLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function OfflineLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }

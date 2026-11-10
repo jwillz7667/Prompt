@@ -27,7 +27,7 @@ export async function getProducts(): Promise<{ products: StripeProduct[] }> {
 
 // Stripe-specific endpoints (called via Next.js API routes)
 export async function createStripeCheckout(
-  request: StripeCheckoutRequest
+  request: StripeCheckoutRequest,
 ): Promise<StripeCheckoutResponse> {
   return api.post<StripeCheckoutResponse>('/api/stripe/checkout', request, { local: true })
 }

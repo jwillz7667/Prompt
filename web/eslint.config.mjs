@@ -19,7 +19,11 @@ export default defineConfig([
     },
   },
   globalIgnores([
-    '.next/**', 'out/**', 'build/**', 'next-env.d.ts',
-    'public/workbox-*.js', 'public/worker-*.js',
+    '.next/**',
+    'out/**',
+    'build/**',
+    'next-env.d.ts',
+    'public/workbox-*.js',
+    'public/worker-*.js',
   ]),
 ])

@@ -16,8 +16,7 @@ export interface SharedPrompt {
 const SLUG_PATTERN = /^[A-Za-z0-9_-]{8,32}$/
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  'https://backend-production-d7487.up.railway.app/api/v1'
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 export function isValidSlug(slug: string): boolean {
   return SLUG_PATTERN.test(slug)

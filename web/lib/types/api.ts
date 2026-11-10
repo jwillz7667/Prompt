@@ -72,7 +72,13 @@ export interface EnhancementResult {
 
 export type StreamEvent =
   | { type: 'token'; content: string }
-  | { type: 'complete'; prompt: EnhancementResult; warning?: string; usage?: PromptUsage; subscription?: EnhanceResponse['subscription'] }
+  | {
+      type: 'complete'
+      prompt: EnhancementResult
+      warning?: string
+      usage?: PromptUsage
+      subscription?: EnhanceResponse['subscription']
+    }
   | { type: 'error'; message: string }
 
 export interface PromptsListResponse {

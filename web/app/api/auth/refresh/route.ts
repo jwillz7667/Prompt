@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,10 +10,7 @@ export async function POST(request: NextRequest) {
     const refreshToken = cookieStore.get('refreshToken')?.value
 
     if (!refreshToken) {
-      return NextResponse.json(
-        { error: 'No refresh token' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'No refresh token' }, { status: 401 })
     }
 
     // Call backend refresh endpoint
@@ -28,7 +26,7 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json(
         { error: 'Refresh failed' },
-        { status: response.status >= 500 || response.status === 429 ? response.status : 401 }
+        { status: response.status >= 500 || response.status === 429 ? response.status : 401 },
       )
     }
 
@@ -50,9 +48,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Token refresh error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

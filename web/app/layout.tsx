@@ -13,7 +13,8 @@ import './globals.css'
 
 const siteUrl = 'https://promptomize.app'
 const siteName = 'Promptomize'
-const siteDescription = 'Transform your prompts into powerful, optimized instructions for any AI platform with advanced prompt engineering.'
+const siteDescription =
+  'Transform your prompts into powerful, optimized instructions for any AI platform with advanced prompt engineering.'
 
 export const metadata: Metadata = {
   // Basic metadata
@@ -151,11 +152,7 @@ export const viewport: Viewport = {
   colorScheme: 'dark light',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -196,9 +193,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
               url: siteUrl,
               logo: `${siteUrl}/logo.png`,
               description: siteDescription,
-              sameAs: [
-                'https://apps.apple.com/us/app/promptomize/id6758075605',
-              ],
+              sameAs: ['https://apps.apple.com/us/app/promptomize/id6758075605'],
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'customer support',
@@ -240,7 +235,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         {/* Skip to main content for accessibility */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-[var(--brand-accent)] focus:text-[var(--text-on-accent)] focus:rounded-lg focus:outline-none"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-[var(--brand-accent)] focus:px-4 focus:py-2 focus:text-[var(--text-on-accent)] focus:outline-none"
         >
           Skip to main content
         </a>

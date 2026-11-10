@@ -32,12 +32,12 @@ export function ToastContainer() {
             'flex items-start gap-3 rounded-xl border p-4 shadow-lg backdrop-blur-sm',
             'animate-in slide-in-from-right-full duration-300',
             'min-w-[300px] max-w-[420px]',
-            toastStyles[toast.type]
+            toastStyles[toast.type],
           )}
           role="alert"
         >
           <div className="flex-shrink-0">{toastIcons[toast.type]}</div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-medium text-[var(--text-primary)]">{toast.title}</p>
             {toast.message && (
               <p className="mt-1 text-sm text-[var(--text-secondary)]">{toast.message}</p>
@@ -45,7 +45,7 @@ export function ToastContainer() {
           </div>
           <button
             onClick={() => removeToast(toast.id)}
-            className="flex-shrink-0 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+            className="flex-shrink-0 text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)]"
             aria-label="Dismiss"
           >
             <X className="h-4 w-4" />

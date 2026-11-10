@@ -11,7 +11,12 @@ import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ErrorDisplay } from '@/components/shared/error-boundary'
-import { useTemplates, useCreateTemplate, useDeleteTemplate, useIncrementTemplateUsage } from '@/lib/hooks/useTemplates'
+import {
+  useTemplates,
+  useCreateTemplate,
+  useDeleteTemplate,
+  useIncrementTemplateUsage,
+} from '@/lib/hooks/useTemplates'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
 import { toast } from '@/lib/stores/uiStore'
 import { cn } from '@/lib/utils/cn'
@@ -90,7 +95,7 @@ export default function TemplatesPage() {
       router.push(`/dashboard?template=${encodeURIComponent(template.content)}`)
       toast.success('Template loaded')
     },
-    [incrementUsage, router]
+    [incrementUsage, router],
   )
 
   const handleCreate = useCallback(async () => {
@@ -120,9 +125,9 @@ export default function TemplatesPage() {
   }, [deleteConfirm, deleteTemplate])
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Templates</h1>
           <p className="mt-1 text-[var(--text-secondary)]">
@@ -136,7 +141,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1">
           <Input
             placeholder="Search templates..."
@@ -155,13 +160,13 @@ export default function TemplatesPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
             <Card key={i} className="p-4">
-              <Skeleton className="h-6 w-6 rounded-lg mb-3" />
-              <Skeleton className="h-5 w-2/3 mb-2" />
+              <Skeleton className="mb-3 h-6 w-6 rounded-lg" />
+              <Skeleton className="mb-2 h-5 w-2/3" />
               <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4 mt-1" />
+              <Skeleton className="mt-1 h-4 w-3/4" />
             </Card>
           ))}
         </div>
@@ -182,26 +187,28 @@ export default function TemplatesPage() {
           }}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => (
             <Card
               key={template.id}
               hover
-              className="p-4 cursor-pointer relative group"
+              className="group relative cursor-pointer p-4"
               onClick={() => setSelectedTemplate(template)}
             >
               <div className="flex items-start gap-3">
                 <div
                   className={cn(
-                    'flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0',
-                    template.isBuiltIn ? 'bg-brand-indigo/10 text-brand-indigo' : 'bg-brand-cyan/10 text-brand-cyan'
+                    'flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl',
+                    template.isBuiltIn
+                      ? 'bg-brand-indigo/10 text-brand-indigo'
+                      : 'bg-brand-cyan/10 text-brand-cyan',
                   )}
                 >
                   {categoryIcons[template.category] || <FileText className="h-5 w-5" />}
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-[var(--text-primary)] truncate">
+                    <h3 className="truncate font-semibold text-[var(--text-primary)]">
                       {template.name}
                     </h3>
                     {template.isBuiltIn && (
@@ -210,10 +217,10 @@ export default function TemplatesPage() {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mt-1">
+                  <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">
                     {template.description || template.content}
                   </p>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="mt-2 flex items-center gap-2">
                     <Badge variant="outline" className="text-[10px] capitalize">
                       {template.category}
                     </Badge>
@@ -231,7 +238,7 @@ export default function TemplatesPage() {
                     e.stopPropagation()
                     setDeleteConfirm(template)
                   }}
-                  className="absolute top-3 right-3 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all"
+                  className="absolute right-3 top-3 rounded-lg bg-red-500/10 p-1.5 text-red-500 opacity-0 transition-all hover:bg-red-500/20 group-hover:opacity-100"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -258,7 +265,7 @@ export default function TemplatesPage() {
               <label className="text-sm font-medium text-[var(--text-secondary)]">
                 Template Content
               </label>
-              <div className="mt-1 p-4 rounded-xl bg-[var(--bg-tertiary)] text-sm whitespace-pre-wrap font-mono">
+              <div className="mt-1 whitespace-pre-wrap rounded-xl bg-[var(--bg-tertiary)] p-4 font-mono text-sm">
                 {selectedTemplate.content}
               </div>
             </div>
@@ -267,9 +274,7 @@ export default function TemplatesPage() {
               <Badge variant="outline" className="capitalize">
                 {selectedTemplate.category}
               </Badge>
-              {selectedTemplate.isBuiltIn && (
-                <Badge variant="primary">Built-in</Badge>
-              )}
+              {selectedTemplate.isBuiltIn && <Badge variant="primary">Built-in</Badge>}
             </div>
 
             <ModalFooter>
@@ -356,11 +361,7 @@ export default function TemplatesPage() {
           <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
             Cancel
           </Button>
-          <Button
-            variant="danger"
-            onClick={handleDelete}
-            isLoading={deleteTemplate.isPending}
-          >
+          <Button variant="danger" onClick={handleDelete} isLoading={deleteTemplate.isPending}>
             Delete
           </Button>
         </ModalFooter>

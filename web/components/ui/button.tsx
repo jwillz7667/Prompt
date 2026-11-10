@@ -11,15 +11,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          'bg-brand-indigo text-white hover:bg-brand-indigo-light focus-visible:ring-brand-indigo shadow-lg hover:shadow-xl hover:shadow-brand-indigo/25',
+          'bg-brand-indigo text-white shadow-lg hover:bg-brand-indigo-light hover:shadow-xl hover:shadow-brand-indigo/25 focus-visible:ring-brand-indigo',
         secondary:
-          'bg-[var(--bg-secondary)] text-[var(--text-primary)] border border-[var(--border)] hover:bg-[var(--bg-tertiary)] focus-visible:ring-brand-indigo',
-        cyan:
-          'bg-brand-indigo dark:bg-brand-cyan text-white dark:text-black hover:bg-brand-indigo-light dark:hover:bg-brand-cyan-dark focus-visible:ring-brand-indigo dark:focus-visible:ring-brand-cyan shadow-lg hover:shadow-xl hover:shadow-brand-indigo/25 dark:hover:shadow-brand-cyan/25',
+          'border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] focus-visible:ring-brand-indigo',
+        cyan: 'bg-brand-indigo text-white shadow-lg hover:bg-brand-indigo-light hover:shadow-xl hover:shadow-brand-indigo/25 focus-visible:ring-brand-indigo dark:bg-brand-cyan dark:text-black dark:hover:bg-brand-cyan-dark dark:hover:shadow-brand-cyan/25 dark:focus-visible:ring-brand-cyan',
         ghost:
           'text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] focus-visible:ring-brand-indigo',
         danger:
-          'bg-red-500 text-white hover:bg-red-600 focus-visible:ring-red-500 shadow-lg hover:shadow-xl hover:shadow-red-500/25',
+          'bg-red-500 text-white shadow-lg hover:bg-red-600 hover:shadow-xl hover:shadow-red-500/25 focus-visible:ring-red-500',
         link: 'text-brand-indigo underline-offset-4 hover:underline focus-visible:ring-brand-indigo',
       },
       size: {
@@ -33,19 +32,21 @@ const buttonVariants = cva(
       variant: 'primary',
       size: 'md',
     },
-  }
+  },
 )
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   isLoading?: boolean
   leftIcon?: React.ReactNode
   rightIcon?: React.ReactNode
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, isLoading, leftIcon, rightIcon, children, disabled, ...props }, ref) => {
+  (
+    { className, variant, size, isLoading, leftIcon, rightIcon, children, disabled, ...props },
+    ref,
+  ) => {
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
@@ -53,16 +54,12 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || isLoading}
         {...props}
       >
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          leftIcon
-        )}
+        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : leftIcon}
         {children}
         {!isLoading && rightIcon}
       </button>
     )
-  }
+  },
 )
 Button.displayName = 'Button'
 

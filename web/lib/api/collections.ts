@@ -1,5 +1,10 @@
 import { api } from './client'
-import type { CollectionsListResponse, CreateCollectionRequest, AddToCollectionRequest, SuccessResponse } from '@/lib/types/api'
+import type {
+  CollectionsListResponse,
+  CreateCollectionRequest,
+  AddToCollectionRequest,
+  SuccessResponse,
+} from '@/lib/types/api'
 import type { Collection, CollectionWithPrompts } from '@/lib/types/models'
 
 export async function getCollections(): Promise<CollectionsListResponse> {
@@ -16,7 +21,7 @@ export async function createCollection(data: CreateCollectionRequest): Promise<C
 
 export async function updateCollection(
   id: string,
-  data: Partial<CreateCollectionRequest>
+  data: Partial<CreateCollectionRequest>,
 ): Promise<Collection> {
   return api.patch<Collection>(`/collections/${id}`, data)
 }
@@ -27,14 +32,14 @@ export async function deleteCollection(id: string): Promise<void> {
 
 export async function addPromptsToCollection(
   id: string,
-  data: AddToCollectionRequest
+  data: AddToCollectionRequest,
 ): Promise<SuccessResponse> {
   return api.post<SuccessResponse>(`/collections/${id}/prompts`, data)
 }
 
 export async function removePromptsFromCollection(
   id: string,
-  promptIds: string[]
+  promptIds: string[],
 ): Promise<SuccessResponse> {
   return api.delete<SuccessResponse>(`/collections/${id}/prompts`, {
     body: { promptIds },

@@ -110,7 +110,10 @@ export function useEnhance() {
         }
 
         if (controller.signal.aborted || abortRef.current !== controller) return null
-        if (!finalPrompt) throw new Error('The connection ended before completion. Any text below may be incomplete and has not been confirmed as saved.')
+        if (!finalPrompt)
+          throw new Error(
+            'The connection ended before completion. Any text below may be incomplete and has not been confirmed as saved.',
+          )
 
         setState({
           isEnhancing: false,
@@ -140,7 +143,7 @@ export function useEnhance() {
         if (abortRef.current === controller) abortRef.current = null
       }
     },
-    [settings, fetchSubscription]
+    [settings, fetchSubscription],
   )
 
   const cancel = useCallback(() => {

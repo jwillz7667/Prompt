@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import type { SubscriptionInfo } from '@/lib/types/models'
-import { getSubscriptionStatus, getTrialEligibility, startFreeTrial as apiStartTrial } from '@/lib/api/subscriptions'
+import {
+  getSubscriptionStatus,
+  getTrialEligibility,
+  startFreeTrial as apiStartTrial,
+} from '@/lib/api/subscriptions'
 
 interface SubscriptionState extends SubscriptionInfo {
   isLoading: boolean
@@ -45,7 +49,17 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   error: null,
   trialEligible: null,
 
-  reset: () => { subscriptionGeneration++; set({ ...defaultSubscription, billingProvider: null, stripeCustomerId: null, error: null, isLoading: false, trialEligible: null }) },
+  reset: () => {
+    subscriptionGeneration++
+    set({
+      ...defaultSubscription,
+      billingProvider: null,
+      stripeCustomerId: null,
+      error: null,
+      isLoading: false,
+      trialEligible: null,
+    })
+  },
 
   fetchSubscription: async () => {
     const generation = subscriptionGeneration
@@ -54,7 +68,10 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       const data = await getSubscriptionStatus()
       if (generation !== subscriptionGeneration) return
       set({
-        subscription: { ...data.subscription, autoRenewEnabled: data.autoRenewEnabled ?? data.subscription.autoRenewEnabled ?? false },
+        subscription: {
+          ...data.subscription,
+          autoRenewEnabled: data.autoRenewEnabled ?? data.subscription.autoRenewEnabled ?? false,
+        },
         usage: data.usage,
         features: data.features,
         billingProvider: data.billingProvider,
@@ -114,10 +131,15 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       await get().fetchSubscription()
       if (generation !== subscriptionGeneration) return false
       const state = get()
-      if (!state.error && state.billingProvider === 'stripe' &&
-        state.subscription.tier !== 'FREE' && !state.subscription.isTrialing &&
-        state.subscription.status === 'ACTIVE') return true
-      if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 2000))
+      if (
+        !state.error &&
+        state.billingProvider === 'stripe' &&
+        state.subscription.tier !== 'FREE' &&
+        !state.subscription.isTrialing &&
+        state.subscription.status === 'ACTIVE'
+      )
+        return true
+      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 2000))
     }
     return false
   },
@@ -128,19 +150,20 @@ export const useIsPremium = () =>
   useSubscriptionStore((state) => state.subscription.tier === 'PREMIUM')
 
 export const useIsPro = () =>
-  useSubscriptionStore((state) =>
-    state.subscription.tier === 'PRO' || state.subscription.tier === 'PREMIUM'
+  useSubscriptionStore(
+    (state) => state.subscription.tier === 'PRO' || state.subscription.tier === 'PREMIUM',
   )
 
-export const useCanCreatePrompt = () =>
-  useSubscriptionStore((state) => state.usage.canCreatePrompt)
+export const useCanCreatePrompt = () => useSubscriptionStore((state) => state.usage.canCreatePrompt)
 
 export const useDailyUsage = () =>
   useSubscriptionStore((state) => ({
     used: state.usage.dailyPromptsUsed,
     limit: state.usage.dailyPromptsLimit,
-    remaining: state.usage.dailyPromptsLimit === -1 ? Infinity : Math.max(0, state.usage.dailyPromptsLimit - state.usage.dailyPromptsUsed),
+    remaining:
+      state.usage.dailyPromptsLimit === -1
+        ? Infinity
+        : Math.max(0, state.usage.dailyPromptsLimit - state.usage.dailyPromptsUsed),
   }))
 
-export const useCanExport = () =>
-  useSubscriptionStore((state) => state.features.canExport)
+export const useCanExport = () => useSubscriptionStore((state) => state.features.canExport)

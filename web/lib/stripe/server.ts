@@ -1,7 +1,8 @@
 import Stripe from 'stripe'
 import type { NextRequest } from 'next/server'
 
-export const backendURL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
+export const backendURL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 export function stripeClient(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -18,10 +19,20 @@ export function appOrigin(request: NextRequest): string {
 }
 
 export function tierForPrice(priceId: string): 'PRO' | 'PREMIUM' | null {
-  if ([process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY,
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL].includes(priceId)) return 'PREMIUM'
-  if ([process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
-    process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL].includes(priceId)) return 'PRO'
+  if (
+    [
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY,
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL,
+    ].includes(priceId)
+  )
+    return 'PREMIUM'
+  if (
+    [
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL,
+    ].includes(priceId)
+  )
+    return 'PRO'
   return null
 }
 
@@ -30,7 +41,7 @@ export function stripeID(value: string | { id: string } | null | undefined): str
 }
 
 export function subscriptionPeriodEnd(subscription: Stripe.Subscription): number {
-  const item = subscription.items.data.find(item => tierForPrice(item.price.id))
+  const item = subscription.items.data.find((item) => tierForPrice(item.price.id))
   // Signed events from older destinations may still contain the Acacia shape.
   const legacy = subscription as Stripe.Subscription & { current_period_end?: number }
   const end = item?.current_period_end ?? legacy.current_period_end

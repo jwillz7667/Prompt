@@ -26,7 +26,8 @@ const nextConfig = {
         ],
       },
       {
-        source: '/:path(dashboard|admin|developers|settings|profile|history|collections|templates|upgrade)(.*)',
+        source:
+          '/:path(dashboard|admin|developers|settings|profile|history|collections|templates|upgrade)(.*)',
         headers: [
           {
             key: 'Cache-Control',

@@ -1,6 +1,7 @@
 import type { RefreshResponse, APIError } from '@/lib/types/api'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -32,7 +33,11 @@ export function getSessionGeneration(): number {
   return sessionGeneration
 }
 
-export function setTokens(accessToken: string, refreshToken: string | undefined, expiresIn: number) {
+export function setTokens(
+  accessToken: string,
+  refreshToken: string | undefined,
+  expiresIn: number,
+) {
   sessionGeneration++
   storeTokens(accessToken, refreshToken, expiresIn)
 }
@@ -113,10 +118,7 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 // Main API client
-export async function apiClient<T>(
-  endpoint: string,
-  options: RequestOptions = {}
-): Promise<T> {
+export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {}, skipAuth = false, local = false } = options
 
   const url = local ? endpoint : `${API_BASE_URL}${endpoint}`
@@ -152,7 +154,8 @@ export async function apiClient<T>(
 
   const requestGeneration = sessionGeneration
   const response = await fetch(url, config)
-  if (!skipAuth && requestGeneration !== sessionGeneration) throw new Error('Your session changed. Please try again.')
+  if (!skipAuth && requestGeneration !== sessionGeneration)
+    throw new Error('Your session changed. Please try again.')
 
   // Handle 401 - try refresh once
   if (response.status === 401 && !skipAuth) {
@@ -165,7 +168,8 @@ export async function apiClient<T>(
         ...config,
         headers: requestHeaders,
       })
-      if (retryGeneration !== sessionGeneration) throw new Error('Your session changed. Please try again.')
+      if (retryGeneration !== sessionGeneration)
+        throw new Error('Your session changed. Please try again.')
 
       if (!retryResponse.ok) {
         const error = await retryResponse.json().catch(() => ({
@@ -212,7 +216,7 @@ export async function apiClient<T>(
 export async function* streamClient(
   endpoint: string,
   body: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): AsyncGenerator<string, void, unknown> {
   const url = `${API_BASE_URL}${endpoint}`
 
@@ -238,7 +242,8 @@ export async function* streamClient(
   }
   let requestGeneration = sessionGeneration
   let response = await fetch(url, config)
-  if (requestGeneration !== sessionGeneration) throw new Error('Your session changed. Please try again.')
+  if (requestGeneration !== sessionGeneration)
+    throw new Error('Your session changed. Please try again.')
   if (response.status === 401) {
     const refreshed = await refreshAccessToken()
     if (refreshed) {
@@ -246,7 +251,8 @@ export async function* streamClient(
       requestGeneration = sessionGeneration
       headers.Authorization = `Bearer ${refreshed}`
       response = await fetch(url, config)
-      if (requestGeneration !== sessionGeneration) throw new Error('Your session changed. Please try again.')
+      if (requestGeneration !== sessionGeneration)
+        throw new Error('Your session changed. Please try again.')
     }
   }
 
@@ -270,7 +276,8 @@ export async function* streamClient(
   try {
     while (true) {
       const { done, value } = await reader.read()
-      if (requestGeneration !== sessionGeneration) throw new Error('Your session changed. Please try again.')
+      if (requestGeneration !== sessionGeneration)
+        throw new Error('Your session changed. Please try again.')
 
       if (done) break
 
@@ -319,5 +326,6 @@ export const api = {
   delete: <T>(endpoint: string, options?: Omit<RequestOptions, 'method'>) =>
     apiClient<T>(endpoint, { ...options, method: 'DELETE' }),
 
-  stream: (endpoint: string, body: unknown, signal?: AbortSignal) => streamClient(endpoint, body, signal),
+  stream: (endpoint: string, body: unknown, signal?: AbortSignal) =>
+    streamClient(endpoint, body, signal),
 }

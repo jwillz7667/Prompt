@@ -98,43 +98,59 @@ const modalityDetails: Record<
 > = {
   text: {
     title: 'Text prompts',
-    description: 'Optimize prompts for writing, summarization, research, planning, and assistant workflows.',
-    placeholder: "Enter the writing or assistant task you want improved. Example: 'Write a launch email for a new AI feature aimed at product managers.'",
-    helper: 'Promptomize will emphasize structure, audience, tone, and clear output requirements for text models.',
+    description:
+      'Optimize prompts for writing, summarization, research, planning, and assistant workflows.',
+    placeholder:
+      "Enter the writing or assistant task you want improved. Example: 'Write a launch email for a new AI feature aimed at product managers.'",
+    helper:
+      'Promptomize will emphasize structure, audience, tone, and clear output requirements for text models.',
     outputLabel: 'text',
   },
   image: {
     title: 'Image prompts',
-    description: 'Optimize prompts for image generators with stronger subject, composition, style, lighting, and camera detail.',
-    placeholder: "Describe the scene you want improved. Example: 'A luxury perfume bottle on black marble with water droplets and dramatic lighting.'",
+    description:
+      'Optimize prompts for image generators with stronger subject, composition, style, lighting, and camera detail.',
+    placeholder:
+      "Describe the scene you want improved. Example: 'A luxury perfume bottle on black marble with water droplets and dramatic lighting.'",
     helper: 'Best for image-generation tools and workflows.',
     outputLabel: 'image',
   },
   video: {
     title: 'Video prompts',
-    description: 'Optimize prompts for motion, pacing, camera movement, scene progression, and cinematic detail.',
-    placeholder: "Describe the sequence you want improved. Example: 'A futuristic sports car racing through neon Tokyo at night for a short ad.'",
-    helper: 'Promptomize will add motion cues, camera direction, timing, and scene continuity for video tools.',
+    description:
+      'Optimize prompts for motion, pacing, camera movement, scene progression, and cinematic detail.',
+    placeholder:
+      "Describe the sequence you want improved. Example: 'A futuristic sports car racing through neon Tokyo at night for a short ad.'",
+    helper:
+      'Promptomize will add motion cues, camera direction, timing, and scene continuity for video tools.',
     outputLabel: 'video',
   },
   audio: {
     title: 'Audio prompts',
-    description: 'Optimize prompts for music, lyrics, voice, or sound design with richer sonic and production language.',
-    placeholder: "Describe the audio output you want improved. Example: 'An uplifting synth-pop anthem with a female lead vocal and glossy 80s production.'",
-    helper: 'Best for music generation, voice synthesis, podcast scripting, and sound design workflows.',
+    description:
+      'Optimize prompts for music, lyrics, voice, or sound design with richer sonic and production language.',
+    placeholder:
+      "Describe the audio output you want improved. Example: 'An uplifting synth-pop anthem with a female lead vocal and glossy 80s production.'",
+    helper:
+      'Best for music generation, voice synthesis, podcast scripting, and sound design workflows.',
     outputLabel: 'audio',
   },
   code: {
     title: 'Code prompts',
-    description: 'Optimize prompts for implementation details, frameworks, constraints, architecture, and test expectations.',
-    placeholder: "Describe the coding task you want improved. Example: 'Build a secure Express auth API with JWT refresh tokens, rate limiting, and tests.'",
-    helper: 'Promptomize will sharpen technical requirements, expected outputs, constraints, and edge cases.',
+    description:
+      'Optimize prompts for implementation details, frameworks, constraints, architecture, and test expectations.',
+    placeholder:
+      "Describe the coding task you want improved. Example: 'Build a secure Express auth API with JWT refresh tokens, rate limiting, and tests.'",
+    helper:
+      'Promptomize will sharpen technical requirements, expected outputs, constraints, and edge cases.',
     outputLabel: 'code',
   },
   '3d': {
     title: '3D prompts',
-    description: 'Optimize prompts for 3D assets, renders, topology, materials, scale, and target use cases.',
-    placeholder: "Describe the 3D asset or render you want improved. Example: 'A stylized medieval sword game asset with leather grip and worn steel blade.'",
+    description:
+      'Optimize prompts for 3D assets, renders, topology, materials, scale, and target use cases.',
+    placeholder:
+      "Describe the 3D asset or render you want improved. Example: 'A stylized medieval sword game asset with leather grip and worn steel blade.'",
     helper: 'Best for 3D generation, visualization, asset ideation, and 3D-printing prep prompts.',
     outputLabel: '3D',
   },
@@ -156,7 +172,8 @@ export default function DashboardPage() {
   const { selectedTone, setTone, outputLength, setOutputLength, deepThinkEnabled, setDeepThink } =
     useSettingsStore()
   const { subscription, usage } = useSubscription()
-  const { isEnhancing, streamedContent, result, error, warning, progress, enhance, reset, cancel } = useEnhance()
+  const { isEnhancing, streamedContent, result, error, warning, progress, enhance, reset, cancel } =
+    useEnhance()
 
   // Pre-fill prompt from URL params (for re-enhance from history)
   useEffect(() => {
@@ -204,7 +221,10 @@ export default function DashboardPage() {
     // Check MAX MODE quota
     if ((maxModeEnabled || (canDeepThink && deepThinkEnabled)) && !canUseMaxMode) {
       if (tier === 'FREE') {
-        toast.error('MAX MODE requires Pro', 'Upgrade to Pro for 5 MAX prompts/day or Premium for unlimited')
+        toast.error(
+          'MAX MODE requires Pro',
+          'Upgrade to Pro for 5 MAX prompts/day or Premium for unlimited',
+        )
       } else {
         toast.error('MAX MODE limit reached', 'Upgrade to Premium for unlimited MAX prompts')
       }
@@ -222,11 +242,24 @@ export default function DashboardPage() {
       if (!completed) return
 
       if (completed.isSaved) toast.success('Prompt enhanced!')
-      else toast.warning('Prompt generated; not saved', 'Copy your result before leaving this page.')
+      else
+        toast.warning('Prompt generated; not saved', 'Copy your result before leaving this page.')
     } catch (err) {
       // Error already shown in state
     }
-  }, [prompt, modality, selectedTone, outputLength, deepThinkEnabled, canDeepThink, canEnhance, enhance, maxModeEnabled, canUseMaxMode, tier])
+  }, [
+    prompt,
+    modality,
+    selectedTone,
+    outputLength,
+    deepThinkEnabled,
+    canDeepThink,
+    canEnhance,
+    enhance,
+    maxModeEnabled,
+    canUseMaxMode,
+    tier,
+  ])
 
   const handleCopy = useCallback(async () => {
     const textToCopy = result?.enhancedPrompt || streamedContent
@@ -247,7 +280,7 @@ export default function DashboardPage() {
   const hasOutput = !!displayContent
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">Enhance Your Prompt</h1>
@@ -258,8 +291,8 @@ export default function DashboardPage() {
 
       {/* Quota warning */}
       {!canEnhance && (
-        <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+        <div className="flex items-center gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 text-yellow-500" />
           <div className="flex-1">
             <p className="font-medium text-[var(--text-primary)]">Daily limit reached</p>
             <p className="text-sm text-[var(--text-secondary)]">
@@ -278,10 +311,10 @@ export default function DashboardPage() {
       <Card variant="elevated">
         <CardContent className="p-0">
           {/* Input Section */}
-          <div className="p-6 pb-4 border-b border-[var(--border)]">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)] mb-4">
+          <div className="border-b border-[var(--border)] p-6 pb-4">
+            <div className="mb-4 grid gap-4 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
               <div className="relative z-30">
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
                   Modality
                 </label>
                 <Select
@@ -293,12 +326,14 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="rounded-2xl border border-[var(--border)] bg-brand-indigo/5 dark:bg-brand-cyan/5 px-4 py-3">
+              <div className="rounded-2xl border border-[var(--border)] bg-brand-indigo/5 px-4 py-3 dark:bg-brand-cyan/5">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{activeModality.outputLabel}</Badge>
                   <p className="font-medium text-[var(--text-primary)]">{activeModality.title}</p>
                 </div>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">{activeModality.description}</p>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  {activeModality.description}
+                </p>
                 <p className="mt-2 text-xs text-[var(--text-tertiary)]">{activeModality.helper}</p>
               </div>
             </div>
@@ -307,17 +342,18 @@ export default function DashboardPage() {
               placeholder={activeModality.placeholder}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[150px] text-base border-0 bg-transparent focus:ring-0 resize-none"
+              className="min-h-[150px] resize-none border-0 bg-transparent text-base focus:ring-0"
               disabled={isEnhancing}
             />
             <p className="mt-2 text-sm text-[var(--text-tertiary)]">
-              Promptomize will optimize this prompt specifically for {activeModality.outputLabel.toLowerCase()} workflows.
+              Promptomize will optimize this prompt specifically for{' '}
+              {activeModality.outputLabel.toLowerCase()} workflows.
             </p>
 
             {/* Options Row */}
-            <div className="flex flex-wrap items-end gap-4 mt-4 pt-4 border-t border-[var(--border)]">
+            <div className="mt-4 flex flex-wrap items-end gap-4 border-t border-[var(--border)] pt-4">
               <div className="relative z-20">
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
                   Tone
                 </label>
                 <Select
@@ -331,7 +367,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="relative z-10">
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
                   Length
                 </label>
                 <Select
@@ -350,7 +386,12 @@ export default function DashboardPage() {
                   onChange={setDeepThink}
                   disabled={!canDeepThink || isEnhancing}
                 />
-                <span className="text-sm text-[var(--text-secondary)]" title="Uses the same daily allowance as MAX mode">Deep Think · MAX quota</span>
+                <span
+                  className="text-sm text-[var(--text-secondary)]"
+                  title="Uses the same daily allowance as MAX mode"
+                >
+                  Deep Think · MAX quota
+                </span>
                 {!canDeepThink && (
                   <Badge variant="pro" className="text-[10px]">
                     PRO
@@ -365,9 +406,15 @@ export default function DashboardPage() {
                   onChange={(checked) => {
                     if (checked && !canUseMaxMode) {
                       if (tier === 'FREE') {
-                        toast.info('MAX MODE requires Pro', 'Upgrade to Pro or Premium for MAX MODE access')
+                        toast.info(
+                          'MAX MODE requires Pro',
+                          'Upgrade to Pro or Premium for MAX MODE access',
+                        )
                       } else {
-                        toast.info('MAX MODE limit reached', 'Upgrade to Premium for unlimited MAX prompts')
+                        toast.info(
+                          'MAX MODE limit reached',
+                          'Upgrade to Premium for unlimited MAX prompts',
+                        )
                       }
                       return
                     }
@@ -376,7 +423,12 @@ export default function DashboardPage() {
                   disabled={isEnhancing || tier === 'FREE'}
                 />
                 <div className="flex items-center gap-1.5">
-                  <Flame className={cn('h-4 w-4', maxModeEnabled ? 'text-orange-500' : 'text-[var(--text-tertiary)]')} />
+                  <Flame
+                    className={cn(
+                      'h-4 w-4',
+                      maxModeEnabled ? 'text-orange-500' : 'text-[var(--text-tertiary)]',
+                    )}
+                  />
                   <span className="text-sm text-[var(--text-secondary)]">MAX</span>
                 </div>
                 {tier === 'FREE' && (
@@ -393,7 +445,11 @@ export default function DashboardPage() {
 
               <div className="flex-1" />
 
-              {isEnhancing && <Button variant="secondary" onClick={cancel}>Stop</Button>}
+              {isEnhancing && (
+                <Button variant="secondary" onClick={cancel}>
+                  Stop
+                </Button>
+              )}
 
               <Button
                 variant="cyan"
@@ -404,75 +460,92 @@ export default function DashboardPage() {
                 leftIcon={!isEnhancing && <Sparkles className="h-5 w-5" />}
                 className="min-w-[180px]"
               >
-                {isEnhancing ? `Optimizing ${activeModality.outputLabel}...` : `Optimize ${activeModality.outputLabel}`}
+                {isEnhancing
+                  ? `Optimizing ${activeModality.outputLabel}...`
+                  : `Optimize ${activeModality.outputLabel}`}
               </Button>
             </div>
           </div>
 
           {/* Output Section */}
           {(hasOutput || isEnhancing || error) && (
-            <div className="p-6 bg-brand-indigo/5 dark:bg-brand-cyan/5">
+            <div className="bg-brand-indigo/5 p-6 dark:bg-brand-cyan/5">
               {error && (
-                <div role="alert" className="mb-4 rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+                <div
+                  role="alert"
+                  className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4"
+                >
                   <p className="text-red-500">{error}</p>
                 </div>
               )}
               {(hasOutput || isEnhancing) && (
                 <>
                   {warning && (
-                    <p role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-300">{warning}</p>
+                    <p
+                      role="status"
+                      className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-300"
+                    >
+                      {warning}
+                    </p>
                   )}
                   {/* Progress indicator */}
                   {isEnhancing && (
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="relative h-1 flex-1 rounded-full bg-[var(--border)] overflow-hidden">
+                    <div className="mb-4 flex items-center gap-2">
+                      <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
                         <div
                           className={cn(
                             'absolute left-0 top-0 h-full rounded-full transition-all duration-300',
-                            progress === 'starting' && 'w-1/4 bg-brand-indigo dark:bg-brand-cyan animate-pulse',
+                            progress === 'starting' &&
+                              'w-1/4 animate-pulse bg-brand-indigo dark:bg-brand-cyan',
                             progress === 'streaming' && 'w-3/4 bg-brand-indigo dark:bg-brand-cyan',
-                            progress === 'completing' && 'w-full bg-brand-cyan'
+                            progress === 'completing' && 'w-full bg-brand-cyan',
                           )}
                         />
                       </div>
-                      <span className="text-xs text-[var(--text-tertiary)] capitalize">{progress}</span>
+                      <span className="text-xs capitalize text-[var(--text-tertiary)]">
+                        {progress}
+                      </span>
                     </div>
                   )}
 
                   {/* Enhanced output */}
                   <div className="relative">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="mb-4 flex items-center gap-2">
                       <Badge variant="outline">{outputModalityDetails.outputLabel} optimized</Badge>
                       <span className="text-xs text-[var(--text-tertiary)]">
-                        Structured for {outputModalityDetails.outputLabel.toLowerCase()} generation workflows.
+                        Structured for {outputModalityDetails.outputLabel.toLowerCase()} generation
+                        workflows.
                       </span>
                     </div>
                     <div
                       className={cn(
                         'min-h-[120px] whitespace-pre-wrap text-base text-[var(--text-primary)]',
-                        isEnhancing && 'animate-pulse'
+                        isEnhancing && 'animate-pulse',
                       )}
                     >
                       {displayContent || (
                         <span className="text-[var(--text-tertiary)]">
-                          Your optimized {outputModalityDetails.outputLabel.toLowerCase()} prompt will appear here...
+                          Your optimized {outputModalityDetails.outputLabel.toLowerCase()} prompt
+                          will appear here...
                         </span>
                       )}
                       {isEnhancing && progress === 'streaming' && (
-                        <span className="inline-block w-2 h-5 ml-1 bg-brand-cyan animate-pulse" />
+                        <span className="ml-1 inline-block h-5 w-2 animate-pulse bg-brand-cyan" />
                       )}
                     </div>
 
                     {/* Actions */}
                     {hasOutput && !isEnhancing && (
-                      <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-[var(--border)]">
+                      <div className="mt-4 flex flex-col gap-3 border-t border-[var(--border)] pt-4">
                         {/* Primary actions row */}
                         <div className="flex items-center gap-2">
                           <Button
                             variant="cyan"
                             size="md"
                             onClick={handleCopy}
-                            leftIcon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            leftIcon={
+                              copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />
+                            }
                             className="min-w-[120px]"
                           >
                             {copied ? 'Copied!' : 'Copy Prompt'}
@@ -490,9 +563,7 @@ export default function DashboardPage() {
                         {/* Stats row */}
                         {result && (
                           <div className="flex items-center gap-4 text-xs text-[var(--text-tertiary)]">
-                            {result.inputTokens && (
-                              <span>{result.inputTokens} input tokens</span>
-                            )}
+                            {result.inputTokens && <span>{result.inputTokens} input tokens</span>}
                             {result.outputTokens && (
                               <span>{result.outputTokens} output tokens</span>
                             )}
@@ -512,7 +583,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-indigo/10">
@@ -546,8 +617,12 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-sm text-[var(--text-secondary)]">Quality</p>
-              <p className="text-lg font-semibold text-[var(--text-primary)] capitalize">
-                {subscription.tier === 'FREE' ? 'Basic' : subscription.tier === 'PRO' ? 'Standard' : 'Advanced'}
+              <p className="text-lg font-semibold capitalize text-[var(--text-primary)]">
+                {subscription.tier === 'FREE'
+                  ? 'Basic'
+                  : subscription.tier === 'PRO'
+                    ? 'Standard'
+                    : 'Advanced'}
               </p>
             </div>
           </div>

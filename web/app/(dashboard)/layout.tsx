@@ -22,7 +22,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const { sidebarCollapsed } = useUIStore()
   const [isInitialized, setIsInitialized] = useState(false)
 
-
   // Handle OAuth callback tokens and initial auth check
   useEffect(() => {
     const initAuth = async () => {
@@ -44,7 +43,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       // Use cookie if available, fallback to URL params
       const token = tokenCookie || tokenParam
       const expiresIn = expiresInCookie || expiresInParam
-
 
       if (token && expiresIn) {
         setTokens(token, '', parseInt(expiresIn, 10))
@@ -72,13 +70,16 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           toast.info('Confirming your subscription', 'This can take a few seconds.')
           const activated = await refreshAfterPurchase()
           if (activated) toast.success('Subscription activated!', 'Your plan is ready to use.')
-          else toast.info('Subscription confirmation pending', 'Refresh your plan shortly. Please avoid submitting another payment.')
+          else
+            toast.info(
+              'Subscription confirmation pending',
+              'Refresh your plan shortly. Please avoid submitting another payment.',
+            )
         }
       } else if (checkout === 'canceled') {
         toast.info('Checkout canceled', 'No charges were made')
         router.replace('/upgrade')
       }
-
     }
 
     initAuth()
@@ -125,22 +126,16 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <main
         className={cn(
           'pt-16 transition-all duration-300',
-          sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'
+          sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64',
         )}
       >
-        <div className="min-h-[calc(100vh-4rem)] p-4 lg:p-6">
-          {children}
-        </div>
+        <div className="min-h-[calc(100vh-4rem)] p-4 lg:p-6">{children}</div>
       </main>
     </div>
   )
 }
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<LoadingState fullScreen message="Loading..." />}>
       <DashboardContent>{children}</DashboardContent>

@@ -3,7 +3,11 @@ import { api, clearTokens, getAccessToken, refreshAccessToken, setTokens } from 
 import { getCurrentUser, logout } from '@/lib/api/auth'
 
 const fetchMock = vi.fn()
-beforeEach(() => { clearTokens(); vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset() })
+beforeEach(() => {
+  clearTokens()
+  vi.stubGlobal('fetch', fetchMock)
+  fetchMock.mockReset()
+})
 afterEach(() => vi.unstubAllGlobals())
 
 describe('authentication and streaming', () => {
@@ -29,7 +33,11 @@ describe('authentication and streaming', () => {
   })
   it('does not revive a session if a refresh finishes after logout', async () => {
     let finish!: (value: Response) => void
-    fetchMock.mockReturnValue(new Promise<Response>(resolve => { finish = resolve }))
+    fetchMock.mockReturnValue(
+      new Promise<Response>((resolve) => {
+        finish = resolve
+      }),
+    )
     const pending = refreshAccessToken()
     clearTokens()
     finish(Response.json({ accessToken: 'stale', expiresIn: 900 }))
@@ -46,7 +54,12 @@ describe('authentication and streaming', () => {
   it('passes cancellation to fetch and cancels the reader on early exit', async () => {
     setTokens('access', undefined, 900)
     const cancel = vi.fn()
-    const body = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"type":"token","content":"hi"}\n\n')) }, cancel })
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"type":"token","content":"hi"}\n\n'))
+      },
+      cancel,
+    })
     fetchMock.mockResolvedValue(new Response(body))
     const controller = new AbortController()
     const stream = api.stream('/prompts/enhance/stream', {}, controller.signal)
@@ -60,7 +73,11 @@ describe('authentication and streaming', () => {
 it('does not let a stale 401 clear the next account session', async () => {
   setTokens('account-a', undefined, 900)
   let finish!: (value: Response) => void
-  fetchMock.mockReturnValueOnce(new Promise<Response>(resolve => { finish = resolve }))
+  fetchMock.mockReturnValueOnce(
+    new Promise<Response>((resolve) => {
+      finish = resolve
+    }),
+  )
   const pending = api.get('/auth/me')
   setTokens('account-b', undefined, 900)
   finish(new Response('', { status: 401 }))
@@ -73,7 +90,11 @@ it('does not let an old refresh rejection clear a new login', async () => {
   setTokens('account-a', undefined, 900)
   fetchMock.mockResolvedValueOnce(new Response('', { status: 401 }))
   let finish!: (value: Response) => void
-  fetchMock.mockReturnValueOnce(new Promise<Response>(resolve => { finish = resolve }))
+  fetchMock.mockReturnValueOnce(
+    new Promise<Response>((resolve) => {
+      finish = resolve
+    }),
+  )
   const pending = api.get('/auth/me')
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
   setTokens('account-b', undefined, 900)

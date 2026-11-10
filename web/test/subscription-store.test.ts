@@ -1,15 +1,28 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const api = vi.hoisted(() => ({ getSubscriptionStatus: vi.fn(), getTrialEligibility: vi.fn(), startFreeTrial: vi.fn() }))
+const api = vi.hoisted(() => ({
+  getSubscriptionStatus: vi.fn(),
+  getTrialEligibility: vi.fn(),
+  startFreeTrial: vi.fn(),
+}))
 vi.mock('@/lib/api/subscriptions', () => api)
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
 
 const free = {
   subscription: { tier: 'FREE', status: 'ACTIVE', isTrialing: false },
   usage: { dailyPromptsUsed: 0, dailyPromptsLimit: 10, canCreatePrompt: true },
-  features: {}, billingProvider: null,
+  features: {},
+  billingProvider: null,
 }
-const paid = { ...free, subscription: { ...free.subscription, tier: 'PRO' }, billingProvider: 'stripe', autoRenewEnabled: true }
-beforeEach(() => { vi.resetAllMocks(); useSubscriptionStore.getState().reset() })
+const paid = {
+  ...free,
+  subscription: { ...free.subscription, tier: 'PRO' },
+  billingProvider: 'stripe',
+  autoRenewEnabled: true,
+}
+beforeEach(() => {
+  vi.resetAllMocks()
+  useSubscriptionStore.getState().reset()
+})
 afterEach(() => vi.useRealTimers())
 
 it('does not report activation until the webhook grants the paid tier', async () => {
@@ -30,7 +43,11 @@ it('leaves delayed payments pending instead of claiming success', async () => {
 })
 it('discards a paid response received after account reset', async () => {
   let finish!: (value: unknown) => void
-  api.getSubscriptionStatus.mockReturnValue(new Promise(resolve => { finish = resolve }))
+  api.getSubscriptionStatus.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
   const pending = useSubscriptionStore.getState().fetchSubscription()
   useSubscriptionStore.getState().reset()
   finish(paid)

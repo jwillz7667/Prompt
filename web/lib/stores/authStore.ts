@@ -3,7 +3,12 @@ import { useSubscriptionStore } from './subscriptionStore'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User } from '@/lib/types/models'
 import { setTokens, clearTokens, getAccessToken } from '@/lib/api/client'
-import { getCurrentUser, logout as apiLogout, logoutAllDevices as apiLogoutAll, refreshTokens } from '@/lib/api/auth'
+import {
+  getCurrentUser,
+  logout as apiLogout,
+  logoutAllDevices as apiLogoutAll,
+  refreshTokens,
+} from '@/lib/api/auth'
 
 interface AuthState {
   user: User | null
@@ -15,7 +20,12 @@ interface AuthState {
   setUser: (user: User | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
-  loginWithTokens: (accessToken: string, refreshToken: string, expiresIn: number, user: User) => void
+  loginWithTokens: (
+    accessToken: string,
+    refreshToken: string,
+    expiresIn: number,
+    user: User,
+  ) => void
   checkAuth: () => Promise<boolean>
   logout: () => Promise<void>
   logoutAllDevices: () => Promise<void>
@@ -118,6 +128,6 @@ export const useAuthStore = create<AuthState>()(
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ user: state.user }),
-    }
-  )
+    },
+  ),
 )

@@ -2,30 +2,30 @@ export default function UsageEndpointPage() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <span className="bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded text-xs font-medium">
+        <div className="mb-2 flex items-center gap-3">
+          <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600">
             GET
           </span>
-          <code className="text-lg text-primary">/public/usage</code>
+          <code className="text-primary text-lg">/public/usage</code>
         </div>
-        <p className="text-lg text-muted">Get current usage and quota information.</p>
+        <p className="text-muted text-lg">Get current usage and quota information.</p>
       </div>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Example Request</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`curl https://api.promptomize.app/api/v1/public/usage \\
+        <h2 className="text-primary text-2xl font-semibold">Example Request</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`curl https://api.promptomize.app/api/v1/public/usage \\
   -H "X-API-Key: pk_live_your_api_key"`}
           </pre>
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Response</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`{
+        <h2 className="text-primary text-2xl font-semibold">Response</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`{
   "tier": "API_STARTER",
   "status": "ACTIVE",
   "quota": {
@@ -49,43 +49,57 @@ export default function UsageEndpointPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Response Fields</h2>
+        <h2 className="text-primary text-2xl font-semibold">Response Fields</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-2 px-4 text-primary font-medium">Field</th>
-                <th className="text-left py-2 px-4 text-primary font-medium">Description</th>
+              <tr className="border-border border-b">
+                <th className="text-primary px-4 py-2 text-left font-medium">Field</th>
+                <th className="text-primary px-4 py-2 text-left font-medium">Description</th>
               </tr>
             </thead>
             <tbody className="text-muted">
-              <tr className="border-b border-border">
-                <td className="py-2 px-4"><code>tier</code></td>
-                <td className="py-2 px-4">Current subscription tier</td>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
+                  <code>tier</code>
+                </td>
+                <td className="px-4 py-2">Current subscription tier</td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="py-2 px-4"><code>status</code></td>
-                <td className="py-2 px-4">Subscription status (ACTIVE, PAST_DUE, etc.)</td>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
+                  <code>status</code>
+                </td>
+                <td className="px-4 py-2">Subscription status (ACTIVE, PAST_DUE, etc.)</td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="py-2 px-4"><code>quota.used</code></td>
-                <td className="py-2 px-4">Requests used in current period</td>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
+                  <code>quota.used</code>
+                </td>
+                <td className="px-4 py-2">Requests used in current period</td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="py-2 px-4"><code>quota.limit</code></td>
-                <td className="py-2 px-4">Total requests allowed (or &quot;unlimited&quot;)</td>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
+                  <code>quota.limit</code>
+                </td>
+                <td className="px-4 py-2">Total requests allowed (or &quot;unlimited&quot;)</td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="py-2 px-4"><code>quota.remaining</code></td>
-                <td className="py-2 px-4">Requests remaining in period</td>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
+                  <code>quota.remaining</code>
+                </td>
+                <td className="px-4 py-2">Requests remaining in period</td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="py-2 px-4"><code>quota.periodEnd</code></td>
-                <td className="py-2 px-4">When the current period ends</td>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
+                  <code>quota.periodEnd</code>
+                </td>
+                <td className="px-4 py-2">When the current period ends</td>
               </tr>
-              <tr className="border-b border-border">
-                <td className="py-2 px-4"><code>rateLimit.requestsPerMinute</code></td>
-                <td className="py-2 px-4">Per-minute rate limit</td>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
+                  <code>rateLimit.requestsPerMinute</code>
+                </td>
+                <td className="px-4 py-2">Per-minute rate limit</td>
               </tr>
             </tbody>
           </table>

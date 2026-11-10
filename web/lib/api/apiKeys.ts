@@ -131,14 +131,20 @@ export async function getApiKey(id: string): Promise<{ apiKey: ApiKey }> {
 /**
  * Update an API key.
  */
-export async function updateApiKey(id: string, data: UpdateApiKeyRequest): Promise<{ apiKey: ApiKey }> {
+export async function updateApiKey(
+  id: string,
+  data: UpdateApiKeyRequest,
+): Promise<{ apiKey: ApiKey }> {
   return api.patch<{ apiKey: ApiKey }>(`/api-keys/${id}`, data)
 }
 
 /**
  * Revoke (delete) an API key.
  */
-export async function revokeApiKey(id: string, reason?: string): Promise<{ success: boolean; message: string }> {
+export async function revokeApiKey(
+  id: string,
+  reason?: string,
+): Promise<{ success: boolean; message: string }> {
   return api.delete<{ success: boolean; message: string }>(`/api-keys/${id}`, {
     body: reason ? { reason } : undefined,
   } as unknown as undefined)
@@ -156,7 +162,7 @@ export async function rotateApiKey(id: string): Promise<RotateApiKeyResponse> {
  */
 export async function getApiKeyUsage(
   id: string,
-  options?: { startDate?: string; endDate?: string }
+  options?: { startDate?: string; endDate?: string },
 ): Promise<{ usage: UsageStats }> {
   const params = new URLSearchParams()
   if (options?.startDate) params.set('startDate', options.startDate)
@@ -170,7 +176,7 @@ export async function getApiKeyUsage(
  */
 export async function getApiKeyHistory(
   id: string,
-  options?: { page?: number; limit?: number; startDate?: string; endDate?: string }
+  options?: { page?: number; limit?: number; startDate?: string; endDate?: string },
 ): Promise<UsageHistoryResponse> {
   const params = new URLSearchParams()
   if (options?.page) params.set('page', options.page.toString())
@@ -297,7 +303,7 @@ export async function getApiCreditPacks(): Promise<{ packs: ApiCreditPack[] }> {
 export async function createApiCheckout(
   tier: 'API_STARTER' | 'API_PRO',
   successUrl: string,
-  cancelUrl: string
+  cancelUrl: string,
 ): Promise<{ url: string }> {
   return api.post<{ url: string }>('/api-subscriptions/checkout', {
     tier,
@@ -309,7 +315,7 @@ export async function createApiCheckout(
 export async function createApiCreditCheckout(
   packId: ApiCreditPack['id'],
   successUrl: string,
-  cancelUrl: string
+  cancelUrl: string,
 ): Promise<{ url: string }> {
   return api.post<{ url: string }>('/api-subscriptions/credits/checkout', {
     packId,
