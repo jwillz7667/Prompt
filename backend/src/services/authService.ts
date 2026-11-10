@@ -10,6 +10,12 @@ import { sendWelcomeEmail } from './emailService.js';
 
 const googleClient = new OAuth2Client(process.env['GOOGLE_CLIENT_ID']);
 
+// Bound Apple's public-key/token requests. The library's default fetch has no
+// timeout, which can leave an iOS sign-in waiting on an unavailable provider.
+appleSignin._setFetch((url: string, options: RequestInit = {}) =>
+  fetch(url, { ...options, signal: AbortSignal.timeout(10_000) }),
+);
+
 export interface AuthResult {
   user: {
     id: string;
@@ -27,106 +33,163 @@ export interface AuthResult {
 // APPLE SIGN IN
 // ============================================================================
 
+export class SignInError extends Error {
+  constructor(
+    readonly code:
+      | 'IDENTITY_INVALID'
+      | 'ACCOUNT_DISABLED'
+      | 'ACCOUNT_LINK_REQUIRED'
+      | 'AUTH_UNAVAILABLE',
+    message: string,
+    readonly statusCode: 401 | 409 | 503,
+  ) {
+    super(message);
+    this.name = 'SignInError';
+  }
+}
+
 export async function authenticateWithApple(
   identityToken: string,
-  authorizationCode: string,
+  _authorizationCode: string,
   fullName?: { givenName?: string; familyName?: string },
-  deviceInfo?: { deviceId?: string; deviceName?: string }
+  deviceInfo?: { deviceId?: string; deviceName?: string },
+  expectedNonce?: string,
 ): Promise<AuthResult> {
-  // Accept both iOS app ID and web Services ID
-  const iosClientId = process.env['APPLE_CLIENT_ID'];
-  const webClientId = process.env['APPLE_WEB_CLIENT_ID'];
-  const audiences = [iosClientId, webClientId].filter(Boolean) as string[];
-
-  authLogger.debug({ audiences }, 'Verifying Apple identity token');
-
-  // Verify the identity token with Apple (accepts array of valid audiences)
-  const applePayload = await appleSignin.verifyIdToken(identityToken, {
-    audience: audiences,
-    ignoreExpiration: false,
-  });
-
-  authLogger.debug({ appleId: applePayload.sub }, 'Apple token verified');
-  const { sub: appleId, email } = applePayload;
-
-  if (!email) {
-    throw new Error('Email not provided by Apple');
+  const audiences = [process.env['APPLE_CLIENT_ID'], process.env['APPLE_WEB_CLIENT_ID']]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  if (audiences.length === 0) {
+    throw new SignInError(
+      'AUTH_UNAVAILABLE',
+      'Apple sign-in is temporarily unavailable. Please try again shortly.',
+      503,
+    );
   }
-
-  // Find or create user
-  let user = await prisma.user.findUnique({
-    where: { appleId },
-  });
-
-  if (!user) {
-    // Check if email exists (user might have signed up differently)
-    user = await prisma.user.findUnique({
-      where: { email },
+  // Decoding only rejects malformed input. Identity is trusted only after Apple's
+  // signature, issuer, audience, expiry and current clients' nonce checks.
+  if (!jwt.decode(identityToken)) {
+    throw new SignInError(
+      'IDENTITY_INVALID',
+      'Apple sign-in could not be verified. Please try again.',
+      401,
+    );
+  }
+  let applePayload;
+  try {
+    applePayload = await appleSignin.verifyIdToken(identityToken, {
+      audience: audiences,
+      ignoreExpiration: false,
+      ...(expectedNonce ? { nonce: expectedNonce } : {}),
     });
-
-    if (user) {
-      // Link Apple ID to existing account
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { appleId },
-      });
-    } else {
-      // Create new user
-      const name = fullName
-        ? [fullName.givenName, fullName.familyName].filter(Boolean).join(' ')
-        : null;
-
-      user = await prisma.user.create({
-        data: {
-          email,
-          appleId,
-          name,
-          emailVerified: new Date(),
-        },
-      });
-
-      // Send welcome email (fire-and-forget)
-      sendWelcomeEmail(email, name).catch((err) => {
-        authLogger.warn({ error: err, email }, 'Failed to send welcome email');
-      });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    const temporaryKeyFailure =
+      /ECONN|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|network|fetch|socket|timeout|request to/i.test(message);
+    if (error instanceof jwt.JsonWebTokenError && !temporaryKeyFailure) {
+      throw new SignInError(
+        'IDENTITY_INVALID',
+        'Apple sign-in could not be verified. Please try again.',
+        401,
+      );
     }
+    throw new SignInError(
+      'AUTH_UNAVAILABLE',
+      'Apple sign-in is temporarily unavailable. Please try again shortly.',
+      503,
+    );
   }
+  const appleId = applePayload.sub;
+  if (!appleId || (expectedNonce && applePayload.nonce !== expectedNonce)) {
+    throw new SignInError(
+      'IDENTITY_INVALID',
+      'Apple sign-in could not be verified. Please try again.',
+      401,
+    );
+  }
+  const email = applePayload.email?.trim().toLowerCase();
+  const emailVerified =
+    applePayload.email_verified === true || applePayload.email_verified === 'true';
 
-  // Update last login
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-  });
-
-  // Generate tokens
-  const tokens = generateTokenPair({
-    userId: user.id,
-    email: user.email,
-    tokenVersion: user.tokenVersion,
-  });
-
-  // Create session
-  await prisma.session.create({
-    data: {
+  const result = await prisma.$transaction(async (tx) => {
+    // Repeated completions must find/create one user instead of racing a unique constraint.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`apple-auth:${appleId}`}, 0))`;
+    let user = await tx.user.findUnique({ where: { appleId } });
+    let created = false;
+    if (!user) {
+      if (!email || !emailVerified) {
+        throw new SignInError(
+          'IDENTITY_INVALID',
+          'Apple did not provide a verified email for this account. Please try signing in again.',
+          401,
+        );
+      }
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-email:${email}`}, 0))`;
+      const existing = await tx.user.findUnique({ where: { email } });
+      if (existing?.appleId && existing.appleId !== appleId) {
+        throw new SignInError(
+          'ACCOUNT_LINK_REQUIRED',
+          'This email is already linked to a different Apple account. Please use the original account.',
+          409,
+        );
+      }
+      if (existing && !existing.isActive) {
+        throw new SignInError(
+          'ACCOUNT_DISABLED',
+          'This account is unavailable. Please contact support.',
+          401,
+        );
+      }
+      const name = fullName
+        ? [fullName.givenName, fullName.familyName].filter(Boolean).join(' ').trim() || null
+        : null;
+      user = existing
+        ? await tx.user.update({ where: { id: existing.id }, data: { appleId } })
+        : await tx.user.create({ data: { email, appleId, name, emailVerified: new Date() } });
+      created = !existing;
+    }
+    if (!user.isActive) {
+      throw new SignInError(
+        'ACCOUNT_DISABLED',
+        'This account is unavailable. Please contact support.',
+        401,
+      );
+    }
+    // Apple's stable subject identifies returning users even when their response
+    // no longer includes an email or full name.
+    await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    const tokens = generateTokenPair({
       userId: user.id,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      deviceId: deviceInfo?.deviceId,
-      deviceName: deviceInfo?.deviceName,
-      deviceType: 'ios',
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-    },
+      email: user.email,
+      tokenVersion: user.tokenVersion,
+    });
+    await tx.session.create({
+      data: {
+        id: tokens.sessionId,
+        userId: user.id,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        deviceId: deviceInfo?.deviceId,
+        deviceName: deviceInfo?.deviceName,
+        deviceType: 'ios',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    return { user, tokens, created };
   });
-
+  if (result.created) {
+    void sendWelcomeEmail(result.user.email, result.user.name).catch((error) => {
+      authLogger.warn({ err: error, userId: result.user.id }, 'Failed to send welcome email');
+    });
+  }
   return {
     user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      isPremium: user.isPremium,
+      id: result.user.id,
+      email: result.user.email,
+      name: result.user.name,
+      avatarUrl: result.user.avatarUrl,
+      isPremium: result.user.isPremium,
     },
-    ...tokens,
+    ...result.tokens,
   };
 }
 
@@ -136,7 +199,7 @@ export async function authenticateWithApple(
 
 export async function authenticateWithGoogle(
   idToken: string,
-  deviceInfo?: { deviceId?: string; deviceName?: string }
+  deviceInfo?: { deviceId?: string; deviceName?: string },
 ): Promise<AuthResult> {
   // Verify the ID token with Google
   const ticket = await googleClient.verifyIdToken({
@@ -197,6 +260,7 @@ export async function authenticateWithGoogle(
 
   await prisma.session.create({
     data: {
+      id: tokens.sessionId,
       userId: user.id,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -268,7 +332,11 @@ export async function refreshTokens(refreshToken: string): Promise<AuthResult> {
     throw new RefreshTokenError('TOKEN_EXPIRED', 'Session expired');
   }
 
-  if (session.user.tokenVersion !== decoded.tokenVersion) {
+  if (
+    !session.user.isActive ||
+    session.user.id !== decoded.userId ||
+    session.user.tokenVersion !== decoded.tokenVersion
+  ) {
     // Token version mismatch - user has been logged out
     await prisma.session.delete({ where: { id: session.id } });
     throw new RefreshTokenError('SESSION_REVOKED', 'Session invalidated');
@@ -278,6 +346,7 @@ export async function refreshTokens(refreshToken: string): Promise<AuthResult> {
     userId: session.user.id,
     email: session.user.email,
     tokenVersion: session.user.tokenVersion,
+    sessionId: session.id,
   });
 
   // Update session with new tokens
