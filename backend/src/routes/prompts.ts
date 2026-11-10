@@ -756,13 +756,12 @@ promptRouter.post(
 );
 
 // ============================================================================
-// CREATE PROMPT (with quota enforcement)
+// SAVE AN EXISTING PROMPT (generation endpoints account for AI usage)
 // ============================================================================
 
 promptRouter.post(
   '/',
-  enforceQuota('enhance_prompt'),
-  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ error: 'Not authenticated' });
@@ -794,40 +793,9 @@ promptRouter.post(
         select: promptSelect(supportsImageAttachment),
       });
 
-      // Update user stats
-      await prisma.user.update({
-        where: { id: req.user.id },
-        data: {
-          promptCount: { increment: 1 },
-          tokenUsage: { increment: BigInt(data.totalTokens) },
-        },
-      });
-
-      // Update daily usage record (for general analytics)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      await prisma.usageRecord.upsert({
-        where: {
-          userId_date: {
-            userId: req.user.id,
-            date: today,
-          },
-        },
-        update: {
-          promptCount: { increment: 1 },
-          tokenCount: { increment: BigInt(data.totalTokens) },
-        },
-        create: {
-          userId: req.user.id,
-          date: today,
-          promptCount: 1,
-          tokenCount: BigInt(data.totalTokens),
-        },
-      });
-
-      // Record usage for quota tracking
-      await recordUsage(req.user.id);
+      // Thread generation has already charged quota and analytics. Saving its
+      // result must remain available even after the last daily generation.
+      const subscription = await getSubscriptionInfo(req.user.id);
 
       // Include subscription info in response for client-side prompt quality selection
       res.status(201).json({
@@ -835,14 +803,12 @@ promptRouter.post(
           ...prompt,
           imageAttachment: supportsImageAttachment ? ('imageAttachment' in prompt ? prompt.imageAttachment ?? null : null) : data.imageAttachment ?? null,
         },
-        subscription: req.subscription
-          ? {
-              tier: req.subscription.tier,
-              promptQuality: req.subscription.promptQuality,
-              dailyPromptsUsed: req.subscription.dailyPromptsUsed + 1,
-              dailyPromptsLimit: req.subscription.dailyPromptsLimit,
-            }
-          : undefined,
+        subscription: {
+          tier: subscription.tier,
+          promptQuality: subscription.features.promptQuality,
+          dailyPromptsUsed: subscription.dailyPromptsUsed,
+          dailyPromptsLimit: subscription.dailyPromptsLimit,
+        },
       });
     } catch (error) {
       promptLogger.error({ err: error }, 'Create prompt error');
