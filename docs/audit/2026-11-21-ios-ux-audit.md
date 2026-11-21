@@ -32,18 +32,23 @@ The app builds in CI and the new Railway backend is healthy. The core loop (type
 | 8 | `Info.plist` pointed `UILaunchStoryboardName` at `LaunchScreen`, which does not exist in the project. | Removed. `INFOPLIST_KEY_UILaunchScreen_Generation` already supplies the launch screen. |
 | 9 | The **live** App Store description (US, UK and China storefronts) says users can "reuse project context" and "organize prompts in collections, and favorite the ones you use most". None of these can be reached anywhere in the iOS UI (details below). The repo's `fastlane/metadata` was also an older, different text than what is live. | Replaced the repo descriptions with the current live text minus those two claims, so the next `fastlane deliver` fixes the listing instead of reverting it. |
 
-I could not compile these changes here. CI on a PR will build them.
+### Follow-up commit `cfb40f7`
+
+| # | Problem | Fix |
+| :-- | :-- | :-- |
+| 10 | Two 7-day trials with opposite terms (server "no payment" trial vs Apple's auto-renewing intro offer). | Apple trial only. The server trial banner and its call path are gone. Product cards show "7 days free" only when StoreKit says the Apple ID is eligible, the button reads "Start Free Trial", and the exact terms sit under it. |
+| 11 | Too many automatic popups, and they could stack. | One gate for every automatic popup: at most one per app session, never on top of another sheet or while a reply streams. Guest sign-in now sends the waiting prompt instead of opening a paywall. The plan intro shows once, after the second result. Daily free-plan paywall is now weekly. Review prompt after 5 results, at most every 30 days. |
+| 12 | About 7,850 lines of screens nothing presents, plus a `PromptKeyboard/` folder that was never a target. | Deleted after a symbol scan confirmed nothing kept, including the widget and UI tests, references them. |
+
+iOS CI (simulator build and subscription checks) passed on PR #53 with these commits.
 
 ## Must fix (not changed, needs your call)
 
 ### 1. Push the corrected description
 The live listing still promises project context, collections and favorites. Users who download for those features cannot find them, and the next review can flag it under Guideline 2.3.1 (accurate metadata). Run the metadata lane from this branch (or paste `fastlane/metadata/*/description.txt` into App Store Connect) with the next version. Alternatively, ship the Contexts and Collections screens (see P1 item 4) and keep the copy.
 
-### 2. Two different 7-day trials
-- The paywall's "Start a 7-day Premium trial" card calls `POST /subscriptions/trial`: "No payment is required and nothing is charged; your trial simply ends automatically."
-- `Products.storekit` also gives both Premium products a 1-week **free introductory offer**, which auto-renews into a paid subscription.
-
-A user can get either one, or both, and the terms are opposite. Pick one model. If you keep the Apple intro offer, drop the server trial card or relabel it. This is a pricing decision, so I left it alone.
+### 2. Confirm the Apple intro offer in App Store Connect
+The app now relies only on Apple's free introductory offer. `Products.storekit` has a 1-week free offer on both Premium products; confirm the same offer is live on both products in App Store Connect, or the trial label simply will not appear. The web app still uses the server trial endpoint; that is unchanged.
 
 ### 3. Merge PR #52
 `main` is still on the September code pointing at the old backend (`backend-production-d538`, which now returns 404). The scheduled Uptime Monitor on `main` checks the old URL and stopped running after Sept 18. It will use the new URL once #52 merges.
@@ -52,15 +57,15 @@ A user can get either one, or both, and the terms are opposite. Pick one model. 
 
 ### P1: these make the app harder to use
 
-1. **Sign-in interrupts the first prompt twice.** Guest taps Send, signs in, then a paywall opens 0.45 seconds later, and the prompt still is not sent; they have to tap Send again. After sign-in, send the waiting prompt automatically and hold the paywall until they actually hit a limit.
-2. **Too many automatic sheets.** Free users get an onboarding paywall, then a paywall on the first foreground of every day (`checkDailyPaywallReminder`), plus What's New after updates and a review prompt every 3 days after 3 results. Two of these can fire on the same appear and collide. Keep the limit-hit paywall, drop the daily one or make it weekly, and never chain two sheets.
+1. ~~Sign-in interrupts the first prompt twice.~~ Fixed in `cfb40f7`.
+2. ~~Too many automatic sheets.~~ Fixed in `cfb40f7`.
 3. **Chats disappear after 5 minutes in the background.** `handleScenePhaseChange` starts a new conversation with no message. The chat is still in the sidebar, but users will think it was lost. Show a one-line "Started a new chat. Your last one is in the menu." or keep the last chat open.
-4. **Advertised features are unreachable.** Contexts and Collections both have working backend routes and full iOS screens (`ContextsView`, `CollectionsView`), but nothing presents them. Either wire them in (Contexts needs a picker in the composer to be useful) or delete them. Same for `HistoryView`, `WorkflowsView`, `SandboxView`, `VariationsView`, `PlatformOptimizationView`, `ThreadListView`, `ChatOptionsSheet`, `PowerToolsSection` and friends. That is about 7,000 lines, roughly a fifth of the app's Swift, compiled into every build and maintained for nothing.
+4. ~~Unreachable screens.~~ Deleted in `cfb40f7`. Services and models that only those screens used (`WorkflowService`, `SandboxService`, `ContextService`, `PlatformService`, `ShareService`, `EnhancementActivityManager`) are still compiled; they can go in a follow-up. If you want Contexts or Collections back, the backend routes are intact.
 
 ### P2: clarity and polish
 
 5. **No localization at all.** There is no string catalog, yet the store listing is also in Simplified Chinese. Chinese users get an all-English app. Either localize or drop the zh-Hans listing.
-6. **Dead targets and capabilities.** `PromptKeyboard/` is not a build target. The Live Activity is only started from `PromptViewModel`, which nothing uses, while `NSSupportsLiveActivities` is on. The entitlements include Apple Pay (`in-app-payments` merchant) and a CloudKit container, but the app uses neither. Unused capabilities invite App Review questions.
+6. **Dead capabilities.** The Live Activity was only started from `PromptViewModel` (now deleted), so it never runs while `NSSupportsLiveActivities` is on. The entitlements include Apple Pay (`in-app-payments` merchant) and a CloudKit container, but the app uses neither. Unused capabilities invite App Review questions.
 7. **iPad is a stretched phone.** The drawer cap helps, but iPad would be much easier with a `NavigationSplitView` (chats on the left, thread on the right).
 8. **48 `print` calls outside `#if DEBUG`**, several logging auth/session state. Move them to `Logger` or gate them.
 
