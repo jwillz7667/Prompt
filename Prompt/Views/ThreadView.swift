@@ -305,7 +305,7 @@ struct ThreadView: View {
     private var workspaceHeader: some View {
         HStack(spacing: 10) {
             // Hamburger menu - opens sidebar
-            iconButton(systemName: "line.3.horizontal", action: {
+            iconButton(systemName: "line.3.horizontal", label: "Chats and history", action: {
                 triggerHaptic(.light)
                 if let onOpenHistory {
                     onOpenHistory()
@@ -317,7 +317,7 @@ struct ThreadView: View {
             Spacer(minLength: 0)
 
             if let onStartNewConversation, viewModel.hasConversation {
-                iconButton(systemName: "square.and.pencil", action: {
+                iconButton(systemName: "square.and.pencil", label: "New chat", action: {
                     triggerHaptic(.light)
                     onStartNewConversation()
                 })
@@ -334,13 +334,14 @@ struct ThreadView: View {
         workspaceHeader
     }
 
-    private func iconButton(systemName: String, action: @escaping () -> Void) -> some View {
+    private func iconButton(systemName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(textPrimary)
         }
         .buttonStyle(GlassIconButtonStyle(size: floatingControlSize))
+        .accessibilityLabel(label)
     }
 
     private var profileButton: some View {
@@ -370,6 +371,7 @@ struct ThreadView: View {
             .clipShape(Circle())
         }
         .buttonStyle(GlassIconButtonStyle(size: floatingControlSize))
+        .accessibilityLabel("Profile and settings")
     }
 
     // MARK: - Suggestion Chips
@@ -558,6 +560,10 @@ struct ThreadView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 16) {
+                    if presentationStyle == .home && !viewModel.hasConversation && !viewModel.isStreaming {
+                        homeEmptyState
+                    }
+
                     ForEach(viewModel.turnMessages) { message in
                         messageRow(message)
                     }
@@ -587,6 +593,33 @@ struct ThreadView: View {
                 }
             }
         }
+    }
+
+    /// First-run explainer. Without it the home screen is a blank canvas with
+    /// a text field, and new users have to guess what the app does.
+    private var homeEmptyState: some View {
+        VStack(spacing: 14) {
+            AppBrandMark(size: 64, showsGlassBackdrop: false)
+                .accessibilityHidden(true)
+
+            Text(conversationMode == .chat ? "Ask anything" : "Turn a rough idea into a great prompt")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+                .multilineTextAlignment(.center)
+
+            Text(conversationMode == .chat
+                 ? "Chat mode is a general AI assistant. Switch to Optimize to rewrite a prompt for another AI tool."
+                 : "Pick what you're making, describe it in plain words, and Promptomize rewrites it into a prompt you can paste into any AI tool.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: 420)
+        .padding(.horizontal, 8)
+        .padding(.top, 48)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     private var processingIndicator: some View {

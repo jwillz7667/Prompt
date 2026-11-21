@@ -34,25 +34,26 @@ struct AuthView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
-                    if mode == .standard {
-                        HStack {
-                            Spacer()
+                    // Always offer a way out. In guest-unlock mode the user
+                    // arrived here by tapping Send; trapping them behind a
+                    // non-dismissable cover (e.g. after cancelling the Apple
+                    // sheet) forces a force-quit. Their draft stays in the
+                    // composer when they close this.
+                    HStack {
+                        Spacer()
 
-                            Button {
-                                dismiss()
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(textPrimary)
-                            }
-                            .buttonStyle(GlassIconButtonStyle(size: 40))
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(textPrimary)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                    } else {
-                        Color.clear
-                            .frame(height: 20)
+                        .buttonStyle(GlassIconButtonStyle(size: 40))
+                        .accessibilityLabel(mode == .guestUnlock ? "Not now" : "Close")
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
 
                     VStack(spacing: 18) {
                         heroCard

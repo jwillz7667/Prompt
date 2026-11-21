@@ -12,22 +12,14 @@ Activate MAX Mode for our most advanced enhancement — deeper reasoning, strong
 7 CREATIVE MODALITIES
 Text, Image, Video, Music, Audio, Code, and 3D. Each modality tailors your prompt for its target output — with platform-aware suggestions and optimised phrasing.
 
-PROJECT CONTEXTS
-Attach reusable project contexts to keep your tone, terminology, and goals consistent across sessions — no need to repeat background information.
-
 CONVERSATION THREADS
 Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
-
-COLLECTIONS
-Organise your best prompts into folders. Star your favourites for quick access later.
 
 KEY FEATURES
 - 7 creative modalities with platform-aware suggestions
 - MAX Mode for expert-level prompt engineering
 - Optimise and Chat conversation modes
-- Project contexts for domain-specific consistency
-- Collections to organise prompts into folders
-- Prompt history with favourites and swipe-to-delete
+- Saved chat history with swipe-to-delete
 - Offline support with automatic sync
 - iOS Widget for quick-access enhancement
 - Siri & Shortcuts: enhance a prompt by voice, from Spotlight, or inside your own shortcuts
@@ -38,9 +30,7 @@ SUBSCRIPTION TIERS
 - Pro: More prompts per day, all modalities, and MAX Mode
 - Premium: Unlimited prompts, all modalities, MAX Mode, and advanced prompt engineering
 
-Premium includes a 7-day free trial for new subscribers. After the trial, your subscription automatically renews at the price shown at purchase (monthly or annually) unless you cancel at least 24 hours before the trial ends. Subscriptions are billed through your Apple ID and renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your device Settings under Subscriptions.
-
-Privacy-first: your prompts are processed securely and never used for training.
+Eligible new subscribers may receive a 7-day free trial of Premium, as shown before purchase. After the trial, your subscription automatically renews at the price shown at purchase (monthly or annually) unless you cancel at least 24 hours before the trial ends. Subscriptions are billed through your Apple ID and renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your device Settings under Subscriptions.
 
 Terms of Use: https://promptomize.app/terms
 Privacy Policy: https://promptomize.app/privacy

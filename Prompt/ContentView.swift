@@ -33,6 +33,7 @@ struct ContentView: View {
     @AppStorage("lastPaywallShownDate") private var lastPaywallShownDateString = ""
     @AppStorage("lastReviewPromptDate") private var lastReviewPromptDateString = ""
     @AppStorage("enhancementCount") private var enhancementCount = 0
+    @AppStorage("didAskNotificationPermission") private var didAskNotificationPermission = false
 
     var body: some View {
         navigationContent
@@ -73,7 +74,9 @@ struct ContentView: View {
     @State private var showSidebar = false
     @State private var sidebarThreadViewModel = ThreadViewModel()
 
-    private let sidebarWidth: CGFloat = UIScreen.main.bounds.width * 0.82
+    // Cap the drawer so it stays a sidebar on iPad instead of covering
+    // ~1,100pt of a 13" screen.
+    private let sidebarWidth: CGFloat = min(UIScreen.main.bounds.width * 0.82, 380)
 
     private var navigationContent: some View {
         NavigationStack {
@@ -241,6 +244,7 @@ struct ContentView: View {
         let delta = max(0, newValue - max(oldValue, lastObservedTurnCount))
         if delta > 0 {
             enhancementCount += delta
+            requestNotificationPermissionIfNeeded()
             checkReviewPrompt()
         }
 
@@ -310,7 +314,6 @@ struct ContentView: View {
             guestSession.completeAuthenticationFlow()
             presentOnboardingPaywallIfNeeded()
         }
-        .interactiveDismissDisabled(true)
     }
 
     // MARK: - What's New
@@ -372,6 +375,18 @@ struct ContentView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+
+    // MARK: - Notification Permission
+
+    /// Ask once, after the first successful result, instead of on launch.
+    private func requestNotificationPermissionIfNeeded() {
+        guard authManager.isAuthenticated, !didAskNotificationPermission else { return }
+        didAskNotificationPermission = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            _ = await NotificationManager.shared.requestAuthorization()
+        }
     }
 
     // MARK: - Review Prompt

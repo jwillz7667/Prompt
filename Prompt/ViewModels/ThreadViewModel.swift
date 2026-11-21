@@ -340,7 +340,12 @@ final class ThreadViewModel {
             switch guestSession.submissionDecision(for: settings.promptMode) {
             case .allowed:
                 break
-            case .blocked(let message), .requiresAuthentication(let message):
+            case .requiresAuthentication:
+                // The sign-in cover is already being presented. Raising an
+                // error alert at the same moment collides with it (only one
+                // can present) and frames an expected step as a failure.
+                return
+            case .blocked(let message):
                 errorMessage = message
                 showError = true
                 return
