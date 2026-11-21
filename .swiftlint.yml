@@ -7,7 +7,6 @@
 # Paths
 included:
   - Prompt
-  - PromptKeyboard
   - PromptWidgetExtension
   - PromptUITests
 

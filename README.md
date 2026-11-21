@@ -101,7 +101,6 @@ the conventions documented in [`CLAUDE.md`](./CLAUDE.md), [`AGENTS.md`](./AGENTS
 │   └── Configuration/
 │
 ├── PromptWidgetExtension/         WidgetKit + Live Activities target
-├── PromptKeyboard/                Custom keyboard extension target
 ├── PromptUITests/                 XCUITest snapshot tests (driven by Fastlane)
 │
 ├── chatgpt-app/                   Standalone MCP server + React widget (Vite + Express)
@@ -229,7 +228,6 @@ pipeline, see **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 | Web App | [`web/`](./web) | [`web/README.md`](./web/README.md) |
 | iOS App | [`Prompt/`](./Prompt) | [`Prompt/README.md`](./Prompt/README.md) |
 | Widget Extension | [`PromptWidgetExtension/`](./PromptWidgetExtension) | [`PromptWidgetExtension/README.md`](./PromptWidgetExtension/README.md) |
-| Keyboard Extension | [`PromptKeyboard/`](./PromptKeyboard) | [`PromptKeyboard/README.md`](./PromptKeyboard/README.md) |
 | ChatGPT App (MCP) | [`chatgpt-app/`](./chatgpt-app) | [`chatgpt-app/README.md`](./chatgpt-app/README.md) |
 | Fastlane | [`fastlane/`](./fastlane) | [`fastlane/README.md`](./fastlane/README.md) |
 | GPT Store assets | [`docs/`](./docs) | [`docs/gpt-store-setup.md`](./docs/gpt-store-setup.md) |

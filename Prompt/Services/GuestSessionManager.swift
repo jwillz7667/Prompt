@@ -44,7 +44,7 @@ final class GuestSessionManager {
         // All prompt submissions require authentication - prompt users to sign in
         shouldPresentAuthenticationGate = true
         return .requiresAuthentication(
-            message: "Sign in with Apple to start enhancing prompts and claim your 7-day free trial."
+            message: "Sign in with Apple to start enhancing prompts."
         )
     }
 

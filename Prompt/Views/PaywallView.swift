@@ -21,7 +21,9 @@ struct PaywallView: View {
     @State private var showSuccess = false
     @State private var showAuthGate = false
     @State private var successMessage = ""
-    @State private var trialEligible = false
+    /// Apple introductory-offer eligibility per product ID. The App Store
+    /// free trial is the only trial this app offers.
+    @State private var introOfferEligibility: [String: Bool] = [:]
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
@@ -86,6 +88,10 @@ struct PaywallView: View {
             return "Choose a Plan"
         }
 
+        if freeTrialText(for: selectedProduct) != nil {
+            return "Start Free Trial"
+        }
+
         return "Unlock \(productId.tier.displayName)"
     }
 
@@ -124,10 +130,6 @@ struct PaywallView: View {
                         .padding(.top, 16)
 
                         heroCard
-
-                        if trialEligible && storeKit.currentTier == .free {
-                            trialBanner
-                        }
 
                         tierComparisonSection
                         productSelectionSection
@@ -224,53 +226,13 @@ struct PaywallView: View {
         .liquidGlass(cornerRadius: 24, shadowIntensity: 0.74, borderGlow: true)
     }
 
-    // MARK: - Trial Banner
-
-    private var trialBanner: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(warningColor)
-
-                Text("Start a 7-day Premium trial")
-                    .font(.system(.headline, design: .rounded, weight: .bold))
-                    .foregroundStyle(textPrimary)
-
-                Spacer()
-            }
-
-            Text("Get 7 days of full Premium access, free. No payment is required and nothing is charged — your trial simply ends automatically after 7 days.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                Task {
-                    await startTrial()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                    Text("Start Free Trial")
-                        .font(.system(.subheadline, design: .rounded, weight: .bold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(LiquidGlassButtonStyle(cornerRadius: 16, tintColor: brandPurple, intensity: .prominent))
-        }
-        .padding(18)
-        .liquidGlass(cornerRadius: 22, shadowIntensity: 0.7, borderGlow: true)
-    }
-
     private var signInSuggestionCard: some View {
         HStack(spacing: 12) {
             Image(systemName: "person.badge.key.fill")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(accentColor)
 
-            Text("Sign in to activate your subscription across devices and unlock the free trial.")
+            Text("Sign in to subscribe or start a free trial. Your plan then works on all your devices.")
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -521,6 +483,12 @@ struct PaywallView: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(textSecondary)
                     }
+
+                    if let trial = freeTrialText(for: product) {
+                        Text(trial)
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .foregroundStyle(successColor)
+                    }
                 }
 
                 Spacer()
@@ -613,6 +581,13 @@ struct PaywallView: View {
 
                 purchaseButton
 
+                if let selectedProduct, let terms = trialTerms(for: selectedProduct) {
+                    Text(terms)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 restoreButton
 
                 if requiresAuthentication {
@@ -675,7 +650,7 @@ struct PaywallView: View {
 
     private var legalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period. Renewal is charged within 24 hours of the next billing date.")
+            Text("Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period. Renewal is charged within 24 hours of the next billing date. If a free trial is offered, the paid subscription starts when the trial ends unless you cancel at least 24 hours before. Manage or cancel in Settings > Apple Account > Subscriptions.")
                 .font(.system(.caption2, design: .rounded))
                 .foregroundStyle(textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -696,11 +671,14 @@ struct PaywallView: View {
 
     private func loadData() async {
         await storeKit.loadProducts()
-        if !requiresAuthentication {
-            trialEligible = await storeKit.checkTrialEligibility()
-        } else {
-            trialEligible = false
+
+        var eligibility: [String: Bool] = [:]
+        for product in storeKit.products {
+            guard let subscription = product.subscription,
+                  subscription.introductoryOffer != nil else { continue }
+            eligibility[product.id] = await subscription.isEligibleForIntroOffer
         }
+        introOfferEligibility = eligibility
 
         // Auto-select premium monthly
         if let premiumMonthly = storeKit.products.first(where: { $0.id == ProductID.premiumMonthly.rawValue }) {
@@ -725,26 +703,6 @@ struct PaywallView: View {
                 successMessage = "Your \(storeKit.currentTier.displayName) subscription is active on this account."
                 showSuccess = true
             }
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-    }
-
-    private func startTrial() async {
-        guard !requiresAuthentication else {
-            // Trial is account-based — sign-in is required to activate it
-            showAuthGate = true
-            return
-        }
-
-        isProcessing = true
-        defer { isProcessing = false }
-
-        do {
-            try await storeKit.startFreeTrial()
-            successMessage = "Your Premium trial is active on this account."
-            showSuccess = true
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -786,6 +744,30 @@ struct PaywallView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .liquidGlassChip(isSelected: false, accentColor: tint)
+    }
+
+    /// "7 days free" when this Apple ID is eligible for the product's
+    /// free-trial introductory offer, otherwise nil.
+    private func freeTrialText(for product: Product) -> String? {
+        guard introOfferEligibility[product.id] == true,
+              let offer = product.subscription?.introductoryOffer,
+              offer.paymentMode == .freeTrial else { return nil }
+        let value = offer.period.value
+        switch offer.period.unit {
+        case .day: return value == 1 ? "1 day free" : "\(value) days free"
+        case .week: return value == 1 ? "7 days free" : "\(value) weeks free"
+        case .month: return value == 1 ? "1 month free" : "\(value) months free"
+        case .year: return value == 1 ? "1 year free" : "\(value) years free"
+        @unknown default: return "Free trial"
+        }
+    }
+
+    /// Plain-language trial terms shown next to the purchase button, as
+    /// App Review expects for introductory offers.
+    private func trialTerms(for product: Product) -> String? {
+        guard let trial = freeTrialText(for: product) else { return nil }
+        let isAnnual = ProductID(rawValue: product.id)?.isAnnual ?? false
+        return "\(trial), then \(product.displayPrice)/\(isAnnual ? "year" : "month"). Cancel at least 24 hours before the trial ends and you won't be charged."
     }
 
     private func productSummary(for product: Product) -> String {

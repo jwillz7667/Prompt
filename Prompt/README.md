@@ -54,7 +54,6 @@ URL scheme: `promptomize://`.
 |--------|------|------|
 | `Prompt` (main app) | `Prompt/` | iPhone + iPad app |
 | `PromptWidgetExtension` | `../PromptWidgetExtension/` | Home-screen widgets, lock-screen widgets, Live Activities |
-| `PromptKeyboard` | `../PromptKeyboard/` | Custom keyboard extension |
 | `PromptUITests` | `../PromptUITests/` | XCUITest snapshot tests driven by Fastlane |
 
 All extensions share auth and state with the main app via the App Group
@@ -88,24 +87,15 @@ Prompt/
 │   └── WorkflowModels.swift      Multi-step workflow DTOs
 │
 ├── ViewModels/
-│   ├── PromptViewModel.swift     Single-turn enhance flow
 │   └── ThreadViewModel.swift     Multi-turn streaming + history sync
 │
 ├── Views/
 │   ├── ThreadView.swift          Primary chat surface (~74k LoC, broken into sub-views)
-│   ├── HistoryView.swift         Saved prompts list + filters
 │   ├── ProfileView.swift         Account, settings, subscription status
 │   ├── PaywallView.swift         StoreKit-driven paywall
-│   ├── SandboxView.swift         Run a single prompt across N platforms
-│   ├── WorkflowsView.swift       Multi-step workflow builder
-│   ├── VariationsView.swift      A/B variation generator
-│   ├── ContextsView.swift        Reusable project-context manager
-│   ├── CollectionsView.swift     Folder organisation
-│   ├── PlatformOptimizationView.swift
 │   ├── AnalyticsView.swift
 │   ├── SupportView.swift         Ticketed chat support
 │   ├── AuthView.swift            Apple/Google sign-in
-│   ├── ThreadListView.swift      Thread switcher
 │   └── WhatsNewView.swift        Release-notes sheet
 │
 ├── Components/                   Reusable SwiftUI building blocks (~14 files)

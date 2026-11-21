@@ -15,6 +15,7 @@ struct ContentView: View {
     @Environment(GuestSessionManager.self) private var guestSession
     @Environment(SettingsManager.self) private var settings
     @Environment(StoreKitManager.self) private var storeKit
+    @Environment(PromptHistoryManager.self) private var historyManager
 
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var deeplinkManager = DeeplinkManager.shared
@@ -34,6 +35,8 @@ struct ContentView: View {
     @AppStorage("lastReviewPromptDate") private var lastReviewPromptDateString = ""
     @AppStorage("enhancementCount") private var enhancementCount = 0
     @AppStorage("didAskNotificationPermission") private var didAskNotificationPermission = false
+    /// At most one automatic (not user-initiated) popup per app session.
+    @State private var didAutoPresentThisSession = false
 
     var body: some View {
         navigationContent
@@ -41,7 +44,6 @@ struct ContentView: View {
             await loadHomeThreadIfNeeded()
         }
         .onAppear {
-            checkPaywallReminder()
             checkWhatsNew()
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -221,7 +223,7 @@ struct ContentView: View {
                 newConversation()
             }
             backgroundedAt = nil
-            checkDailyPaywallReminder()
+            checkWeeklyPaywallReminder()
         default:
             break
         }
@@ -244,8 +246,7 @@ struct ContentView: View {
         let delta = max(0, newValue - max(oldValue, lastObservedTurnCount))
         if delta > 0 {
             enhancementCount += delta
-            requestNotificationPermissionIfNeeded()
-            checkReviewPrompt()
+            handleSuccessfulResult()
         }
 
         lastObservedTurnCount = newValue
@@ -312,7 +313,7 @@ struct ContentView: View {
     private func authGateSheet() -> some View {
         AuthView(mode: .guestUnlock) {
             guestSession.completeAuthenticationFlow()
-            presentOnboardingPaywallIfNeeded()
+            sendPendingPromptAfterSignIn()
         }
     }
 
@@ -329,46 +330,99 @@ struct ContentView: View {
             return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        presentAutomatically(after: 1.2) {
             showWhatsNew = true
+        }
+    }
+
+    // MARK: - Automatic Popups
+
+    /// Something is already on screen (a sheet, the drawer, the sign-in
+    /// cover) or a reply is still streaming.
+    private var isBusyOrPresenting: Bool {
+        showProfile || showPaywall || showWhatsNew || showSidebar
+            || guestSession.shouldPresentAuthenticationGate
+            || homeThreadViewModel.isStreaming
+    }
+
+    /// Single gate for every popup the app shows on its own (What's New,
+    /// plan reminders, the notification prompt, the review prompt). It
+    /// allows one per app session and never stacks one on top of another
+    /// sheet. User-initiated sheets and the limit-reached paywall do not go
+    /// through here.
+    private func presentAutomatically(after delay: TimeInterval, _ present: @escaping () -> Void) {
+        guard !didAutoPresentThisSession else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(delay))
+            guard !didAutoPresentThisSession, !isBusyOrPresenting else { return }
+            didAutoPresentThisSession = true
+            present()
+        }
+    }
+
+    /// After a result arrives, ask for at most one thing, in this order:
+    /// notifications (first result ever), the plans intro (second result,
+    /// free plan, once), then an App Store review (later, rarely).
+    private func handleSuccessfulResult() {
+        guard authManager.isAuthenticated else { return }
+
+        if !didAskNotificationPermission {
+            presentAutomatically(after: 1.5) {
+                didAskNotificationPermission = true
+                Task { _ = await NotificationManager.shared.requestAuthorization() }
+            }
+            return
+        }
+
+        if !hasSeenOnboardingPaywall, enhancementCount >= 2, storeKit.currentTier == .free {
+            presentAutomatically(after: 1.5) {
+                hasSeenOnboardingPaywall = true
+                updateLastPaywallShownDate()
+                showPaywall = true
+            }
+            return
+        }
+
+        checkReviewPrompt()
+    }
+
+    /// After signing in from the guest cover, send the prompt the user was
+    /// trying to send instead of making them tap Send again.
+    private func sendPendingPromptAfterSignIn() {
+        Task {
+            // Let the sign-in cover finish dismissing first.
+            try? await Task.sleep(for: .milliseconds(450))
+            guard authManager.isAuthenticated,
+                  homeThreadViewModel.canSend,
+                  !settings.maxModeEnabled else { return }
+            await homeThreadViewModel.addTurn(settings: settings, historyManager: historyManager)
+            await storeKit.syncWithBackend()
         }
     }
 
     // MARK: - Paywall
 
-    private func checkPaywallReminder() {
-        if !hasSeenOnboardingPaywall && authManager.isAuthenticated {
-            presentOnboardingPaywallIfNeeded(delay: 0.8)
+    /// Free users who already saw the plans intro get a reminder at most
+    /// once a week (it used to be every day on first foreground).
+    private func checkWeeklyPaywallReminder() {
+        guard authManager.isAuthenticated,
+              hasSeenOnboardingPaywall,
+              storeKit.currentTier == .free else { return }
+        if let last = parseDate(lastPaywallShownDateString),
+           let days = Calendar.current.dateComponents([.day], from: last, to: Date()).day,
+           days < 7 {
+            return
         }
-    }
 
-    private func checkDailyPaywallReminder() {
-        guard authManager.isAuthenticated else { return }
-        guard storeKit.currentTier == .free else { return }
-        let today = formattedDate(Date())
-        guard lastPaywallShownDateString != today else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            if storeKit.currentTier == .free {
-                showPaywall = true
-                updateLastPaywallShownDate()
-            }
+        presentAutomatically(after: 1.5) {
+            guard storeKit.currentTier == .free else { return }
+            updateLastPaywallShownDate()
+            showPaywall = true
         }
     }
 
     private func updateLastPaywallShownDate() {
         lastPaywallShownDateString = formattedDate(Date())
-    }
-
-    private func presentOnboardingPaywallIfNeeded(delay: TimeInterval = 0.45) {
-        guard !hasSeenOnboardingPaywall else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            guard !hasSeenOnboardingPaywall else { return }
-            showPaywall = true
-            hasSeenOnboardingPaywall = true
-            updateLastPaywallShownDate()
-        }
     }
 
     private func formattedDate(_ date: Date) -> String {
@@ -377,30 +431,18 @@ struct ContentView: View {
         return formatter.string(from: date)
     }
 
-    // MARK: - Notification Permission
-
-    /// Ask once, after the first successful result, instead of on launch.
-    private func requestNotificationPermissionIfNeeded() {
-        guard authManager.isAuthenticated, !didAskNotificationPermission else { return }
-        didAskNotificationPermission = true
-        Task {
-            try? await Task.sleep(for: .seconds(1.5))
-            _ = await NotificationManager.shared.requestAuthorization()
-        }
-    }
-
     // MARK: - Review Prompt
 
     private func checkReviewPrompt() {
-        guard enhancementCount >= 3 else { return }
+        guard enhancementCount >= 5 else { return }
 
         let today = Date()
         if let lastPromptDate = parseDate(lastReviewPromptDateString) {
             let daysSinceLastPrompt = Calendar.current.dateComponents([.day], from: lastPromptDate, to: today).day ?? 0
-            guard daysSinceLastPrompt >= 3 else { return }
+            guard daysSinceLastPrompt >= 30 else { return }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        presentAutomatically(after: 2.0) {
             requestAppReview()
             lastReviewPromptDateString = formattedDate(today)
         }

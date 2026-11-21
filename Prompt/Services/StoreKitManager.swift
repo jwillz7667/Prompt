@@ -397,51 +397,6 @@ final class StoreKitManager {
         shared.reloadWidgets()
     }
 
-    // MARK: - Start Free Trial
-
-    func startFreeTrial() async throws {
-        isLoading = true
-        error = nil
-
-        do {
-            let response: TrialResponse = try await APIClient.shared.request(
-                "/subscriptions/trial",
-                method: .post
-            )
-
-            if response.success {
-                await syncWithBackend()
-            } else {
-                throw StoreError.trialNotAvailable(response.error ?? "Trial not available")
-            }
-
-            isLoading = false
-        } catch {
-            isLoading = false
-            ErrorHandler.shared.handle(error, context: "startFreeTrial")
-            if let storeError = error as? StoreError {
-                self.error = storeError
-                throw storeError
-            }
-            self.error = .trialFailed(error)
-            throw StoreError.trialFailed(error)
-        }
-    }
-
-    // MARK: - Check Trial Eligibility
-
-    func checkTrialEligibility() async -> Bool {
-        do {
-            let response: TrialEligibilityResponse = try await APIClient.shared.request(
-                "/subscriptions/trial/eligibility",
-                method: .get
-            )
-            return response.eligible
-        } catch {
-            return false
-        }
-    }
-
     // MARK: - Transaction Listener
 
     private func listenForTransactions() -> Task<Void, Error> {

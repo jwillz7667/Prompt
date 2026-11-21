@@ -112,7 +112,7 @@ struct AuthView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 benefitRow(systemImage: "wand.and.stars", text: "AI-powered prompt enhancement across all modalities")
-                benefitRow(systemImage: "gift.fill", text: "7-day Premium trial with unlimited prompts and MAX mode")
+                benefitRow(systemImage: "gift.fill", text: "Eligible new subscribers can try Premium free for 7 days")
                 benefitRow(systemImage: "clock.arrow.circlepath", text: "Save history, sync across devices, and unlock all tools")
             }
         }
@@ -210,7 +210,7 @@ struct AuthView: View {
         case .standard:
             return "Upgrade weak prompts into production-ready instructions with a cleaner, faster chat workflow."
         case .guestUnlock:
-            return "Sign in with Apple to start enhancing prompts, save your history, and claim your 7-day Premium trial."
+            return "Sign in with Apple to start enhancing prompts and save your history."
         }
     }
 
