@@ -110,6 +110,21 @@ describe('LLM gateway', () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
+  it('fails over and opens the breaker when the primary rejects its configured model', async () => {
+    const fetch = vi.fn<FetchLike>(async (url) =>
+      url === DEEPSEEK_URL
+        ? new Response('{"error":{"message":"Model Not Exist"}}', { status: 400 })
+        : streamResponse(sseToken('ok') + sseFinish()),
+    );
+    const { gateway } = buildGateway(fetch);
+
+    const first = await gateway.streamChat(request, { onToken: () => undefined });
+    const second = await gateway.streamChat(request, { onToken: () => undefined });
+
+    expect([first.provider, second.provider]).toEqual(['openrouter', 'openrouter']);
+    expect(fetch.mock.calls.filter(([url]) => url === DEEPSEEK_URL)).toHaveLength(1);
+  });
+
   it('throws the last provider error when every provider fails, mapped to a generic client error', async () => {
     const fetch = vi.fn<FetchLike>(async (url) =>
       new Response('x', { status: url === DEEPSEEK_URL ? 503 : 429 }),

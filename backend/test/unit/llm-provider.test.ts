@@ -59,6 +59,7 @@ describe('status classification', () => {
     [429, 'rate_limited'],
     [503, 'overloaded'],
     [524, 'timeout'],
+    [404, 'model_unavailable'],
     [400, 'bad_request'],
   ] as const)('maps HTTP %i to %s', (status, kind) => {
     expect(classifyProviderStatus(status)).toBe(kind);
@@ -144,6 +145,31 @@ describe('OpenAI-compatible provider', () => {
 
     await expect(provider.complete(baseRequest, { model: 'm', timeoutMs: 1_000 }))
       .rejects.toMatchObject({ kind: 'context_length' });
+  });
+
+  it.each([
+    [400, '{"error":{"message":"Model Not Exist","type":"invalid_request_error"}}'],
+    [422, '{"error":{"message":"Unknown parameter: thinking"}}'],
+    [400, '{"error":{"message":"deepseek/deepseek-v9 is not a valid model ID","code":400}}'],
+  ])('classifies a %i rejecting the model or a request field as model_unavailable', async (status, body) => {
+    const fetch = vi.fn().mockResolvedValue(new Response(body, { status }));
+    const provider = createOpenAiCompatibleProvider(providerConfig('deepseek'), { logger: silentLogger(), fetch });
+
+    const failure: unknown = await provider
+      .complete(baseRequest, { model: 'm', timeoutMs: 1_000 })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({ kind: 'model_unavailable', isFailoverEligible: true, isProviderWide: true });
+  });
+
+  it('keeps a 400 about the request content as a non-failover bad_request', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response('{"error":{"message":"messages[0].content must be a string"}}', { status: 400 }),
+    );
+    const provider = createOpenAiCompatibleProvider(providerConfig('deepseek'), { logger: silentLogger(), fetch });
+
+    await expect(provider.complete(baseRequest, { model: 'm', timeoutMs: 1_000 }))
+      .rejects.toMatchObject({ kind: 'bad_request' });
   });
 
   it('turns an in-band error object into a ProviderError that records streamed output', async () => {

@@ -99,7 +99,19 @@ type ParsedUsage = z.infer<typeof usageSchema>;
 
 const CONTEXT_LENGTH_PATTERN =
   /context[_ ]length|maximum context|too many tokens|prompt is too long|context window/i;
+// A retired/renamed model id or a request field this deployment does not
+// accept: the provider is unusable for every request until it is reconfigured,
+// so it must fail over and open the breaker rather than surface as a 500.
+const MODEL_UNAVAILABLE_PATTERN =
+  /model[^.\n]{0,60}(not exist|does not exist|not found|not available|unsupported|unknown|invalid|no such)|(unknown|unrecognized|unsupported|invalid) (model|parameter|field|request argument)|not a valid model|no endpoints found|extra (inputs|fields) (are )?not permitted/i;
 const ERROR_BODY_PEEK_BYTES = 4_096;
+
+/** Narrows a 400/422 by its body; anything unrecognised stays a request problem. */
+export function classifyBadRequestBody(peek: string): ProviderErrorKind {
+  if (CONTEXT_LENGTH_PATTERN.test(peek)) return 'context_length';
+  if (MODEL_UNAVAILABLE_PATTERN.test(peek)) return 'model_unavailable';
+  return 'bad_request';
+}
 
 function reasoningFields(style: ReasoningStyle, reasoning: LlmReasoning): Record<string, unknown> {
   const enabled = reasoning === 'on';
@@ -156,9 +168,13 @@ function mapFinishReason(raw: string): FinishOutcome {
 function inBandErrorKind(error: z.infer<typeof inBandErrorSchema>): ProviderErrorKind {
   const numeric = typeof error.code === 'number' ? error.code : Number(error.code);
   if (Number.isInteger(numeric) && numeric >= 400 && numeric < 600) {
-    return classifyProviderStatus(numeric);
+    const kind = classifyProviderStatus(numeric);
+    return kind === 'bad_request' && error.message ? classifyBadRequestBody(error.message) : kind;
   }
-  if (error.message && CONTEXT_LENGTH_PATTERN.test(error.message)) return 'context_length';
+  if (error.message) {
+    const kind = classifyBadRequestBody(error.message);
+    if (kind !== 'bad_request') return kind;
+  }
   return 'overloaded';
 }
 
@@ -261,7 +277,7 @@ export function createOpenAiCompatibleProvider(
         .text()
         .then((text) => text.slice(0, ERROR_BODY_PEEK_BYTES))
         .catch(() => '');
-      if (CONTEXT_LENGTH_PATTERN.test(peek)) kind = 'context_length';
+      kind = classifyBadRequestBody(peek);
     } else {
       await response.body?.cancel().catch(() => undefined);
     }

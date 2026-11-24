@@ -15,7 +15,9 @@ export type ProviderErrorKind =
   | 'context_length'
   | 'content_filter'
   | 'interrupted'
-  | 'not_configured';
+  | 'not_configured'
+  /** The provider rejects the configured model id or a request field it does not support. */
+  | 'model_unavailable';
 
 export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
@@ -46,7 +48,10 @@ export class ProviderError extends Error {
   /** Failures that indicate this provider is unusable for everyone, not just this request. */
   get isProviderWide(): boolean {
     return (
-      this.kind === 'insufficient_balance' || this.kind === 'auth' || this.kind === 'not_configured'
+      this.kind === 'insufficient_balance' ||
+      this.kind === 'auth' ||
+      this.kind === 'not_configured' ||
+      this.kind === 'model_unavailable'
     );
   }
 
@@ -65,6 +70,7 @@ export function classifyProviderStatus(status: number): ProviderErrorKind {
   if (status === 402) return 'insufficient_balance';
   if (status === 401 || status === 403) return 'auth';
   if (status === 408 || status === 504 || status === 524) return 'timeout';
+  if (status === 404) return 'model_unavailable';
   if (status === 413) return 'context_length';
   if (status === 429) return 'rate_limited';
   if (status >= 500) return 'overloaded';
@@ -115,6 +121,7 @@ function codeForKind(kind: ProviderErrorKind): ClientErrorCode {
     case 'insufficient_balance':
     case 'auth':
     case 'not_configured':
+    case 'model_unavailable':
     case 'overloaded':
       return 'PROVIDER_UNAVAILABLE';
     case 'rate_limited':
