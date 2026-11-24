@@ -350,6 +350,21 @@ final class AuthManager: NSObject {
         isLoading = false
     }
 
+    // MARK: - Delete Account
+
+    /// Permanently deletes the account on the server, then clears every
+    /// local trace of the session. Throws (leaving the session intact) when
+    /// the server did not confirm the deletion.
+    func deleteAccount() async throws {
+        authAttemptVersion &+= 1
+        try await APIClient.shared.requestVoid("/users/account", method: .delete)
+        await APIClient.shared.clearTokens()
+        clearSignedInState()
+        StoreKitManager.shared.clearSubscriptionState()
+        SupportSocketManager.shared.disconnect()
+        currentUser = nil
+    }
+
     // MARK: - Sign Out All Devices
 
     func signOutAllDevices() async throws {

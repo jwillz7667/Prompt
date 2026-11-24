@@ -39,6 +39,7 @@ struct PaywallView: View {
     @State private var isRestoring = false
     @State private var isSigningOut = false
     @State private var alertMessage: String?
+    @State private var isConfirmingAccountDeletion = false
 
     init(mode: Mode = .manage) {
         self.mode = mode
@@ -355,8 +356,24 @@ struct PaywallView: View {
             .buttonStyle(.plain)
             .disabled(isBusy)
             .accessibilityIdentifier("paywall.signOut")
+
+            // An account exists from sign-in onward, so it must be deletable
+            // without subscribing (App Review 5.1.1(v)).
+            Button(role: .destructive) {
+                isConfirmingAccountDeletion = true
+            } label: {
+                Text("Delete Account")
+                    .font(.system(.footnote, design: .rounded, weight: .semibold))
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(warningColor)
+            .disabled(isBusy)
+            .padding(.top, 6)
+            .accessibilityIdentifier("paywall.deleteAccount")
         }
         .padding(.top, 4)
+        .deleteAccountFlow(isPresented: $isConfirmingAccountDeletion)
     }
 
     private func noticeBanner(_ message: String) -> some View {

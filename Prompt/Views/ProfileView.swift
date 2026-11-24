@@ -435,15 +435,8 @@ struct ProfileView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
-            .alert("Delete Account", isPresented: $showDeleteAccountAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) {
-                    Task {
-                        try? await deleteAccount()
-                    }
-                }
-            } message: {
-                Text("This will permanently delete your account and all data. This action cannot be undone.")
+            .deleteAccountFlow(isPresented: $showDeleteAccountAlert) {
+                dismiss()
             }
             .sheet(isPresented: $showSubscription) {
                 PaywallView(mode: .manage)
@@ -583,15 +576,6 @@ struct ProfileView: View {
             print("Failed to load stats: \(error)")
             #endif
         }
-    }
-
-    private func deleteAccount() async throws {
-        try await APIClient.shared.requestVoid("/users/account", method: .delete)
-        await APIClient.shared.clearTokens()
-        StoreKitManager.shared.clearSubscriptionState()
-        authManager.currentUser = nil
-        historyManager.clearLocalData()
-        dismiss()
     }
 
     private var subscriptionSummary: String {

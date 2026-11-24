@@ -218,6 +218,12 @@ struct EntitlementCheckView: View {
 
     let hasFailed: Bool
 
+    @State private var isConfirmingAccountDeletion = false
+    /// A check that runs this long is likely stuck on a bad connection; the
+    /// user is then offered a way out instead of an endless spinner.
+    @State private var isTakingLong = false
+    private static let slowCheckThreshold: Duration = .seconds(8)
+
     var body: some View {
         ZStack {
             LiquidGlassBackground()
@@ -259,23 +265,49 @@ struct EntitlementCheckView: View {
                     .disabled(storeKit.isCheckingEntitlement)
                     .accessibilityIdentifier("entitlement.retry")
 
-                    Button("Sign out") {
-                        Task {
-                            await authManager.signOut()
-                            historyManager.clearLocalData()
-                        }
-                    }
-                    .font(.system(.footnote, design: .rounded, weight: .semibold))
-                    .foregroundStyle(Color.adaptiveTextSecondary)
+                    accountActions
                 } else {
                     ProgressView()
                         .tint(Color.brandCyan)
                     Text("Checking your subscription…")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
                         .foregroundStyle(Color.adaptiveTextSecondary)
+                    if isTakingLong {
+                        accountActions
+                            .transition(.opacity)
+                    }
                 }
             }
             .padding(24)
+        }
+        .animation(.easeInOut(duration: 0.25), value: isTakingLong)
+        .deleteAccountFlow(isPresented: $isConfirmingAccountDeletion)
+        .task(id: hasFailed) {
+            isTakingLong = false
+            guard !hasFailed else { return }
+            try? await Task.sleep(for: Self.slowCheckThreshold)
+            guard !Task.isCancelled else { return }
+            isTakingLong = true
+        }
+    }
+
+    private var accountActions: some View {
+        VStack(spacing: 10) {
+            Button("Sign out") {
+                Task {
+                    await authManager.signOut()
+                    historyManager.clearLocalData()
+                }
+            }
+            .font(.system(.footnote, design: .rounded, weight: .semibold))
+            .foregroundStyle(Color.adaptiveTextSecondary)
+            .accessibilityIdentifier("entitlement.signOut")
+
+            Button("Delete Account", role: .destructive) {
+                isConfirmingAccountDeletion = true
+            }
+            .font(.system(.footnote, design: .rounded, weight: .semibold))
+            .accessibilityIdentifier("entitlement.deleteAccount")
         }
     }
 }
