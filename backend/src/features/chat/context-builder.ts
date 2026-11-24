@@ -20,10 +20,22 @@ export const CHAT_SYSTEM_PROMPT = [
 
 const CUSTOM_INSTRUCTIONS_HEADER = "The user's custom instructions for this conversation:";
 
-const CHARS_PER_TOKEN = 3.5;
+// Latin-script text averages ~4 characters per token. CJK ideographs, kana
+// and Hangul are about one token per character (often more), and other
+// non-Latin scripts and emoji tokenize far worse than Latin, so they are
+// counted per code point. Overestimating only trims older history sooner.
+const LATIN_CHARS_PER_TOKEN = 4;
+const DENSE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+  let latinChars = 0;
+  let denseTokens = 0;
+  for (const char of text) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (codePoint < 0x0250) latinChars += 1;
+    else denseTokens += DENSE_SCRIPT.test(char) ? 1 : 0.5;
+  }
+  return Math.ceil(latinChars / LATIN_CHARS_PER_TOKEN + denseTokens);
 }
 
 export interface ContextHistoryMessage {

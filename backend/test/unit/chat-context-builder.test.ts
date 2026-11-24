@@ -122,3 +122,31 @@ describe('deriveConversationTitle', () => {
     expect(deriveConversationTitle(' \n ')).toBeNull();
   });
 });
+
+describe('token estimate', () => {
+  it('counts CJK text at about one token per character', () => {
+    const chinese = '请帮我写一篇关于人工智能发展历史的文章'.repeat(10);
+
+    expect(estimateTokens(chinese)).toBeGreaterThanOrEqual(chinese.length);
+  });
+
+  it('counts English text at about four characters per token', () => {
+    const english = 'The quick brown fox jumps over the lazy dog. '.repeat(20);
+
+    expect(estimateTokens(english)).toBe(Math.ceil(english.length / 4));
+  });
+
+  it('trims more CJK history than Latin history of the same length', () => {
+    const budget = estimateTokens(CHAT_SYSTEM_PROMPT) + estimateTokens('next') + 2_000;
+    const history = (content: string) =>
+      Array.from({ length: 20 }, (_, index) => ({
+        role: index % 2 === 0 ? ('USER' as const) : ('ASSISTANT' as const),
+        content,
+        status: 'COMPLETE' as const,
+      }));
+    const build = (content: string) =>
+      buildChatContext({ customInstructions: null, history: history(content), newUserMessage: 'next', tokenBudget: budget });
+
+    expect(build('字'.repeat(400)).length).toBeLessThan(build('w'.repeat(400)).length);
+  });
+});
