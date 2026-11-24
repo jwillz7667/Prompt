@@ -5,7 +5,6 @@
  */
 
 import Stripe from 'stripe';
-import { z } from 'zod';
 import { prisma } from '../utils/prisma.js';
 import { cache } from '../utils/redis.js';
 import { logger } from '../utils/logger.js';
@@ -55,33 +54,27 @@ export interface ApiCreditPackConfig {
 }
 
 /**
- * The developer API is a separately billed B2B product, deliberately outside
- * the app's hard paywall (docs/adr/0001-developer-api-free-tier.md). Its free
- * allowance is kept small because a verified email is the only signup
- * barrier; signups are also throttled per IP in routes/developerAuth.
+ * Every developer API request that reaches a model must be paid for. The free
+ * tier keeps an account, API keys, docs and the non-AI endpoints, but includes
+ * no model requests; /enhance answers 402 API_PLAN_REQUIRED until the
+ * developer is on an active paid plan.
  */
-const freeTierEnvSchema = z.object({
-  API_FREE_MONTHLY_REQUESTS: z.preprocess(
-    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-    z.coerce.number().int().min(0).default(25),
-  ),
-});
-const API_FREE_MONTHLY_REQUESTS = freeTierEnvSchema.parse(process.env).API_FREE_MONTHLY_REQUESTS;
+export const API_BILLING_PATH = '/developers/billing';
 
 export const API_TIER_CONFIG: Record<ApiTier, ApiTierConfig> = {
   API_FREE: {
     tier: ApiTier.API_FREE,
     name: 'Free',
-    description: 'Perfect for testing and development',
-    monthlyRequests: API_FREE_MONTHLY_REQUESTS,
+    description: 'Account, API keys and docs. Prompt enhancement needs a paid plan.',
+    monthlyRequests: 0,
     requestsPerMinute: 10,
     priceMonthly: 0,
     overagePerHundred: 0, // No overage allowed
     features: [
-      `${API_FREE_MONTHLY_REQUESTS} requests/month`,
-      '10 requests/minute',
-      'Basic support',
-      'Community access',
+      'No enhancement requests included',
+      'API keys, usage and models endpoints',
+      'Full API documentation',
+      'Upgrade any time to start enhancing',
     ],
   },
   API_STARTER: {
@@ -168,6 +161,8 @@ export const API_CREDIT_PACKS: ApiCreditPackConfig[] = [
 export interface ApiSubscriptionInfo {
   tier: ApiTier;
   status: ApiSubscriptionStatus;
+  /** True only for an ACTIVE paid tier; nothing else may reach a model. */
+  hasActivePaidPlan: boolean;
   monthlyRequestLimit: number;
   baseMonthlyRequests: number;
   requestsPerMinute: number;
@@ -204,6 +199,39 @@ function getBaseMonthlyRequests(tier: ApiTier): number {
   return API_TIER_CONFIG[tier].monthlyRequests;
 }
 
+export function isPaidApiTier(tier: ApiTier): boolean {
+  return tier !== ApiTier.API_FREE;
+}
+
+function isActivePaidPlan(tier: ApiTier, status: ApiSubscriptionStatus): boolean {
+  return isPaidApiTier(tier) && status === ApiSubscriptionStatus.ACTIVE;
+}
+
+function canSpendRequests(
+  tier: ApiTier,
+  status: ApiSubscriptionStatus,
+  remainingRequests: number,
+): boolean {
+  if (!isActivePaidPlan(tier, status)) return false;
+  return (
+    remainingRequests === -1 || remainingRequests > 0 || API_TIER_CONFIG[tier].overagePerHundred > 0
+  );
+}
+
+/**
+ * Thrown when a developer without an active paid plan tries to buy something
+ * that only tops up a paid plan.
+ */
+export class ApiPlanRequiredError extends Error {
+  readonly code = 'API_PLAN_REQUIRED';
+  readonly upgradeUrl = API_BILLING_PATH;
+
+  constructor() {
+    super('A paid API plan is required');
+    this.name = 'ApiPlanRequiredError';
+  }
+}
+
 function isUnlimitedPlan(tier: ApiTier, includedRequests: number): boolean {
   return getBaseMonthlyRequests(tier) === -1 || includedRequests === -1;
 }
@@ -221,6 +249,12 @@ export function getPrepaidCreditsRemaining(snapshot: SubscriptionSnapshot): numb
 }
 
 function getRemainingRequests(snapshot: SubscriptionSnapshot): number {
+  // Unspent purchased credits on a free account are shown as credits, never as
+  // spendable quota: they only unlock once a paid plan is active.
+  if (!isPaidApiTier(snapshot.tier)) {
+    return 0;
+  }
+
   if (isUnlimitedPlan(snapshot.tier, snapshot.includedRequests)) {
     return -1;
   }
@@ -229,6 +263,10 @@ function getRemainingRequests(snapshot: SubscriptionSnapshot): number {
 }
 
 function getEffectiveIncludedRequests(snapshot: SubscriptionSnapshot): number {
+  if (!isPaidApiTier(snapshot.tier)) {
+    return 0;
+  }
+
   if (isUnlimitedPlan(snapshot.tier, snapshot.includedRequests)) {
     return -1;
   }
@@ -251,13 +289,19 @@ export async function getApiSubscriptionInfo(developerId: string): Promise<ApiSu
   // Try cache first
   const cached = await cache.get<ApiSubscriptionCache>(`api-subscription:${developerId}`);
   if (cached) {
-    const config = API_TIER_CONFIG[cached.tier as ApiTier];
-    const remainingRequests =
-      cached.monthlyLimit === -1 ? -1 : Math.max(0, cached.monthlyLimit - cached.periodUsage);
+    const tier = cached.tier as ApiTier;
+    const status = cached.status as ApiSubscriptionStatus;
+    const config = API_TIER_CONFIG[tier];
+    const remainingRequests = !isPaidApiTier(tier)
+      ? 0
+      : cached.monthlyLimit === -1
+        ? -1
+        : Math.max(0, cached.monthlyLimit - cached.periodUsage);
 
     return {
-      tier: cached.tier as ApiTier,
-      status: cached.status as ApiSubscriptionStatus,
+      tier,
+      status,
+      hasActivePaidPlan: isActivePaidPlan(tier, status),
       monthlyRequestLimit: cached.monthlyLimit,
       baseMonthlyRequests: cached.baseMonthlyLimit,
       requestsPerMinute: config.requestsPerMinute,
@@ -266,8 +310,7 @@ export async function getApiSubscriptionInfo(developerId: string): Promise<ApiSu
       currentPeriodEnd: new Date(cached.periodEnd),
       remainingRequests,
       prepaidCreditsRemaining: cached.prepaidCreditsRemaining,
-      canMakeRequests:
-        remainingRequests === -1 || remainingRequests > 0 || config.overagePerHundred > 0,
+      canMakeRequests: canSpendRequests(tier, status, remainingRequests),
       overageAllowed: config.overagePerHundred > 0,
       features: config.features,
       hasBillingAccount: cached.hasBillingAccount,
@@ -311,6 +354,7 @@ export async function getApiSubscriptionInfo(developerId: string): Promise<ApiSu
   return {
     tier: subscription.tier,
     status: subscription.status,
+    hasActivePaidPlan: isActivePaidPlan(subscription.tier, subscription.status),
     monthlyRequestLimit,
     baseMonthlyRequests: config.monthlyRequests,
     requestsPerMinute: config.requestsPerMinute,
@@ -319,36 +363,40 @@ export async function getApiSubscriptionInfo(developerId: string): Promise<ApiSu
     currentPeriodEnd: subscription.currentPeriodEnd,
     remainingRequests,
     prepaidCreditsRemaining,
-    canMakeRequests:
-      remainingRequests === -1 || remainingRequests > 0 || config.overagePerHundred > 0,
+    canMakeRequests: canSpendRequests(subscription.tier, subscription.status, remainingRequests),
     overageAllowed: config.overagePerHundred > 0,
     features: config.features,
     hasBillingAccount,
   };
 }
 
+export type ApiRequestDecision =
+  | { allowed: true; remainingRequests: number }
+  | { allowed: false; reason: 'API_PLAN_REQUIRED'; message: string }
+  | { allowed: false; reason: 'QUOTA_EXCEEDED'; message: string };
+
 /**
- * Check if user can make an API request.
+ * Decide whether a developer may spend a model request. Only an ACTIVE paid
+ * plan qualifies; the free tier and lapsed or past-due plans never do.
  */
-export async function canMakeRequest(developerId: string): Promise<{
-  allowed: boolean;
-  reason?: string;
-  remainingRequests?: number;
-}> {
+export async function canMakeRequest(developerId: string): Promise<ApiRequestDecision> {
   const info = await getApiSubscriptionInfo(developerId);
 
-  if (info.status !== ApiSubscriptionStatus.ACTIVE) {
+  if (!info.hasActivePaidPlan) {
     return {
       allowed: false,
-      reason: `API subscription is ${info.status.toLowerCase()}`,
+      reason: 'API_PLAN_REQUIRED',
+      message: isPaidApiTier(info.tier)
+        ? `Your API plan is ${info.status.toLowerCase().replace('_', ' ')}. Update billing to resume enhancement requests.`
+        : 'Prompt enhancement requests need a paid API plan. Choose a plan to start enhancing.',
     };
   }
 
   if (!info.canMakeRequests) {
     return {
       allowed: false,
-      reason: 'Monthly quota exceeded',
-      remainingRequests: 0,
+      reason: 'QUOTA_EXCEEDED',
+      message: 'Monthly quota exceeded',
     };
   }
 
@@ -657,6 +705,12 @@ export async function createCreditCheckoutSession(
     throw new Error(`Unknown API credit pack: ${packId}`);
   }
 
+  // Credit packs top up a paid plan; they are not a way around choosing one.
+  const subscription = await ensureApiSubscription(developerId);
+  if (!isActivePaidPlan(subscription.tier, subscription.status)) {
+    throw new ApiPlanRequiredError();
+  }
+
   const stripeCustomerId = await getOrCreateStripeCustomer(developerId, email);
 
   const session = await stripe.checkout.sessions.create({
@@ -867,15 +921,11 @@ export async function reportUsageToStripe(developerId: string, quantity: number)
 // ============================================================================
 
 /**
- * Get available API plans for display.
+ * Plans a developer can choose. The free tier is the no-plan state, not an
+ * offer, so it is not listed.
  */
 export function getAvailablePlans(): ApiTierConfig[] {
-  return [
-    API_TIER_CONFIG.API_FREE,
-    API_TIER_CONFIG.API_STARTER,
-    API_TIER_CONFIG.API_PRO,
-    API_TIER_CONFIG.API_ENTERPRISE,
-  ];
+  return [API_TIER_CONFIG.API_STARTER, API_TIER_CONFIG.API_PRO, API_TIER_CONFIG.API_ENTERPRISE];
 }
 
 /**

@@ -22,7 +22,7 @@ import { API_TIER_CONFIG } from '../../src/services/apiSubscriptionService.js';
 
 const app = express().use(express.json()).use('/developer/auth', developerAuthRouter);
 
-describe('developer API free tier', () => {
+describe('developer signup and the free tier', () => {
   it('throttles repeated signups from one network', async () => {
     registerDeveloper.mockResolvedValue({ developer: {}, accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
     const signup = (index: number) =>
@@ -34,8 +34,8 @@ describe('developer API free tier', () => {
     expect(registerDeveloper).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps the free allowance small and advertises the real number', () => {
-    expect(API_TIER_CONFIG.API_FREE.monthlyRequests).toBe(25);
-    expect(API_TIER_CONFIG.API_FREE.features).toContain('25 requests/month');
+  it('includes no enhancement requests on the free tier', () => {
+    expect(API_TIER_CONFIG.API_FREE.monthlyRequests).toBe(0);
+    expect(API_TIER_CONFIG.API_FREE.features.join(' ')).not.toMatch(/\d+ requests\/month/);
   });
 });

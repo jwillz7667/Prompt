@@ -21,7 +21,7 @@ vi.mock('../../src/middleware/apiQuotaEnforcement.js', () => ({
   getQuotaInfo: vi.fn().mockResolvedValue({ quota: {} }),
 }));
 vi.mock('../../src/services/apiSubscriptionService.js', () => ({
-  getApiSubscriptionInfo: vi.fn().mockResolvedValue({ tier: 'API_FREE' }),
+  getApiSubscriptionInfo: vi.fn().mockResolvedValue({ tier: 'API_PRO' }),
   getTierConfig: vi.fn().mockReturnValue({}),
 }));
 vi.mock('../../src/services/apiUsageService.js', () => ({ getRecentUsage: vi.fn() }));

@@ -28,10 +28,10 @@ import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/erro
 
 export const publicApiRouter = Router();
 
-// All routes require API key authentication
+// All routes require API key authentication. Only routes that reach a model
+// run enforceApiQuota, so free accounts keep the read-only endpoints.
 publicApiRouter.use(apiKeyAuth);
 publicApiRouter.use(apiRateLimit);
-publicApiRouter.use(enforceApiQuota);
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -60,6 +60,7 @@ const historyQuerySchema = z.object({
 publicApiRouter.post(
   '/enhance',
   requirePermission('enhance'),
+  enforceApiQuota,
   async (req: ApiQuotaRequest, res: Response): Promise<void> => {
     const startTime = Date.now();
 
@@ -405,10 +406,9 @@ publicApiRouter.get('/recent', async (req: ApiKeyRequest, res: Response): Promis
 // HELPERS
 // ============================================================================
 
+// enforceApiQuota has already rejected API_FREE, so it never reaches here.
 function mapApiTierToPromptTier(tier: string): 'basic' | 'standard' | 'advanced' {
   switch (tier) {
-    case 'API_FREE':
-      return 'basic';
     case 'API_STARTER':
       return 'standard';
     case 'API_PRO':

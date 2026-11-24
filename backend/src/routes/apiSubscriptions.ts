@@ -21,6 +21,8 @@ import {
   getAvailablePlans,
   getAvailableCreditPacks,
   ApiTier,
+  ApiPlanRequiredError,
+  API_BILLING_PATH,
 } from '../services/apiSubscriptionService.js';
 import { getMonthlyUsage, calculateBilling } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
@@ -85,6 +87,8 @@ apiSubscriptionsRouter.get(
         },
         features: subscriptionInfo.features,
         canMakeRequests: subscriptionInfo.canMakeRequests,
+        hasActivePaidPlan: subscriptionInfo.hasActivePaidPlan,
+        upgradeUrl: API_BILLING_PATH,
         overageAllowed: subscriptionInfo.overageAllowed,
         hasBillingAccount: subscriptionInfo.hasBillingAccount,
       });
@@ -236,6 +240,15 @@ apiSubscriptionsRouter.post(
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.issues });
+        return;
+      }
+      if (error instanceof ApiPlanRequiredError) {
+        res.status(402).json({
+          error: error.message,
+          code: error.code,
+          message: 'Credit packs top up a paid plan. Choose a plan first.',
+          upgradeUrl: error.upgradeUrl,
+        });
         return;
       }
       logger.error({ error }, 'Create API credit checkout session error');
