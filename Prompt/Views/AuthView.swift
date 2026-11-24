@@ -80,7 +80,7 @@ struct AuthView: View {
                 .font(.system(.headline, design: .rounded, weight: .bold))
                 .foregroundStyle(textPrimary)
 
-            Text("An account keeps your chats, history and subscription in one place.")
+            Text("Your subscription, chats and history belong to your account, so they work on every device you sign in on.")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
