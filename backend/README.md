@@ -181,9 +181,29 @@ retried every 15 minutes, so deletion never blocks. Set all three keys or
 none: a partial set fails boot, and none logs that revocation is disabled.
 
 **Developer API.** `/api/v1/public/*` is a separately billed product
-outside the app paywall ([ADR 0001](../docs/adr/0001-developer-api-free-tier.md)).
-`API_FREE_MONTHLY_REQUESTS` (default `25`) sets the free allowance.
+([ADR 0002](../docs/adr/0002-developer-api-paid-plans-only.md)). There is no
+free allowance: `POST /public/enhance` (JSON and streaming) answers
+`402 {code:'API_PLAN_REQUIRED', upgradeUrl:'/developers/billing'}` unless the
+developer is on an ACTIVE paid plan (`API_STARTER`, `API_PRO`,
+`API_ENTERPRISE`); a paid plan over its quota gets `429 QUOTA_EXCEEDED`.
+Free keys can still call `/usage`, `/models`, `/history` and `/recent`.
 `DEVELOPER_SIGNUPS_PER_IP_PER_HOUR` (default `5`) throttles signups.
+
+**AI data-sharing consent (App Store 5.1.2(i)).** The account's consent is
+stored on `User.aiDataConsentAt` / `aiDataConsentVersion` and managed with
+`POST` / `DELETE /api/v1/users/me/ai-consent`. Every user payload carries
+`aiDataConsent`. When enforced, every AI route (after the paywall check) and
+the support assistant answer
+`403 {code:'AI_CONSENT_REQUIRED', requiredVersion}` before any provider call.
+
+| Variable                  | Default | Purpose                                                              |
+| ------------------------- | ------- | -------------------------------------------------------------------- |
+| `AI_CONSENT_ENFORCED`     | `false` | Enforce the consent gate (see rollout in `aiConsentService.ts`)      |
+| `AI_DATA_CONSENT_VERSION` | `1`     | Disclosure version; raising it re-requires consent from every user   |
+
+Turn `AI_CONSENT_ENFORCED` on only once the consent-syncing iOS build is the
+minimum supported version; the web dashboard handles the 403 with its own
+consent dialog.
 
 ### Chat
 

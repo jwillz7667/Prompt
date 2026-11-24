@@ -1,6 +1,6 @@
 # 0001. The developer API free tier sits outside the app's hard paywall
 
-- Status: accepted
+- Status: superseded by [0002](0002-developer-api-paid-plans-only.md)
 - Date: 2026-11-24
 
 ## Context
