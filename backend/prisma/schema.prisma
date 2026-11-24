@@ -14,6 +14,10 @@ datasource db {
 
 enum SubscriptionTier {
   FREE
+  // Deprecated: tiers collapsed to a single PREMIUM entitlement (migration
+  // 20261124000000 rewrote every PRO row). Kept for one release so a rollback
+  // to the previous image can still read the enum; remove in the next schema
+  // release once no deployed build writes PRO.
   PRO
   PREMIUM
 }
@@ -74,6 +78,11 @@ model User {
   // Stripe (for web payments)
   stripeCustomerId String? @unique
 
+  // StoreKit appAccountToken: iOS passes it on every purchase so App Store
+  // notifications can be attributed to this account even before a
+  // transaction row exists for it.
+  appAccountToken String @unique @default(uuid()) @db.Uuid
+
   // User preferences
   customInstructions String? @db.Text
 
@@ -87,17 +96,18 @@ model User {
   lastLoginAt DateTime?
 
   // Relations
-  sessions           Session[]
-  prompts            Prompt[]
-  threads            Thread[]
-  subscription       Subscription?
-  supportTickets     SupportTicket[]
-  workflows          Workflow[]
-  workflowExecutions WorkflowExecution[]
-  variationResults   VariationResult[]
-  projectContexts    ProjectContext[]
-  platformSettings   UserPlatformSettings[]
-  sandboxTests       SandboxTest[]
+  sessions             Session[]
+  prompts              Prompt[]
+  threads              Thread[]
+  subscription         Subscription?
+  supportTickets       SupportTicket[]
+  workflows            Workflow[]
+  workflowExecutions   WorkflowExecution[]
+  variationResults     VariationResult[]
+  projectContexts      ProjectContext[]
+  platformSettings     UserPlatformSettings[]
+  sandboxTests         SandboxTest[]
+  appStoreTransactions AppStoreTransaction[]
 
   // Indexes for performance at scale
   @@index([email])
@@ -456,6 +466,10 @@ model Subscription {
   autoRenewEnabled   Boolean @default(true)
   autoRenewProductId String?
 
+  // App Store environment of the backing transaction ("Production" |
+  // "Sandbox"); null for Stripe-backed or never-purchased rows.
+  environment String?
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -469,6 +483,7 @@ model Subscription {
 model AppStoreTransaction {
   id     String @id @default(cuid())
   userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Transaction identifiers
   transactionId         String  @unique
@@ -483,6 +498,11 @@ model AppStoreTransaction {
   purchaseDate   DateTime
   expirationDate DateTime?
   revocationDate DateTime?
+
+  // Offer redeemed by this transaction (1 introductory, 2 promotional,
+  // 3 offer code, 4 win-back) and its discount type (FREE_TRIAL, ...).
+  offerType         Int?
+  offerDiscountType String?
 
   // Environment
   environment String // Production, Sandbox
