@@ -12,6 +12,7 @@ import {
 } from './circuit-breaker.js';
 import { getLlmConfig, type LlmConfig, type LlmTimeouts } from './config.js';
 import { ProviderError } from './errors.js';
+import { withAssistantIdentity } from './identity.js';
 import {
   TokenConsumerError,
   createOpenAiCompatibleProvider,
@@ -231,7 +232,8 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
   };
 
   return {
-    streamChat(request, callbacks) {
+    streamChat(rawRequest, callbacks) {
+      const request = { ...rawRequest, messages: withAssistantIdentity(rawRequest.messages) };
       return run(request, 'stream', (provider, model, onEmit) =>
         provider.stream(request, {
           model,
@@ -243,7 +245,8 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
         }),
       );
     },
-    completeChat(request) {
+    completeChat(rawRequest) {
+      const request = { ...rawRequest, messages: withAssistantIdentity(rawRequest.messages) };
       return run(request, 'complete', (provider, model) =>
         provider.complete(request, { model, timeoutMs: deps.timeouts.totalMs }),
       );

@@ -4,6 +4,7 @@ import { createCircuitBreaker, createMemoryBreakerStore } from '../../src/featur
 import { loadLlmConfig } from '../../src/features/llm/config.js';
 import { ProviderError, toClientStreamError } from '../../src/features/llm/errors.js';
 import { createLlmGateway } from '../../src/features/llm/gateway.js';
+import { ASSISTANT_IDENTITY_RULE } from '../../src/features/llm/identity.js';
 import {
   createOpenAiCompatibleProvider,
   type FetchLike,
@@ -168,6 +169,34 @@ describe('LLM gateway', () => {
 
     await expect(gateway.completeChat(request)).rejects.toMatchObject({ provider: 'gateway' });
     expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('adds the assistant identity rule to every request it sends upstream', async () => {
+    const fetch = vi.fn<FetchLike>(async () => streamResponse(sseToken('ok') + sseFinish()));
+    const { gateway } = buildGateway(fetch);
+
+    await gateway.streamChat(request, { onToken: () => undefined });
+    await gateway.streamChat(
+      { ...request, messages: [{ role: 'system', content: 'You optimize prompts.' }, ...request.messages] },
+      { onToken: () => undefined },
+    );
+
+    const systems = fetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).messages[0]);
+    expect(systems[0]).toEqual({ role: 'system', content: ASSISTANT_IDENTITY_RULE });
+    expect(systems[1]).toEqual({ role: 'system', content: `You optimize prompts.\n\n${ASSISTANT_IDENTITY_RULE}` });
+  });
+
+  it('does not repeat the identity rule when the system prompt already has it', async () => {
+    const fetch = vi.fn<FetchLike>(async () => streamResponse(sseToken('ok') + sseFinish()));
+    const { gateway } = buildGateway(fetch);
+    const system = `Be helpful.\n- ${ASSISTANT_IDENTITY_RULE}`;
+
+    await gateway.streamChat(
+      { ...request, messages: [{ role: 'system', content: system }, ...request.messages] },
+      { onToken: () => undefined },
+    );
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).messages[0].content).toBe(system);
   });
 
   it('throws not_configured when the chain is empty', async () => {

@@ -42,5 +42,6 @@ export {
   type LlmTextPart,
   type LlmUsage,
 } from './types.js';
+export { ASSISTANT_IDENTITY_RULE, withAssistantIdentity } from './identity.js';
 export { validateLlmConfig } from './validate.js';
 export { beginSse, endSse, shouldCompressResponse, writeSse } from './sse.js';
