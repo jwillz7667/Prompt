@@ -21,12 +21,17 @@ const config = loadLlmConfig({
   LLM_LAST_PROVIDER_RETRIES: '0',
 });
 
-function buildGateway(fetch: FetchLike, overrides: { ttftMs?: number; now?: () => number } = {}) {
+function buildGateway(
+  fetch: FetchLike,
+  overrides: { ttftMs?: number; now?: () => number; chain?: typeof config.chain } = {},
+) {
   const logger = silentLogger();
   const store = createMemoryBreakerStore(overrides.now);
   const breaker = createCircuitBreaker({ store, config: config.breaker, logger });
   const gateway = createLlmGateway({
-    providers: config.chain.map((provider) => createOpenAiCompatibleProvider(provider, { logger, fetch })),
+    providers: (overrides.chain ?? config.chain).map((provider) =>
+      createOpenAiCompatibleProvider(provider, { logger, fetch }),
+    ),
     breaker,
     timeouts: { ttftMs: overrides.ttftMs ?? 1_000, idleMs: 1_000, totalMs: 5_000 },
     lastProviderRetries: 0,
@@ -137,6 +142,32 @@ describe('LLM gateway', () => {
     const clientError = toClientStreamError(failure);
     expect(clientError.code).toBe('RATE_LIMITED');
     expect(JSON.stringify(clientError)).not.toMatch(/openrouter|deepseek/i);
+  });
+
+  it('still attempts the only provider while its circuit is transiently open', async () => {
+    let isHealthy = false;
+    const fetch = vi.fn<FetchLike>(async () =>
+      isHealthy ? streamResponse(sseToken('recovered') + sseFinish()) : new Response('busy', { status: 503 }),
+    );
+    const { gateway } = buildGateway(fetch, { chain: config.chain.slice(0, 1) });
+    for (let index = 0; index < 3; index += 1) {
+      await gateway.completeChat(request).catch(() => undefined);
+    }
+    isHealthy = true;
+
+    const result = await gateway.streamChat(request, { onToken: () => undefined });
+
+    expect(result.provider).toBe('deepseek');
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not bypass a circuit opened for a provider-wide failure', async () => {
+    const fetch = vi.fn<FetchLike>(async () => new Response('pay up', { status: 402 }));
+    const { gateway } = buildGateway(fetch, { chain: config.chain.slice(0, 1) });
+    await gateway.completeChat(request).catch(() => undefined);
+
+    await expect(gateway.completeChat(request)).rejects.toMatchObject({ provider: 'gateway' });
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
   it('throws not_configured when the chain is empty', async () => {

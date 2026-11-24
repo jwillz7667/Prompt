@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { LlmBreakerConfig, LlmProviderName } from './config.js';
 import type { ProviderError, ProviderErrorKind } from './errors.js';
 import type { LlmLogger } from './openai-compatible-provider.js';
@@ -14,15 +16,39 @@ export interface BreakerStore {
   /** INCR, applying `ttlMs` only when the key was just created (fixed window). */
   increment(key: string, ttlMs: number): Promise<number>;
   delete(keys: string[]): Promise<void>;
+  /** Deletes `key` only while it still holds `value` (atomic compare-and-delete). */
+  deleteIfEqual(key: string, value: string): Promise<void>;
 }
 
+/** Proof that a caller may use a provider; `probeToken` is set only for the half-open probe. */
+export interface BreakerPermit {
+  readonly provider: LlmProviderName;
+  readonly probeToken: string | undefined;
+}
+
+export type BreakerDecision =
+  | { isAllowed: true; permit: BreakerPermit }
+  /**
+   * `isProviderWide` is true while the provider is open for billing, auth,
+   * configuration or model errors, where another attempt cannot succeed.
+   */
+  | { isAllowed: false; isProviderWide: boolean };
+
 export interface CircuitBreaker {
-  /** False while open; in half-open state only one caller cluster-wide gets true. */
-  tryAcquire(provider: LlmProviderName): Promise<boolean>;
-  recordSuccess(provider: LlmProviderName): Promise<void>;
-  recordFailure(provider: LlmProviderName, error: ProviderError): Promise<void>;
-  /** Outcome says nothing about provider health (caller abort, bad request): free any probe slot. */
-  release(provider: LlmProviderName): Promise<void>;
+  /** Denied while open; in half-open state only one caller cluster-wide is allowed. */
+  tryAcquire(provider: LlmProviderName): Promise<BreakerDecision>;
+  recordSuccess(permit: BreakerPermit): Promise<void>;
+  recordFailure(permit: BreakerPermit, error: ProviderError): Promise<void>;
+  /** Outcome says nothing about provider health (caller abort, bad request): free this caller's probe slot. */
+  release(permit: BreakerPermit): Promise<void>;
+}
+
+/**
+ * A permit for an attempt made without acquiring the breaker (the gateway's
+ * last resort when no other provider is available). It never owns the probe.
+ */
+export function bypassPermit(provider: LlmProviderName): BreakerPermit {
+  return { provider, probeToken: undefined };
 }
 
 const TRANSIENT_KINDS: ReadonlySet<ProviderErrorKind> = new Set([
@@ -39,6 +65,23 @@ const HALF_OPEN_MEMORY_MS = 10 * 60_000;
 // instance dies mid-request. Matches the default total request deadline.
 const PROBE_LEASE_MS = 180_000;
 const MAX_RATE_LIMIT_COOLDOWN_MS = 5 * 60_000;
+
+const PROVIDER_WIDE_KINDS: ReadonlySet<string> = new Set<ProviderErrorKind>([
+  'insufficient_balance',
+  'auth',
+  'not_configured',
+  'model_unavailable',
+]);
+
+function isProviderWideMarker(marker: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(marker);
+    const kind = typeof parsed === 'object' && parsed !== null ? Reflect.get(parsed, 'kind') : undefined;
+    return typeof kind === 'string' && PROVIDER_WIDE_KINDS.has(kind);
+  } catch {
+    return false;
+  }
+}
 
 function keysFor(provider: LlmProviderName) {
   const base = `llm:cb:v1:${provider}`;
@@ -83,27 +126,43 @@ export function createCircuitBreaker(deps: {
     }
   };
 
+  const releaseProbe = async (permit: BreakerPermit): Promise<void> => {
+    // Only the caller that won the half-open lease may free it; an attempt
+    // acquired while the circuit was closed must not free a later probe.
+    if (permit.probeToken === undefined) return;
+    await store.deleteIfEqual(keysFor(permit.provider).probe, permit.probeToken);
+  };
+
   return {
     async tryAcquire(provider) {
       const keys = keysFor(provider);
-      if ((await store.get(keys.open)) !== null) return false;
-      if ((await store.get(keys.tripped)) === null) return true;
-      return store.setIfAbsent(keys.probe, '1', PROBE_LEASE_MS);
+      const openMarker = await store.get(keys.open);
+      if (openMarker !== null) {
+        return { isAllowed: false, isProviderWide: isProviderWideMarker(openMarker) };
+      }
+      if ((await store.get(keys.tripped)) === null) {
+        return { isAllowed: true, permit: { provider, probeToken: undefined } };
+      }
+      const probeToken = randomUUID();
+      return (await store.setIfAbsent(keys.probe, probeToken, PROBE_LEASE_MS))
+        ? { isAllowed: true, permit: { provider, probeToken } }
+        : { isAllowed: false, isProviderWide: false };
     },
 
-    async recordSuccess(provider) {
-      const keys = keysFor(provider);
+    async recordSuccess(permit) {
+      const keys = keysFor(permit.provider);
       await store.delete([keys.open, keys.tripped, keys.probe, keys.failures]);
     },
 
-    async recordFailure(provider, error) {
+    async recordFailure(permit, error) {
+      const { provider } = permit;
       const keys = keysFor(provider);
       if (error.isProviderWide) {
         await open(provider, error, config.longCooldownMs);
         return;
       }
       if (!TRANSIENT_KINDS.has(error.kind)) {
-        await store.delete([keys.probe]);
+        await releaseProbe(permit);
         return;
       }
       const cooldownMs =
@@ -123,9 +182,7 @@ export function createCircuitBreaker(deps: {
       if (failures >= config.failureThreshold) await open(provider, error, cooldownMs);
     },
 
-    async release(provider) {
-      await store.delete([keysFor(provider).probe]);
-    },
+    release: releaseProbe,
   };
 }
 
@@ -161,8 +218,14 @@ export function createMemoryBreakerStore(now: () => number = Date.now): BreakerS
     async delete(keys) {
       for (const key of keys) entries.delete(key);
     },
+    async deleteIfEqual(key, value) {
+      if (live(key)?.value === value) entries.delete(key);
+    },
   };
 }
+
+const COMPARE_AND_DELETE_SCRIPT =
+  "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0";
 
 /** The node-redis v5 commands the breaker uses. */
 export interface RedisBreakerClient {
@@ -175,11 +238,12 @@ export interface RedisBreakerClient {
   incr(key: string): Promise<number>;
   pExpire(key: string, ms: number): Promise<number>;
   del(keys: string[]): Promise<number>;
+  eval(script: string, options: { keys: string[]; arguments: string[] }): Promise<unknown>;
 }
 
 export function isRedisBreakerClient(value: unknown): value is RedisBreakerClient {
   if (typeof value !== 'object' || value === null) return false;
-  return ['get', 'set', 'incr', 'pExpire', 'del'].every(
+  return ['get', 'set', 'incr', 'pExpire', 'del', 'eval'].every(
     (method) => typeof Reflect.get(value, method) === 'function',
   );
 }
@@ -204,6 +268,9 @@ export function createRedisBreakerStore(client: RedisBreakerClient): BreakerStor
     },
     async delete(keys) {
       if (keys.length > 0) await client.del(keys);
+    },
+    async deleteIfEqual(key, value) {
+      await client.eval(COMPARE_AND_DELETE_SCRIPT, { keys: [key], arguments: [value] });
     },
   };
 }
@@ -241,5 +308,6 @@ export function createFallbackBreakerStore(deps: {
     set: (key, value, ttlMs) => run((store) => store.set(key, value, ttlMs)),
     increment: (key, ttlMs) => run((store) => store.increment(key, ttlMs)),
     delete: (keys) => run((store) => store.delete(keys)),
+    deleteIfEqual: (key, value) => run((store) => store.deleteIfEqual(key, value)),
   };
 }

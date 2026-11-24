@@ -1,11 +1,13 @@
 import { getRedis, isRedisAvailable } from '../../utils/redis.js';
 import { logger as appLogger } from '../../utils/logger.js';
 import {
+  bypassPermit,
   createCircuitBreaker,
   createFallbackBreakerStore,
   createMemoryBreakerStore,
   createRedisBreakerStore,
   isRedisBreakerClient,
+  type BreakerPermit,
   type CircuitBreaker,
 } from './circuit-breaker.js';
 import { getLlmConfig, type LlmConfig, type LlmTimeouts } from './config.js';
@@ -50,6 +52,14 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Wraps a failure that must reach the caller as-is: no failover, no retry. */
+class TerminalAttemptError extends Error {
+  constructor(readonly error: ProviderError) {
+    super(error.message, { cause: error });
+    this.name = 'TerminalAttemptError';
+  }
+}
+
 function callerAbortedError(provider: string): ProviderError {
   return new ProviderError({ kind: 'interrupted', provider, message: 'request aborted by caller' });
 }
@@ -92,6 +102,78 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
 
     let lastError: ProviderError | undefined;
     const skippedOpen: string[] = [];
+    const attempted = new Set<string>();
+    // Skipped only for transient reasons and never tried by this request: when
+    // nothing else is left, one attempt here beats a guaranteed failure.
+    let lastResort: { provider: LlmProvider; model: string } | undefined;
+
+    const attemptOnce = async (
+      provider: LlmProvider,
+      model: string,
+      permit: BreakerPermit,
+      attempt: number,
+    ): Promise<LlmChatResult> => {
+      attempted.add(provider.name);
+      let hasEmitted = false;
+      try {
+        const result = await attemptProvider(provider, model, () => {
+          hasEmitted = true;
+        });
+        await deps.breaker.recordSuccess(permit);
+        log.info(
+          {
+            provider: result.provider,
+            model: result.model,
+            mode,
+            purpose: request.purpose,
+            latencyMs: result.latencyMs,
+            finishReason: result.finishReason,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            cachedInputTokens: result.usage.cachedInputTokens,
+            failedOver: lastError !== undefined || skippedOpen.length > 0,
+          },
+          'LLM request completed',
+        );
+        return result;
+      } catch (thrown) {
+        if (thrown instanceof TokenConsumerError) {
+          await deps.breaker.release(permit);
+          throw thrown.original;
+        }
+        const error =
+          thrown instanceof ProviderError
+            ? thrown
+            : new ProviderError({
+                kind: 'overloaded',
+                provider: provider.name,
+                message: 'unexpected provider failure',
+                hasStreamedOutput: hasEmitted,
+                cause: thrown,
+              });
+        const isCallerAbort = request.signal?.aborted === true;
+        if (isCallerAbort) await deps.breaker.release(permit);
+        else await deps.breaker.recordFailure(permit, error);
+
+        log.warn(
+          {
+            provider: provider.name,
+            model,
+            mode,
+            purpose: request.purpose,
+            attempt,
+            kind: error.kind,
+            status: error.status,
+            hasStreamedOutput: error.hasStreamedOutput,
+            err: error,
+          },
+          'LLM provider attempt failed',
+        );
+
+        if (isCallerAbort || !error.isFailoverEligible) throw new TerminalAttemptError(error);
+        throw error;
+      }
+    };
 
     for (const [index, provider] of candidates.entries()) {
       const isLast = index === candidates.length - 1;
@@ -100,72 +182,43 @@ export function createLlmGateway(deps: LlmGatewayDeps): LlmGateway {
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         if (request.signal?.aborted) throw callerAbortedError(provider.name);
-        if (!(await deps.breaker.tryAcquire(provider.name))) {
+        const decision = await deps.breaker.tryAcquire(provider.name);
+        if (!decision.isAllowed) {
           skippedOpen.push(provider.name);
+          if (!decision.isProviderWide && !attempted.has(provider.name)) {
+            lastResort = { provider, model };
+          }
           break;
         }
 
-        let hasEmitted = false;
         try {
-          const result = await attemptProvider(provider, model, () => {
-            hasEmitted = true;
-          });
-          await deps.breaker.recordSuccess(provider.name);
-          log.info(
-            {
-              provider: result.provider,
-              model: result.model,
-              mode,
-              purpose: request.purpose,
-              latencyMs: result.latencyMs,
-              finishReason: result.finishReason,
-              inputTokens: result.usage.inputTokens,
-              outputTokens: result.usage.outputTokens,
-              cachedInputTokens: result.usage.cachedInputTokens,
-              failedOver: lastError !== undefined || skippedOpen.length > 0,
-            },
-            'LLM request completed',
-          );
-          return result;
+          return await attemptOnce(provider, model, decision.permit, attempt);
         } catch (thrown) {
-          if (thrown instanceof TokenConsumerError) {
-            await deps.breaker.release(provider.name);
-            throw thrown.original;
-          }
-          const error =
-            thrown instanceof ProviderError
-              ? thrown
-              : new ProviderError({
-                  kind: 'overloaded',
-                  provider: provider.name,
-                  message: 'unexpected provider failure',
-                  hasStreamedOutput: hasEmitted,
-                  cause: thrown,
-                });
-          const isCallerAbort = request.signal?.aborted === true;
-          if (isCallerAbort) await deps.breaker.release(provider.name);
-          else await deps.breaker.recordFailure(provider.name, error);
-
-          log.warn(
-            {
-              provider: provider.name,
-              model,
-              mode,
-              purpose: request.purpose,
-              attempt,
-              kind: error.kind,
-              status: error.status,
-              hasStreamedOutput: error.hasStreamedOutput,
-              err: error,
-            },
-            'LLM provider attempt failed',
-          );
-
-          if (isCallerAbort || !error.isFailoverEligible) throw error;
-          lastError = error;
-          if (error.isProviderWide) break;
-          if (attempt + 1 < maxAttempts) await sleep(retryDelayMs(attempt, error));
+          if (thrown instanceof TerminalAttemptError) throw thrown.error;
+          if (!(thrown instanceof ProviderError)) throw thrown;
+          lastError = thrown;
+          if (thrown.isProviderWide) break;
+          if (attempt + 1 < maxAttempts) await sleep(retryDelayMs(attempt, thrown));
         }
+      }
+    }
+
+    if (lastResort && !attempted.has(lastResort.provider.name)) {
+      if (request.signal?.aborted) throw callerAbortedError(lastResort.provider.name);
+      log.warn(
+        { provider: lastResort.provider.name, mode, purpose: request.purpose },
+        'No LLM provider available through the breaker; making a last-resort attempt',
+      );
+      try {
+        return await attemptOnce(
+          lastResort.provider,
+          lastResort.model,
+          bypassPermit(lastResort.provider.name),
+          0,
+        );
+      } catch (thrown) {
+        if (thrown instanceof TerminalAttemptError) throw thrown.error;
+        throw thrown;
       }
     }
 
