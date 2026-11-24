@@ -506,7 +506,7 @@ private struct ChatComposer: View {
     @Bindable var viewModel: ChatViewModel
     var isFocused: FocusState<Bool>.Binding
 
-    private var characterCount: Int { viewModel.trimmedDraft.count }
+    private var characterCount: Int { ChatLimits.length(of: viewModel.trimmedDraft) }
     private var showsCounter: Bool { characterCount > ChatLimits.maxMessageLength - 2_000 }
 
     var body: some View {

@@ -20,7 +20,7 @@ struct ReportMessageSheet: View {
     @State private var didSubmit = false
 
     private var canSubmit: Bool {
-        reason != nil && !isSubmitting && details.count <= ChatLimits.maxReportDetailsLength
+        reason != nil && !isSubmitting && ChatLimits.length(of: details) <= ChatLimits.maxReportDetailsLength
     }
 
     var body: some View {
@@ -95,12 +95,12 @@ struct ReportMessageSheet: View {
                 TextField("Add details (optional)", text: $details, axis: .vertical)
                     .lineLimit(3...8)
                     .onChange(of: details) { _, newValue in
-                        if newValue.count > ChatLimits.maxReportDetailsLength {
-                            details = String(newValue.prefix(ChatLimits.maxReportDetailsLength))
+                        if ChatLimits.length(of: newValue) > ChatLimits.maxReportDetailsLength {
+                            details = ChatLimits.truncated(newValue, toLength: ChatLimits.maxReportDetailsLength)
                         }
                     }
             } footer: {
-                Text("Reports are reviewed by our team to improve the assistant. \(details.count)/\(ChatLimits.maxReportDetailsLength)")
+                Text("Reports are reviewed by our team to improve the assistant. \(ChatLimits.length(of: details))/\(ChatLimits.maxReportDetailsLength)")
             }
 
             if let errorMessage {

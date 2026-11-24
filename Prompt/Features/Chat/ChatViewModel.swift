@@ -120,7 +120,7 @@ final class ChatViewModel {
 
     var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    var isDraftTooLong: Bool { trimmedDraft.count > ChatLimits.maxMessageLength }
+    var isDraftTooLong: Bool { ChatLimits.length(of: trimmedDraft) > ChatLimits.maxMessageLength }
 
     var canSend: Bool {
         !isStreaming && !trimmedDraft.isEmpty && !isDraftTooLong && loadState != .loading
@@ -774,7 +774,7 @@ final class ChatViewModel {
     private static func normalized(_ value: String, limit: Int) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return String(trimmed.prefix(limit))
+        return ChatLimits.truncated(trimmed, toLength: limit)
     }
 
     private static func isDuplicateMessage(_ error: Error) -> Bool {

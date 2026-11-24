@@ -19,6 +19,28 @@ nonisolated enum ChatLimits {
     static let maxReportDetailsLength = 1_000
     static let conversationPageSize = 30
     static let messagePageSize = 50
+
+    /// The server validates lengths with zod, which counts UTF-16 code units
+    /// (JS `string.length`), not Characters. One emoji is one Character but
+    /// two or more code units, so every client limit measures the same unit.
+    static func length(of text: String) -> Int {
+        text.utf16.count
+    }
+
+    /// The longest prefix of `text` within `limit` UTF-16 code units that
+    /// still ends on a Character boundary.
+    static func truncated(_ text: String, toLength limit: Int) -> String {
+        guard length(of: text) > limit else { return text }
+        var used = 0
+        var end = text.startIndex
+        for index in text.indices {
+            let characterLength = text[index].utf16.count
+            guard used + characterLength <= limit else { break }
+            used += characterLength
+            end = text.index(after: index)
+        }
+        return String(text[..<end])
+    }
 }
 
 // MARK: - Conversations

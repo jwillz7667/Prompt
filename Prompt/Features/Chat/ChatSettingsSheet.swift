@@ -48,8 +48,8 @@ struct ChatSettingsSheet: View {
                         .submitLabel(.next)
                         .onSubmit { focusedField = .instructions }
                         .onChange(of: title) { _, newValue in
-                            if newValue.count > ChatLimits.maxTitleLength {
-                                title = String(newValue.prefix(ChatLimits.maxTitleLength))
+                            if ChatLimits.length(of: newValue) > ChatLimits.maxTitleLength {
+                                title = ChatLimits.truncated(newValue, toLength: ChatLimits.maxTitleLength)
                             }
                         }
                 } header: {
@@ -65,8 +65,8 @@ struct ChatSettingsSheet: View {
                     .lineLimit(6...14)
                     .focused($focusedField, equals: .instructions)
                     .onChange(of: instructions) { _, newValue in
-                        if newValue.count > ChatLimits.maxSystemPromptLength {
-                            instructions = String(newValue.prefix(ChatLimits.maxSystemPromptLength))
+                        if ChatLimits.length(of: newValue) > ChatLimits.maxSystemPromptLength {
+                            instructions = ChatLimits.truncated(newValue, toLength: ChatLimits.maxSystemPromptLength)
                         }
                     }
 
@@ -78,7 +78,7 @@ struct ChatSettingsSheet: View {
                 } header: {
                     Text("Custom instructions")
                 } footer: {
-                    Text("Promptomize Assistant follows these in every reply in this chat. \(instructions.count)/\(ChatLimits.maxSystemPromptLength)")
+                    Text("Promptomize Assistant follows these in every reply in this chat. \(ChatLimits.length(of: instructions))/\(ChatLimits.maxSystemPromptLength)")
                 }
 
                 if let errorMessage {

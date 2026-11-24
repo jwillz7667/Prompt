@@ -83,8 +83,9 @@ final class ConversationListViewModel {
     }
 
     func rename(id: String, to title: String) async throws -> ChatConversation {
-        let trimmed = String(
-            title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(ChatLimits.maxTitleLength)
+        let trimmed = ChatLimits.truncated(
+            title.trimmingCharacters(in: .whitespacesAndNewlines),
+            toLength: ChatLimits.maxTitleLength
         )
         guard !trimmed.isEmpty else { throw APIError.badRequest(String(localized: "Enter a name for this chat.")) }
         let updated = try await service.updateConversation(id: id, title: .set(trimmed))
