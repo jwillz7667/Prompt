@@ -162,7 +162,7 @@ final class AuthManager: NSObject {
         // If we have tokens, try to validate with backend
         if hasTokens {
             do {
-                let response: MeResponse = try await APIClient.shared.request("/auth/me")
+                let response: MeResponse = try await APIClient.shared.request("/auth/me", connectivity: .failFast)
                 guard await APIClient.shared.sessionVersion == checkedSessionVersion else { return }
                 self.currentUser = User(from: response.user)
                 cacheUser(self.currentUser!)
@@ -408,7 +408,7 @@ extension AuthManager {
     /// Reloads the signed-in user from `/auth/me`.
     func refreshCurrentUser() async throws {
         let sessionVersion = await APIClient.shared.sessionVersion
-        let response: MeResponse = try await APIClient.shared.request("/auth/me")
+        let response: MeResponse = try await APIClient.shared.request("/auth/me", connectivity: .failFast)
         guard await APIClient.shared.sessionVersion == sessionVersion else {
             throw APIError.unauthorized
         }

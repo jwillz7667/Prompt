@@ -39,6 +39,29 @@ actor APIClient {
         return URLSession(configuration: config)
     }()
 
+    /// For launch-gating checks (`/auth/me`, `/subscriptions/status`). With
+    /// `waitsForConnectivity` an offline request waits for the 300 s resource
+    /// timeout before the caller can fall back to cached state; these must
+    /// fail immediately offline and give up quickly on a dead connection.
+    private let failFastSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = false
+        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForResource = 15
+        config.allowsCellularAccess = true
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
+        return URLSession(configuration: config)
+    }()
+
+    /// How a request behaves when the device has no usable connection.
+    enum ConnectivityPolicy: Sendable {
+        /// Wait (up to the resource timeout) for connectivity to return.
+        case waitForConnectivity
+        /// Fail at once so the caller can fall back to cached state.
+        case failFast
+    }
+
     // MARK: - Token Management
 
     func setTokens(access: String, refresh: String) async throws {
@@ -99,14 +122,16 @@ actor APIClient {
         method: HTTPMethod = .get,
         body: (any Encodable)? = nil,
         requiresAuth: Bool = true,
-        timeoutInterval: TimeInterval = 30
+        timeoutInterval: TimeInterval = 30,
+        connectivity: ConnectivityPolicy = .waitForConnectivity
     ) async throws -> T {
         let data = try await performRequest(
             endpoint,
             method: method,
             body: body,
             requiresAuth: requiresAuth,
-            timeoutInterval: timeoutInterval
+            timeoutInterval: timeoutInterval,
+            connectivity: connectivity
         )
         let decoder = Self.makeJSONDecoder()
         return try decoder.decode(T.self, from: data)
@@ -117,14 +142,16 @@ actor APIClient {
         method: HTTPMethod = .get,
         body: (any Encodable)? = nil,
         requiresAuth: Bool = true,
-        timeoutInterval: TimeInterval = 30
+        timeoutInterval: TimeInterval = 30,
+        connectivity: ConnectivityPolicy = .waitForConnectivity
     ) async throws {
         _ = try await performRequest(
             endpoint,
             method: method,
             body: body,
             requiresAuth: requiresAuth,
-            timeoutInterval: timeoutInterval
+            timeoutInterval: timeoutInterval,
+            connectivity: connectivity
         )
     }
 
@@ -450,6 +477,7 @@ actor APIClient {
         body: (any Encodable)?,
         requiresAuth: Bool,
         timeoutInterval: TimeInterval,
+        connectivity: ConnectivityPolicy,
         isRetry: Bool = false
     ) async throws -> Data {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
@@ -486,7 +514,8 @@ actor APIClient {
         let response: URLResponse
 
         do {
-            (data, response) = try await urlSession.data(for: request)
+            let session = connectivity == .failFast ? failFastSession : urlSession
+            (data, response) = try await session.data(for: request)
         } catch let urlError as URLError where urlError.code == .timedOut {
             throw APIError.requestTimedOut
         }
@@ -519,6 +548,7 @@ actor APIClient {
                     body: body,
                     requiresAuth: requiresAuth,
                     timeoutInterval: timeoutInterval,
+                    connectivity: connectivity,
                     isRetry: true
                 )
             }

@@ -47,8 +47,16 @@ final class StoreKitManager {
 
     @ObservationIgnored
     private var updateListenerTask: Task<Void, Never>?
+    /// The in-flight refresh and the session it was started for. Only a
+    /// refresh for the current session may be joined: one started for a
+    /// previous account exits without touching state.
     @ObservationIgnored
-    private var entitlementRefreshTask: Task<Void, Never>?
+    private var entitlementRefresh: (sessionVersion: UInt, task: Task<Void, Never>)?
+    /// Bumped whenever the backend confirms an activation (purchase, restore).
+    /// A status fetched before the latest bump may predate that activation
+    /// and must not overwrite it.
+    @ObservationIgnored
+    private var activationEpoch = 0
     /// The silent restore runs at most once per launch (and per account).
     @ObservationIgnored
     private var didAttemptSelfHeal = false
@@ -81,14 +89,17 @@ final class StoreKitManager {
     /// Re-derives `entitlementState` from the backend. Concurrent callers
     /// (launch, foreground, transaction updates) share one in-flight check.
     func refreshEntitlement() async {
-        if let inFlight = entitlementRefreshTask {
-            await inFlight.value
+        let sessionVersion = await APIClient.shared.sessionVersion
+        if let inFlight = entitlementRefresh, inFlight.sessionVersion == sessionVersion {
+            await inFlight.task.value
             return
         }
         let task = Task { await performEntitlementRefresh() }
-        entitlementRefreshTask = task
+        entitlementRefresh = (sessionVersion, task)
         await task.value
-        entitlementRefreshTask = nil
+        if entitlementRefresh?.task == task {
+            entitlementRefresh = nil
+        }
     }
 
     /// Kept for call sites that predate `refreshEntitlement()`.
@@ -124,22 +135,29 @@ final class StoreKitManager {
         // unfinished; retry them first so the status below reflects them.
         await activatePendingTransactions()
         let localEntitlements = await verifiedLocalEntitlements()
-        guard await APIClient.shared.sessionVersion == sessionVersion else { return }
+        guard !Task.isCancelled, await APIClient.shared.sessionVersion == sessionVersion else { return }
         purchasedProductIDs = Set(localEntitlements.map(\.productID))
 
         do {
+            var epoch = activationEpoch
             var status = try await fetchStatus()
             if !status.resolvedIsEntitled, !didAttemptSelfHeal, !localEntitlements.isEmpty {
                 didAttemptSelfHeal = true
                 if await silentlyRestore(signedTransactions: localEntitlements.map(\.jws)) {
+                    epoch = activationEpoch
                     status = try await fetchStatus()
                 }
             }
-            guard await APIClient.shared.sessionVersion == sessionVersion else { return }
+            if activationEpoch != epoch {
+                // An activation was confirmed while this status was in
+                // flight, so it may describe the account before it.
+                status = try await fetchStatus()
+            }
+            guard !Task.isCancelled, await APIClient.shared.sessionVersion == sessionVersion else { return }
             apply(status)
             entitlementCheckFailed = false
         } catch {
-            guard await APIClient.shared.sessionVersion == sessionVersion else { return }
+            guard !Task.isCancelled, await APIClient.shared.sessionVersion == sessionVersion else { return }
             ErrorHandler.shared.handleSilently(error, context: "refreshEntitlement")
             applyOfflineFallback(after: error)
         }
@@ -177,7 +195,7 @@ final class StoreKitManager {
     }
 
     private func fetchStatus() async throws -> SubscriptionStatusResponse {
-        try await APIClient.shared.request("/subscriptions/status", method: .get)
+        try await APIClient.shared.request("/subscriptions/status", method: .get, connectivity: .failFast)
     }
 
     private func apply(_ status: SubscriptionStatusResponse) {
@@ -248,6 +266,8 @@ final class StoreKitManager {
     /// Drops all subscription state. Called on sign-out and session expiry so
     /// a different account never inherits the previous user's entitlement.
     func clearSubscriptionState() {
+        entitlementRefresh?.task.cancel()
+        entitlementRefresh = nil
         entitlementState = .unknown
         entitlementCheckFailed = false
         subscriptionInfo = nil
@@ -390,6 +410,7 @@ final class StoreKitManager {
             guard await APIClient.shared.sessionVersion == restoreSessionVersion else {
                 throw StoreError.signInRequired
             }
+            activationEpoch &+= 1
             await refreshEntitlement()
         } catch let error as StoreError {
             ErrorHandler.shared.handleSilently(error, context: "restorePurchases")
@@ -404,13 +425,18 @@ final class StoreKitManager {
 
     /// Re-attempts backend activation for transactions left unfinished
     /// because the backend could not be reached at purchase time.
+    /// Runs on the entitlement gate's path, so it fails fast offline; an
+    /// unfinished transaction simply retries on the next refresh.
     private func activatePendingTransactions() async {
         guard await APIClient.shared.isAuthenticated else { return }
 
         for await result in Transaction.unfinished {
             guard case .verified(let transaction) = result else { continue }
 
-            let outcome = await syncTransactionWithBackend(jwsRepresentation: result.jwsRepresentation)
+            let outcome = await syncTransactionWithBackend(
+                jwsRepresentation: result.jwsRepresentation,
+                connectivity: .failFast
+            )
             if outcome != .retryLater {
                 await transaction.finish()
             }
@@ -460,7 +486,10 @@ final class StoreKitManager {
         case retryLater
     }
 
-    private func syncTransactionWithBackend(jwsRepresentation: String) async -> PurchaseSyncOutcome {
+    private func syncTransactionWithBackend(
+        jwsRepresentation: String,
+        connectivity: APIClient.ConnectivityPolicy = .waitForConnectivity
+    ) async -> PurchaseSyncOutcome {
         guard await APIClient.shared.isAuthenticated else {
             // No account to attach the purchase to yet; activation retries
             // after sign-in via activatePendingTransactions().
@@ -472,7 +501,8 @@ final class StoreKitManager {
             let response: VerifyPurchaseResponse = try await APIClient.shared.request(
                 "/subscriptions/verify",
                 method: .post,
-                body: VerifyPurchaseRequest(signedTransaction: jwsRepresentation)
+                body: VerifyPurchaseRequest(signedTransaction: jwsRepresentation),
+                connectivity: connectivity
             )
             guard await APIClient.shared.sessionVersion == requestedSessionVersion else {
                 return .retryLater
@@ -480,6 +510,7 @@ final class StoreKitManager {
             guard response.success, let subscription = response.subscription else { return .retryLater }
             guard response.activationConfirmed else { return .rejected }
 
+            activationEpoch &+= 1
             let info = AppSubscriptionInfo(response: subscription, isEntitled: true, productId: nil)
             subscriptionInfo = info
             entitlementState = info.entitlementState
