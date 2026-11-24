@@ -30,8 +30,8 @@ const signupThrottleEnvSchema = z.object({
   ),
 });
 
-// Each verified developer account gets a free monthly allowance of model
-// calls, so account farming is throttled at the source.
+// Developer accounts include no model requests, but signups send email and
+// create rows, so they are still throttled per network.
 const signupThrottle = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: signupThrottleEnvSchema.parse(process.env).DEVELOPER_SIGNUPS_PER_IP_PER_HOUR,
@@ -98,11 +98,11 @@ developerAuthRouter.post(
         res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
-      if (error instanceof Error) {
-        if (error.message === 'Email already registered') {
-          res.status(409).json({ error: error.message });
-          return;
-        }
+      if (error instanceof Error && error.message === 'Email already registered') {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      if (error instanceof Error && error.message === 'Password must be at least 8 characters') {
         res.status(400).json({ error: error.message });
         return;
       }
@@ -169,7 +169,12 @@ developerAuthRouter.post('/refresh', async (req: Request, res: Response): Promis
       return;
     }
     if (error instanceof Error) {
-      res.status(401).json({ error: error.message });
+      // Refresh failures range from bad signatures to revoked or deleted
+      // accounts; the client only needs to know it must sign in again.
+      logger.warn({ error }, 'Developer token refresh rejected');
+      res
+        .status(401)
+        .json({ error: 'Invalid or expired refresh token', code: 'INVALID_REFRESH_TOKEN' });
       return;
     }
     logger.error({ error }, 'Developer token refresh error');
