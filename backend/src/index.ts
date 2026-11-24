@@ -49,12 +49,17 @@ import { initQueues, closeQueues } from './utils/queue.js';
 import { initializeSocket } from './utils/socket.js';
 import { validateEnvAtBoot } from './utils/env.js';
 import { initSentry } from './utils/sentry.js';
+import { shouldCompressResponse, validateLlmConfig } from './features/llm/index.js';
 
 config();
 
 // Surface missing configuration at boot (loud, not fatal) so a misconfigured
 // deploy is diagnosable from the first log line instead of failing per-request.
 validateEnvAtBoot();
+
+// Logs the effective LLM provider chain and probes each provider's model list
+// in the background; malformed LLM_* values throw here (fail fast).
+validateLlmConfig();
 
 // No-op without SENTRY_DSN; must run before any request is served so the
 // error handler's captureError calls have an initialized client.
@@ -145,7 +150,11 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Body parsing & compression
-app.use(compression());
+app.use(
+  compression({
+    filter: (req, res) => shouldCompressResponse(req, res, compression.filter),
+  }),
+);
 app.use(
   express.json({
     limit: '10mb',
