@@ -126,7 +126,6 @@ final class ThreadViewModel {
     // MARK: - Private
 
     private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
-    private let guestSession = GuestSessionManager.shared
 
     // MARK: - Init
 
@@ -334,22 +333,9 @@ final class ThreadViewModel {
         let promptToSend = (initialPrompt ?? userPrompt).trimmingCharacters(in: .whitespacesAndNewlines)
         let sentAttachment = initialAttachment ?? selectedImageAttachment
         guard !promptToSend.isEmpty || sentAttachment != nil else { return }
-        let isAuthenticated = await APIClient.shared.isAuthenticated
-
-        if !isAuthenticated {
-            switch guestSession.submissionDecision(for: settings.promptMode) {
-            case .allowed:
-                break
-            case .requiresAuthentication:
-                // The sign-in cover is already being presented. Raising an
-                // error alert at the same moment collides with it (only one
-                // can present) and frames an expected step as a failure.
-                return
-            case .blocked(let message):
-                errorMessage = message
-                showError = true
-                return
-            }
+        guard await APIClient.shared.isAuthenticated else {
+            presentError(APIError.notAuthenticated.localizedDescription)
+            return
         }
 
         beginSubmission(
@@ -375,18 +361,15 @@ final class ThreadViewModel {
         let sentPrompt = promptToSend
         let responseMode = settings.conversationMode
 
-        let stream = await streamForNewConversation(
-            request: request,
-            prompt: sentPrompt,
-            settings: settings
+        let stream = await APIClient.shared.requestStream(
+            "/threads",
+            method: .post,
+            body: request
         )
 
-        var didReceiveCompletion = false
-
         do {
+            var didReceiveCompletion = false
             for try await event in stream {
-                guestSession.synchronize(with: event.guestQuota)
-
                 switch event.type {
                 case .token:
                     if let content = event.content {
@@ -394,7 +377,6 @@ final class ThreadViewModel {
                     }
                 case .complete:
                     didReceiveCompletion = true
-                    let completedThreadId = event.threadId
                     let turnRecord = appendTurnRecord(
                         id: event.turnId ?? UUID().uuidString,
                         turnIndex: event.turnIndex ?? turns.count,
@@ -407,7 +389,7 @@ final class ThreadViewModel {
                         processingMs: event.usage?.processingMs ?? 0
                     )
 
-                    if isAuthenticated, let completedThreadId {
+                    if let completedThreadId = event.threadId {
                         upsertCurrentThread(
                             id: completedThreadId,
                             title: derivedThreadTitle(prompt: sentPrompt, attachment: sentAttachment),
@@ -424,50 +406,18 @@ final class ThreadViewModel {
                         historyManager: historyManager
                     )
                 case .error:
-                    didReceiveCompletion = true
-                    if event.guestQuota?.isExhausted == true {
-                        guestSession.presentAuthenticationGate()
-                    }
-                    restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
-                    presentError(event.message ?? failureMessage(for: responseMode))
+                    // APIClient throws error events; they are never yielded.
+                    break
                 }
             }
 
             if !didReceiveCompletion {
-                await recoverIncompleteStream(
-                    prompt: sentPrompt,
-                    attachment: sentAttachment,
-                    modality: settings.effectiveApiModality,
-                    settings: settings,
-                    historyManager: historyManager,
-                    responseMode: responseMode
-                )
-            }
-        } catch let error as APIError {
-            if error.isQuotaExceeded {
-                restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
-                showPaywall = true
-            } else {
-                await recoverInterruptedStream(
-                    prompt: sentPrompt,
-                    attachment: sentAttachment,
-                    modality: settings.effectiveApiModality,
-                    settings: settings,
-                    historyManager: historyManager,
-                    responseMode: responseMode,
-                    message: error.localizedDescription
-                )
+                failSubmission(prompt: sentPrompt, attachment: sentAttachment, error: APIError.service(
+                    ServiceFailure(code: .interrupted, isRetryable: true, retryAfter: nil)
+                ))
             }
         } catch {
-            await recoverInterruptedStream(
-                prompt: sentPrompt,
-                attachment: sentAttachment,
-                modality: settings.effectiveApiModality,
-                settings: settings,
-                historyManager: historyManager,
-                responseMode: responseMode,
-                message: "Stream connection failed"
-            )
+            failSubmission(prompt: sentPrompt, attachment: sentAttachment, error: error)
         }
     }
 
@@ -481,10 +431,8 @@ final class ThreadViewModel {
         let sentPrompt = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let sentAttachment = selectedImageAttachment
         guard !sentPrompt.isEmpty || sentAttachment != nil else { return }
-        let isAuthenticated = await APIClient.shared.isAuthenticated
-
-        if !isAuthenticated {
-            await startNewThread(settings: settings, historyManager: historyManager)
+        guard await APIClient.shared.isAuthenticated else {
+            presentError(APIError.notAuthenticated.localizedDescription)
             return
         }
 
@@ -512,12 +460,9 @@ final class ThreadViewModel {
             body: request
         )
 
-        var didReceiveCompletion = false
-
         do {
+            var didReceiveCompletion = false
             for try await event in stream {
-                guestSession.synchronize(with: event.guestQuota)
-
                 switch event.type {
                 case .token:
                     if let content = event.content {
@@ -551,64 +496,30 @@ final class ThreadViewModel {
                         historyManager: historyManager
                     )
                 case .error:
-                    didReceiveCompletion = true
-                    if event.guestQuota?.isExhausted == true {
-                        guestSession.presentAuthenticationGate()
-                    }
-                    restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
-                    presentError(event.message ?? failureMessage(for: responseMode))
+                    // APIClient throws error events; they are never yielded.
+                    break
                 }
             }
 
             if !didReceiveCompletion {
-                await recoverIncompleteStream(
-                    prompt: sentPrompt,
-                    attachment: sentAttachment,
-                    modality: currentThread?.modality ?? settings.effectiveApiModality,
-                    settings: settings,
-                    historyManager: historyManager,
-                    responseMode: responseMode
-                )
+                failSubmission(prompt: sentPrompt, attachment: sentAttachment, error: APIError.service(
+                    ServiceFailure(code: .interrupted, isRetryable: true, retryAfter: nil)
+                ))
             }
-        } catch let error as APIError {
-            if case .notFound = error {
-                currentThread = nil
-                turns = []
-                clearPendingSubmission()
-                finishSubmission()
-                await startNewThread(
-                    settings: settings,
-                    historyManager: historyManager,
-                    initialPrompt: sentPrompt,
-                    initialAttachment: sentAttachment
-                )
-                return
-            }
-
-            if error.isQuotaExceeded {
-                restoreComposer(prompt: sentPrompt, attachment: sentAttachment)
-                showPaywall = true
-            } else {
-                await recoverInterruptedStream(
-                    prompt: sentPrompt,
-                    attachment: sentAttachment,
-                    modality: currentThread?.modality ?? settings.effectiveApiModality,
-                    settings: settings,
-                    historyManager: historyManager,
-                    responseMode: responseMode,
-                    message: error.localizedDescription
-                )
-            }
-        } catch {
-            await recoverInterruptedStream(
-                prompt: sentPrompt,
-                attachment: sentAttachment,
-                modality: currentThread?.modality ?? settings.effectiveApiModality,
+        } catch APIError.notFound {
+            // The thread was deleted elsewhere; continue in a fresh one.
+            currentThread = nil
+            turns = []
+            clearPendingSubmission()
+            finishSubmission()
+            await startNewThread(
                 settings: settings,
                 historyManager: historyManager,
-                responseMode: responseMode,
-                message: "Stream connection failed"
+                initialPrompt: sentPrompt,
+                initialAttachment: sentAttachment
             )
+        } catch {
+            failSubmission(prompt: sentPrompt, attachment: sentAttachment, error: error)
         }
     }
 
@@ -733,109 +644,34 @@ final class ThreadViewModel {
         )
     }
 
-    private func recoverIncompleteStream(
-        prompt: String,
-        attachment: PromptImageAttachment?,
-        modality: String,
-        settings: SettingsManager,
-        historyManager: PromptHistoryManager?,
-        responseMode: ThreadConversationMode
-    ) async {
-        let recoveredContent = resolvedStreamedResponse(fallback: nil)
-        guard !recoveredContent.isEmpty else {
-            restoreComposer(prompt: prompt, attachment: attachment)
-            presentError("The response ended unexpectedly. Please try again.")
+    /// A turn the server never confirmed is not kept: partial text is
+    /// discarded and the user's message goes back into the composer so it can
+    /// be resent. Entitlement loss is handled globally (hard paywall), so it
+    /// raises no alert here.
+    private func failSubmission(prompt: String, attachment: PromptImageAttachment?, error: Error) {
+        restoreComposer(prompt: prompt, attachment: attachment)
+
+        if error is CancellationError { return }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return }
+
+        guard let apiError = error as? APIError else {
+            presentError(ServiceErrorCode.interrupted.userMessage)
             return
         }
 
-        let recoveredTurn = appendTurnRecord(
-            id: UUID().uuidString,
-            turnIndex: turns.count,
-            originalPrompt: prompt,
-            enhancedPrompt: recoveredContent,
-            responseMode: responseMode,
-            imageAttachment: attachment,
-            model: settings.effectiveModel.rawValue,
-            totalTokens: 0,
-            processingMs: 0
-        )
-        clearPendingSubmission()
-        if let threadId = currentThread?.id {
-            syncLocalThreadListAfterChange(
-                id: threadId,
-                fallbackTitle: currentThread?.title ?? derivedThreadTitle(prompt: prompt, attachment: attachment),
-                fallbackModality: currentThread?.modality ?? modality,
-                now: Date()
-            )
-        }
-        await persistTurnToHistory(
-            recoveredTurn,
-            originalPrompt: prompt,
-            modality: modality,
-            settings: settings,
-            historyManager: historyManager
-        )
-        presentError("The reply was kept locally because the stream closed before the server confirmed the turn.")
-    }
-
-    private func recoverInterruptedStream(
-        prompt: String,
-        attachment: PromptImageAttachment?,
-        modality: String,
-        settings: SettingsManager,
-        historyManager: PromptHistoryManager?,
-        responseMode: ThreadConversationMode,
-        message: String
-    ) async {
-        let recoveredContent = resolvedStreamedResponse(fallback: nil)
-        guard !recoveredContent.isEmpty else {
-            restoreComposer(prompt: prompt, attachment: attachment)
-            presentError(message)
+        switch apiError {
+        case .subscriptionRequired:
             return
+        case .quotaExceeded, .featureLocked:
+            showPaywall = true
+        default:
+            presentError(apiError.localizedDescription)
         }
-
-        let recoveredTurn = appendTurnRecord(
-            id: UUID().uuidString,
-            turnIndex: turns.count,
-            originalPrompt: prompt,
-            enhancedPrompt: recoveredContent,
-            responseMode: responseMode,
-            imageAttachment: attachment,
-            model: settings.effectiveModel.rawValue,
-            totalTokens: 0,
-            processingMs: 0
-        )
-        clearPendingSubmission()
-        if let threadId = currentThread?.id {
-            syncLocalThreadListAfterChange(
-                id: threadId,
-                fallbackTitle: currentThread?.title ?? derivedThreadTitle(prompt: prompt, attachment: attachment),
-                fallbackModality: currentThread?.modality ?? modality,
-                now: Date()
-            )
-        }
-        await persistTurnToHistory(
-            recoveredTurn,
-            originalPrompt: prompt,
-            modality: modality,
-            settings: settings,
-            historyManager: historyManager
-        )
-        presentError("The connection dropped after a partial reply. The last turn was kept locally.")
     }
 
     private func presentError(_ message: String) {
         errorMessage = message
         showError = true
-    }
-
-    private func failureMessage(for responseMode: ThreadConversationMode) -> String {
-        switch responseMode {
-        case .optimize:
-            return "Optimization failed"
-        case .chat:
-            return "Reply failed"
-        }
     }
 
     private func derivedThreadTitle(prompt: String, attachment: PromptImageAttachment?) -> String {
@@ -938,37 +774,6 @@ final class ThreadViewModel {
                 processingMs: turn.processingMs
             )
         }
-    }
-
-    private func streamForNewConversation(
-        request: CreateThreadRequest,
-        prompt: String,
-        settings: SettingsManager
-    ) async -> AsyncThrowingStream<StreamEvent, Error> {
-        if await APIClient.shared.isAuthenticated {
-            return await APIClient.shared.requestStream(
-                "/threads",
-                method: .post,
-                body: request
-            )
-        }
-
-        let guestRequest = GuestEnhanceRequest(
-            prompt: prompt,
-            modality: settings.effectiveApiModality,
-            subModality: settings.effectiveSubModality,
-            mode: settings.promptMode.rawValue,
-            conversationMode: settings.conversationMode.rawValue,
-            imageAttachment: request.imageAttachment,
-            previousTurns: seededTurnsForRequest ?? []
-        )
-
-        return await APIClient.shared.requestStream(
-            "/prompts/guest/enhance/stream",
-            method: .post,
-            body: guestRequest,
-            requiresAuth: false
-        )
     }
 }
 

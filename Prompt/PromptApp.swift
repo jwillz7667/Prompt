@@ -74,92 +74,112 @@ struct PromptApp: App {
     @ViewBuilder
     private var contentView: some View {
         if let modelContainer = SwiftDataManager.shared.modelContainer {
-            RootView()
-                .environment(settingsManager)
-                .environment(authManager)
-                .environment(historyManager)
-                .environment(storeKitManager)
-                .environment(syncManager)
-                .environment(complianceManager)
-                .environment(guestSessionManager)
+            rootView
                 .modelContainer(modelContainer)
-                .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
-                .task {
-                    // Load subscription data when app starts
-                    await storeKitManager.checkEntitlements()
-                }
         } else {
-            // Fallback when database is unavailable - app still works without persistence
-            RootView()
-                .environment(settingsManager)
-                .environment(authManager)
-                .environment(historyManager)
-                .environment(storeKitManager)
-                .environment(syncManager)
-                .environment(complianceManager)
-                .environment(guestSessionManager)
-                .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
-                .task {
-                    // Load subscription data when app starts
-                    await storeKitManager.checkEntitlements()
-                }
+            // Database unavailable: the app still works without persistence.
+            rootView
         }
+    }
+
+    private var rootView: some View {
+        RootView()
+            .environment(settingsManager)
+            .environment(authManager)
+            .environment(historyManager)
+            .environment(storeKitManager)
+            .environment(syncManager)
+            .environment(complianceManager)
+            .environment(guestSessionManager)
+            .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
     }
 }
 
 // MARK: - Root View
 
+/// Launch gate: splash, then required Sign in with Apple, then entitlement.
+/// The app shell (ContentView) is only reachable with an active
+/// subscription or free trial; while entitlement is unknown the gate waits
+/// (or offers a retry) and never fails open.
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
+    @Environment(StoreKitManager.self) private var storeKit
     @State private var splashMinimumDurationElapsed = false
 
-    // Check if running in UI test / screenshot mode
+    private enum Stage: Equatable {
+        case splash
+        case signIn
+        case checkingEntitlement
+        case entitlementCheckFailed
+        case paywall
+        case app
+    }
+
+    // Screenshot / UI-test runs bypass the gates; the backend still enforces
+    // entitlement on every AI request.
     private var isUITesting: Bool {
         ProcessInfo.processInfo.arguments.contains("-FASTLANE_SNAPSHOT") ||
         ProcessInfo.processInfo.arguments.contains("-ui_testing")
     }
 
+    private var stage: Stage {
+        if isUITesting { return .app }
+        if authManager.isCheckingSession || !splashMinimumDurationElapsed { return .splash }
+        guard authManager.isAuthenticated else { return .signIn }
+        switch storeKit.entitlementState {
+        case .entitled:
+            return .app
+        case .notEntitled:
+            return .paywall
+        case .unknown:
+            return storeKit.entitlementCheckFailed ? .entitlementCheckFailed : .checkingEntitlement
+        }
+    }
+
     var body: some View {
         Group {
-            if isUITesting {
-                // Bypass auth for UI testing/screenshots
-                ContentView()
-            } else if authManager.isCheckingSession || !splashMinimumDurationElapsed {
+            switch stage {
+            case .splash:
                 SplashView()
-            } else {
+            case .signIn:
+                AuthView()
+            case .checkingEntitlement:
+                EntitlementCheckView(hasFailed: false)
+            case .entitlementCheckFailed:
+                EntitlementCheckView(hasFailed: true)
+            case .paywall:
+                PaywallView(mode: .hard)
+            case .app:
                 ContentView()
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: authManager.isAuthenticated)
-        .animation(.easeInOut(duration: 0.3), value: authManager.isCheckingSession)
+        .animation(.easeInOut(duration: 0.3), value: stage)
         .task {
             if !splashMinimumDurationElapsed {
                 try? await Task.sleep(for: .seconds(1.15))
                 splashMinimumDurationElapsed = true
             }
 
-            await VariationsService.shared.bootstrap()
-            // Request notification permissions when authenticated
             if authManager.isAuthenticated {
+                await storeKit.refreshEntitlement()
+                await VariationsService.shared.bootstrap()
                 await setupNotifications()
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            guard authManager.isAuthenticated else { return }
-
-            if newPhase == .active {
-                Task {
-                    await VariationsService.shared.appDidBecomeActive()
-                }
+            guard newPhase == .active, authManager.isAuthenticated else { return }
+            Task {
+                await storeKit.refreshEntitlement()
+                await VariationsService.shared.appDidBecomeActive()
             }
         }
         .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
-            if isAuthenticated {
-                Task {
-                    await VariationsService.shared.bootstrap()
-                    await setupNotifications()
-                }
+            guard isAuthenticated else { return }
+            Task {
+                await storeKit.refreshEntitlement()
+                await VariationsService.shared.bootstrap()
+                await setupNotifications()
             }
         }
     }
@@ -183,6 +203,79 @@ struct RootView: View {
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         if status != .notDetermined {
             _ = await NotificationManager.shared.requestAuthorization()
+        }
+    }
+}
+
+// MARK: - Entitlement Check View
+
+/// Shown between sign-in and the app while the subscription is verified.
+/// On failure it offers a retry instead of letting the user in.
+struct EntitlementCheckView: View {
+    @Environment(AuthManager.self) private var authManager
+    @Environment(StoreKitManager.self) private var storeKit
+    @Environment(PromptHistoryManager.self) private var historyManager
+
+    let hasFailed: Bool
+
+    var body: some View {
+        ZStack {
+            LiquidGlassBackground()
+
+            VStack(spacing: 20) {
+                AppBrandMark(size: 88, showsGlassBackdrop: true)
+
+                if hasFailed {
+                    VStack(spacing: 8) {
+                        Text("Couldn't verify your subscription")
+                            .font(.system(.title3, design: .rounded, weight: .bold))
+                            .foregroundStyle(Color.adaptiveTextPrimary)
+                        Text("Check your internet connection and try again.")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.adaptiveTextSecondary)
+                    }
+                    .multilineTextAlignment(.center)
+
+                    Button {
+                        Task { await storeKit.refreshEntitlement() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if storeKit.isCheckingEntitlement {
+                                ProgressView()
+                                    .tint(Color.adaptiveTextOnAccent)
+                            }
+                            Text("Try Again")
+                                .font(.system(.headline, design: .rounded, weight: .bold))
+                        }
+                        .frame(maxWidth: 280)
+                        .padding(.vertical, 14)
+                        .foregroundStyle(Color.adaptiveTextOnAccent)
+                    }
+                    .buttonStyle(LiquidGlassButtonStyle(
+                        cornerRadius: 16,
+                        tintColor: Color.adaptiveButtonPrimary,
+                        intensity: .prominent
+                    ))
+                    .disabled(storeKit.isCheckingEntitlement)
+                    .accessibilityIdentifier("entitlement.retry")
+
+                    Button("Sign out") {
+                        Task {
+                            await authManager.signOut()
+                            historyManager.clearLocalData()
+                        }
+                    }
+                    .font(.system(.footnote, design: .rounded, weight: .semibold))
+                    .foregroundStyle(Color.adaptiveTextSecondary)
+                } else {
+                    ProgressView()
+                        .tint(Color.brandCyan)
+                    Text("Checking your subscription…")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(Color.adaptiveTextSecondary)
+                }
+            }
+            .padding(24)
         }
     }
 }
@@ -214,7 +307,7 @@ struct SplashView: View {
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundStyle(textPrimary)
 
-                    Text("Refine prompts in one polished chat flow")
+                    Text("Sharper prompts and an AI assistant in one app")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
                         .foregroundStyle(Color.adaptiveTextSecondary)
                 }

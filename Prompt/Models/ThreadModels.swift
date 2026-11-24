@@ -9,7 +9,7 @@ import Foundation
 
 // MARK: - API Response DTOs
 
-struct ThreadDTO: Codable, Sendable {
+nonisolated struct ThreadDTO: Codable, Sendable {
     let id: String
     let title: String?
     let modality: String
@@ -47,7 +47,7 @@ struct ThreadTurnDTO: Codable, Sendable {
 
 // MARK: - API Responses
 
-struct ThreadListResponse: Decodable, Sendable {
+nonisolated struct ThreadListResponse: Decodable, Sendable {
     let threads: [ThreadDTO]
     let pagination: PaginationInfo
 
@@ -63,7 +63,7 @@ struct ThreadDetailResponse: Decodable, Sendable {
     let thread: ThreadDetailDTO
 }
 
-struct ThreadUpdateResponse: Decodable, Sendable {
+nonisolated struct ThreadUpdateResponse: Decodable, Sendable {
     let thread: ThreadDTO
 }
 
@@ -100,16 +100,6 @@ struct SeedThreadTurnRequest: Encodable, Sendable {
     let model: String?
     let totalTokens: Int?
     let processingMs: Int?
-}
-
-struct GuestEnhanceRequest: Encodable, Sendable {
-    let prompt: String
-    let modality: String
-    let subModality: String?
-    let mode: String?
-    let conversationMode: String?
-    let imageAttachment: PromptImageAttachment?
-    let previousTurns: [SeedThreadTurnRequest]
 }
 
 struct GuestQuotaState: Codable, Sendable, Equatable {

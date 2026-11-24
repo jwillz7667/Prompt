@@ -128,28 +128,37 @@ actor APIClient {
         )
     }
 
-    // MARK: - Streaming Request
+    // MARK: - Server-Sent Events
 
-    func requestStream(
-        _ endpoint: String,
+    /// Opens a server-sent-events request and yields each decoded event.
+    ///
+    /// - Decoding happens on this actor, never on the MainActor. `Event` must
+    ///   therefore have a nonisolated `Decodable` conformance (declare the type
+    ///   `nonisolated struct`).
+    /// - An event whose `failure` is non-nil is thrown, never yielded, so
+    ///   consumers see each server error exactly once.
+    /// - A payload that fails to decode is skipped only when its `type` is not
+    ///   one of `Event.terminalEventTypes`; a malformed terminal event throws
+    ///   `APIError.decodingError` instead of silently ending the stream.
+    /// - Cancelling the consuming task (or dropping the stream) cancels the
+    ///   underlying URLSession request, so the server observes the disconnect.
+    func streamEvents<Event: ServerSentEvent>(
+        path: String,
         method: HTTPMethod = .post,
-        body: (any Encodable)? = nil,
-        requiresAuth: Bool = true
-    ) -> AsyncThrowingStream<StreamEvent, Error> {
+        body: (any Encodable & Sendable)? = nil,
+        requiresAuth: Bool = true,
+        as eventType: Event.Type = Event.self
+    ) -> AsyncThrowingStream<Event, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
-                do {
-                    try await streamRequest(
-                        endpoint,
-                        method: method,
-                        body: body,
-                        requiresAuth: requiresAuth,
-                        isRetry: false,
-                        continuation: continuation
-                    )
-                } catch {
-                    continuation.finish(throwing: error)
-                }
+                await self.pumpEvents(
+                    Event.self,
+                    path: path,
+                    method: method,
+                    body: body,
+                    requiresAuth: requiresAuth,
+                    continuation: continuation
+                )
             }
 
             continuation.onTermination = { _ in
@@ -158,116 +167,49 @@ actor APIClient {
         }
     }
 
-    private func streamRequest(
-        _ endpoint: String,
+    private func pumpEvents<Event: ServerSentEvent>(
+        _ eventType: Event.Type,
+        path: String,
         method: HTTPMethod,
-        body: (any Encodable)?,
+        body: (any Encodable & Sendable)?,
         requiresAuth: Bool,
-        isRetry: Bool,
-        continuation: AsyncThrowingStream<StreamEvent, Error>.Continuation
-    ) async throws {
-        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
-            throw APIError.invalidURL
-        }
-
-        if requiresAuth && accessToken == nil {
-            loadStoredTokens()
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-        request.timeoutInterval = 120
-
-        let deviceId = await MainActor.run { UIDevice.current.identifierForVendor?.uuidString }
-        request.setValue(deviceId, forHTTPHeaderField: "X-Device-ID")
-
-        if requiresAuth {
-            guard let token = accessToken else {
-                throw APIError.notAuthenticated
-            }
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        if let body = body {
-            request.httpBody = try Self.makeJSONEncoder().encode(body)
-        }
-
-        let requestSessionVersion = sessionVersion
-        let requestAccessToken = accessToken
+        continuation: AsyncThrowingStream<Event, Error>.Continuation
+    ) async {
         do {
-            let (bytes, response) = try await urlSession.bytes(for: request)
-            guard !requiresAuth || sessionVersion == requestSessionVersion else {
-                throw APIError.unauthorized
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIError.invalidResponse
-            }
-
-            if httpResponse.statusCode == 401 {
-                if requiresAuth && !isRetry {
-                    if accessToken == requestAccessToken {
-                        try await refreshAccessToken()
-                    }
-                    guard sessionVersion == requestSessionVersion else { throw APIError.unauthorized }
-                    try await streamRequest(
-                        endpoint,
-                        method: method,
-                        body: body,
-                        requiresAuth: requiresAuth,
-                        isRetry: true,
-                        continuation: continuation
-                    )
-                    return
-                }
-
-                throw APIError.unauthorized
-            }
-
-            guard httpResponse.statusCode == 200 else {
-                let errorBody = try await streamErrorBody(from: bytes)
-                throw streamAPIError(statusCode: httpResponse.statusCode, body: errorBody)
-            }
-
-            for try await line in bytes.lines {
+            let connection = try await openEventStream(
+                path,
+                method: method,
+                body: body,
+                requiresAuth: requiresAuth,
+                isRetry: false
+            )
+            for try await line in connection.bytes.lines {
                 try Task.checkCancellation()
-                guard !requiresAuth || sessionVersion == requestSessionVersion else {
+                guard !requiresAuth || sessionVersion == connection.sessionVersion else {
                     throw APIError.unauthorized
                 }
-
-                guard line.hasPrefix("data: ") else { continue }
-
-                let payload = String(line.dropFirst(6))
-                if payload == "[DONE]" {
-                    continuation.finish()
-                    return
+                guard let payload = Self.ssePayload(from: line) else { continue }
+                if payload == Self.sseDoneMarker { break }
+                guard let event = try Self.decodeEvent(Event.self, from: payload) else { continue }
+                if let failure = event.failure {
+                    throw surfaced(failure)
                 }
-
-                guard let jsonData = payload.data(using: .utf8) else { continue }
-
-                do {
-                    let event = try await MainActor.run {
-                        try JSONDecoder().decode(StreamEvent.self, from: jsonData)
-                    }
-                    continuation.yield(event)
-
-                    if case .error = event.type {
-                        throw APIError.badRequest(event.message ?? "Stream error")
-                    }
-                } catch let error as APIError {
-                    throw error
-                } catch {
-                    continue
-                }
+                continuation.yield(event)
             }
-
             continuation.finish()
-        } catch let urlError as URLError where urlError.code == .timedOut {
-            throw APIError.requestTimedOut
+        } catch {
+            continuation.finish(throwing: Self.normalizedTransportError(error))
         }
+    }
+
+    /// Prompt-optimizer thread stream (`/threads`, `/threads/:id/turns/stream`).
+    func requestStream(
+        _ endpoint: String,
+        method: HTTPMethod = .post,
+        body: (any Encodable & Sendable)? = nil,
+        requiresAuth: Bool = true
+    ) -> AsyncThrowingStream<StreamEvent, Error> {
+        streamEvents(path: endpoint, method: method, body: body, requiresAuth: requiresAuth)
     }
 
     // MARK: - Raw SSE Streaming
@@ -275,28 +217,22 @@ actor APIClient {
     /// Generic server-sent-events transport: yields each `data:` payload as raw
     /// bytes so feature services own event decoding (e.g. OptimizeService).
     /// SSE comment lines (`: heartbeat`) are skipped and `[DONE]` finishes the
-    /// stream. Shares token refresh and HTTP error mapping with `requestStream`
-    /// without changing its behavior.
+    /// stream. Shares token refresh and HTTP error mapping with `streamEvents`.
     func requestRawEventStream(
         _ endpoint: String,
         method: HTTPMethod = .get,
-        body: (any Encodable)? = nil,
+        body: (any Encodable & Sendable)? = nil,
         requiresAuth: Bool = true
     ) -> AsyncThrowingStream<Data, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
-                do {
-                    try await rawEventStreamRequest(
-                        endpoint,
-                        method: method,
-                        body: body,
-                        requiresAuth: requiresAuth,
-                        isRetry: false,
-                        continuation: continuation
-                    )
-                } catch {
-                    continuation.finish(throwing: error)
-                }
+                await self.pumpRawEvents(
+                    endpoint,
+                    method: method,
+                    body: body,
+                    requiresAuth: requiresAuth,
+                    continuation: continuation
+                )
             }
 
             continuation.onTermination = { _ in
@@ -305,14 +241,51 @@ actor APIClient {
         }
     }
 
-    private func rawEventStreamRequest(
+    private func pumpRawEvents(
         _ endpoint: String,
         method: HTTPMethod,
-        body: (any Encodable)?,
+        body: (any Encodable & Sendable)?,
         requiresAuth: Bool,
-        isRetry: Bool,
         continuation: AsyncThrowingStream<Data, Error>.Continuation
-    ) async throws {
+    ) async {
+        do {
+            let connection = try await openEventStream(
+                endpoint,
+                method: method,
+                body: body,
+                requiresAuth: requiresAuth,
+                isRetry: false
+            )
+            for try await line in connection.bytes.lines {
+                try Task.checkCancellation()
+                guard !requiresAuth || sessionVersion == connection.sessionVersion else {
+                    throw APIError.unauthorized
+                }
+                guard let payload = Self.ssePayload(from: line) else { continue }
+                if payload == Self.sseDoneMarker { break }
+                continuation.yield(Data(payload.utf8))
+            }
+            continuation.finish()
+        } catch {
+            continuation.finish(throwing: Self.normalizedTransportError(error))
+        }
+    }
+
+    private struct EventStreamConnection {
+        let bytes: URLSession.AsyncBytes
+        let sessionVersion: UInt
+    }
+
+    /// Sends the request and validates the HTTP status. Every non-200 status
+    /// is mapped here, before the caller reads any event, so entitlement and
+    /// fair-use rejections arrive as typed errors rather than stream events.
+    private func openEventStream(
+        _ endpoint: String,
+        method: HTTPMethod,
+        body: (any Encodable & Sendable)?,
+        requiresAuth: Bool,
+        isRetry: Bool
+    ) async throws -> EventStreamConnection {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
         }
@@ -338,110 +311,132 @@ actor APIClient {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        if let body = body {
+        if let body {
             request.httpBody = try Self.makeJSONEncoder().encode(body)
         }
 
         let requestSessionVersion = sessionVersion
         let requestAccessToken = accessToken
+        let (bytes, response) = try await urlSession.bytes(for: request)
+        guard !requiresAuth || sessionVersion == requestSessionVersion else {
+            throw APIError.unauthorized
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            if requiresAuth && !isRetry {
+                if accessToken == requestAccessToken {
+                    try await refreshAccessToken()
+                }
+                guard sessionVersion == requestSessionVersion else { throw APIError.unauthorized }
+                return try await openEventStream(
+                    endpoint,
+                    method: method,
+                    body: body,
+                    requiresAuth: requiresAuth,
+                    isRetry: true
+                )
+            }
+            throw APIError.unauthorized
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorBody = try await Self.readErrorBody(from: bytes)
+            throw surfaced(Self.mapErrorResponse(statusCode: httpResponse.statusCode, body: errorBody))
+        }
+
+        return EventStreamConnection(bytes: bytes, sessionVersion: requestSessionVersion)
+    }
+
+    private static let sseDoneMarker = "[DONE]"
+    private static let maxErrorBodyBytes = 64 * 1024
+
+    nonisolated private static func ssePayload(from line: String) -> String? {
+        guard line.hasPrefix("data:") else { return nil }
+        let payload = line.dropFirst(5)
+        return String(payload.hasPrefix(" ") ? payload.dropFirst() : payload)
+    }
+
+    nonisolated private static func decodeEvent<Event: ServerSentEvent>(
+        _ type: Event.Type,
+        from payload: String
+    ) throws -> Event? {
+        let data = Data(payload.utf8)
         do {
-            let (bytes, response) = try await urlSession.bytes(for: request)
-            guard !requiresAuth || sessionVersion == requestSessionVersion else {
-                throw APIError.unauthorized
+            return try JSONDecoder().decode(Event.self, from: data)
+        } catch {
+            let envelope = try? JSONDecoder().decode(SSEEventEnvelope.self, from: data)
+            if let eventType = envelope?.type, !Event.terminalEventTypes.contains(eventType) {
+                // Additive event types from a newer backend are not fatal.
+                return nil
             }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIError.invalidResponse
-            }
-
-            if httpResponse.statusCode == 401 {
-                if requiresAuth && !isRetry {
-                    if accessToken == requestAccessToken {
-                        try await refreshAccessToken()
-                    }
-                    guard sessionVersion == requestSessionVersion else { throw APIError.unauthorized }
-                    try await rawEventStreamRequest(
-                        endpoint,
-                        method: method,
-                        body: body,
-                        requiresAuth: requiresAuth,
-                        isRetry: true,
-                        continuation: continuation
-                    )
-                    return
-                }
-
-                throw APIError.unauthorized
-            }
-
-            guard httpResponse.statusCode == 200 else {
-                let errorBody = try await streamErrorBody(from: bytes)
-                throw streamAPIError(statusCode: httpResponse.statusCode, body: errorBody)
-            }
-
-            for try await line in bytes.lines {
-                try Task.checkCancellation()
-                guard !requiresAuth || sessionVersion == requestSessionVersion else {
-                    throw APIError.unauthorized
-                }
-
-                guard line.hasPrefix("data: ") else { continue }
-
-                let payload = String(line.dropFirst(6))
-                if payload == "[DONE]" {
-                    continuation.finish()
-                    return
-                }
-
-                if let data = payload.data(using: .utf8) {
-                    continuation.yield(data)
-                }
-            }
-
-            continuation.finish()
-        } catch let urlError as URLError where urlError.code == .timedOut {
-            throw APIError.requestTimedOut
+            throw APIError.decodingError
         }
     }
 
-    private func streamErrorBody(from bytes: URLSession.AsyncBytes) async throws -> Data {
+    private static func readErrorBody(from bytes: URLSession.AsyncBytes) async throws -> Data {
         var data = Data()
         for try await byte in bytes {
             data.append(byte)
+            if data.count >= maxErrorBodyBytes { break }
         }
         return data
     }
 
-    private func streamAPIError(statusCode: Int, body: Data) -> APIError {
+    nonisolated private static func normalizedTransportError(_ error: Error) -> Error {
+        if let urlError = error as? URLError, urlError.code == .timedOut {
+            return APIError.requestTimedOut
+        }
+        return error
+    }
+
+    /// Entitlement loss is global state: any route that reports it flips the
+    /// app back to the hard paywall, regardless of which screen made the call.
+    private func surfaced(_ error: APIError) -> APIError {
+        if case .subscriptionRequired = error {
+            Task { @MainActor in
+                StoreKitManager.shared.handleSubscriptionRequired()
+            }
+        }
+        return error
+    }
+
+    // MARK: - Error Mapping
+
+    /// Maps a non-2xx, non-401 response to a typed error. Server-provided text
+    /// is only surfaced for validation-style failures (400/409/422); AI and
+    /// infrastructure failures always use local copy keyed by `code`.
+    nonisolated static func mapErrorResponse(statusCode: Int, body: Data) -> APIError {
+        let envelope = try? JSONDecoder().decode(APIErrorEnvelope.self, from: body)
+
+        if let envelope, let mapped = APIError.fromServerCode(
+            envelope.code,
+            reason: envelope.reason,
+            retryable: envelope.retryable,
+            retryAfterMs: envelope.retryAfterMs,
+            resetAt: envelope.resetAt,
+            remainingQuota: envelope.remainingQuota
+        ) {
+            return mapped
+        }
+
+        let serverText = envelope?.message ?? envelope?.error
         switch statusCode {
         case 400:
-            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: body)
-            return .badRequest(errorResponse?.message ?? errorResponse?.error ?? "Bad request")
-
+            return .badRequest(serverText ?? "Bad request")
         case 403:
-            let errorResponse = try? JSONDecoder().decode(QuotaErrorResponse.self, from: body)
-            if errorResponse?.code == "QUOTA_EXCEEDED" {
-                return .quotaExceeded(remaining: errorResponse?.remainingQuota ?? 0)
-            }
-            if errorResponse?.code == "FEATURE_LOCKED" {
-                return .featureLocked
-            }
-            let message = errorResponse?.message ?? errorResponse?.error ?? "Request failed (403)"
-            return .serverMessage(message, statusCode)
-
+            return .httpError(403)
         case 404:
             return .notFound
-
+        case 409, 422:
+            return .serverMessage(serverText ?? "Request could not be completed", statusCode)
         case 429:
             return .rateLimited
-
         case 500...599:
-            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: body)
-            if let message = errorResponse?.message ?? errorResponse?.error {
-                return .serverMessage(message, statusCode)
-            }
             return .serverError(statusCode)
-
         default:
             return .httpError(statusCode)
         }
@@ -509,11 +504,11 @@ actor APIClient {
 
         case 401:
             if !requiresAuth {
-                let failure = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
+                let failure = try? JSONDecoder().decode(APIErrorEnvelope.self, from: data)
                 throw APIError.serverMessage(failure?.message ?? failure?.error ?? "Sign-in could not be verified. Please try again.", 401)
             }
             // Token expired - try refresh
-            if !isRetry && requiresAuth {
+            if !isRetry {
                 if accessToken == requestAccessToken {
                     try await refreshAccessToken()
                 }
@@ -529,39 +524,8 @@ actor APIClient {
             }
             throw APIError.unauthorized
 
-        case 400:
-            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-            throw APIError.badRequest(errorResponse?.message ?? errorResponse?.error ?? "Bad request")
-
-        case 409, 422:
-            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-            throw APIError.serverMessage(errorResponse?.message ?? errorResponse?.error ?? "Request could not be completed", httpResponse.statusCode)
-
-        case 404:
-            throw APIError.notFound
-
-        case 403:
-            // Check if it's a quota exceeded error
-            let errorResponse = try? JSONDecoder().decode(QuotaErrorResponse.self, from: data)
-            if errorResponse?.code == "QUOTA_EXCEEDED" {
-                throw APIError.quotaExceeded(remaining: errorResponse?.remainingQuota ?? 0)
-            } else if errorResponse?.code == "FEATURE_LOCKED" {
-                throw APIError.featureLocked
-            }
-            throw APIError.httpError(403)
-
-        case 429:
-            throw APIError.rateLimited
-
-        case 500...599:
-            let errorResponse = try? JSONDecoder().decode(APIErrorResponse.self, from: data)
-            if let message = errorResponse?.message ?? errorResponse?.error {
-                throw APIError.serverMessage(message, httpResponse.statusCode)
-            }
-            throw APIError.serverError(httpResponse.statusCode)
-
         default:
-            throw APIError.httpError(httpResponse.statusCode)
+            throw surfaced(Self.mapErrorResponse(statusCode: httpResponse.statusCode, body: data))
         }
     }
 
@@ -727,8 +691,18 @@ enum APIError: LocalizedError, Sendable {
     case badRequest(String)
     case notFound
     case rateLimited
+    /// Legacy daily quota (403 QUOTA_EXCEEDED without a subscription reason).
     case quotaExceeded(remaining: Int)
     case featureLocked
+    /// 403 QUOTA_EXCEEDED + reason SUBSCRIPTION_REQUIRED: no active
+    /// subscription or trial. Flips the app to the hard paywall.
+    case subscriptionRequired
+    /// 429 FAIR_USE_LIMIT: the daily fair-use ceiling for subscribers.
+    case fairUseLimit(resetAt: Date?)
+    /// A typed AI-service failure (`toClientStreamError` on the backend).
+    case service(ServiceFailure)
+    /// 409 TRANSACTION_OWNED_BY_ANOTHER_USER from purchase activation.
+    case transactionOwnedByAnotherAccount
     case serverMessage(String, Int)
     case serverError(Int)
     case httpError(Int)
@@ -746,9 +720,13 @@ enum APIError: LocalizedError, Sendable {
         case .notFound: return "Resource not found"
         case .rateLimited: return "Too many requests. Please wait a moment"
         case .quotaExceeded: return "You've reached your daily prompt limit"
-        case .featureLocked: return "This feature requires a subscription upgrade"
+        case .featureLocked: return "This feature requires a subscription"
+        case .subscriptionRequired: return ServiceMessages.subscriptionRequired
+        case .fairUseLimit(let resetAt): return ServiceMessages.fairUseLimit(resetAt: resetAt)
+        case .service(let failure): return failure.code.userMessage
+        case .transactionOwnedByAnotherAccount: return ServiceMessages.transactionOwnedByAnotherAccount
         case .serverMessage(let message, _): return message
-        case .serverError(let code): return "Server error (\(code))"
+        case .serverError: return ServiceErrorCode.internalError.userMessage
         case .httpError(let code): return "Request failed (\(code))"
         case .decodingError: return "Failed to process response"
         case .secureStorageUnavailable: return "Your sign-in could not be saved securely. Please restart the app and try again."
@@ -759,6 +737,108 @@ enum APIError: LocalizedError, Sendable {
         if case .quotaExceeded = self { return true }
         return false
     }
+
+    var isSubscriptionRequired: Bool {
+        if case .subscriptionRequired = self { return true }
+        return false
+    }
+
+    /// Maps a backend error `code` (HTTP body or SSE error event) to a typed
+    /// error. Returns nil for codes that carry no client-specific meaning, so
+    /// the caller falls back to HTTP-status mapping.
+    nonisolated static func fromServerCode(
+        _ code: String?,
+        reason: String?,
+        retryable: Bool?,
+        retryAfterMs: Int?,
+        resetAt: String?,
+        remainingQuota: Int?
+    ) -> APIError? {
+        guard let code else { return nil }
+        switch code {
+        case "SUBSCRIPTION_REQUIRED":
+            return .subscriptionRequired
+        case "QUOTA_EXCEEDED":
+            return reason == "SUBSCRIPTION_REQUIRED"
+                ? .subscriptionRequired
+                : .quotaExceeded(remaining: remainingQuota ?? 0)
+        case "FEATURE_LOCKED":
+            return .featureLocked
+        case "FAIR_USE_LIMIT":
+            return .fairUseLimit(resetAt: ServerDate.parse(resetAt))
+        case "AUTH_REQUIRED":
+            return .unauthorized
+        case "TRANSACTION_OWNED_BY_ANOTHER_USER":
+            return .transactionOwnedByAnotherAccount
+        default:
+            guard let serviceCode = ServiceErrorCode(rawValue: code) else { return nil }
+            return .service(ServiceFailure(
+                code: serviceCode,
+                isRetryable: retryable ?? serviceCode.isRetryableByDefault,
+                retryAfter: retryAfterMs.map { TimeInterval($0) / 1000 }
+            ))
+        }
+    }
+}
+
+// MARK: - AI Service Failures
+
+/// Client-visible AI failure codes (`ClientErrorCode` in
+/// backend/src/features/llm/errors.ts). User copy lives in ErrorHandler.
+nonisolated enum ServiceErrorCode: String, Sendable, Equatable {
+    case providerUnavailable = "PROVIDER_UNAVAILABLE"
+    case rateLimited = "RATE_LIMITED"
+    case timeout = "TIMEOUT"
+    case contextTooLong = "CONTEXT_TOO_LONG"
+    case contentBlocked = "CONTENT_BLOCKED"
+    case interrupted = "INTERRUPTED"
+    case internalError = "INTERNAL_ERROR"
+
+    var isRetryableByDefault: Bool {
+        switch self {
+        case .contextTooLong, .contentBlocked: return false
+        case .providerUnavailable, .rateLimited, .timeout, .interrupted, .internalError: return true
+        }
+    }
+}
+
+nonisolated struct ServiceFailure: Sendable, Equatable {
+    let code: ServiceErrorCode
+    let isRetryable: Bool
+    let retryAfter: TimeInterval?
+}
+
+/// Shape shared by JSON error bodies across routes. Every field is optional
+/// so one decoder handles legacy and current backends.
+nonisolated struct APIErrorEnvelope: Decodable, Sendable {
+    let error: String?
+    let code: String?
+    let message: String?
+    let reason: String?
+    let remainingQuota: Int?
+    let resetAt: String?
+    let retryable: Bool?
+    let retryAfterMs: Int?
+}
+
+// MARK: - Server-Sent Event Contract
+
+/// An event decoded by `APIClient.streamEvents`.
+nonisolated protocol ServerSentEvent: Decodable, Sendable {
+    /// `type` values whose loss would corrupt the client's view of the
+    /// stream; failing to decode one of these throws instead of skipping.
+    static var terminalEventTypes: Set<String> { get }
+    /// Non-nil when the event reports a server failure. The stream throws it
+    /// instead of yielding the event.
+    var failure: APIError? { get }
+}
+
+extension ServerSentEvent {
+    nonisolated static var terminalEventTypes: Set<String> { ["complete", "error", "done"] }
+}
+
+nonisolated private struct SSEEventEnvelope: Decodable {
+    let type: String?
 }
 
 // MARK: - Request/Response Models
@@ -773,42 +853,6 @@ struct RefreshTokenRequest: Encodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case refreshToken
-    }
-}
-
-struct APIErrorResponse: Decodable, Sendable {
-    let error: String
-    let code: String?
-    let message: String?
-
-    nonisolated init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        error = try container.decode(String.self, forKey: .error)
-        code = try container.decodeIfPresent(String.self, forKey: .code)
-        message = try container.decodeIfPresent(String.self, forKey: .message)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case error, code, message
-    }
-}
-
-struct QuotaErrorResponse: Decodable, Sendable {
-    let error: String
-    let code: String?
-    let message: String?
-    let remainingQuota: Int?
-
-    nonisolated init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        error = try container.decode(String.self, forKey: .error)
-        code = try container.decodeIfPresent(String.self, forKey: .code)
-        message = try container.decodeIfPresent(String.self, forKey: .message)
-        remainingQuota = try container.decodeIfPresent(Int.self, forKey: .remainingQuota)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case error, code, message, remainingQuota
     }
 }
 
@@ -852,6 +896,9 @@ struct UserDTO: Codable, Sendable {
     let name: String?
     let avatarUrl: String?
     let isPremium: Bool
+    /// StoreKit `appAccountToken` binding App Store purchases to this
+    /// account. Optional so responses from backends that predate it decode.
+    let appAccountToken: UUID?
 
     nonisolated init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -859,7 +906,11 @@ struct UserDTO: Codable, Sendable {
         email = try container.decode(String.self, forKey: .email)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
-        isPremium = try container.decode(Bool.self, forKey: .isPremium)
+        isPremium = try container.decodeIfPresent(Bool.self, forKey: .isPremium) ?? false
+        // A malformed token is treated as absent rather than failing sign-in;
+        // purchases re-fetch the profile before buying.
+        appAccountToken = try container.decodeIfPresent(String.self, forKey: .appAccountToken)
+            .flatMap(UUID.init(uuidString:))
     }
 
     nonisolated func encode(to encoder: any Encoder) throws {
@@ -869,10 +920,11 @@ struct UserDTO: Codable, Sendable {
         try container.encodeIfPresent(name, forKey: .name)
         try container.encodeIfPresent(avatarUrl, forKey: .avatarUrl)
         try container.encode(isPremium, forKey: .isPremium)
+        try container.encodeIfPresent(appAccountToken?.uuidString.lowercased(), forKey: .appAccountToken)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, email, name, avatarUrl, isPremium
+        case id, email, name, avatarUrl, isPremium, appAccountToken
     }
 }
 
@@ -950,25 +1002,34 @@ enum KeychainHelper {
 
 // MARK: - Stream Event
 
-enum StreamEventType: String, Codable, Sendable {
+nonisolated enum StreamEventType: String, Codable, Sendable {
     case token
     case complete
     case error
 }
 
-struct StreamEvent: Codable, Sendable {
+/// Prompt-optimizer thread stream event.
+nonisolated struct StreamEvent: ServerSentEvent {
     let type: StreamEventType
     let content: String?
     let message: String?
+    let code: String?
+    let reason: String?
+    let retryable: Bool?
+    let retryAfterMs: Int?
+    let resetAt: String?
     let promptId: String?
-    // Thread-specific fields
     let threadId: String?
     let turnId: String?
     let turnIndex: Int?
-    let imageAttachment: PromptImageAttachment?
+    let attachment: StreamImageAttachment?
     let usage: StreamUsage?
-    let subscription: StreamSubscription?
-    let guestQuota: GuestQuotaState?
+
+    private enum CodingKeys: String, CodingKey {
+        case type, content, message, code, reason, retryable, retryAfterMs, resetAt
+        case promptId, threadId, turnId, turnIndex, usage
+        case attachment = "imageAttachment"
+    }
 
     struct StreamUsage: Codable, Sendable {
         let inputTokens: Int
@@ -977,10 +1038,42 @@ struct StreamEvent: Codable, Sendable {
         let processingMs: Int
     }
 
-    struct StreamSubscription: Codable, Sendable {
-        let tier: String
-        let promptQuality: String
-        let dailyPromptsUsed: Int
-        let dailyPromptsLimit: Int
+    /// Wire copy of `PromptImageAttachment`, decodable off the MainActor.
+    struct StreamImageAttachment: Codable, Sendable {
+        let dataUrl: String
+        let mimeType: String
+        let width: Int
+        let height: Int
+        let analysis: String?
+    }
+
+    var failure: APIError? {
+        guard type == .error else { return nil }
+        return APIError.fromServerCode(
+            code,
+            reason: reason,
+            retryable: retryable,
+            retryAfterMs: retryAfterMs,
+            resetAt: resetAt,
+            remainingQuota: nil
+        ) ?? .service(ServiceFailure(
+            code: .internalError,
+            isRetryable: retryable ?? true,
+            retryAfter: retryAfterMs.map { TimeInterval($0) / 1000 }
+        ))
+    }
+}
+
+extension StreamEvent {
+    var imageAttachment: PromptImageAttachment? {
+        attachment.map {
+            PromptImageAttachment(
+                dataUrl: $0.dataUrl,
+                mimeType: $0.mimeType,
+                width: $0.width,
+                height: $0.height,
+                analysis: $0.analysis
+            )
+        }
     }
 }

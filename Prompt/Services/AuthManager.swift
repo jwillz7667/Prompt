@@ -2,7 +2,8 @@
 //  AuthManager.swift
 //  Prompt
 //
-//  Enterprise authentication manager supporting Apple Sign In and Google OAuth
+//  Sign in with Apple session management. An account is required: chats,
+//  history and the subscription are bound to it.
 //
 
 import Foundation
@@ -293,7 +294,7 @@ final class AuthManager: NSObject {
 
             // Sign-in is complete once the session exists. Receipt history can
             // take several network calls and must not hold the Apple sheet open.
-            Task { await StoreKitManager.shared.checkEntitlements() }
+            Task { await StoreKitManager.shared.refreshEntitlement() }
             return true
         } catch {
             guard attempt == authAttemptVersion else { return false }
@@ -324,19 +325,6 @@ final class AuthManager: NSObject {
         default: error = .failed
         }
         ErrorHandler.shared.handleSilently(failure, context: "AppleSignIn")
-    }
-
-    // MARK: - Google Sign In
-
-    func signInWithGoogle(presenting viewController: UIViewController) async {
-        // Note: Implement using GoogleSignIn SDK
-        // This is a placeholder - requires GoogleSignIn-iOS package
-        isLoading = true
-        error = nil
-
-        // For now, show not implemented
-        isLoading = false
-        error = .notImplemented("Google Sign In requires GoogleSignIn SDK integration")
     }
 
     // MARK: - Sign Out
@@ -401,6 +389,8 @@ struct User: Codable, Identifiable, Sendable {
     var name: String?
     var avatarUrl: String?
     var isPremium: Bool
+    /// Lowercase UUID the backend issued for StoreKit purchase attribution.
+    var appAccountToken: UUID?
 
     nonisolated init(from dto: UserDTO) {
         self.id = dto.id
@@ -408,12 +398,40 @@ struct User: Codable, Identifiable, Sendable {
         self.name = dto.name
         self.avatarUrl = dto.avatarUrl
         self.isPremium = dto.isPremium
+        self.appAccountToken = dto.appAccountToken
     }
 }
 
 // MARK: - Profile Update
 
 extension AuthManager {
+    /// Reloads the signed-in user from `/auth/me`.
+    func refreshCurrentUser() async throws {
+        let sessionVersion = await APIClient.shared.sessionVersion
+        let response: MeResponse = try await APIClient.shared.request("/auth/me")
+        guard await APIClient.shared.sessionVersion == sessionVersion else {
+            throw APIError.unauthorized
+        }
+        let user = User(from: response.user)
+        currentUser = user
+        cacheUser(user)
+    }
+
+    /// The token StoreKit attaches to a purchase so the backend can bind the
+    /// App Store subscription to this account. Fetched from the server when
+    /// the cached profile predates the field; purchases never proceed
+    /// without it.
+    func resolveAppAccountToken() async throws -> UUID {
+        if let token = currentUser?.appAccountToken {
+            return token
+        }
+        try await refreshCurrentUser()
+        guard let token = currentUser?.appAccountToken else {
+            throw StoreError.accountNotReady
+        }
+        return token
+    }
+
     func updateProfile(name: String?) async throws {
         let request = ProfileUpdateRequest(name: name)
         let response: ProfileUpdateResponse = try await APIClient.shared.request(
@@ -426,7 +444,7 @@ extension AuthManager {
     }
 }
 
-struct MeResponse: Decodable, Sendable {
+nonisolated struct MeResponse: Decodable, Sendable {
     let user: UserDTO
 }
 
@@ -467,7 +485,6 @@ enum AuthError: LocalizedError, Equatable {
     case notInteractive
     case unknown
     case serverError(String)
-    case notImplemented(String)
 
     var errorDescription: String? {
         switch self {
@@ -478,7 +495,6 @@ enum AuthError: LocalizedError, Equatable {
         case .notInteractive: return "Interactive authentication required"
         case .unknown: return "An unknown error occurred"
         case .serverError(let msg): return msg
-        case .notImplemented(let msg): return msg
         }
     }
 }

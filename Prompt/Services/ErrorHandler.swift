@@ -50,7 +50,7 @@ enum ErrorAction: Sendable {
         switch self {
         case .retry: return "Try Again"
         case .signIn: return "Sign In"
-        case .upgrade: return "View Plans"
+        case .upgrade: return "See Premium"
         case .contactSupport: return "Contact Support"
         case .checkConnection: return "Check Connection"
         case .refreshApp: return "Refresh"
@@ -78,6 +78,9 @@ enum AppError: AppErrorProtocol, Equatable {
     case unauthorized
     case quotaExceeded
     case featureLocked
+    case subscriptionRequired
+    case fairUseLimit(resetAt: Date?)
+    case service(ServiceFailure)
 
     // Validation Errors
     case invalidInput(String)
@@ -98,6 +101,7 @@ enum AppError: AppErrorProtocol, Equatable {
     case purchasePending
     case verificationFailed
     case restoreFailed
+    case ownedByAnotherAccount
 
     // Storage Errors
     case keychainError(String)
@@ -115,15 +119,15 @@ enum AppError: AppErrorProtocol, Equatable {
             return .network
         case .notAuthenticated, .sessionExpired, .invalidCredentials, .accountDisabled:
             return .authentication
-        case .unauthorized, .quotaExceeded, .featureLocked:
+        case .unauthorized, .quotaExceeded, .featureLocked, .subscriptionRequired, .fairUseLimit:
             return .authorization
         case .invalidInput, .missingRequired:
             return .validation
-        case .serverError, .maintenanceMode, .rateLimited:
+        case .serverError, .maintenanceMode, .rateLimited, .service:
             return .server
         case .decodingFailed, .encodingFailed, .invalidResponse:
             return .client
-        case .purchaseFailed, .purchasePending, .verificationFailed, .restoreFailed:
+        case .purchaseFailed, .purchasePending, .verificationFailed, .restoreFailed, .ownedByAnotherAccount:
             return .subscription
         case .keychainError, .dataCorrupted:
             return .storage
@@ -140,6 +144,8 @@ enum AppError: AppErrorProtocol, Equatable {
             return true
         case .rateLimited:
             return true
+        case .service(let failure):
+            return failure.isRetryable
         case .sessionExpired:
             return true
         case .purchasePending:
@@ -172,17 +178,23 @@ enum AppError: AppErrorProtocol, Equatable {
         case .unauthorized:
             return "You don't have permission to perform this action."
         case .quotaExceeded:
-            return "You've reached your daily limit. Upgrade for more prompts."
+            return String(localized: "You've reached your daily limit.")
         case .featureLocked:
-            return "This feature requires a subscription upgrade."
+            return String(localized: "This feature requires a subscription.")
+        case .subscriptionRequired:
+            return ServiceMessages.subscriptionRequired
+        case .fairUseLimit(let resetAt):
+            return ServiceMessages.fairUseLimit(resetAt: resetAt)
+        case .service(let failure):
+            return failure.code.userMessage
 
         case .invalidInput(let field):
             return "Invalid \(field). Please check and try again."
         case .missingRequired(let field):
             return "\(field) is required."
 
-        case .serverError(let code, _):
-            return "Server error (\(code)). Please try again later."
+        case .serverError:
+            return ServiceErrorCode.internalError.userMessage
         case .maintenanceMode:
             return "We're performing maintenance. Please try again soon."
         case .rateLimited(let retryAfter):
@@ -195,13 +207,15 @@ enum AppError: AppErrorProtocol, Equatable {
             return "Something went wrong. Please try again."
 
         case .purchaseFailed(let reason):
-            return "Purchase failed: \(reason)"
+            return reason
         case .purchasePending:
             return "Your purchase is pending approval."
         case .verificationFailed:
             return "Unable to verify your purchase. Please contact support."
         case .restoreFailed:
             return "Unable to restore purchases. Please try again."
+        case .ownedByAnotherAccount:
+            return ServiceMessages.transactionOwnedByAnotherAccount
 
         case .keychainError:
             return "Unable to access secure storage."
@@ -232,8 +246,12 @@ enum AppError: AppErrorProtocol, Equatable {
             return .checkConnection
         case .notAuthenticated, .sessionExpired, .invalidCredentials:
             return .signIn
-        case .quotaExceeded, .featureLocked:
+        case .quotaExceeded, .featureLocked, .subscriptionRequired:
             return .upgrade
+        case .fairUseLimit, .ownedByAnotherAccount:
+            return ErrorAction.none
+        case .service(let failure):
+            return failure.isRetryable ? .retry : ErrorAction.none
         case .rateLimited, .serverError, .maintenanceMode:
             return .retry
         case .verificationFailed, .accountDisabled:
@@ -268,6 +286,8 @@ enum AppError: AppErrorProtocol, Equatable {
              (.purchasePending, .purchasePending),
              (.verificationFailed, .verificationFailed),
              (.restoreFailed, .restoreFailed),
+             (.ownedByAnotherAccount, .ownedByAnotherAccount),
+             (.subscriptionRequired, .subscriptionRequired),
              (.dataCorrupted, .dataCorrupted),
              (.maintenanceMode, .maintenanceMode):
             return true
@@ -281,8 +301,55 @@ enum AppError: AppErrorProtocol, Equatable {
             return c1 == c2 && m1 == m2
         case (.rateLimited(let a), .rateLimited(let b)):
             return a == b
+        case (.fairUseLimit(let a), .fairUseLimit(let b)):
+            return a == b
+        case (.service(let a), .service(let b)):
+            return a == b
         default:
             return false
+        }
+    }
+}
+
+// MARK: - Service Error Copy
+
+/// User-facing copy for typed backend failures. Server text is never shown
+/// for these: it may name infrastructure or third-party providers.
+enum ServiceMessages {
+    nonisolated static var subscriptionRequired: String {
+        String(localized: "A Promptomize Premium subscription is required to use this feature.")
+    }
+
+    nonisolated static var transactionOwnedByAnotherAccount: String {
+        String(localized: "This Apple Account's subscription is linked to a different Promptomize account. Sign in with that account.")
+    }
+
+    nonisolated static func fairUseLimit(resetAt: Date?) -> String {
+        guard let resetAt else {
+            return String(localized: "You've reached today's fair-use limit. It resets tomorrow.")
+        }
+        let time = resetAt.formatted(date: .omitted, time: .shortened)
+        return String(localized: "You've reached today's fair-use limit. It resets at \(time).")
+    }
+}
+
+extension ServiceErrorCode {
+    nonisolated var userMessage: String {
+        switch self {
+        case .providerUnavailable:
+            return String(localized: "The assistant is temporarily unavailable. Please try again in a few minutes.")
+        case .rateLimited:
+            return String(localized: "The assistant is busy right now. Please try again shortly.")
+        case .timeout:
+            return String(localized: "The response took too long. Please try again.")
+        case .contextTooLong:
+            return String(localized: "This conversation is too long to continue. Start a new chat to keep going.")
+        case .contentBlocked:
+            return String(localized: "That request couldn't be completed. Try rephrasing it.")
+        case .interrupted:
+            return String(localized: "The response was interrupted. Please try again.")
+        case .internalError:
+            return String(localized: "Something went wrong. Please try again.")
         }
     }
 }
@@ -362,6 +429,14 @@ final class ErrorHandler: ObservableObject {
                 return .quotaExceeded
             case .featureLocked:
                 return .featureLocked
+            case .subscriptionRequired:
+                return .subscriptionRequired
+            case .fairUseLimit(let resetAt):
+                return .fairUseLimit(resetAt: resetAt)
+            case .service(let failure):
+                return .service(failure)
+            case .transactionOwnedByAnotherAccount:
+                return .ownedByAnotherAccount
             case .serverMessage(let message, let code):
                 return .serverError(code, message)
             case .serverError(let code):
@@ -378,28 +453,19 @@ final class ErrorHandler: ObservableObject {
         // StoreError mapping
         if let storeError = error as? StoreError {
             switch storeError {
-            case .failedToLoadProducts:
-                return .purchaseFailed("Failed to load subscription options")
-            case .purchaseFailed(let underlying):
-                return .purchaseFailed(underlying.localizedDescription)
             case .purchasePending:
                 return .purchasePending
             case .failedVerification:
                 return .verificationFailed
-            case .unknownPurchaseResult:
-                return .purchaseFailed("Unknown purchase result")
-            case .activationFailed:
-                return .purchaseFailed("Your purchase went through, but we couldn't activate it on your account. It will retry automatically — or tap Restore Purchase.")
             case .signInRequired:
                 return .notAuthenticated
-            case .managedOnWeb, .noActivePurchases, .restoreRejected:
-                return .purchaseFailed(storeError.localizedDescription)
+            case .ownedByAnotherAccount:
+                return .ownedByAnotherAccount
             case .restoreFailed:
                 return .restoreFailed
-            case .trialNotAvailable(let message):
-                return .purchaseFailed(message)
-            case .trialFailed(let underlying):
-                return .purchaseFailed(underlying.localizedDescription)
+            case .failedToLoadProducts, .purchaseFailed, .unknownPurchaseResult, .activationFailed,
+                 .accountNotReady, .managedOnWeb, .noActivePurchases, .restoreRejected:
+                return .purchaseFailed(storeError.localizedDescription)
             }
         }
 
@@ -411,8 +477,6 @@ final class ErrorHandler: ObservableObject {
             case .failed, .invalidResponse, .notHandled, .notInteractive, .unknown:
                 return .notAuthenticated
             case .serverError(let message):
-                return .unknown(message)
-            case .notImplemented(let message):
                 return .unknown(message)
             }
         }
