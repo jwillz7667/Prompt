@@ -5,6 +5,7 @@ import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import { sendAccountDeleted } from '../services/emailService.js';
 import { registerDeviceToken, unregisterDeviceToken } from '../services/notificationService.js';
+import { appleAccountService } from '../features/apple-account/index.js';
 
 export const userRouter = Router();
 
@@ -247,6 +248,12 @@ userRouter.delete('/account', async (req: AuthenticatedRequest, res: Response): 
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { email: true, name: true },
+    });
+
+    // Apple requires revoking Sign in with Apple tokens on deletion; a failed
+    // revoke is queued for retry and never blocks the deletion itself.
+    await appleAccountService.revokeBeforeAccountDeletion(req.user.id).catch((error: unknown) => {
+      logger.error({ err: error, userId: req.user?.id }, 'Sign in with Apple revocation errored');
     });
 
     // Delete all user data (cascades to sessions, prompts, etc.)

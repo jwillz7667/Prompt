@@ -12,6 +12,7 @@
 import type { Queue as BullQueue, Worker as BullWorker } from 'bullmq';
 import { logger } from './logger.js';
 import { processExpiredSubscriptions } from '../services/subscriptionService.js';
+import { appleAccountService } from '../features/apple-account/index.js';
 
 // Job types
 export interface PromptEnhanceJob {
@@ -51,6 +52,7 @@ let queuesAvailable = false;
 
 const SUBSCRIPTION_MAINTENANCE_QUEUE = 'subscription-maintenance';
 const EXPIRE_SUBSCRIPTIONS_JOB = 'expire-subscriptions';
+const RETRY_APPLE_REVOCATIONS_JOB = 'retry-apple-revocations';
 
 export async function initQueues(): Promise<void> {
   const redisUrl = process.env['REDIS_URL'];
@@ -151,7 +153,12 @@ export async function initQueues(): Promise<void> {
     });
     subscriptionMaintenanceWorker = new Worker(
       SUBSCRIPTION_MAINTENANCE_QUEUE,
-      async () => {
+      async (job) => {
+        if (job.name === RETRY_APPLE_REVOCATIONS_JOB) {
+          const outcome = await appleAccountService.retryPendingRevocations();
+          logger.info(outcome, 'Sign in with Apple revocation retry sweep completed');
+          return outcome;
+        }
         const expired = await processExpiredSubscriptions();
         logger.info({ expired }, 'Subscription expiry sweep completed');
         return { expired };
@@ -167,6 +174,11 @@ export async function initQueues(): Promise<void> {
       { repeat: { pattern: '15 * * * *' }, jobId: 'expire-subscriptions-hourly' },
     );
     logger.info('Subscription expiry sweep scheduled hourly');
+    await subscriptionMaintenanceQueue.add(
+      RETRY_APPLE_REVOCATIONS_JOB,
+      {},
+      { repeat: { pattern: '*/15 * * * *' }, jobId: 'retry-apple-revocations' },
+    );
   } catch (error) {
     logger.warn({ error }, 'BullMQ not available - queues disabled');
   }

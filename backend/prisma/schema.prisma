@@ -59,8 +59,10 @@ model User {
   avatarUrl     String?
 
   // Auth providers
-  appleId  String? @unique
-  googleId String? @unique
+  appleId           String? @unique
+  /// Sealed (AES-256-GCM) Sign in with Apple refresh token; revoked when the account is deleted.
+  appleRefreshToken String? @db.Text
+  googleId          String? @unique
 
   // Security
   passwordHash String?
@@ -1142,4 +1144,19 @@ model ChatMessageReport {
   @@index([createdAt])
   @@index([messageId])
   @@index([userId])
+}
+
+/// A Sign in with Apple token revocation that failed while an account was
+/// being deleted. Not linked to User (the user row is already gone); retried
+/// with backoff by the subscription-maintenance worker.
+model AppleTokenRevocation {
+  id            String   @id @default(cuid())
+  sealedGrant   String   @db.Text
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError     String?
+  createdAt     DateTime @default(now())
+
+  // Serves the retry sweep (WHERE nextAttemptAt <= now ORDER BY nextAttemptAt).
+  @@index([nextAttemptAt])
 }

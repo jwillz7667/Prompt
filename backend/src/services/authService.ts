@@ -7,6 +7,7 @@ import { generateTokenPair, verifyRefreshToken, type TokenPayload } from '../uti
 import { authLogger } from '../utils/logger.js';
 import { cache } from '../utils/redis.js';
 import { sendWelcomeEmail } from './emailService.js';
+import { appleAccountService } from '../features/apple-account/index.js';
 
 const googleClient = new OAuth2Client(process.env['GOOGLE_CLIENT_ID']);
 
@@ -52,7 +53,7 @@ export class SignInError extends Error {
 
 export async function authenticateWithApple(
   identityToken: string,
-  _authorizationCode: string,
+  authorizationCode: string,
   fullName?: { givenName?: string; familyName?: string },
   deviceInfo?: { deviceId?: string; deviceName?: string },
   expectedNonce?: string,
@@ -183,6 +184,13 @@ export async function authenticateWithApple(
       authLogger.warn({ err: error, userId: result.user.id }, 'Failed to send welcome email');
     });
   }
+  // Kept so the token can be revoked on account deletion; runs off the
+  // sign-in path because Apple's token endpoint must never delay a login.
+  void appleAccountService.rememberRefreshToken(
+    result.user.id,
+    authorizationCode,
+    applePayload.aud,
+  );
   return {
     user: {
       id: result.user.id,
