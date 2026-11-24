@@ -6,9 +6,42 @@
 
 import { Router, type Response, type Request } from 'express';
 import YAML from 'yaml';
-import { API_TIER_CONFIG } from '../services/apiSubscriptionService.js';
+import { API_BILLING_PATH, getAvailablePlans } from '../services/apiSubscriptionService.js';
 
 export const docsRouter = Router();
+
+const BILLING_URL = `https://promptomize.app${API_BILLING_PATH}`;
+
+const PAID_PLAN_NOTE = `Prompt enhancement requires an active paid API plan (${getAvailablePlans()
+  .map((plan) => plan.name)
+  .join(
+    ', ',
+  )}). Accounts without one can create API keys and call /public/usage, /public/models, /public/history and /public/recent, but /public/enhance returns 402 API_PLAN_REQUIRED. Choose a plan at ${BILLING_URL}.`;
+
+const planRequiredResponse = {
+  description: 'No active paid API plan. Choose a plan on the developer billing page.',
+  content: {
+    'application/json': {
+      schema: { $ref: '#/components/schemas/PlanRequiredError' },
+    },
+  },
+};
+
+const planRequiredErrorSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    error: { type: 'string', enum: ['A paid API plan is required'] },
+    code: { type: 'string', enum: ['API_PLAN_REQUIRED'] },
+    message: { type: 'string' },
+    upgradeUrl: {
+      type: 'string',
+      description: 'Path of the developer billing page on https://promptomize.app',
+      example: API_BILLING_PATH,
+    },
+  },
+  required: ['error', 'code', 'message', 'upgradeUrl'],
+};
 
 // ============================================================================
 // OPENAPI SPECIFICATION
@@ -18,7 +51,7 @@ const openApiSpec = {
   openapi: '3.1.0',
   info: {
     title: 'Promptomize API',
-    description: 'Enterprise API for prompt optimization and enhancement',
+    description: `Enterprise API for prompt optimization and enhancement. ${PAID_PLAN_NOTE}`,
     version: '1.0.0',
     contact: {
       name: 'Promptomize Support',
@@ -67,8 +100,7 @@ const openApiSpec = {
       post: {
         tags: ['Enhance'],
         summary: 'Enhance a prompt',
-        description:
-          'Optimize a prompt using AI-powered enhancement. Supports multiple modalities and customization options.',
+        description: `Optimize a prompt using AI-powered enhancement. Supports multiple modalities and customization options. ${PAID_PLAN_NOTE}`,
         operationId: 'enhancePrompt',
         security: [{ ApiKeyAuth: [] }],
         requestBody: {
@@ -129,6 +161,7 @@ const openApiSpec = {
               },
             },
           },
+          402: planRequiredResponse,
           429: {
             description: 'Rate limit or quota exceeded',
             content: {
@@ -152,7 +185,8 @@ const openApiSpec = {
       get: {
         tags: ['Usage'],
         summary: 'Get current usage and quota',
-        description: 'Returns current API tier, usage statistics, and remaining quota.',
+        description:
+          'Returns current API tier, usage statistics, and remaining quota. Available on every account; accounts without a paid plan report a limit of 0 and an upgrade link.',
         operationId: 'getUsage',
         security: [{ ApiKeyAuth: [] }],
         responses: {
@@ -336,6 +370,14 @@ const openApiSpec = {
             type: 'array',
             items: { type: 'string' },
           },
+          plan: {
+            type: 'object',
+            properties: {
+              canEnhance: { type: 'boolean' },
+              upgradeRequired: { type: 'boolean' },
+              upgradeUrl: { type: 'string' },
+            },
+          },
         },
       },
       ModelsResponse: {
@@ -466,6 +508,7 @@ const openApiSpec = {
           granted: { type: 'array', items: { type: 'string' } },
         },
       },
+      PlanRequiredError: planRequiredErrorSchema,
       ServerError: {
         type: 'object',
         properties: {
@@ -502,7 +545,7 @@ const gptActionSpec = {
         operationId: 'enhancePrompt',
         summary: 'Enhance a prompt',
         description:
-          'Rewrite and optimize a user prompt for a specific modality. Returns a single enhanced prompt plus token and quota metadata.',
+          'Rewrite and optimize a user prompt for a specific modality. Returns a single enhanced prompt plus token and quota metadata. The API key must belong to an account with an active paid API plan; otherwise the call returns 402 API_PLAN_REQUIRED.',
         security: [{ PromptomizeApiKey: [] }],
         requestBody: {
           required: true,
@@ -568,6 +611,7 @@ const gptActionSpec = {
               },
             },
           },
+          402: planRequiredResponse,
           429: {
             description: 'Rate limit or quota exceeded',
             content: {
@@ -595,7 +639,7 @@ const gptActionSpec = {
         in: 'header',
         name: 'X-API-Key',
         description:
-          'Production API key created in the Promptomize developer portal. Use a dedicated key with only the enhance permission.',
+          'Production API key created in the Promptomize developer portal on an account with an active paid API plan. Use a dedicated key with only the enhance permission.',
       },
     },
     schemas: {
@@ -728,6 +772,7 @@ const gptActionSpec = {
         },
         required: ['error', 'code', 'message'],
       },
+      PlanRequiredError: planRequiredErrorSchema,
       ServerError: {
         type: 'object',
         additionalProperties: false,
@@ -796,11 +841,16 @@ docsRouter.get('/', (_req: Request, res: Response): void => {
       steps: [
         {
           step: 1,
+          title: 'Choose a paid API plan',
+          description: `Prompt enhancement needs an active paid plan. Choose one at ${BILLING_URL}`,
+        },
+        {
+          step: 2,
           title: 'Get an API Key',
           description: 'Create an API key at https://promptomize.app/developers/keys',
         },
         {
-          step: 2,
+          step: 3,
           title: 'Make your first request',
           code: `curl -X POST https://api.promptomize.app/api/v1/public/enhance \\
   -H "X-API-Key: pk_live_your_key_here" \\
@@ -808,7 +858,7 @@ docsRouter.get('/', (_req: Request, res: Response): void => {
   -d '{"prompt": "Write a professional email", "modality": "text"}'`,
         },
         {
-          step: 3,
+          step: 4,
           title: 'Check your usage',
           code: `curl https://api.promptomize.app/api/v1/public/usage \\
   -H "X-API-Key: pk_live_your_key_here"`,
@@ -839,15 +889,17 @@ print(response.json()["enhancedPrompt"])`,
 const { enhancedPrompt } = await response.json();
 console.log(enhancedPrompt);`,
     },
+    access: {
+      description: PAID_PLAN_NOTE,
+      billingUrl: BILLING_URL,
+    },
     rateLimits: {
-      description: 'Rate limits vary by tier',
-      tiers: [
-        ...Object.values(API_TIER_CONFIG).map((plan) => ({
-          tier: plan.tier,
-          requestsPerMinute: plan.requestsPerMinute,
-          monthlyRequests: plan.monthlyRequests === -1 ? 'unlimited' : plan.monthlyRequests,
-        })),
-      ],
+      description: 'Enhancement quotas and rate limits by paid plan',
+      tiers: getAvailablePlans().map((plan) => ({
+        tier: plan.tier,
+        requestsPerMinute: plan.requestsPerMinute,
+        monthlyRequests: plan.monthlyRequests === -1 ? 'unlimited' : plan.monthlyRequests,
+      })),
     },
     headers: {
       request: {
