@@ -33,7 +33,7 @@ import {
   type VerifiedTransaction,
 } from '../../src/services/appleStoreService.js';
 import { getSubscriptionInfo } from '../../src/services/subscriptionService.js';
-import { updateApiSubscription } from '../../src/services/apiSubscriptionService.js';
+import { API_TIER_CONFIG, updateApiSubscription } from '../../src/services/apiSubscriptionService.js';
 
 const users: string[] = [];
 const developers: string[] = [];
@@ -307,7 +307,7 @@ describe('API billing webhooks', () => {
     expect(
       (await prisma.apiSubscription.findUniqueOrThrow({ where: { developerId: d.id } }))
         .includedRequests,
-    ).toBe(5100);
+    ).toBe(API_TIER_CONFIG.API_FREE.monthlyRequests + 5000);
   });
   it('rejects invalid Stripe signatures before processing', async () => {
     expect(
