@@ -23,6 +23,8 @@ export interface AuthResult {
     name: string | null;
     avatarUrl: string | null;
     isPremium: boolean;
+    /** Lowercase UUID; iOS passes it to StoreKit as .appAccountToken. */
+    appAccountToken: string;
   };
   accessToken: string;
   refreshToken: string;
@@ -188,6 +190,7 @@ export async function authenticateWithApple(
       name: result.user.name,
       avatarUrl: result.user.avatarUrl,
       isPremium: result.user.isPremium,
+      appAccountToken: result.user.appAccountToken,
     },
     ...result.tokens,
   };
@@ -278,6 +281,7 @@ export async function authenticateWithGoogle(
       name: user.name,
       avatarUrl: user.avatarUrl,
       isPremium: user.isPremium,
+      appAccountToken: user.appAccountToken,
     },
     ...tokens,
   };
@@ -367,6 +371,7 @@ export async function refreshTokens(refreshToken: string): Promise<AuthResult> {
       name: session.user.name,
       avatarUrl: session.user.avatarUrl,
       isPremium: session.user.isPremium,
+      appAccountToken: session.user.appAccountToken,
     },
     ...tokens,
   };

@@ -11,6 +11,45 @@ export const userRouter = Router();
 userRouter.use(authenticate);
 
 // ============================================================================
+// CURRENT USER
+// ============================================================================
+
+userRouter.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        isPremium: true,
+        premiumUntil: true,
+        promptCount: true,
+        customInstructions: true,
+        appAccountToken: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({ user });
+  } catch (error) {
+    logger.error({ err: error, userId: req.user?.id }, 'Get current user error');
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+// ============================================================================
 // UPDATE PROFILE
 // ============================================================================
 
@@ -39,6 +78,7 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
         avatarUrl: true,
         isPremium: true,
         customInstructions: true,
+        appAccountToken: true,
       },
     });
 

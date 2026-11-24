@@ -201,6 +201,7 @@ authRouter.get(
           isPremium: true,
           premiumUntil: true,
           promptCount: true,
+          appAccountToken: true,
           createdAt: true,
         },
       });
