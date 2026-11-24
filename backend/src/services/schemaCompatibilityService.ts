@@ -138,9 +138,23 @@ const EXPECTED_COLUMNS: ReadonlyArray<{ table: string; column: string }> = [
   { table: 'Prompt', column: 'rootPromptId' },
   { table: 'ThreadTurn', column: 'imageAttachment' },
   { table: 'Template', column: 'modality' },
+  // Hard paywall (20261124000000): entitlement reads and appAccountToken.
+  { table: 'Subscription', column: 'environment' },
+  { table: 'User', column: 'appAccountToken' },
+  // Usage ledger (20261124020000) and Apple token revocation (20261124040000).
+  { table: 'DailyUsage', column: 'supportReplyCount' },
+  { table: 'User', column: 'appleRefreshToken' },
+  // Durable chat reports (20261124030000).
+  { table: 'ChatMessageReport', column: 'messageContent' },
 ];
 
-const EXPECTED_TABLES: ReadonlyArray<string> = ['SharedPrompt'];
+const EXPECTED_TABLES: ReadonlyArray<string> = [
+  'SharedPrompt',
+  'ChatConversation',
+  'ChatMessage',
+  'ChatMessageReport',
+  'AppleTokenRevocation',
+];
 
 export interface SchemaAssertionResult {
   // false only when the information_schema probes themselves failed (DB
