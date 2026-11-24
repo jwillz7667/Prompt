@@ -108,6 +108,8 @@ model User {
   platformSettings     UserPlatformSettings[]
   sandboxTests         SandboxTest[]
   appStoreTransactions AppStoreTransaction[]
+  chatConversations    ChatConversation[]
+  chatMessageReports   ChatMessageReport[]
 
   // Indexes for performance at scale
   @@index([email])
@@ -1059,4 +1061,78 @@ model PlatformTestResult {
 
   @@unique([testId, platform])
   @@index([testId])
+}
+
+// ============================================================================
+// GENERAL-PURPOSE CHAT
+// ============================================================================
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+enum ChatMessageStatus {
+  COMPLETE
+  STOPPED
+  TRUNCATED
+  FAILED
+}
+
+enum ChatReportReason {
+  HARMFUL
+  INACCURATE
+  INAPPROPRIATE
+  OTHER
+}
+
+model ChatConversation {
+  id                 String        @id @default(cuid())
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title              String        @default("New chat")
+  systemPrompt       String?       @db.Text
+  lastMessagePreview String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  messages           ChatMessage[]
+
+  // Serves the cursor-paginated conversation list (WHERE userId ORDER BY updatedAt DESC, id DESC).
+  @@index([userId, updatedAt(sort: Desc), id])
+}
+
+model ChatMessage {
+  id              String              @id @default(cuid())
+  conversationId  String
+  conversation    ChatConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            ChatRole
+  content         String              @db.Text
+  status          ChatMessageStatus   @default(COMPLETE)
+  // Client idempotency key for user messages; NULLs never collide in the unique index.
+  clientMessageId String?
+  inputTokens     Int?
+  outputTokens    Int?
+  // Internal attribution only; never serialized to clients.
+  provider        String?
+  model           String?
+  createdAt       DateTime            @default(now())
+  reports         ChatMessageReport[]
+
+  @@unique([conversationId, clientMessageId])
+  @@index([conversationId, createdAt, id])
+}
+
+model ChatMessageReport {
+  id        String           @id @default(cuid())
+  messageId String
+  message   ChatMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason    ChatReportReason
+  details   String?          @db.Text
+  createdAt DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([messageId])
+  @@index([userId])
 }
