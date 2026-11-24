@@ -120,7 +120,7 @@ function enforceSessionLimit(session: SessionRecord): void {
   session.requestTimestamps = pruneTimestamps(session.requestTimestamps, now)
 
   if (session.requestTimestamps.length >= maxRequestsPerWindow) {
-    throw new Error('Rate limited for this ChatGPT session. Please wait a moment and try again.')
+    throw new Error('Too many requests in this session. Please wait a moment and try again.')
   }
 
   session.requestTimestamps.push(now)
