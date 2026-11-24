@@ -2,146 +2,157 @@ import Foundation
 
 // MARK: - Subscription Tier
 
-enum SubscriptionTier: String, Codable, CaseIterable {
+/// Server tier label. Under the hard paywall there is a single paid
+/// entitlement (PREMIUM); access decisions use `EntitlementState`, never the
+/// tier alone.
+nonisolated enum SubscriptionTier: String, Codable, CaseIterable, Sendable {
     case free = "FREE"
+    /// Never produced by decoding: legacy "PRO" decodes as `.premium`
+    /// because grandfathered Pro subscribers keep full access. The case only
+    /// remains so existing `switch` sites outside this module keep compiling
+    /// until they are collapsed onto the single entitlement.
     case pro = "PRO"
     case premium = "PREMIUM"
+
+    init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw.uppercased() {
+        case "PREMIUM", "PRO":
+            self = .premium
+        default:
+            self = .free
+        }
+    }
 
     var displayName: String {
         switch self {
         case .free: return "Free"
-        case .pro: return "Pro"
-        case .premium: return "Premium"
-        }
-    }
-
-    var promptQuality: PromptTier {
-        switch self {
-        case .free: return .basic
-        case .pro: return .standard
-        case .premium: return .advanced
+        case .pro, .premium: return "Premium"
         }
     }
 }
 
 // MARK: - Subscription Status
 
-enum SubscriptionStatus: String, Codable {
+nonisolated enum SubscriptionStatus: String, Codable, Sendable {
     case active = "ACTIVE"
     case expired = "EXPIRED"
     case canceled = "CANCELED"
     case gracePeriod = "GRACE_PERIOD"
+
+    /// Unknown statuses from a newer backend decode as `.expired` so an
+    /// unrecognised value can never grant access.
+    init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = SubscriptionStatus(rawValue: raw.uppercased()) ?? .expired
+    }
 
     var isActive: Bool {
         self == .active || self == .gracePeriod
     }
 }
 
-// MARK: - Prompt Tier (for meta-prompt quality)
+// MARK: - Entitlement State
 
-enum PromptTier: String, Codable {
-    case basic
-    case standard
-    case advanced
+/// Single source of truth for whether AI features may be used. `.unknown`
+/// means the app has not yet established entitlement and must not fail open.
+nonisolated enum EntitlementState: Equatable, Sendable {
+    case unknown
+    case entitled(expiresAt: Date?, isTrialing: Bool)
+    case notEntitled
 
-    var displayName: String {
-        switch self {
-        case .basic: return "Basic"
-        case .standard: return "Standard"
-        case .advanced: return "Advanced"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .basic: return "Clear structure and basic prompting"
-        case .standard: return "RISEN framework + Chain-of-Thought"
-        case .advanced: return "All techniques including Tree-of-Thought"
-        }
-    }
-}
-
-// MARK: - Tier Features
-
-struct TierFeatures: Codable {
-    let promptQuality: String
-    let canExport: Bool
-    let maxTokensPerPrompt: Int
-
-    var promptTier: PromptTier {
-        PromptTier(rawValue: promptQuality) ?? .basic
+    var isEntitled: Bool {
+        if case .entitled = self { return true }
+        return false
     }
 }
 
 // MARK: - App Subscription Info (renamed to avoid conflict with StoreKit.SubscriptionInfo)
 
-struct AppSubscriptionInfo: Codable, Sendable {
+nonisolated struct AppSubscriptionInfo: Codable, Sendable, Equatable {
     let tier: SubscriptionTier
     let status: SubscriptionStatus
     let expiresAt: Date?
     let isTrialing: Bool
     let trialEndsAt: Date?
-    let features: TierFeatures
+    let productId: String?
+    let isEntitled: Bool
 
-    var isActive: Bool {
-        status.isActive
+    /// The moment access ends: trial end for a trialing subscription,
+    /// otherwise the paid period end.
+    var accessEndsAt: Date? {
+        isTrialing ? (trialEndsAt ?? expiresAt) : expiresAt
     }
 
-    var daysUntilExpiry: Int? {
-        guard let expiresAt = expiresAt else { return nil }
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.day], from: Date(), to: expiresAt)
-        return components.day
+    /// Whether this snapshot may still grant access at `date`. Used for the
+    /// offline fallback: a cached snapshot whose period has ended never
+    /// grants access, and one without an end date is not trusted offline.
+    func grantsAccess(at date: Date) -> Bool {
+        guard isEntitled, let accessEndsAt else { return false }
+        return accessEndsAt > date
     }
 
-    var trialDaysRemaining: Int? {
-        guard isTrialing, let trialEndsAt = trialEndsAt else { return nil }
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.day], from: Date(), to: trialEndsAt)
-        return max(0, components.day ?? 0)
+    init(
+        tier: SubscriptionTier,
+        status: SubscriptionStatus,
+        expiresAt: Date?,
+        isTrialing: Bool,
+        trialEndsAt: Date?,
+        productId: String?,
+        isEntitled: Bool
+    ) {
+        self.tier = tier
+        self.status = status
+        self.expiresAt = expiresAt
+        self.isTrialing = isTrialing
+        self.trialEndsAt = trialEndsAt
+        self.productId = productId
+        self.isEntitled = isEntitled
+    }
+
+    init(response: SubscriptionResponse, isEntitled: Bool, productId: String?) {
+        self.init(
+            tier: response.tier,
+            status: response.status,
+            expiresAt: ServerDate.parse(response.expiresAt),
+            isTrialing: response.isTrialing ?? false,
+            trialEndsAt: ServerDate.parse(response.trialEndsAt),
+            productId: productId ?? response.productId,
+            isEntitled: isEntitled
+        )
+    }
+
+    var entitlementState: EntitlementState {
+        isEntitled ? .entitled(expiresAt: accessEndsAt, isTrialing: isTrialing) : .notEntitled
     }
 }
 
 // MARK: - Usage Info
 
-struct UsageInfo: Codable {
-    let dailyPromptsUsed: Int
-    let dailyPromptsLimit: Int
-    let canCreatePrompt: Bool
-    let maxModeUsedToday: Int?
-    let maxModeDailyLimit: Int?
+/// Optional usage counters still reported by the status endpoint. They are
+/// informational only; access is governed by `EntitlementState`.
+nonisolated struct UsageInfo: Codable, Sendable {
     let maxModeRemaining: Int?
-
-    var isUnlimited: Bool {
-        dailyPromptsLimit == -1
-    }
-
-    var remainingPrompts: Int {
-        if isUnlimited { return Int.max }
-        return max(0, dailyPromptsLimit - dailyPromptsUsed)
-    }
-
-    var usagePercentage: Double {
-        if isUnlimited { return 0 }
-        guard dailyPromptsLimit > 0 else { return 1.0 }
-        return Double(dailyPromptsUsed) / Double(dailyPromptsLimit)
-    }
-
-    var maxModeHasUnlimitedAccess: Bool {
-        maxModeDailyLimit == -1 || maxModeRemaining == -1
-    }
 }
 
 // MARK: - Subscription Status Response
 
-struct SubscriptionStatusResponse: Codable {
+nonisolated struct SubscriptionStatusResponse: Decodable, Sendable {
     let subscription: SubscriptionResponse
-    let usage: UsageInfo
-    let features: TierFeatures
+    let usage: UsageInfo?
     let billingProvider: String?
+    let autoRenewEnabled: Bool?
+    /// Authoritative entitlement flag. Older backends omit it, in which case
+    /// entitlement is derived from tier and status.
+    let isEntitled: Bool?
+    let productId: String?
+
+    var resolvedIsEntitled: Bool {
+        isEntitled ?? subscription.isEntitled ?? subscription.impliesEntitlement
+    }
 }
 
-struct SubscriptionResponse: Codable {
+nonisolated struct SubscriptionResponse: Codable, Sendable {
     let tier: SubscriptionTier
     let status: SubscriptionStatus
     let expiresAt: String?
@@ -150,135 +161,65 @@ struct SubscriptionResponse: Codable {
     // throw and successful purchase activations register as failures.
     let isTrialing: Bool?
     let trialEndsAt: String?
+    let productId: String?
+    let isEntitled: Bool?
+
+    var impliesEntitlement: Bool {
+        tier != .free && status.isActive
+    }
 }
 
 // MARK: - Verify Purchase Response
 
-struct VerifyPurchaseResponse: Codable {
+nonisolated struct VerifyPurchaseResponse: Decodable, Sendable {
     let success: Bool
     let subscription: SubscriptionResponse?
-    let features: TierFeatures?
 
     /// A successful HTTP response alone does not establish an entitlement.
     var activationConfirmed: Bool {
-        success && subscription?.status.isActive == true
-            && subscription?.tier != .free && features != nil
+        guard success, let subscription else { return false }
+        return subscription.isEntitled ?? subscription.impliesEntitlement
     }
-}
-
-// MARK: - Trial Response
-
-struct TrialResponse: Codable {
-    let success: Bool
-    let trialEndDate: String?
-    let subscription: SubscriptionResponse?
-    let features: TierFeatures?
-    let error: String?
-}
-
-// MARK: - Trial Eligibility Response
-
-struct TrialEligibilityResponse: Codable {
-    let eligible: Bool
-    let trialDays: Int
-}
-
-// MARK: - Product Info (from backend)
-
-struct ProductInfo: Codable, Identifiable {
-    let productId: String
-    let tier: String
-    let name: String
-    let price: Double
-    let period: String
-    let savings: String?
-    let hasTrial: Bool?
-    let trialEligible: Bool?
-    let features: TierFeatureLimits
-
-    var id: String { productId }
-
-    var subscriptionTier: SubscriptionTier {
-        SubscriptionTier(rawValue: tier) ?? .free
-    }
-
-    var isAnnual: Bool {
-        period == "year"
-    }
-
-    var monthlyEquivalent: Double {
-        if isAnnual {
-            return price / 12.0
-        }
-        return price
-    }
-}
-
-struct TierFeatureLimits: Codable {
-    let dailyPrompts: Int
-    let promptQuality: String
-    let canExport: Bool
-    let maxTokensPerPrompt: Int
-
-    var isUnlimited: Bool {
-        dailyPrompts == -1
-    }
-}
-
-// MARK: - Products Response
-
-struct ProductsResponse: Codable {
-    let products: [ProductInfo]
-    let trialEligible: Bool
 }
 
 // MARK: - Restore Response
 
-struct RestoreResponse: Codable {
+nonisolated struct RestoreResponse: Decodable, Sendable {
     let success: Bool
     let restored: Bool
     let message: String?
     let subscription: SubscriptionResponse?
-    let features: TierFeatures?
 }
 
 // MARK: - Product IDs
 
-enum ProductID: String, CaseIterable {
+nonisolated enum ProductID: String, CaseIterable, Sendable {
+    case premiumMonthly = "com.promptomizer.premium.monthly"
+    // No longer sold. Kept so grandfathered subscribers' transactions are
+    // still recognised by entitlement checks and Restore Purchases.
     case proMonthly = "com.promptomizer.pro.monthly"
     case proAnnual = "com.promptomizer.pro.annual"
-    case premiumMonthly = "com.promptomizer.premium.monthly"
     case premiumAnnual = "com.promptomizer.premium.annual"
 
-    var tier: SubscriptionTier {
-        switch self {
-        case .proMonthly, .proAnnual: return .pro
-        case .premiumMonthly, .premiumAnnual: return .premium
-        }
-    }
+    /// The only product offered for purchase.
+    static let onSale: ProductID = .premiumMonthly
 
-    var isAnnual: Bool {
-        self == .proAnnual || self == .premiumAnnual
-    }
-
-    static var allProductIds: [String] {
-        allCases.map { $0.rawValue }
+    /// Every product whose transaction grants access (sold and grandfathered).
+    static var entitlementProductIds: Set<String> {
+        Set(allCases.map(\.rawValue))
     }
 }
 
-// MARK: - Quota Error
+// MARK: - Date Parsing
 
-struct QuotaError: Codable {
-    let error: String
-    let code: String
-    let message: String
-    let remainingQuota: Int?
-
-    var isQuotaExceeded: Bool {
-        code == "QUOTA_EXCEEDED"
-    }
-
-    var isFeatureLocked: Bool {
-        code == "FEATURE_LOCKED"
+nonisolated enum ServerDate {
+    static func parse(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) { return date }
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return standard.date(from: value)
     }
 }

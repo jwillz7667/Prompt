@@ -1,405 +1,286 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { LoadingState } from '@/components/shared/loading-state'
 import { useSubscription } from '@/lib/hooks/useSubscription'
-import { createStripeCheckout, createStripePortalSession } from '@/lib/api/subscriptions'
-import { toast } from '@/lib/stores/uiStore'
-import { cn } from '@/lib/utils/cn'
+import { useAuthStore } from '@/lib/stores/authStore'
 import {
-  Crown,
-  Check,
-  Zap,
-  Sparkles,
-  Shield,
-  Download,
-  Layers,
-  Rocket,
-  ExternalLink,
-} from 'lucide-react'
+  createStripeCheckout,
+  createStripePortalSession,
+  getBillingConfig,
+} from '@/lib/api/subscriptions'
+import {
+  APP_STORE_MANAGE_INSTRUCTIONS,
+  PREMIUM_PLAN,
+  PREMIUM_TRIAL_SUMMARY,
+  premiumRenewalTerms,
+} from '@/lib/billing/premium-plan'
+import { classifyCheckoutFailure, resolveUpgradeView } from '@/lib/billing/upgrade-view'
+import { toast } from '@/lib/stores/uiStore'
+import { Check, Crown, ExternalLink, Smartphone } from 'lucide-react'
 
-type BillingInterval = 'monthly' | 'annual'
-
-interface PlanFeature {
-  text: string
-  included: boolean
-  highlight?: boolean
-}
-
-interface Plan {
-  id: string
-  name: string
-  tier: 'PRO' | 'PREMIUM'
-  monthlyPrice: number
-  annualPrice: number
-  description: string
-  features: PlanFeature[]
-  popular?: boolean
-  icon: React.ReactNode
-}
-
-const plans: Plan[] = [
-  {
-    id: 'pro',
-    name: 'Pro',
-    tier: 'PRO',
-    monthlyPrice: 4.99,
-    annualPrice: 49.99,
-    description: 'Perfect for regular users',
-    icon: <Zap className="h-6 w-6" />,
-    features: [
-      { text: '100 daily prompts', included: true, highlight: true },
-      { text: 'Standard quality enhancements', included: true },
-      { text: 'Up to 8K tokens per prompt', included: true },
-      { text: 'Export to PDF/TXT/MD', included: true },
-      { text: 'Priority support', included: true },
-      { text: 'Deep Think mode', included: false },
-    ],
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    tier: 'PREMIUM',
-    monthlyPrice: 14.99,
-    annualPrice: 149.99,
-    description: 'For power users and teams',
-    icon: <Crown className="h-6 w-6" />,
-    popular: true,
-    features: [
-      { text: 'Unlimited daily prompts', included: true, highlight: true },
-      { text: 'Advanced quality enhancements', included: true },
-      { text: 'Up to 64K tokens per prompt', included: true },
-      { text: 'Export to PDF/TXT/MD', included: true },
-      { text: 'Priority support', included: true },
-      { text: 'Deep Think mode', included: true, highlight: true },
-    ],
-  },
-]
-
-// Stripe price IDs - replace with actual production IDs
-const PRICE_IDS = {
-  pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY || '',
-  pro_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL || '',
-  premium_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_MONTHLY || '',
-  premium_annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM_ANNUAL || '',
+function formatDate(value: string | null): string | null {
+  return value ? new Date(value).toLocaleDateString() : null
 }
 
 export default function UpgradePage() {
-  const [interval, setInterval] = useState<BillingInterval>('annual')
-  const [loading, setLoading] = useState<string | null>(null)
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuthStore()
+  const { subscription, billingProvider, isEntitled, trialEligible, hasLoaded, error, refetch } =
+    useSubscription()
+  const [isCheckoutAvailable, setIsCheckoutAvailable] = useState<boolean | null>(null)
+  const [pendingAction, setPendingAction] = useState<'checkout' | 'manage' | null>(null)
 
-  const { subscription, billingProvider, trialEligible, startTrial } = useSubscription()
-
-  const currentTier = subscription.tier
-  const isTrialing = subscription.isTrialing
-
-  const handleStartTrial = useCallback(async () => {
-    setLoading('trial')
-    try {
-      const success = await startTrial()
-      if (success) {
-        toast.success('Trial started!', 'Enjoy 7 days of Premium features')
-      } else {
-        toast.error('Failed to start trial')
-      }
-    } catch {
-      toast.error('Failed to start trial')
-    } finally {
-      setLoading(null)
-    }
-  }, [startTrial])
-
-  const handleSubscribe = useCallback(
-    async (plan: Plan) => {
-      setLoading(plan.id)
-      try {
-        const priceId =
-          plan.tier === 'PRO'
-            ? interval === 'monthly'
-              ? PRICE_IDS.pro_monthly
-              : PRICE_IDS.pro_annual
-            : interval === 'monthly'
-              ? PRICE_IDS.premium_monthly
-              : PRICE_IDS.premium_annual
-
-        if (!priceId) throw new Error('This plan is not available yet. Please contact support.')
-
-        const { url } = await createStripeCheckout({
-          priceId,
-          successUrl: `${window.location.origin}/dashboard?checkout=success`,
-          cancelUrl: `${window.location.origin}/upgrade?checkout=canceled`,
-        })
-
-        window.location.href = url
-      } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : (err as { error?: string })?.error || 'Failed to start checkout',
-        )
-        setLoading(null)
-      }
-    },
-    [interval],
-  )
-
-  const handleManageSubscription = useCallback(async () => {
-    setLoading('manage')
-    try {
-      const { url } = await createStripePortalSession()
-      window.location.href = url
-    } catch {
-      toast.error('Failed to open billing portal')
-      setLoading(null)
+  useEffect(() => {
+    let isCurrent = true
+    getBillingConfig()
+      .then((config) => isCurrent && setIsCheckoutAvailable(config.isCheckoutAvailable))
+      // The checkout call reports BILLING_NOT_CONFIGURED itself; an unreachable
+      // config route should not hide the offer.
+      .catch(() => isCurrent && setIsCheckoutAvailable(true))
+    return () => {
+      isCurrent = false
     }
   }, [])
 
+  const view = resolveUpgradeView({
+    isAuthenticated,
+    isAuthLoading,
+    hasLoadedSubscription: hasLoaded,
+    subscriptionError: error,
+    isEntitled,
+    isTrialing: subscription.isTrialing,
+    billingProvider: billingProvider ?? null,
+    trialEligible,
+    isCheckoutAvailable,
+  })
+
+  const handleFailure = useCallback(
+    async (failure: unknown) => {
+      const outcome = classifyCheckoutFailure(failure)
+      switch (outcome.kind) {
+        case 'unavailable':
+          setIsCheckoutAvailable(false)
+          break
+        case 'already_subscribed':
+          toast.info('You already have Premium', 'Loading your subscription details.')
+          await refetch()
+          break
+        case 'sign_in':
+          toast.error('Please sign in again')
+          break
+        case 'message':
+          toast.error(outcome.message)
+          break
+      }
+    },
+    [refetch],
+  )
+
+  const handleSubscribe = useCallback(async () => {
+    setPendingAction('checkout')
+    try {
+      const { url } = await createStripeCheckout()
+      window.location.href = url
+    } catch (failure) {
+      await handleFailure(failure)
+      setPendingAction(null)
+    }
+  }, [handleFailure])
+
+  const handleManage = useCallback(async () => {
+    setPendingAction('manage')
+    try {
+      const portal = await createStripePortalSession()
+      if (portal.provider === 'appstore') {
+        toast.info('Managed by the App Store', portal.instructions)
+        setPendingAction(null)
+        return
+      }
+      window.location.href = portal.url
+    } catch (failure) {
+      await handleFailure(failure)
+      setPendingAction(null)
+    }
+  }, [handleFailure])
+
+  if (view.kind === 'loading') return <LoadingState message="Loading your plan..." />
+
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
-      {/* Header */}
+    <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Upgrade Your Experience</h1>
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">{PREMIUM_PLAN.name}</h1>
         <p className="mx-auto mt-2 max-w-xl text-[var(--text-secondary)]">
-          Unlock the full potential of AI prompt enhancement with more prompts, better quality, and
-          advanced features.
+          One plan with everything: the prompt optimizer and the AI chat assistant, on the web and
+          in the iOS app.
         </p>
       </div>
 
-      {/* Trial banner */}
-      {trialEligible && currentTier === 'FREE' && !isTrialing && (
-        <Card className="border-brand-indigo/20 bg-brand-indigo/10 dark:border-brand-cyan/20 dark:bg-brand-cyan/10">
-          <CardContent className="flex flex-col items-center justify-between gap-4 p-6 sm:flex-row">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/20 dark:bg-brand-cyan/20">
-                <Rocket className="h-6 w-6 text-brand-indigo dark:text-brand-cyan" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-[var(--text-primary)]">
-                  Try Premium Free for 7 Days
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  No credit card required. Experience all Premium features.
-                </p>
-              </div>
-            </div>
-            <Button variant="cyan" onClick={handleStartTrial} isLoading={loading === 'trial'}>
-              Start Free Trial
+      {view.kind === 'signed_out' && (
+        <Card>
+          <CardContent className="space-y-4 p-6 text-center">
+            <p className="text-[var(--text-primary)]">Sign in to start your free trial.</p>
+            <Link href="/login">
+              <Button variant="cyan">Sign in</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {view.kind === 'status_error' && (
+        <Card>
+          <CardContent className="space-y-4 p-6 text-center">
+            <p className="text-[var(--text-primary)]">We couldn&apos;t load your subscription.</p>
+            <p className="text-sm text-[var(--text-secondary)]">{view.message}</p>
+            <Button variant="secondary" onClick={() => void refetch()}>
+              Try again
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Current subscription */}
-      {currentTier !== 'FREE' && (
+      {view.kind === 'subscribed' && (
         <Card className="border-brand-indigo/20">
-          <CardContent className="flex flex-col items-center justify-between gap-4 p-6 sm:flex-row">
-            <div className="flex items-center gap-4">
-              <Badge
-                variant={currentTier === 'PREMIUM' ? 'premium' : 'pro'}
-                className="px-4 py-1.5 text-base"
-              >
-                {currentTier}
+          <CardContent className="space-y-4 p-6">
+            <div className="flex items-center gap-3">
+              <Badge variant="premium" className="px-3 py-1 text-sm">
+                Premium
               </Badge>
-              <div>
-                <p className="font-medium text-[var(--text-primary)]">
-                  {isTrialing ? 'Trial Active' : 'Current Plan'}
-                </p>
+              <p className="font-medium text-[var(--text-primary)]">
+                {view.isTrialing ? "You're on your free trial" : "You're subscribed"}
+              </p>
+            </div>
+            {subscription.expiresAt && (
+              <p className="text-sm text-[var(--text-secondary)]">
+                {view.isTrialing
+                  ? `Trial ends on ${formatDate(subscription.trialEndsAt ?? subscription.expiresAt)}`
+                  : subscription.autoRenewEnabled
+                    ? `Renews on ${formatDate(subscription.expiresAt)}`
+                    : `Access ends on ${formatDate(subscription.expiresAt)}`}
+              </p>
+            )}
+            {view.manageWith === 'stripe' && (
+              <Button
+                variant="secondary"
+                onClick={handleManage}
+                isLoading={pendingAction === 'manage'}
+                disabled={pendingAction !== null}
+                rightIcon={<ExternalLink className="h-4 w-4" />}
+              >
+                Manage subscription
+              </Button>
+            )}
+            {view.manageWith === 'appstore' && (
+              <div className="flex items-start gap-3 rounded-xl bg-[var(--bg-secondary)] p-4">
+                <Smartphone className="mt-0.5 h-5 w-5 flex-shrink-0 text-[var(--text-secondary)]" />
                 <p className="text-sm text-[var(--text-secondary)]">
-                  {subscription.expiresAt
-                    ? `${isTrialing ? 'Trial ends' : subscription.autoRenewEnabled ? 'Renews' : 'Access ends'} on ${new Date(subscription.expiresAt).toLocaleDateString()}`
-                    : 'Active subscription'}
+                  {APP_STORE_MANAGE_INSTRUCTIONS}
                 </p>
               </div>
-            </div>
-            <Button
-              variant="secondary"
-              onClick={handleManageSubscription}
-              isLoading={loading === 'manage'}
-              disabled={isTrialing && !billingProvider}
-              rightIcon={<ExternalLink className="h-4 w-4" />}
-            >
-              {billingProvider === 'appstore' ? 'Manage with Apple' : 'Manage Subscription'}
-            </Button>
+            )}
+            {view.manageWith === 'none' && (
+              <p className="text-sm text-[var(--text-secondary)]">
+                Questions about your access?{' '}
+                <Link href="/support" className="underline">
+                  Contact support
+                </Link>
+                .
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Billing toggle */}
-      <div className="flex justify-center">
-        <div className="inline-flex items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-1">
-          <button
-            onClick={() => setInterval('monthly')}
-            className={cn(
-              'rounded-lg px-4 py-2 text-sm font-medium transition-all',
-              interval === 'monthly'
-                ? 'bg-brand-indigo text-white'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-            )}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setInterval('annual')}
-            className={cn(
-              'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-              interval === 'annual'
-                ? 'bg-brand-indigo text-white'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-            )}
-          >
-            Annual
-            <Badge variant="cyan" className="text-[10px]">
-              Save 17%
-            </Badge>
-          </button>
-        </div>
-      </div>
+      {view.kind === 'unavailable' && (
+        <Card>
+          <CardContent className="space-y-3 p-6 text-center">
+            <p className="font-medium text-[var(--text-primary)]">
+              Web subscriptions aren&apos;t available right now
+            </p>
+            <p className="text-sm text-[var(--text-secondary)]">
+              You can start your {PREMIUM_PLAN.trialDays}-day free trial in the Promptomize iOS app,
+              then sign in here with the same account. Please check back later to subscribe on the
+              web.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Plans */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {plans.map((plan) => {
-          const price = interval === 'monthly' ? plan.monthlyPrice : plan.annualPrice
-          const monthlyEquivalent =
-            interval === 'annual' ? (plan.annualPrice / 12).toFixed(2) : null
-          const isCurrentPlan = currentTier === plan.tier
-          const canUpgrade =
-            currentTier === 'FREE' || (currentTier === 'PRO' && plan.tier === 'PREMIUM')
+      {view.kind === 'offer' && (
+        <Card className="relative overflow-hidden border-brand-indigo ring-2 ring-brand-indigo/20">
+          <CardContent className="space-y-6 p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo text-white dark:bg-brand-cyan dark:text-black">
+                <Crown className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <h2 className="text-xl font-bold text-[var(--text-primary)]">{PREMIUM_PLAN.name}</h2>
+            </div>
 
-          return (
-            <Card
-              key={plan.id}
-              className={cn(
-                'relative overflow-hidden',
-                plan.popular && 'border-brand-indigo ring-2 ring-brand-indigo/20',
-              )}
+            <div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-5xl font-bold text-[var(--text-primary)]">
+                  {PREMIUM_PLAN.priceLabel}
+                </span>
+                <span className="text-lg text-[var(--text-secondary)]">
+                  /{PREMIUM_PLAN.intervalLabel}
+                </span>
+              </div>
+              <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
+                {view.includesTrial
+                  ? PREMIUM_TRIAL_SUMMARY
+                  : `${PREMIUM_PLAN.priceLabel}/${PREMIUM_PLAN.intervalLabel}, cancel anytime`}
+              </p>
+            </div>
+
+            <ul className="space-y-3">
+              {PREMIUM_PLAN.features.map((feature) => (
+                <li key={feature} className="flex items-center gap-3">
+                  <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-green-500/20 text-green-500">
+                    <Check className="h-3 w-3" aria-hidden="true" />
+                  </div>
+                  <span className="text-sm text-[var(--text-primary)]">{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <Button
+              variant="cyan"
+              size="lg"
+              className="w-full"
+              onClick={handleSubscribe}
+              isLoading={pendingAction === 'checkout'}
+              disabled={pendingAction !== null}
             >
-              {plan.popular && (
-                <div className="absolute right-0 top-0">
-                  <div className="rounded-bl-lg bg-brand-indigo px-3 py-1 text-xs font-medium text-white">
-                    Most Popular
-                  </div>
-                </div>
-              )}
+              {view.includesTrial
+                ? `Start ${PREMIUM_PLAN.trialDays}-day free trial`
+                : `Subscribe for ${PREMIUM_PLAN.priceLabel}/${PREMIUM_PLAN.intervalLabel}`}
+            </Button>
 
-              <CardContent className="p-6">
-                <div className="mb-4 flex items-center gap-3">
-                  <div
-                    className={cn(
-                      'flex h-12 w-12 items-center justify-center rounded-xl',
-                      plan.tier === 'PREMIUM'
-                        ? 'bg-brand-indigo text-white dark:bg-brand-cyan dark:text-black'
-                        : 'bg-brand-indigo/10 text-brand-indigo dark:bg-brand-cyan/10 dark:text-brand-cyan',
-                    )}
-                  >
-                    {plan.icon}
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-[var(--text-primary)]">{plan.name}</h3>
-                    <p className="text-sm text-[var(--text-secondary)]">{plan.description}</p>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-bold text-[var(--text-primary)]">
-                      ${price.toFixed(2)}
-                    </span>
-                    <span className="text-[var(--text-secondary)]">
-                      /{interval === 'monthly' ? 'mo' : 'yr'}
-                    </span>
-                  </div>
-                  {monthlyEquivalent && (
-                    <p className="text-sm text-[var(--text-tertiary)]">
-                      ${monthlyEquivalent}/mo billed annually
-                    </p>
-                  )}
-                </div>
-
-                <ul className="mb-6 space-y-3">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full',
-                          feature.included
-                            ? feature.highlight
-                              ? 'bg-brand-cyan/20 text-brand-cyan'
-                              : 'bg-green-500/20 text-green-500'
-                            : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)]',
-                        )}
-                      >
-                        <Check className="h-3 w-3" />
-                      </div>
-                      <span
-                        className={cn(
-                          'text-sm',
-                          feature.included
-                            ? 'text-[var(--text-primary)]'
-                            : 'text-[var(--text-tertiary)] line-through',
-                        )}
-                      >
-                        {feature.text}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Button
-                  variant={plan.popular ? 'cyan' : 'primary'}
-                  className="w-full"
-                  onClick={() => handleSubscribe(plan)}
-                  isLoading={loading === plan.id}
-                  disabled={isCurrentPlan || !canUpgrade || !!loading}
-                >
-                  {isCurrentPlan
-                    ? 'Current Plan'
-                    : canUpgrade
-                      ? `Upgrade to ${plan.name}`
-                      : 'Downgrade in Portal'}
-                </Button>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-
-      {/* Features comparison */}
-      <Card className="p-6">
-        <h3 className="mb-6 text-center text-lg font-semibold text-[var(--text-primary)]">
-          Why Upgrade?
-        </h3>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/10">
-              <Sparkles className="h-6 w-6 text-brand-indigo" />
-            </div>
-            <h4 className="mb-1 font-medium text-[var(--text-primary)]">Better Quality</h4>
-            <p className="text-sm text-[var(--text-secondary)]">
-              Access advanced AI models for superior prompt enhancement
+            <p className="text-xs leading-relaxed text-[var(--text-tertiary)]">
+              {premiumRenewalTerms(view.includesTrial)} Payments are processed securely by Stripe.
+              By subscribing you agree to the{' '}
+              <Link href="/terms" className="underline">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" className="underline">
+                Privacy Policy
+              </Link>
+              .
             </p>
-          </div>
-          <div className="text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cyan/10">
-              <Layers className="h-6 w-6 text-brand-cyan" />
-            </div>
-            <h4 className="mb-1 font-medium text-[var(--text-primary)]">More Prompts</h4>
-            <p className="text-sm text-[var(--text-secondary)]">
-              Enhance up to unlimited prompts daily with Premium
-            </p>
-          </div>
-          <div className="text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/10">
-              <Download className="h-6 w-6 text-green-500" />
-            </div>
-            <h4 className="mb-1 font-medium text-[var(--text-primary)]">Export & Share</h4>
-            <p className="text-sm text-[var(--text-secondary)]">
-              Export your enhanced prompts to PDF, TXT, or Markdown
-            </p>
-          </div>
-        </div>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {view.kind !== 'subscribed' && (
+        <p className="text-center text-xs text-[var(--text-tertiary)]">
+          Already subscribed in the iOS app? Sign in here with the same account and Premium unlocks
+          automatically.
+        </p>
+      )}
     </div>
   )
 }

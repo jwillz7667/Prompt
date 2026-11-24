@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
-import { useIsPro } from '@/lib/hooks/useSubscription'
+import { useIsEntitled } from '@/lib/hooks/useSubscription'
 import { toast } from '@/lib/stores/uiStore'
 import type { ToneType, OutputLength, AppearanceMode, DeepseekModel } from '@/lib/types/models'
 import { Palette, Sliders, Brain, RotateCcw, Crown, Sun, Moon, Monitor } from 'lucide-react'
@@ -51,7 +51,7 @@ const appearanceOptions: { value: AppearanceMode; label: string; icon: React.Rea
 ]
 
 export default function SettingsPage() {
-  const isPro = useIsPro()
+  const isPremium = useIsEntitled()
   const {
     selectedModel,
     setModel,
@@ -200,9 +200,9 @@ export default function SettingsPage() {
           <CardTitle className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-brand-indigo" />
             Advanced
-            {!isPro && (
-              <Badge variant="pro" className="text-[10px]">
-                PRO
+            {!isPremium && (
+              <Badge variant="premium" className="text-[10px]">
+                PREMIUM
               </Badge>
             )}
           </CardTitle>
@@ -213,20 +213,20 @@ export default function SettingsPage() {
             options={modelOptions}
             value={selectedModel}
             onChange={(value) => setModel(value as DeepseekModel)}
-            disabled={!isPro && selectedModel !== 'deepseek-chat'}
+            disabled={!isPremium && selectedModel !== 'deepseek-chat'}
           />
 
           <div className="flex items-center justify-between">
             <Switch
               checked={deepThinkEnabled}
               onChange={setDeepThink}
-              disabled={!isPro}
+              disabled={!isPremium}
               label="Deep Think Mode"
               description="Enable advanced reasoning for complex prompts"
             />
-            {!isPro && (
-              <Badge variant="pro" className="text-[10px]">
-                PRO
+            {!isPremium && (
+              <Badge variant="premium" className="text-[10px]">
+                PREMIUM
               </Badge>
             )}
           </div>
@@ -246,19 +246,20 @@ export default function SettingsPage() {
             value={maxTokens}
             onChange={setMaxTokens}
             min={1024}
-            max={isPro ? 65536 : 4096}
+            max={isPremium ? 65536 : 4096}
             step={1024}
             formatValue={(v) => `${(v / 1024).toFixed(0)}K`}
           />
 
-          {!isPro && (
+          {!isPremium && (
             <div className="rounded-xl border border-brand-indigo/20 bg-brand-indigo/5 p-4">
               <p className="text-sm text-[var(--text-secondary)]">
-                Upgrade to Pro to unlock advanced models, higher token limits, and Deep Think mode.
+                Start your free trial of Premium to unlock advanced models, higher token limits, and
+                Deep Think mode.
               </p>
               <a href="/upgrade">
                 <Button variant="primary" size="sm" className="mt-3">
-                  Upgrade to Pro
+                  Start free trial
                 </Button>
               </a>
             </div>

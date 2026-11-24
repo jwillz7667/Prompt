@@ -254,13 +254,15 @@ struct AnalyticsView: View {
         return "\(number)"
     }
 
+    /// Server model ids name third-party providers and must never be shown;
+    /// anything unrecognised gets a generic label.
     private func formatModelName(_ model: String) -> String {
         if model.contains("reasoner") {
             return "MAX"
         } else if model.contains("chat") {
             return "Standard"
         }
-        return model
+        return String(localized: "Other")
     }
 }
 

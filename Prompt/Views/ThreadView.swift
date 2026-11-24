@@ -24,7 +24,6 @@ struct ThreadView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(SettingsManager.self) private var settings
     @Environment(StoreKitManager.self) private var storeKit
-    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(PromptHistoryManager.self) private var historyManager
     @Environment(AuthManager.self) private var authManager
 
@@ -34,10 +33,10 @@ struct ThreadView: View {
     var onOpenThreads: (() -> Void)? = nil
     var onOpenProfile: (() -> Void)? = nil
     var onOpenHistory: (() -> Void)? = nil
-    var onOpenPaywall: (() -> Void)? = nil
+    /// Opens the subscription management screen (plan, usage, restore).
+    var onOpenSubscription: (() -> Void)? = nil
     var onStartNewConversation: (() -> Void)? = nil
 
-    @State private var showPaywallSheet = false
     @State private var showWorkspaceActions = false
     @State private var optimizeViewModel = OptimizeViewModel()
     @State private var optimizeSeed: OptimizeSeedPrompt?
@@ -58,18 +57,16 @@ struct ThreadView: View {
     private var accentColor: Color { Color.adaptiveButtonPrimary }
     private var brandSecondaryAccent: Color { colorScheme == .dark ? Color.brandPurple : Color.brandPurpleDark }
 
+    /// Everyone inside the app is subscribed; the server may still report
+    /// a MAX allowance for the day.
     private var canUseMaxMode: Bool {
-        guard authManager.isAuthenticated else {
-            return guestSession.quota.maxRemaining > 0
-        }
-
         guard let remaining = storeKit.usageInfo?.maxModeRemaining else { return true }
         return remaining != 0
     }
 
-    private var conversationMode: ThreadConversationMode {
-        settings.conversationMode
-    }
+    private static let maxModeUnavailableMessage = String(
+        localized: "You've used today's MAX prompts. Standard quality is still available."
+    )
 
     private var floatingControlSize: CGFloat { 44 }
 
@@ -82,7 +79,6 @@ struct ThreadView: View {
     }
 
     private var hasActiveComposerOptions: Bool {
-        settings.conversationMode != .optimize ||
         settings.selectedModality != .text ||
         settings.maxModeEnabled ||
         (settings.selectedModality == .audio && settings.selectedAudioSubModality != .speech)
@@ -109,21 +105,7 @@ struct ThreadView: View {
     }
 
     private var inputPlaceholder: String {
-        let modality = settings.selectedModality
-        if viewModel.hasConversation {
-            switch conversationMode {
-            case .optimize:
-                return "Follow up or refine..."
-            case .chat:
-                return chatFollowUpPlaceholder(for: modality)
-            }
-        }
-        switch conversationMode {
-        case .optimize:
-            return optimizePlaceholder(for: modality)
-        case .chat:
-            return chatPlaceholder(for: modality)
-        }
+        viewModel.hasConversation ? "Follow up or refine..." : optimizePlaceholder(for: settings.selectedModality)
     }
 
     private func optimizePlaceholder(for modality: ModalityType) -> String {
@@ -138,37 +120,8 @@ struct ThreadView: View {
         }
     }
 
-    private func chatPlaceholder(for modality: ModalityType) -> String {
-        switch modality {
-        case .image: return "Ask about images..."
-        case .video: return "Ask about video..."
-        case .code: return "Ask about code..."
-        case .audio: return "Ask about audio..."
-        case .music: return "Ask about music..."
-        case .threeD: return "Ask about 3D..."
-        case .text: return "Ask anything..."
-        }
-    }
-
-    private func chatFollowUpPlaceholder(for modality: ModalityType) -> String {
-        switch modality {
-        case .image: return "Refine style or details..."
-        case .video: return "Refine scene or pacing..."
-        case .code: return "Modify or extend..."
-        case .audio: return "Adjust mood or layers..."
-        case .music: return "Tweak genre or tempo..."
-        case .threeD: return "Adjust details..."
-        case .text: return "Continue chatting..."
-        }
-    }
-
     private var imagePromptPlaceholder: String {
-        switch conversationMode {
-        case .optimize:
-            return "Describe motion or style..."
-        case .chat:
-            return "Ask about this image..."
-        }
+        "Describe motion or style..."
     }
 
     var body: some View {
@@ -194,12 +147,6 @@ struct ThreadView: View {
             if let threadId {
                 await viewModel.loadThread(id: threadId)
             }
-        }
-        .sheet(isPresented: $showPaywallSheet) {
-            PaywallView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
         }
         .sheet(item: $optimizeSeed) { seed in
             OptimizeSheet(initialPrompt: seed.prompt, viewModel: optimizeViewModel)
@@ -229,8 +176,10 @@ struct ThreadView: View {
                 }
             }
 
-            Button("Plans & Usage") {
-                presentPaywall()
+            if let onOpenSubscription {
+                Button("Plans & Usage") {
+                    onOpenSubscription()
+                }
             }
         }
         .photosPicker(
@@ -265,7 +214,7 @@ struct ThreadView: View {
         }
         .onChange(of: viewModel.showPaywall) { _, shouldShow in
             guard shouldShow else { return }
-            presentPaywall()
+            onOpenSubscription?()
             viewModel.showPaywall = false
         }
         .onChange(of: viewModel.hasConversation) { _, hasConversation in
@@ -386,13 +335,7 @@ struct ThreadView: View {
     }
 
     private var currentSuggestions: [SuggestionItem] {
-        let modality = settings.selectedModality
-        switch conversationMode {
-        case .optimize:
-            return optimizeSuggestions(for: modality)
-        case .chat:
-            return chatSuggestions(for: modality)
-        }
+        optimizeSuggestions(for: settings.selectedModality)
     }
 
     private func optimizeSuggestions(for modality: ModalityType) -> [SuggestionItem] {
@@ -449,60 +392,6 @@ struct ThreadView: View {
         }
     }
 
-    private func chatSuggestions(for modality: ModalityType) -> [SuggestionItem] {
-        switch modality {
-        case .text:
-            return [
-                SuggestionItem(title: "Help me write", subtitle: "a compelling blog post", prompt: "Help me write a compelling blog post about an interesting topic"),
-                SuggestionItem(title: "Brainstorm ideas", subtitle: "for a project", prompt: "Help me brainstorm creative ideas for my project"),
-                SuggestionItem(title: "Improve my writing", subtitle: "make it more engaging", prompt: "How can I make my writing more engaging and persuasive?"),
-                SuggestionItem(title: "Prompt tips", subtitle: "write better prompts", prompt: "What are the best techniques for writing effective AI prompts?"),
-            ]
-        case .image:
-            return [
-                SuggestionItem(title: "Style guide", subtitle: "what makes great prompts", prompt: "What makes a great image prompt? Teach me the key elements"),
-                SuggestionItem(title: "Describe a scene", subtitle: "help me visualize it", prompt: "Help me describe a scene I'm imagining so I can turn it into an image prompt"),
-                SuggestionItem(title: "Prompt techniques", subtitle: "parameters and styles", prompt: "What are the best parameters and style keywords for image prompts?"),
-                SuggestionItem(title: "Style exploration", subtitle: "art styles and mediums", prompt: "What art styles, mediums, and techniques can I use in image prompts?"),
-            ]
-        case .video:
-            return [
-                SuggestionItem(title: "Camera movements", subtitle: "how to describe them", prompt: "Teach me how to describe camera movements and angles for video prompts"),
-                SuggestionItem(title: "Plan a scene", subtitle: "help me storyboard", prompt: "Help me plan and storyboard a video scene for my project"),
-                SuggestionItem(title: "Video tips", subtitle: "get the best results", prompt: "What are the best tips for writing effective AI video generation prompts?"),
-                SuggestionItem(title: "Transitions", subtitle: "smooth scene changes", prompt: "Suggest creative transition techniques between video scenes"),
-            ]
-        case .code:
-            return [
-                SuggestionItem(title: "Debug this", subtitle: "help me find the bug", prompt: "Help me debug an issue I'm having with my code"),
-                SuggestionItem(title: "Explain a pattern", subtitle: "architecture help", prompt: "Explain common code architecture patterns and when to use them"),
-                SuggestionItem(title: "Tech stack advice", subtitle: "pick the right tools", prompt: "Help me choose the right tech stack for my project"),
-                SuggestionItem(title: "Best practices", subtitle: "error handling tips", prompt: "What are best practices for error handling and resilient code?"),
-            ]
-        case .audio:
-            return [
-                SuggestionItem(title: "Describe a sound", subtitle: "help me capture it", prompt: "Help me describe a specific sound I'm imagining for an audio prompt"),
-                SuggestionItem(title: "Sound design tips", subtitle: "layering and mixing", prompt: "Teach me about sound design — layering, mixing, and spatial audio"),
-                SuggestionItem(title: "Music for video", subtitle: "suggest styles", prompt: "Suggest music and audio styles that would work well for my video project"),
-                SuggestionItem(title: "Audio techniques", subtitle: "layering and effects", prompt: "What techniques work best for different types of AI audio generation?"),
-            ]
-        case .music:
-            return [
-                SuggestionItem(title: "Write lyrics", subtitle: "for a song idea", prompt: "Help me write lyrics for a song I'm working on"),
-                SuggestionItem(title: "Genre guide", subtitle: "find the right style", prompt: "Help me find the right music genre and style for the mood I want"),
-                SuggestionItem(title: "Music tips", subtitle: "get better results", prompt: "What are the best tips and techniques for writing AI music prompts?"),
-                SuggestionItem(title: "Song structure", subtitle: "verses and hooks", prompt: "Teach me about song structure — how to build verses, choruses, and hooks"),
-            ]
-        case .threeD:
-            return [
-                SuggestionItem(title: "Describe a model", subtitle: "help me specify it", prompt: "Help me describe a 3D model I want to create with proper detail"),
-                SuggestionItem(title: "Materials guide", subtitle: "PBR and textures", prompt: "Teach me about PBR materials and textures for realistic 3D rendering"),
-                SuggestionItem(title: "3D tips", subtitle: "get better results", prompt: "What are the best tips for writing effective AI 3D model generation prompts?"),
-                SuggestionItem(title: "Topology advice", subtitle: "clean mesh structure", prompt: "Explain clean topology and mesh structure for 3D models"),
-            ]
-        }
-    }
-
     private var suggestionChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
@@ -524,7 +413,6 @@ struct ThreadView: View {
         }
         .padding(.bottom, 4)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: settings.selectedModality)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: conversationMode)
     }
 
     private func suggestionChip(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
@@ -602,14 +490,12 @@ struct ThreadView: View {
             AppBrandMark(size: 64, showsGlassBackdrop: false)
                 .accessibilityHidden(true)
 
-            Text(conversationMode == .chat ? "Ask anything" : "Turn a rough idea into a great prompt")
+            Text("Turn a rough idea into a great prompt")
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(conversationMode == .chat
-                 ? "Chat mode is a general AI assistant. Switch to Optimize to rewrite a prompt for another AI tool."
-                 : "Pick what you're making, describe it in plain words, and Promptomize rewrites it into a prompt you can paste into any AI tool.")
+            Text("Pick what you're making, describe it in plain words, and Promptomize rewrites it into a prompt you can paste into any AI tool. For questions and conversation, switch to Chat at the top.")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(textSecondary)
                 .multilineTextAlignment(.center)
@@ -627,7 +513,7 @@ struct ThreadView: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .scaleEffect(0.8)
-                Text(conversationMode == .chat ? "Thinking..." : "Optimizing...")
+                Text("Optimizing...")
                     .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(textSecondary)
             }
@@ -787,7 +673,7 @@ struct ThreadView: View {
                     toggleComposerDrawer(.modalities)
                 } label: {
                     let hasNonTextModality = settings.selectedModality != .text
-                    let isMaxOn = settings.maxModeEnabled && storeKit.hasActiveSubscription
+                    let isMaxOn = settings.maxModeEnabled
                     let buttonIcon = hasNonTextModality ? settings.selectedModality.icon : "slider.horizontal.3"
                     let buttonTint: Color = hasNonTextModality ? modalityAccentColor(for: settings.selectedModality) : textSecondary
                     let activeTint: Color = activeComposerDrawer == .modalities ? accentColor : buttonTint
@@ -938,20 +824,15 @@ struct ThreadView: View {
     private var modalityDrawerContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             drawerSectionHeader(
-                title: "Response style",
-                subtitle: "First choose how Promptomize should respond."
+                title: "Quality",
+                subtitle: "Choose how much reasoning goes into each rewrite."
             )
-
-            HStack(spacing: 10) {
-                responseModeCard(.optimize, tint: accentColor)
-                responseModeCard(.chat, tint: brandSecondaryAccent)
-            }
 
             maxModeCard
 
             drawerSectionHeader(
                 title: "Target output",
-                subtitle: "Then choose what kind of prompt you want to generate."
+                subtitle: "Choose what kind of prompt you want to generate."
             )
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
@@ -1069,14 +950,6 @@ struct ThreadView: View {
 
     // MARK: - Actions
 
-    private func presentPaywall() {
-        if let onOpenPaywall {
-            onOpenPaywall()
-        } else {
-            showPaywallSheet = true
-        }
-    }
-
     private func submitPrompt() {
         guard viewModel.canSend else { return }
 
@@ -1089,7 +962,8 @@ struct ThreadView: View {
         if settings.maxModeEnabled && !canUseMaxMode {
             settings.maxModeEnabled = false
             settings.savePreferences()
-            presentPaywall()
+            viewModel.errorMessage = Self.maxModeUnavailableMessage
+            viewModel.showError = true
             return
         }
 
@@ -1105,13 +979,6 @@ struct ThreadView: View {
         triggerHaptic(.light)
     }
 
-    private func applyConversationMode(_ mode: ThreadConversationMode) {
-        guard settings.conversationMode != mode else { return }
-        settings.conversationMode = mode
-        settings.savePreferences()
-        triggerHaptic(.light)
-    }
-
     private func applyAudioSubModality(_ subModality: AudioSubModalityType) {
         settings.selectedAudioSubModality = subModality
         settings.savePreferences()
@@ -1119,19 +986,9 @@ struct ThreadView: View {
     }
 
     private func toggleMaxMode() {
-        if !authManager.isAuthenticated && !settings.maxModeEnabled && guestSession.quota.maxRemaining == 0 {
-            if guestSession.quota.isExhausted {
-                guestSession.presentAuthenticationGate()
-                viewModel.errorMessage = "Sign in to keep using MAX mode and continue your chat."
-            } else {
-                viewModel.errorMessage = "Your guest MAX prompt is already used. Switch back to Standard or sign in to continue."
-            }
-            viewModel.showError = true
-            return
-        }
-
         if !settings.maxModeEnabled && !canUseMaxMode {
-            presentPaywall()
+            viewModel.errorMessage = Self.maxModeUnavailableMessage
+            viewModel.showError = true
             return
         }
 
@@ -1186,78 +1043,14 @@ struct ThreadView: View {
         }
     }
 
-    private func responseModeCard(_ mode: ThreadConversationMode, tint: Color) -> some View {
-        let isSelected = settings.conversationMode == mode
-
-        return Button {
-            applyConversationMode(mode)
-        } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Image(systemName: mode.icon)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(isSelected ? tint : textPrimary)
-
-                    Spacer(minLength: 8)
-
-                    Text(mode == .optimize ? "Rewrite" : "Direct")
-                        .font(.system(.caption2, design: .rounded, weight: .bold))
-                        .foregroundStyle(isSelected ? tint : textTertiary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background {
-                            Capsule()
-                                .fill(isSelected ? tint.opacity(colorScheme == .dark ? 0.18 : 0.14) : Color.white.opacity(colorScheme == .dark ? 0.06 : 0.4))
-                        }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(mode.displayName)
-                        .font(.system(.headline, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
-
-                    Text(mode.shortDescription)
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-            .padding(16)
-            .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(isSelected ? tint.opacity(colorScheme == .dark ? 0.16 : 0.10) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.22))
-                    }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(
-                        isSelected
-                            ? tint.opacity(colorScheme == .dark ? 0.82 : 0.42)
-                            : Color.white.opacity(colorScheme == .dark ? 0.12 : 0.28),
-                        lineWidth: isSelected ? 1.6 : 1
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
     private var maxModeCard: some View {
-        let isMaxLocked = !storeKit.hasActiveSubscription
-        let isMaxActive = settings.maxModeEnabled && !isMaxLocked
+        let isMaxActive = settings.maxModeEnabled
         let maxFillColor: Color = isMaxActive ? Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.08) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.22)
         let maxStrokeColor: Color = (isMaxActive ? Color.orange : accentColor).opacity(colorScheme == .dark ? 0.48 : 0.26)
         let maxStrokeWidth: CGFloat = isMaxActive ? 1.4 : 1
 
         return Button {
-            if isMaxLocked {
-                showPaywallSheet = true
-            } else {
-                toggleMaxMode()
-            }
+            toggleMaxMode()
         } label: {
             HStack(alignment: .center, spacing: 14) {
                 ZStack {
@@ -1266,56 +1059,32 @@ struct ThreadView: View {
 
                     Image(systemName: isMaxActive ? "flame.fill" : "bolt.fill")
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(isMaxLocked ? textTertiary : (isMaxActive ? Color.orange : accentColor))
+                        .foregroundStyle(isMaxActive ? Color.orange : accentColor)
                 }
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(isMaxLocked ? "MAX quality" : (isMaxActive ? "MAX quality" : "Standard quality"))
-                            .font(.system(.headline, design: .rounded, weight: .bold))
-                            .foregroundStyle(isMaxLocked ? textSecondary : textPrimary)
-
-                        if isMaxLocked {
-                            Text("PRO")
-                                .font(.system(size: 9, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background {
-                                    Capsule()
-                                        .fill(LinearGradient(
-                                            colors: [Color.brandPurple, Color.brandCyan],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ))
-                                }
-                        }
-                    }
+                    Text(isMaxActive ? "MAX quality" : "Standard quality")
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
 
                     Text(maxModeSupportingCopy)
                         .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(isMaxLocked ? textTertiary : textSecondary)
+                        .foregroundStyle(textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 8)
 
-                if isMaxLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(textTertiary)
-                } else {
-                    Text(isMaxActive ? "On" : "Off")
-                        .font(.system(.caption, design: .rounded, weight: .bold))
-                        .foregroundStyle(isMaxActive ? Color.adaptiveTextOnAccent : textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background {
-                            Capsule()
-                                .fill(isMaxActive ? Color.orange : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.46))
-                        }
-                }
+                Text(isMaxActive ? "On" : "Off")
+                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .foregroundStyle(isMaxActive ? Color.adaptiveTextOnAccent : textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background {
+                        Capsule()
+                            .fill(isMaxActive ? Color.orange : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.46))
+                    }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1339,10 +1108,6 @@ struct ThreadView: View {
     }
 
     private var maxModeSupportingCopy: String {
-        if !storeKit.hasActiveSubscription {
-            return "Upgrade to Pro or Premium to unlock deeper reasoning with MAX mode."
-        }
-
         if settings.maxModeEnabled {
             return "Deeper reasoning for harder rewrites and more complex prompts."
         }
@@ -1353,19 +1118,13 @@ struct ThreadView: View {
     private func modalityTargetCard(_ modality: ModalityType) -> some View {
         let tint = modalityAccentColor(for: modality)
         let isSelected = settings.selectedModality == modality
-        let isPremiumModality = modality != .text
-        let isLocked = isPremiumModality && !storeKit.hasActiveSubscription
-        let isActiveSelection = isSelected && !isLocked
+        let isActiveSelection = isSelected
         let cardFillColor: Color = isActiveSelection ? tint.opacity(colorScheme == .dark ? 0.14 : 0.10) : Color.white.opacity(colorScheme == .dark ? 0.03 : 0.18)
         let cardStrokeColor: Color = isActiveSelection ? tint.opacity(colorScheme == .dark ? 0.78 : 0.42) : Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24)
         let cardStrokeWidth: CGFloat = isActiveSelection ? 1.5 : 1
 
         return Button {
-            if isLocked {
-                showPaywallSheet = true
-            } else {
-                applyModality(modality)
-            }
+            applyModality(modality)
         } label: {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
@@ -1375,37 +1134,21 @@ struct ThreadView: View {
 
                         Image(systemName: modality.icon)
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(isLocked ? textTertiary : (isSelected ? tint : textPrimary))
+                            .foregroundStyle(isSelected ? tint : textPrimary)
                     }
                     .frame(width: 40, height: 40)
 
                     Spacer()
-
-                    if isLocked {
-                        Text("PRO")
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background {
-                                Capsule()
-                                    .fill(LinearGradient(
-                                        colors: [Color.brandPurple, Color.brandCyan],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ))
-                            }
-                    }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(modality.displayName)
                         .font(.system(.subheadline, design: .rounded, weight: .bold))
-                        .foregroundStyle(isLocked ? textSecondary : textPrimary)
+                        .foregroundStyle(textPrimary)
 
                     Text(modality.description)
                         .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(isLocked ? textTertiary : textSecondary)
+                        .foregroundStyle(textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

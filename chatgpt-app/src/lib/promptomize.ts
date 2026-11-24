@@ -7,6 +7,7 @@ import type {
   UsagePayload,
 } from '../shared/types.js'
 import { enrichModalityCapabilities } from '../shared/modalityDetails.js'
+import { LENGTH_OPTIONS, TONE_OPTIONS, toCustomInstructions } from '../shared/enhanceOptions.js'
 
 const capabilityItemSchema = z.object({
   id: z.string(),
@@ -14,10 +15,10 @@ const capabilityItemSchema = z.object({
   description: z.string().optional(),
 })
 
+// GET /public/models returns modalities, modes and limits; tones and lengths
+// are this app's own options (shared/enhanceOptions).
 const capabilitiesSchema = z.object({
   modalities: z.array(capabilityItemSchema),
-  tones: z.array(capabilityItemSchema),
-  lengths: z.array(capabilityItemSchema),
   limits: z.object({
     maxPromptLength: z.number().int(),
     maxTokens: z.number().int(),
@@ -78,7 +79,18 @@ async function readJsonOrThrow(response: Response): Promise<unknown> {
   }
 }
 
+// The service key must belong to a developer account on an active paid API
+// plan. When it lapses, ChatGPT users get a neutral message; the operator
+// sees API_PLAN_REQUIRED in the Promptomize developer portal and logs.
+const PLAN_REQUIRED_MESSAGE =
+  'Promptomize prompt enhancement is temporarily unavailable. Please try again later.'
+
 function buildErrorMessage(status: number, payload: unknown, fallback: string): string {
+  if (status === 402) {
+    console.error('Promptomize API key has no active paid API plan (API_PLAN_REQUIRED)')
+    return PLAN_REQUIRED_MESSAGE
+  }
+
   if (payload && typeof payload === 'object') {
     const maybeMessage = (payload as { message?: unknown; error?: unknown }).message
     if (typeof maybeMessage === 'string' && maybeMessage.length > 0) {
@@ -115,8 +127,10 @@ export async function fetchCapabilities(
 
   const parsed = capabilitiesSchema.parse(payload)
   const value: CapabilitiesPayload = {
-    ...parsed,
     modalities: enrichModalityCapabilities(parsed.modalities),
+    tones: [...TONE_OPTIONS],
+    lengths: [...LENGTH_OPTIONS],
+    limits: parsed.limits,
     fetchedAt: new Date().toISOString(),
   }
 
@@ -138,9 +152,7 @@ export async function enhancePrompt(
     body: JSON.stringify({
       prompt: request.prompt,
       modality: request.modality,
-      tone: request.tone,
-      length: request.length,
-      customInstructions: request.customInstructions,
+      customInstructions: toCustomInstructions(request),
       stream: false,
     }),
   })

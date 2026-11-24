@@ -284,7 +284,7 @@ export async function getMonthlyUsage(developerId: string): Promise<MonthlyUsage
       periodStart,
       periodEnd,
       totalRequests: 0,
-      includedRequests: 100, // Free tier
+      includedRequests: 0, // Free tier includes no enhancement requests
       overageRequests: 0,
       totalTokens: 0,
       estimatedCostCents: 0,
@@ -307,10 +307,12 @@ export async function getMonthlyUsage(developerId: string): Promise<MonthlyUsage
 
   const totalRequests = subscription.currentPeriodUsage;
   const totalTokens = usageRecords.reduce((sum, r) => sum + r.totalTokens, 0);
+  // A free account's balance is unspendable purchased credit, not included
+  // requests, and it is never billed for overage.
+  const isFreeTier = subscription.tier === 'API_FREE';
+  const includedRequests = isFreeTier ? 0 : subscription.includedRequests;
   const overageRequests =
-    subscription.includedRequests < 0
-      ? 0
-      : Math.max(0, totalRequests - subscription.includedRequests);
+    isFreeTier || includedRequests < 0 ? 0 : Math.max(0, totalRequests - includedRequests);
   const estimatedCostCents =
     overageRequests > 0 ? Math.ceil(overageRequests / 100) * subscription.overageRateCents : 0;
 
@@ -318,7 +320,7 @@ export async function getMonthlyUsage(developerId: string): Promise<MonthlyUsage
     periodStart: subscription.currentPeriodStart,
     periodEnd: subscription.currentPeriodEnd,
     totalRequests,
-    includedRequests: subscription.includedRequests,
+    includedRequests,
     overageRequests,
     totalTokens,
     estimatedCostCents,
@@ -348,9 +350,11 @@ export async function calculateBilling(
     },
   });
 
-  const includedRequests = subscription?.includedRequests || 100;
-  const overageRateCents = subscription?.overageRateCents || 1;
-  const overageRequests = includedRequests < 0 ? 0 : Math.max(0, requestCount - includedRequests);
+  const isFreeTier = !subscription || subscription.tier === 'API_FREE';
+  const includedRequests = isFreeTier ? 0 : subscription.includedRequests;
+  const overageRateCents = isFreeTier ? 0 : subscription.overageRateCents;
+  const overageRequests =
+    isFreeTier || includedRequests < 0 ? 0 : Math.max(0, requestCount - includedRequests);
   const overageCostCents =
     overageRequests > 0 ? Math.ceil(overageRequests / 100) * overageRateCents : 0;
 

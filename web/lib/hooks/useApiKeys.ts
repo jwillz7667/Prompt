@@ -5,6 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getDeveloperPlanAccess } from '@/lib/developer/plan-access'
 import {
   listApiKeys,
   getApiKey,
@@ -321,7 +322,7 @@ export function useCancelApiSubscription() {
  */
 export function useHasApiSubscription() {
   const { data } = useApiSubscriptionStatus()
-  return data?.tier !== 'API_FREE' && data?.status === 'ACTIVE'
+  return data ? !getDeveloperPlanAccess(data).isUpgradeRequired : false
 }
 
 /**

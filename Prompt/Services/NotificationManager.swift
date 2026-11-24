@@ -114,7 +114,7 @@ final class NotificationManager: NSObject, ObservableObject {
                 let environment: String
             }
 
-            struct EmptyResponse: Decodable {}
+            nonisolated struct EmptyResponse: Decodable {}
 
             let _: EmptyResponse = try await APIClient.shared.request(
                 "/users/device-token",
@@ -140,7 +140,7 @@ final class NotificationManager: NSObject, ObservableObject {
                 let deviceToken: String
             }
 
-            struct EmptyResponse: Decodable {}
+            nonisolated struct EmptyResponse: Decodable {}
 
             let _: EmptyResponse = try await APIClient.shared.request(
                 "/users/device-token",

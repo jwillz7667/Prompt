@@ -27,34 +27,28 @@ struct WhatsNewView: View {
     // Update these each release
     private let features: [WhatsNewFeature] = [
         WhatsNewFeature(
-            icon: "bolt.fill",
-            title: "Power Tools",
-            description: "Variations, Sandbox, and Workflows now live in one production-ready power tools grid after each enhancement.",
-            iconColor: .brandPurple
-        ),
-        WhatsNewFeature(
-            icon: "cpu",
-            title: "MAX Mode",
-            description: "MAX now folds in deep reasoning and stronger prompt planning for every modality without a separate Deep Think path.",
+            icon: "bubble.left.and.text.bubble.right.fill",
+            title: "AI Chat Assistant",
+            description: "Ask questions, draft and rewrite, brainstorm, or get help with code in a full chat alongside the prompt optimizer.",
             iconColor: .brandCyan
         ),
         WhatsNewFeature(
-            icon: "rectangle.on.rectangle",
-            title: "Inline Variations",
-            description: "Generate prompt alternatives with Standard, MAX, and modality-focused strategies, then swap in the best result instantly.",
-            iconColor: .purple
+            icon: "crown.fill",
+            title: "One Simple Plan",
+            description: "Promptomize Premium includes the prompt optimizer and the AI chat assistant. New subscribers can start with a free trial.",
+            iconColor: .brandPurple
         ),
         WhatsNewFeature(
-            icon: "sparkles",
-            title: "Redesigned Prompt Screen",
-            description: "Cleaner layout with progressive disclosure. Features appear when relevant, toolbar simplified to essentials.",
-            iconColor: .orange
-        ),
-        WhatsNewFeature(
-            icon: "doc.on.doc",
-            title: "Quick Access",
-            description: "Continue the same optimization thread with a cleaner message-style workspace and faster access to follow-up actions.",
+            icon: "icloud.fill",
+            title: "Your Chats, Everywhere",
+            description: "Conversations and results are saved to your account and sync across your devices.",
             iconColor: .green
+        ),
+        WhatsNewFeature(
+            icon: "exclamationmark.bubble.fill",
+            title: "Clearer Errors",
+            description: "If a reply is interrupted you'll see what happened and your message stays in the composer, ready to resend.",
+            iconColor: .orange
         )
     ]
 

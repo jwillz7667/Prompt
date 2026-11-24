@@ -2,10 +2,22 @@ import { Workflow, WorkflowStep, WorkflowExecution, WorkflowStatus, Prisma } fro
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import { enhancePrompt } from './deepseekService.js';
+import { reserveGenerationsForUser } from './subscriptionService.js';
 import { contextService } from './contextService.js';
 import Handlebars from 'handlebars';
 import { z } from 'zod';
 import pLimit from 'p-limit';
+
+/** Each step is at least one provider call, so one execute request is bounded by this. */
+export const MAX_WORKFLOW_STEPS = 10;
+
+/** A step stopped because the owner's daily generation allowance is spent. */
+export class WorkflowUsageLimitError extends Error {
+  constructor() {
+    super('Daily fair-use limit reached');
+    this.name = 'WorkflowUsageLimitError';
+  }
+}
 
 interface WorkflowCreateData {
   userId: string;
@@ -366,7 +378,7 @@ class WorkflowService {
         }
 
         // Execute step
-        const result = await this.executeStep(step, context, options);
+        const result = await this.executeStep(step, context, options, workflow.userId);
         stepResults.push(result);
 
         // Add result to context for next steps
@@ -415,6 +427,7 @@ class WorkflowService {
     step: WorkflowStep,
     context: Record<string, any>,
     options: WorkflowExecutionOptions,
+    userId: string,
   ): Promise<StepExecutionResult> {
     const startedAt = new Date();
 
@@ -431,8 +444,16 @@ class WorkflowService {
       const maxRetries = options.maxRetries || 3;
       let retryCount = 0;
       let lastError: Error | null = null;
+      let isSuccessful = false;
 
       while (retryCount < maxRetries) {
+        // Every attempt is a provider call, so every attempt is reserved
+        // against the owner's daily allowance; a failed call is returned.
+        const usage = await reserveGenerationsForUser(userId, 1);
+        if (!usage.isAllowed) {
+          lastError = new WorkflowUsageLimitError();
+          break;
+        }
         try {
           // No explicit model: deepseekService resolves the centralized
           // default (standard mode → thinking disabled).
@@ -442,6 +463,9 @@ class WorkflowService {
             temperature: 0.7,
             maxTokens: 4096,
             modality: 'text',
+          }).catch(async (error: unknown) => {
+            await usage.reservation.release();
+            throw error;
           });
 
           output = enhanceResult.enhancedPrompt;
@@ -458,6 +482,7 @@ class WorkflowService {
             output = this.formatOutput(output, step.outputFormat);
           }
 
+          isSuccessful = true;
           break; // Success, exit retry loop
         } catch (error: any) {
           lastError = error;
@@ -469,8 +494,8 @@ class WorkflowService {
         }
       }
 
-      if (retryCount >= maxRetries && lastError) {
-        throw lastError;
+      if (!isSuccessful) {
+        throw lastError ?? new Error('Workflow step failed');
       }
 
       const completedAt = new Date();
@@ -737,7 +762,13 @@ class WorkflowService {
   async importWorkflow(userId: string, workflowData: any): Promise<Workflow> {
     try {
       // Validate workflow data
-      if (!workflowData.name || !workflowData.steps || !Array.isArray(workflowData.steps)) {
+      if (
+        !workflowData.name ||
+        !workflowData.steps ||
+        !Array.isArray(workflowData.steps) ||
+        workflowData.steps.length === 0 ||
+        workflowData.steps.length > MAX_WORKFLOW_STEPS
+      ) {
         throw new Error('Invalid workflow data');
       }
 

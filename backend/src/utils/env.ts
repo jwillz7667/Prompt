@@ -17,7 +17,9 @@ interface EnvVarSpec {
   purpose: string;
 }
 
-// Without these, a core user-facing capability is broken.
+// Without these, a core user-facing capability is broken. Model provider keys
+// are not listed: any provider in LLM_PROVIDER_CHAIN may serve traffic, so the
+// gateway config (features/llm validate + /health) owns that check.
 const REQUIRED: EnvVarSpec[] = [
   {
     name: 'DATABASE_URL',
@@ -30,10 +32,6 @@ const REQUIRED: EnvVarSpec[] = [
   {
     name: 'JWT_REFRESH_SECRET',
     purpose: 'Signs/verifies refresh tokens — sessions cannot be renewed',
-  },
-  {
-    name: 'DEEPSEEK_API_KEY',
-    purpose: 'Upstream model provider — prompt enhancement returns errors without it',
   },
   {
     name: 'BACKEND_WEBHOOK_SECRET',

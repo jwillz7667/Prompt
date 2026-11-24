@@ -103,20 +103,6 @@ final class ScreenshotTests: XCTestCase {
             // Close templates
             app.swipeDown()
         }
-
-        // 9. Paywall (tap usage indicator if visible)
-        let usageIndicator = app.buttons.matching(identifier: "UsageIndicator").firstMatch
-        if usageIndicator.waitForExistence(timeout: 2) {
-            usageIndicator.tap()
-            sleep(1)
-            snapshot("08_Paywall")
-
-            // Close paywall
-            let closePaywall = app.buttons["Close"]
-            if closePaywall.waitForExistence(timeout: 2) {
-                closePaywall.tap()
-            }
-        }
     }
 
     // MARK: - Individual Screenshot Tests (for debugging)

@@ -11,17 +11,25 @@ import {
 import { getAvailableProviders, COMPARE_PROVIDERS } from '../services/providerAdapters.js';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
-  enforceQuota,
-  recordPromptUsage,
-  type RequestWithSubscription,
-} from '../middleware/quotaEnforcement.js';
+  getEntitlement,
+  requireEntitlement,
+  sendUsageLimitResponse,
+  type EntitledRequest,
+} from '../middleware/requireEntitlement.js';
 import { prisma } from '../utils/prisma.js';
 import { promptLogger } from '../utils/logger.js';
-import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
+import {
+  getSubscriptionInfo,
+  reserveGenerations,
+  trackStreamedGeneration,
+  type StreamedGenerationCharge,
+  type SubscriptionInfo,
+  type UsageReservation,
+} from '../services/subscriptionService.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 import {
   enhancePrompt,
   enhancePromptStream,
-  enhancePromptInThreadStream,
   getPromptTierFromSubscription,
 } from '../services/deepseekService.js';
 import { DEEPSEEK_V4_FLASH_MODEL } from '../services/deepseekModels.js';
@@ -31,13 +39,6 @@ import {
   getMaxModeQuota,
   recordMaxModeUsage,
 } from '../services/maxModeQuotaService.js';
-import {
-  ensureGuestQuotaAvailable,
-  getGuestQuota,
-  recordGuestPromptUsage,
-  type GuestQuotaSnapshot,
-} from '../services/guestQuotaService.js';
-import { resolveGuestIdentity } from '../services/anonymousSessionService.js';
 import {
   supportsPromptImageAttachmentColumn,
   resetSchemaCompatibilityCache,
@@ -216,166 +217,24 @@ const enhancePromptSchemaBase = z.object({
 
 const enhancePromptSchema = enhancePromptSchemaBase.superRefine(requirePromptOrImage);
 
-const guestEnhancePromptSchema = enhancePromptSchemaBase
-  .extend({
-    previousTurns: z
-      .array(
-        z.object({
-          originalPrompt: z.string().max(100000).default(''),
-          enhancedPrompt: z.string().min(1).max(500000),
-          imageAttachment: imageAttachmentSchema.optional(),
-        }),
-      )
-      .max(20)
-      .default([]),
-  })
-  .superRefine(requirePromptOrImage);
-
-function writeSSEEvent(res: Response, payload: Record<string, unknown>) {
-  res.write(`data: ${JSON.stringify(payload)}\n\n`);
-}
-
-function beginSSE(res: Response) {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-}
-
-function guestQuotaMessage(mode: 'standard' | 'max', quota: GuestQuotaSnapshot): string {
-  if (quota.standardRemaining === 0 && quota.maxRemaining === 0) {
-    return 'Sign in to keep optimizing prompts and unlock your 7-day Premium trial.';
-  }
-
-  if (mode === 'standard') {
-    return `Your 5 guest Standard prompts are used. You still have ${quota.maxRemaining} MAX prompt left.`;
-  }
-
-  return `Your guest MAX prompt is already used. You still have ${quota.standardRemaining} Standard prompts left.`;
-}
-
-promptRouter.post('/guest/enhance/stream', async (req, res): Promise<void> => {
-  beginSSE(res);
-
-  try {
-    const guestIdentity = resolveGuestIdentity(req);
-    const data = guestEnhancePromptSchema.parse(req.body);
-    const maxTokens = Math.min(data.maxTokens ?? 4096, data.mode === 'max' ? 6144 : 4096);
-
-    await ensureGuestQuotaAvailable(guestIdentity.quotaKey, data.mode);
-    const reservedQuota = await recordGuestPromptUsage(guestIdentity.quotaKey, data.mode);
-
-    await enhancePromptInThreadStream(
-      {
-        prompt: data.prompt,
-        tier: 'basic',
-        maxTokens,
-        mode: data.mode,
-        conversationMode: data.conversationMode,
-        modality: data.modality,
-        subModality: data.subModality,
-        customInstructions: data.customInstructions,
-        previousTurns: data.previousTurns,
-        imageAttachment: data.imageAttachment,
-      },
-      {
-        onToken: (token) => {
-          writeSSEEvent(res, { type: 'token', content: token });
-        },
-        onComplete: async (result) => {
-          writeSSEEvent(res, {
-            type: 'complete',
-            usage: {
-              inputTokens: result.inputTokens,
-              outputTokens: result.outputTokens,
-              totalTokens: result.totalTokens,
-              processingMs: result.processingMs,
-            },
-            imageAttachment: result.imageAttachment,
-            guestQuota: reservedQuota,
-            guestSession: guestIdentity.sessionToken,
-          });
-          res.write('data: [DONE]\n\n');
-          res.end();
-        },
-        onError: async (error) => {
-          const quota = await getGuestQuota(guestIdentity.quotaKey);
-          writeSSEEvent(res, {
-            type: 'error',
-            message: error.message,
-            guestQuota: quota,
-            guestSession: guestIdentity.sessionToken,
-          });
-          res.end();
-        },
-      },
-    );
-  } catch (error) {
-    let quota: GuestQuotaSnapshot | null = null;
-    let guestSession: string | undefined;
-    try {
-      const guestIdentity = resolveGuestIdentity(req);
-      quota = await getGuestQuota(guestIdentity.quotaKey);
-      guestSession = guestIdentity.sessionToken;
-    } catch {
-      quota = null;
-    }
-
-    if (error instanceof z.ZodError) {
-      writeSSEEvent(res, {
-        type: 'error',
-        message: 'Invalid request data.',
-        guestQuota: quota,
-        guestSession,
-      });
-      res.end();
-      return;
-    }
-
-    if (
-      error instanceof Error &&
-      (error.message === 'GUEST_STANDARD_LIMIT_REACHED' ||
-        error.message === 'GUEST_MAX_LIMIT_REACHED')
-    ) {
-      writeSSEEvent(res, {
-        type: 'error',
-        message: quota
-          ? guestQuotaMessage(
-              error.message === 'GUEST_STANDARD_LIMIT_REACHED' ? 'standard' : 'max',
-              quota,
-            )
-          : 'Guest prompt limit reached. Sign in to keep optimizing prompts.',
-        guestQuota: quota,
-        guestSession,
-      });
-      res.end();
-      return;
-    }
-
-    writeSSEEvent(res, {
-      type: 'error',
-      message: 'Failed to enhance prompt',
-      guestQuota: quota,
-      guestSession,
-    });
-    res.end();
-  }
+// The unauthenticated guest generation endpoint was removed: it minted fresh
+// quota whenever X-Guest-Session was omitted. Kept for one release so builds
+// that still call it get a clean sign-in error instead of a 404.
+promptRouter.post('/guest/enhance/stream', (_req, res: Response): void => {
+  res.status(401).json({ error: 'Sign in required', code: 'AUTH_REQUIRED' });
 });
 
 // All authenticated prompt routes require a user session
 promptRouter.use(authenticate);
 
 function buildSubscriptionPayload(
-  subscription: RequestWithSubscription['subscription'] | undefined,
+  subscription: SubscriptionInfo,
   maxModeQuota: Awaited<ReturnType<typeof getMaxModeQuota>>,
   incrementDailyPromptUsage = false,
 ) {
-  if (!subscription) return undefined;
-
   return {
     tier: subscription.tier,
-    promptQuality: subscription.promptQuality,
+    promptQuality: subscription.features.promptQuality,
     dailyPromptsUsed: subscription.dailyPromptsUsed + (incrementDailyPromptUsage ? 1 : 0),
     dailyPromptsLimit: subscription.dailyPromptsLimit,
     maxModeUsedToday: maxModeQuota.usedToday,
@@ -390,19 +249,26 @@ function buildSubscriptionPayload(
 
 promptRouter.post(
   '/enhance',
-  enforceQuota('enhance_prompt'),
-  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+  requireEntitlement,
+  async (req: EntitledRequest, res: Response): Promise<void> => {
+    // Held until the provider returns; released on any failure before that.
+    let pendingGeneration: UsageReservation | undefined;
     try {
-      if (!req.user) {
+      const subscriptionInfo = getEntitlement(req);
+      if (!req.user || !subscriptionInfo) {
         res.status(401).json({ error: 'Not authenticated' });
         return;
       }
 
       const data = enhancePromptSchema.parse(req.body);
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      pendingGeneration = usage.reservation;
       const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
-      // Get user's subscription to determine prompt quality tier
-      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       // Enforce subscription gates: MAX mode and non-text modalities require a subscription
       ensureModalityAvailable(data.modality, subscriptionInfo.tier);
@@ -431,6 +297,8 @@ promptRouter.post(
         subModality: data.subModality,
         imageAttachment: data.imageAttachment,
       });
+      // The answer exists: the reserved generation is owed from here on.
+      pendingGeneration = undefined;
 
       // Save the prompt to the database.
       // `select` constrains the RETURNING clause; without it Prisma asks the DB
@@ -490,8 +358,6 @@ promptRouter.post(
         },
       });
 
-      // Record usage for quota tracking
-      await recordUsage(req.user.id);
       const maxModeQuota =
         data.mode === 'max'
           ? await recordMaxModeUsage(req.user.id, subscriptionInfo.tier)
@@ -512,9 +378,10 @@ promptRouter.post(
           processingMs: result.processingMs,
         },
         imageAttachment: result.imageAttachment,
-        subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
+        subscription: buildSubscriptionPayload(subscriptionInfo, maxModeQuota, true),
       });
     } catch (error) {
+      await pendingGeneration?.release();
       promptLogger.error({ err: error }, 'Enhance prompt error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.issues });
@@ -529,8 +396,7 @@ promptRouter.post(
           res.status(403).json({
             error: 'Subscription required',
             code: 'MODALITY_REQUIRES_SUBSCRIPTION',
-            message:
-              'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.',
+            message: 'Upgrade to Premium to use image, video, audio, code, and 3D modalities.',
           });
           return;
         }
@@ -538,15 +404,18 @@ promptRouter.post(
           res.status(403).json({
             error: 'Subscription required',
             code: 'MAX_MODE_REQUIRES_SUBSCRIPTION',
-            message: 'Upgrade to Pro or Premium to use MAX mode.',
+            message: 'Upgrade to Premium to use MAX mode.',
             remainingQuota: 0,
           });
           return;
         }
-        res.status(500).json({ error: error.message });
-        return;
       }
-      res.status(500).json({ error: 'Failed to enhance prompt' });
+      const clientError = toClientStreamError(error);
+      res.status(clientErrorHttpStatus(clientError.code)).json({
+        error: clientError.message,
+        code: clientError.code,
+        retryable: clientError.retryable,
+      });
     }
   },
 );
@@ -557,15 +426,25 @@ promptRouter.post(
 
 promptRouter.post(
   '/enhance/stream',
-  enforceQuota('enhance_prompt'),
-  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+  requireEntitlement,
+  async (req: EntitledRequest, res: Response): Promise<void> => {
+    let charge: StreamedGenerationCharge | undefined;
     try {
-      if (!req.user) {
+      const subscriptionInfo = getEntitlement(req);
+      if (!req.user || !subscriptionInfo) {
         res.status(401).json({ error: 'Not authenticated' });
         return;
       }
 
       const data = enhancePromptSchema.parse(req.body);
+      // Reserved before any SSE byte so a spent allowance is a real HTTP status.
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      const generation = trackStreamedGeneration(usage.reservation);
+      charge = generation;
       const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
       // Set up SSE headers
@@ -574,9 +453,13 @@ promptRouter.post(
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
       res.flushHeaders();
+      // `res` close with an unfinished response is the disconnect signal
+      // (`req` close fires as soon as the body has been read).
+      const abortController = new AbortController();
+      res.on('close', () => {
+        if (!res.writableEnded) abortController.abort();
+      });
 
-      // Get user's subscription to determine prompt quality tier
-      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
 
       // Enforce subscription gates: MAX mode and non-text modalities require a subscription
@@ -608,27 +491,25 @@ promptRouter.post(
           imageAttachment: data.imageAttachment,
         },
         {
+          signal: abortController.signal,
           onToken: (token) => {
+            if (abortController.signal.aborted) return;
             res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+            generation.markDelivered();
           },
           onComplete: async (result) => {
-            // The model already produced a billable answer. Persistence is
-            // best-effort from here: a DB failure (schema drift, transient
-            // outage) must never turn a successful enhancement into a client
-            // error or a lost token stream. We log loudly and still deliver
-            // the result; the client treats a null promptId as "not saved".
-            // Charge the daily quota first and on its own. The model call has
-            // already happened, so the quota is owed even if persistence fails
-            // below — otherwise a DB error would silently hand the user a free
-            // enhancement (fail-open).
-            try {
-              await recordUsage(req.user!.id);
-            } catch (usageError) {
-              promptLogger.error(
-                { err: usageError, userId: req.user!.id },
-                'Failed to record daily usage for prompt',
-              );
+            // Client disconnected: nothing is persisted. Tokens it already
+            // received keep the reserved generation charged.
+            if (abortController.signal.aborted) {
+              await generation.settleWithoutCompletion();
+              return;
             }
+            // The model already produced a billable answer and the generation
+            // was reserved up front. Persistence is best-effort from here: a
+            // DB failure (schema drift, transient outage) must never turn a
+            // successful enhancement into a client error or a lost token
+            // stream. We log loudly and still deliver the result; the client
+            // treats a null promptId as "not saved".
 
             let maxModeQuota = maxModeQuotaBeforeUse;
             try {
@@ -739,37 +620,42 @@ promptRouter.post(
                   processingMs: result.processingMs,
                 },
                 imageAttachment: result.imageAttachment,
-                subscription: buildSubscriptionPayload(req.subscription, maxModeQuota, true),
+                subscription: buildSubscriptionPayload(subscriptionInfo, maxModeQuota, true),
               })}\n\n`,
             );
             res.write('data: [DONE]\n\n');
             res.end();
           },
-          onError: (error) => {
+          onError: async (error) => {
+            await generation.settleWithoutCompletion();
+            if (abortController.signal.aborted) return;
             promptLogger.error({ err: error }, 'Stream error');
-            res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+            res.write(`data: ${JSON.stringify(toClientStreamError(error))}\n\n`);
             res.end();
           },
         },
       );
     } catch (error) {
+      await charge?.settleWithoutCompletion();
       promptLogger.error({ err: error }, 'Stream enhance error');
+      if (error instanceof z.ZodError && !res.headersSent) {
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
+        return;
+      }
       if (error instanceof z.ZodError) {
         res.write(
-          `data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`,
+          `data: ${JSON.stringify({ type: 'error', code: 'INVALID_REQUEST', message: 'Invalid request data', retryable: false })}\n\n`,
         );
       } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
         res.write(
-          `data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`,
+          `data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Premium to use image, video, audio, code, and 3D modalities.', retryable: false })}\n\n`,
         );
       } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
         res.write(
-          `data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`,
+          `data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Premium to use MAX mode.', retryable: false })}\n\n`,
         );
       } else {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', message: 'Failed to enhance prompt' })}\n\n`,
-        );
+        res.write(`data: ${JSON.stringify(toClientStreamError(error))}\n\n`);
       }
       res.end();
     }
@@ -1326,26 +1212,24 @@ promptRouter.get(
 
 promptRouter.post(
   '/compare',
-  enforceQuota('enhance_prompt'),
-  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+  requireEntitlement,
+  async (req: EntitledRequest, res: Response): Promise<void> => {
+    let pendingGeneration: UsageReservation | undefined;
     try {
-      if (!req.user) {
+      const subscriptionInfo = getEntitlement(req);
+      if (!req.user || !subscriptionInfo) {
         res.status(401).json({ error: 'Not authenticated' });
-        return;
-      }
-
-      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
-      if (subscriptionInfo.tier === 'FREE') {
-        res.status(403).json({
-          error: 'Subscription required',
-          code: 'COMPARE_REQUIRES_SUBSCRIPTION',
-          message: 'Upgrade to Pro or Premium to compare providers side by side.',
-        });
         return;
       }
 
       const data = compareSchema.parse(req.body);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      pendingGeneration = usage.reservation;
 
       const results = await compareEnhancements({
         prompt: data.prompt,
@@ -1356,22 +1240,26 @@ promptRouter.post(
         customInstructions: data.customInstructions,
       });
 
-      // One compare call charges one enhancement from the user's quota
-      // (enforced above); token accounting still records real upstream usage.
+      // One compare call charges one generation, and only when at least one
+      // variant succeeded; token accounting still records real upstream usage.
       const totalTokens = results.reduce(
         (sum, r) => sum + (r.inputTokens ?? 0) + (r.outputTokens ?? 0),
         0,
       );
-      await Promise.all([
-        recordUsage(req.user.id),
-        prisma.user.update({
+      if (results.some((result) => result.status === 'ok')) {
+        pendingGeneration = undefined;
+        await prisma.user.update({
           where: { id: req.user.id },
           data: { tokenUsage: { increment: BigInt(totalTokens) } },
-        }),
-      ]);
+        });
+      } else {
+        await pendingGeneration.release();
+        pendingGeneration = undefined;
+      }
 
       res.json({ results });
     } catch (error) {
+      await pendingGeneration?.release();
       promptLogger.error({ err: error }, 'Compare providers error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.issues });
@@ -1384,7 +1272,12 @@ promptRouter.post(
         });
         return;
       }
-      res.status(500).json({ error: 'Failed to compare providers' });
+      const clientError = toClientStreamError(error);
+      res.status(clientErrorHttpStatus(clientError.code)).json({
+        error: clientError.message,
+        code: clientError.code,
+        retryable: clientError.retryable,
+      });
     }
   },
 );

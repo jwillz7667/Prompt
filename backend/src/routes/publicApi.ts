@@ -24,13 +24,14 @@ import {
 import { getApiSubscriptionInfo, getTierConfig } from '../services/apiSubscriptionService.js';
 import { getRecentUsage } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 
 export const publicApiRouter = Router();
 
-// All routes require API key authentication
+// All routes require API key authentication. Only routes that reach a model
+// run enforceApiQuota, so free accounts keep the read-only endpoints.
 publicApiRouter.use(apiKeyAuth);
 publicApiRouter.use(apiRateLimit);
-publicApiRouter.use(enforceApiQuota);
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -59,6 +60,7 @@ const historyQuerySchema = z.object({
 publicApiRouter.post(
   '/enhance',
   requirePermission('enhance'),
+  enforceApiQuota,
   async (req: ApiQuotaRequest, res: Response): Promise<void> => {
     const startTime = Date.now();
 
@@ -130,8 +132,16 @@ publicApiRouter.post(
               res.end();
             },
             onError: (error) => {
-              logger.error({ error, keyId: req.apiKey?.id }, 'Stream error');
-              res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+              logger.error({ err: error, keyId: req.apiKey?.id }, 'Stream error');
+              const clientError = toClientStreamError(error);
+              res.write(
+                `data: ${JSON.stringify({
+                  type: 'error',
+                  code: clientError.code,
+                  message: clientError.message,
+                  retryable: clientError.retryable,
+                })}\n\n`,
+              );
               res.end();
             },
           },
@@ -186,12 +196,21 @@ publicApiRouter.post(
         return;
       }
 
-      logger.error({ error, keyId: req.apiKey?.id, latencyMs }, 'Enhance error');
+      logger.error({ err: error, keyId: req.apiKey?.id, latencyMs }, 'Enhance error');
 
-      res.status(500).json({
+      // Gateway messages name upstream vendors and infrastructure; API
+      // customers only ever see the sanitized copy and a stable reason code.
+      const clientError = toClientStreamError(error);
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      res.status(clientErrorHttpStatus(clientError.code)).json({
         error: 'Enhancement failed',
         code: 'ENHANCEMENT_ERROR',
-        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+        reason: clientError.code,
+        message: clientError.message,
+        retryable: clientError.retryable,
       });
     }
   },
@@ -387,10 +406,9 @@ publicApiRouter.get('/recent', async (req: ApiKeyRequest, res: Response): Promis
 // HELPERS
 // ============================================================================
 
+// enforceApiQuota has already rejected API_FREE, so it never reaches here.
 function mapApiTierToPromptTier(tier: string): 'basic' | 'standard' | 'advanced' {
   switch (tier) {
-    case 'API_FREE':
-      return 'basic';
     case 'API_STARTER':
       return 'standard';
     case 'API_PRO':

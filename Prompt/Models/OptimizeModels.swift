@@ -26,31 +26,38 @@ enum TargetModelFamily: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
+    /// Raw values stay the wire contract; users only ever see the output
+    /// format each one produces (backend reflectionLoop/prompts.ts
+    /// "Target-model formatting rules"). Third-party AI product names are
+    /// never shown (owner rule after the China storefront rejection; 5.2.1).
     var displayName: String {
         switch self {
-        case .claude: return "Claude"
-        case .gpt: return "GPT"
-        case .gemini: return "Gemini"
-        case .deepseek: return "DeepSeek"
-        case .reasoningModel: return "Reasoning"
-        case .unknown: return "Auto"
+        case .claude: return String(localized: "XML sections")
+        case .gpt: return String(localized: "Markdown headers")
+        case .gemini: return String(localized: "Concise Markdown")
+        case .deepseek: return String(localized: "Standard format")
+        case .reasoningModel: return String(localized: "Reasoning models")
+        case .unknown: return String(localized: "Auto")
         }
     }
 
     var sfSymbol: String {
         switch self {
-        case .claude: return "sparkles"
-        case .gpt: return "circle.hexagongrid.fill"
-        case .gemini: return "diamond.fill"
-        case .deepseek: return "magnifyingglass.circle.fill"
+        case .claude: return "chevron.left.forwardslash.chevron.right"
+        case .gpt: return "number"
+        case .gemini: return "text.alignleft"
+        case .deepseek: return "doc.plaintext"
         case .reasoningModel: return "brain.head.profile"
         case .unknown: return "wand.and.stars"
         }
     }
 
-    /// Spec §8 target-model profiles: Free gets the single generic profile,
-    /// Pro unlocks every named family.
-    var isProOnly: Bool { self != .unknown }
+    /// Families with a distinct formatting rule, offered in the picker.
+    /// `.deepseek` has none (it formats like Auto), so it stays decodable but
+    /// is not offered.
+    static var selectableOptions: [TargetModelFamily] {
+        [.unknown, .claude, .gpt, .gemini, .reasoningModel]
+    }
 }
 
 // MARK: - Job Creation

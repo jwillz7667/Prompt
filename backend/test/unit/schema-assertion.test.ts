@@ -26,8 +26,21 @@ const ALL_COLUMNS = [
   { table_name: 'Prompt', column_name: 'rootPromptId' },
   { table_name: 'ThreadTurn', column_name: 'imageAttachment' },
   { table_name: 'Template', column_name: 'modality' },
+  { table_name: 'Subscription', column_name: 'environment' },
+  { table_name: 'User', column_name: 'appAccountToken' },
+  { table_name: 'DailyUsage', column_name: 'supportReplyCount' },
+  { table_name: 'User', column_name: 'appleRefreshToken' },
+  { table_name: 'ChatMessageReport', column_name: 'messageContent' },
+  { table_name: 'User', column_name: 'aiDataConsentAt' },
+  { table_name: 'User', column_name: 'aiDataConsentVersion' },
 ];
-const ALL_TABLES = [{ table_name: 'SharedPrompt' }];
+const ALL_TABLES = [
+  { table_name: 'SharedPrompt' },
+  { table_name: 'ChatConversation' },
+  { table_name: 'ChatMessage' },
+  { table_name: 'ChatMessageReport' },
+  { table_name: 'AppleTokenRevocation' },
+];
 
 beforeEach(() => {
   queryRawMock.mockReset();
@@ -35,6 +48,25 @@ beforeEach(() => {
 });
 
 describe('assertExpectedSchemaAtBoot', () => {
+  it('expects the chat tables and the columns this release added', async () => {
+    queryRawMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    const result = await assertExpectedSchemaAtBoot();
+
+    expect(result.missing).toEqual(
+      expect.arrayContaining([
+        'DailyUsage.supportReplyCount',
+        'ChatMessageReport.messageContent',
+        'User.aiDataConsentAt',
+        'User.aiDataConsentVersion',
+        'ChatConversation (table)',
+        'ChatMessage (table)',
+        'ChatMessageReport (table)',
+        'AppleTokenRevocation (table)',
+      ]),
+    );
+  });
+
   it('reports ok and skips Sentry when every expected object exists', async () => {
     queryRawMock.mockResolvedValueOnce(ALL_COLUMNS).mockResolvedValueOnce(ALL_TABLES);
 
@@ -60,11 +92,15 @@ describe('assertExpectedSchemaAtBoot', () => {
 
   it('lists every missing column and table and captures one Sentry event', async () => {
     queryRawMock
-      .mockResolvedValueOnce([
-        { table_name: 'Prompt', column_name: 'imageAttachment' },
-        { table_name: 'ThreadTurn', column_name: 'imageAttachment' },
-      ])
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce(
+        ALL_COLUMNS.filter(
+          (row) =>
+            !['Prompt.version', 'Prompt.rootPromptId', 'Template.modality'].includes(
+              `${row.table_name}.${row.column_name}`,
+            ),
+        ),
+      )
+      .mockResolvedValueOnce(ALL_TABLES.filter((row) => row.table_name !== 'SharedPrompt'));
 
     const result = await assertExpectedSchemaAtBoot();
 

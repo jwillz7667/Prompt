@@ -45,6 +45,9 @@ const stripeWebhookSchema = z.discriminatedUnion('event', [
       ]),
       currentPeriodEnd: z.string().datetime(),
       cancelAtPeriodEnd: z.boolean(),
+      // True once Stripe ever started a trial on this subscription (trial_start
+      // set), so a relay first seen after the trial ended still burns it.
+      hadTrial: z.boolean().optional(),
     }),
   }),
   z.object({ event: z.literal('subscription.deleted'), data: stripeEventDataSchema }),
@@ -97,7 +100,9 @@ webhookRouter.post('/stripe', async (req: Request, res: Response): Promise<void>
         if (event === 'subscription.created' || event === 'subscription.updated') {
           const updateData = payload.data;
           const entitled = ['active', 'trialing', 'past_due'].includes(updateData.status);
-          const tier = entitled ? updateData.tier : SubscriptionTier.FREE;
+          // Single entitlement: any live web subscription is PREMIUM whatever
+          // tier the (legacy) price metadata carried.
+          const tier = entitled ? SubscriptionTier.PREMIUM : SubscriptionTier.FREE;
           const status =
             updateData.status === 'past_due'
               ? SubscriptionStatus.GRACE_PERIOD
@@ -119,6 +124,12 @@ webhookRouter.post('/stripe', async (req: Request, res: Response): Promise<void>
             trialEndDate:
               updateData.status === 'trialing' ? new Date(updateData.currentPeriodEnd) : null,
             gracePeriodEndDate: null,
+            // One free trial per account across web and App Store: the web
+            // checkout offers trial_period_days only while this stays false.
+            hasUsedTrial:
+              (current?.hasUsedTrial ?? false) ||
+              updateData.status === 'trialing' ||
+              updateData.hadTrial === true,
           };
           await tx.subscription.upsert({
             where: { userId: data.userId },

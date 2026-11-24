@@ -23,7 +23,7 @@ export const modalityDetails: Record<Modality, ModalityDetail> = {
     placeholder:
       "Paste the scene you want improved. Example: 'A luxury perfume bottle on black marble with dramatic rim lighting.'",
     example: 'Cinematic studio portrait of a founder at a glowing workstation, editorial style.',
-    helper: 'Useful for Midjourney, DALL-E, Flux, and other image-generation tools.',
+    helper: 'Useful for image generators, illustration tools, and visual concept work.',
   },
   video: {
     name: 'Video',
@@ -31,7 +31,7 @@ export const modalityDetails: Record<Modality, ModalityDetail> = {
     placeholder:
       "Paste the video concept you want improved. Example: 'A futuristic sports car drifting through neon Tokyo for a short ad.'",
     example: 'Slow dolly-in through a misty forest temple at sunrise with drifting particles.',
-    helper: 'Useful for Sora, Runway, Kling, Pika, and similar video-generation workflows.',
+    helper: 'Useful for video generators, storyboards, and shot-by-shot direction.',
   },
   audio: {
     name: 'Audio',

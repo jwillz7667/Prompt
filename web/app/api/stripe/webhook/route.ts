@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
+import { loadWebhookConfig } from '@/lib/stripe/config'
 import {
   backendURL,
+  consumerItem,
   invoiceSubscriptionID,
   stripeClient,
   stripeID,
   subscriptionPeriodEnd,
-  tierForPrice,
 } from '@/lib/stripe/server'
 
 export async function POST(request: NextRequest) {
   const signature = request.headers.get('stripe-signature')
   if (!signature) return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-  const relaySecret = process.env.BACKEND_WEBHOOK_SECRET
-  if (!webhookSecret || !relaySecret) {
-    return NextResponse.json({ error: 'Billing webhook is not configured' }, { status: 503 })
+  const configResult = loadWebhookConfig()
+  if (!configResult.isConfigured) {
+    return NextResponse.json(
+      { error: 'Billing webhook is not configured', code: 'BILLING_NOT_CONFIGURED' },
+      { status: 503 },
+    )
   }
+  const { secretKey, webhookSecret, relaySecret, consumerPriceIds } = configResult.config
   try {
-    const stripe = stripeClient()
+    const stripe = stripeClient(secretKey)
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(await request.text(), signature, webhookSecret)
@@ -40,6 +44,7 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.deleted':
       case 'customer.subscription.paused':
       case 'customer.subscription.resumed':
+      case 'customer.subscription.trial_will_end':
         subscriptionId = (event.data.object as Stripe.Subscription).id
         break
       case 'invoice.paid':
@@ -54,7 +59,9 @@ export async function POST(request: NextRequest) {
       const subscription = await stripe.subscriptions.retrieve(subscriptionId)
       const userId = subscription.metadata?.userId
       if (userId) {
-        const item = subscription.items.data.find((item) => tierForPrice(item.price.id))
+        // Legacy Pro / annual prices are still recognized: those subscribers
+        // keep Premium until their agreement lapses.
+        const item = consumerItem(subscription, consumerPriceIds)
         if (!item) throw new Error('Unrecognized consumer subscription price')
         const customerId = stripeID(subscription.customer)
         if (!customerId) throw new Error('Missing subscription customer')
@@ -71,12 +78,13 @@ export async function POST(request: NextRequest) {
               stripeCustomerId: customerId,
               stripeSubscriptionId: subscription.id,
               stripePriceId: item.price.id,
-              tier: tierForPrice(item.price.id),
+              tier: 'PREMIUM',
               status: subscription.status,
+              hadTrial: subscription.trial_start != null,
               ...(!deleted
                 ? {
                     currentPeriodEnd: new Date(
-                      subscriptionPeriodEnd(subscription) * 1000,
+                      subscriptionPeriodEnd(item, subscription) * 1000,
                     ).toISOString(),
                   }
                 : {}),
@@ -90,7 +98,8 @@ export async function POST(request: NextRequest) {
       }
     }
     return NextResponse.json({ received: true })
-  } catch {
+  } catch (error) {
+    console.error('Stripe webhook relay failed', error)
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

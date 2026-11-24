@@ -2,15 +2,27 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
-import { enforceQuota, type RequestWithSubscription } from '../middleware/quotaEnforcement.js';
+import {
+  getEntitlement,
+  requireEntitlement,
+  sendUsageLimitResponse,
+  type EntitledRequest,
+} from '../middleware/requireEntitlement.js';
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
-import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
+import {
+  reserveGenerations,
+  trackStreamedGeneration,
+  type StreamedGenerationCharge,
+  type SubscriptionInfo,
+} from '../services/subscriptionService.js';
 import {
   enhancePromptInThreadStream,
   getPromptTierFromSubscription,
+  type EnhancePromptInThreadRequest,
   type ThreadTurnContext,
 } from '../services/deepseekService.js';
+import { toClientStreamError } from '../features/llm/errors.js';
 import {
   ensureMaxModeAvailable,
   ensureModalityAvailable,
@@ -154,14 +166,12 @@ const listQuerySchema = z.object({
 });
 
 function buildSubscriptionPayload(
-  subscription: RequestWithSubscription['subscription'] | undefined,
+  subscription: SubscriptionInfo,
   maxModeQuota: Awaited<ReturnType<typeof getMaxModeQuota>>,
 ) {
-  if (!subscription) return undefined;
-
   return {
     tier: subscription.tier,
-    promptQuality: subscription.promptQuality,
+    promptQuality: subscription.features.promptQuality,
     dailyPromptsUsed: subscription.dailyPromptsUsed + 1,
     dailyPromptsLimit: subscription.dailyPromptsLimit,
     maxModeUsedToday: maxModeQuota.usedToday,
@@ -170,16 +180,69 @@ function buildSubscriptionPayload(
   };
 }
 
+// The upstream generation is aborted when the client goes away. `res` close
+// (not `req` close, which fires once the body is consumed) with an unfinished
+// response is the reliable disconnect signal.
+function abortOnClientDisconnect(res: Response): AbortController {
+  const controller = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) controller.abort();
+  });
+  return controller;
+}
+
+const MODALITY_REQUIRES_SUBSCRIPTION_EVENT = {
+  type: 'error',
+  code: 'MODALITY_REQUIRES_SUBSCRIPTION',
+  message: 'Upgrade to Premium to use image, video, audio, code, and 3D modalities.',
+  retryable: false,
+} as const;
+
+const MAX_MODE_REQUIRES_SUBSCRIPTION_EVENT = {
+  type: 'error',
+  code: 'MAX_MODE_REQUIRES_SUBSCRIPTION',
+  message: 'Upgrade to Premium to use MAX mode.',
+  retryable: false,
+} as const;
+
+const INVALID_REQUEST_EVENT = {
+  type: 'error',
+  code: 'INVALID_REQUEST',
+  message: 'Invalid request data',
+  retryable: false,
+} as const;
+
+function writeThreadFailure(res: Response, error: unknown): void {
+  if (error instanceof z.ZodError && !res.headersSent) {
+    res.status(400).json({ error: 'Invalid request data', details: error.issues });
+    return;
+  }
+  const event =
+    error instanceof z.ZodError
+      ? INVALID_REQUEST_EVENT
+      : error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION'
+        ? MODALITY_REQUIRES_SUBSCRIPTION_EVENT
+        : error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED'
+          ? MAX_MODE_REQUIRES_SUBSCRIPTION_EVENT
+          : toClientStreamError(error);
+  if (!res.writableEnded) {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+    res.end();
+  }
+}
+
 // ============================================================================
 // CREATE THREAD (first turn, streams SSE)
 // ============================================================================
 
 threadRouter.post(
   '/',
-  enforceQuota('enhance_prompt'),
-  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+  requireEntitlement,
+  async (req: EntitledRequest, res: Response): Promise<void> => {
+    let charge: StreamedGenerationCharge | undefined;
     try {
-      if (!req.user) {
+      const subscriptionInfo = getEntitlement(req);
+      if (!req.user || !subscriptionInfo) {
         res.status(401).json({ error: 'Not authenticated' });
         return;
       }
@@ -187,15 +250,23 @@ threadRouter.post(
       const data = createThreadSchema.parse(req.body);
       const supportsImageAttachment = await supportsThreadTurnImageAttachmentColumn();
 
+      // Reserved before any SSE byte so a spent allowance is a real HTTP status.
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      const generation = trackStreamedGeneration(usage.reservation);
+      charge = generation;
+
       // Set up SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
       res.flushHeaders();
+      const abortController = abortOnClientDisconnect(res);
 
-      // Get subscription info
-      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       const maxTokens = subscriptionInfo.features.maxTokensPerPrompt;
 
@@ -241,181 +312,167 @@ threadRouter.post(
         });
       }
 
-      await enhancePromptInThreadStream(
-        {
-          prompt: data.prompt,
-          tier: promptTier,
-          maxTokens,
-          mode: data.mode,
-          conversationMode: data.conversationMode,
-          modality: data.modality,
-          subModality: data.subModality,
-          customInstructions: data.customInstructions,
-          previousTurns: data.previousTurns,
-          imageAttachment: data.imageAttachment,
+      const discardThread = (): void => {
+        prisma.thread.delete({ where: { id: thread.id } }).catch((cleanupError: unknown) => {
+          logger.error({ err: cleanupError, threadId: thread.id }, 'Failed to clean up thread');
+        });
+      };
+      const streamRequest: EnhancePromptInThreadRequest = {
+        prompt: data.prompt,
+        tier: promptTier,
+        maxTokens,
+        mode: data.mode,
+        conversationMode: data.conversationMode,
+        modality: data.modality,
+        subModality: data.subModality,
+        customInstructions: data.customInstructions,
+        previousTurns: data.previousTurns,
+        imageAttachment: data.imageAttachment,
+      };
+
+      await enhancePromptInThreadStream(streamRequest, {
+        signal: abortController.signal,
+        onToken: (token) => {
+          if (abortController.signal.aborted) return;
+          res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+          generation.markDelivered();
         },
-        {
-          onToken: (token) => {
-            res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
-          },
-          onComplete: async (result) => {
-            // The model already produced a billable answer. Persistence is
-            // best-effort: a DB failure must never turn a successful
-            // enhancement into a client error or a lost token stream.
+        onComplete: async (result) => {
+          // Client disconnected: nothing is persisted and the up-front thread
+          // row is dropped. Tokens it already received keep the charge.
+          if (abortController.signal.aborted) {
+            discardThread();
+            await generation.settleWithoutCompletion();
+            return;
+          }
+          // The model already produced a billable answer (its generation was
+          // reserved up front). Persistence is best-effort: a DB failure must
+          // never turn a successful enhancement into a client error or a lost
+          // token stream.
 
-            // Charge the daily quota first and on its own. The model call has
-            // already happened, so the quota is owed even if the turn row fails
-            // to persist below — otherwise a persistence error would silently
-            // hand the user a free enhancement (fail-open).
+          let turnId: string | null = null;
+          let maxModeQuota = maxModeQuotaBeforeUse;
+          try {
+            const baseData = {
+              threadId: thread.id,
+              turnIndex: data.previousTurns.length,
+              originalPrompt: data.prompt,
+              enhancedPrompt: result.enhancedPrompt,
+              model: result.model,
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+              totalTokens: result.totalTokens,
+              processingMs: result.processingMs,
+            };
+
+            let turn: { id: string };
             try {
-              await recordUsage(req.user!.id);
-            } catch (usageError) {
-              logger.error(
-                { err: usageError, userId: req.user!.id },
-                'Failed to record daily usage for thread turn',
-              );
+              turn = await prisma.threadTurn.create({
+                data: {
+                  ...baseData,
+                  ...(supportsImageAttachment
+                    ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
+                    : {}),
+                },
+                select: { id: true },
+              });
+            } catch (createError) {
+              if (supportsImageAttachment && isMissingColumnError(createError)) {
+                resetSchemaCompatibilityCache();
+                logger.warn(
+                  { err: createError, threadId: thread.id },
+                  'ThreadTurn imageAttachment column missing; retrying persist without it',
+                );
+                turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
+              } else {
+                throw createError;
+              }
             }
+            turnId = turn.id;
 
-            let turnId: string | null = null;
-            let maxModeQuota = maxModeQuotaBeforeUse;
-            try {
-              const baseData = {
-                threadId: thread.id,
-                turnIndex: data.previousTurns.length,
-                originalPrompt: data.prompt,
-                enhancedPrompt: result.enhancedPrompt,
-                model: result.model,
+            // Update user stats + usage in parallel (quota already charged above)
+            await Promise.all([
+              prisma.user.update({
+                where: { id: req.user!.id },
+                data: {
+                  promptCount: { increment: 1 },
+                  tokenUsage: { increment: BigInt(result.totalTokens) },
+                },
+              }),
+              prisma.usageRecord.upsert({
+                where: {
+                  userId_date: {
+                    userId: req.user!.id,
+                    date: new Date(new Date().setHours(0, 0, 0, 0)),
+                  },
+                },
+                update: {
+                  promptCount: { increment: 1 },
+                  tokenCount: { increment: BigInt(result.totalTokens) },
+                },
+                create: {
+                  userId: req.user!.id,
+                  date: new Date(new Date().setHours(0, 0, 0, 0)),
+                  promptCount: 1,
+                  tokenCount: BigInt(result.totalTokens),
+                },
+              }),
+            ]);
+            maxModeQuota =
+              data.mode === 'max'
+                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                : maxModeQuotaBeforeUse;
+          } catch (persistError) {
+            logger.error(
+              { err: persistError, threadId: thread.id },
+              'Failed to persist thread turn; returning result to client without saving',
+            );
+            // The thread row was created up-front for this first turn. If no
+            // turn persisted, it is a blank orphan that would show up as an
+            // empty thread in history — delete it and drop the threadId from
+            // the response so the client holds no dangling reference.
+            if (turnId === null) {
+              await prisma.thread.delete({ where: { id: thread.id } }).catch((cleanupError) => {
+                logger.error(
+                  { err: cleanupError, threadId: thread.id },
+                  'Failed to clean up orphan thread',
+                );
+              });
+            }
+          }
+
+          // Send completion event (always — the enhancement succeeded)
+          res.write(
+            `data: ${JSON.stringify({
+              type: 'complete',
+              threadId: turnId ? thread.id : null,
+              turnId,
+              turnIndex: data.previousTurns.length,
+              usage: {
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
-              };
-
-              let turn: { id: string };
-              try {
-                turn = await prisma.threadTurn.create({
-                  data: {
-                    ...baseData,
-                    ...(supportsImageAttachment
-                      ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
-                      : {}),
-                  },
-                  select: { id: true },
-                });
-              } catch (createError) {
-                if (supportsImageAttachment && isMissingColumnError(createError)) {
-                  resetSchemaCompatibilityCache();
-                  logger.warn(
-                    { err: createError, threadId: thread.id },
-                    'ThreadTurn imageAttachment column missing; retrying persist without it',
-                  );
-                  turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
-                } else {
-                  throw createError;
-                }
-              }
-              turnId = turn.id;
-
-              // Update user stats + usage in parallel (quota already charged above)
-              await Promise.all([
-                prisma.user.update({
-                  where: { id: req.user!.id },
-                  data: {
-                    promptCount: { increment: 1 },
-                    tokenUsage: { increment: BigInt(result.totalTokens) },
-                  },
-                }),
-                prisma.usageRecord.upsert({
-                  where: {
-                    userId_date: {
-                      userId: req.user!.id,
-                      date: new Date(new Date().setHours(0, 0, 0, 0)),
-                    },
-                  },
-                  update: {
-                    promptCount: { increment: 1 },
-                    tokenCount: { increment: BigInt(result.totalTokens) },
-                  },
-                  create: {
-                    userId: req.user!.id,
-                    date: new Date(new Date().setHours(0, 0, 0, 0)),
-                    promptCount: 1,
-                    tokenCount: BigInt(result.totalTokens),
-                  },
-                }),
-              ]);
-              maxModeQuota =
-                data.mode === 'max'
-                  ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-                  : maxModeQuotaBeforeUse;
-            } catch (persistError) {
-              logger.error(
-                { err: persistError, threadId: thread.id },
-                'Failed to persist thread turn; returning result to client without saving',
-              );
-              // The thread row was created up-front for this first turn. If no
-              // turn persisted, it is a blank orphan that would show up as an
-              // empty thread in history — delete it and drop the threadId from
-              // the response so the client holds no dangling reference.
-              if (turnId === null) {
-                await prisma.thread.delete({ where: { id: thread.id } }).catch((cleanupError) => {
-                  logger.error(
-                    { err: cleanupError, threadId: thread.id },
-                    'Failed to clean up orphan thread',
-                  );
-                });
-              }
-            }
-
-            // Send completion event (always — the enhancement succeeded)
-            res.write(
-              `data: ${JSON.stringify({
-                type: 'complete',
-                threadId: turnId ? thread.id : null,
-                turnId,
-                turnIndex: data.previousTurns.length,
-                usage: {
-                  inputTokens: result.inputTokens,
-                  outputTokens: result.outputTokens,
-                  totalTokens: result.totalTokens,
-                  processingMs: result.processingMs,
-                },
-                subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
-                imageAttachment: result.imageAttachment,
-              })}\n\n`,
-            );
-            res.write('data: [DONE]\n\n');
-            res.end();
-          },
-          onError: (error) => {
-            logger.error({ err: error }, 'Thread create stream error');
-            // Clean up the empty thread on error
-            prisma.thread.delete({ where: { id: thread.id } }).catch(() => {});
-            res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
-            res.end();
-          },
+              },
+              subscription: buildSubscriptionPayload(subscriptionInfo, maxModeQuota),
+              imageAttachment: result.imageAttachment,
+            })}\n\n`,
+          );
+          res.write('data: [DONE]\n\n');
+          res.end();
         },
-      );
+        onError: async (error) => {
+          discardThread();
+          await generation.settleWithoutCompletion();
+          if (abortController.signal.aborted) return;
+          logger.error({ err: error }, 'Thread create stream error');
+          writeThreadFailure(res, error);
+        },
+      });
     } catch (error) {
+      await charge?.settleWithoutCompletion();
       logger.error({ err: error }, 'Create thread error');
-      if (error instanceof z.ZodError) {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`,
-        );
-      } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`,
-        );
-      } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`,
-        );
-      } else {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', message: 'Failed to create thread' })}\n\n`,
-        );
-      }
-      res.end();
+      writeThreadFailure(res, error);
     }
   },
 );
@@ -426,10 +483,12 @@ threadRouter.post(
 
 threadRouter.post(
   '/:id/turns/stream',
-  enforceQuota('enhance_prompt'),
-  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+  requireEntitlement,
+  async (req: EntitledRequest, res: Response): Promise<void> => {
+    let charge: StreamedGenerationCharge | undefined;
     try {
-      if (!req.user) {
+      const subscriptionInfo = getEntitlement(req);
+      if (!req.user || !subscriptionInfo) {
         res.status(401).json({ error: 'Not authenticated' });
         return;
       }
@@ -458,15 +517,23 @@ threadRouter.post(
         return;
       }
 
+      // Reserved before any SSE byte so a spent allowance is a real HTTP status.
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      const generation = trackStreamedGeneration(usage.reservation);
+      charge = generation;
+
       // Set up SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
       res.flushHeaders();
+      const abortController = abortOnClientDisconnect(res);
 
-      // Get subscription info
-      const subscriptionInfo = await getSubscriptionInfo(req.user.id);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
       const maxTokens = subscriptionInfo.features.maxTokensPerPrompt;
 
@@ -489,169 +556,152 @@ threadRouter.post(
 
       const nextTurnIndex = thread.turns.length;
 
-      await enhancePromptInThreadStream(
-        {
-          prompt: data.prompt,
-          tier: promptTier,
-          maxTokens,
-          mode: data.mode,
-          conversationMode: data.conversationMode,
-          modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d',
-          subModality: data.subModality,
-          customInstructions: data.customInstructions,
-          previousTurns,
-          imageAttachment: data.imageAttachment,
+      const streamRequest: EnhancePromptInThreadRequest = {
+        prompt: data.prompt,
+        tier: promptTier,
+        maxTokens,
+        mode: data.mode,
+        conversationMode: data.conversationMode,
+        modality: thread.modality as 'text' | 'image' | 'video' | 'audio' | 'code' | '3d',
+        subModality: data.subModality,
+        customInstructions: data.customInstructions,
+        previousTurns,
+        imageAttachment: data.imageAttachment,
+      };
+
+      await enhancePromptInThreadStream(streamRequest, {
+        signal: abortController.signal,
+        onToken: (token) => {
+          if (abortController.signal.aborted) return;
+          res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+          generation.markDelivered();
         },
-        {
-          onToken: (token) => {
-            res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
-          },
-          onComplete: async (result) => {
-            // The model already produced a billable answer. Persistence is
-            // best-effort: a DB failure must never turn a successful
-            // enhancement into a client error or a lost token stream.
+        onComplete: async (result) => {
+          // Client disconnected: nothing is persisted. Tokens it already
+          // received keep the charge.
+          if (abortController.signal.aborted) {
+            await generation.settleWithoutCompletion();
+            return;
+          }
+          // The model already produced a billable answer (its generation was
+          // reserved up front). Persistence is best-effort: a DB failure must
+          // never turn a successful enhancement into a client error or a lost
+          // token stream.
 
-            // Charge the daily quota first and on its own. The model call has
-            // already happened, so the quota is owed even if the turn row fails
-            // to persist below — otherwise a persistence error would silently
-            // hand the user a free enhancement (fail-open).
+          let turnId: string | null = null;
+          let maxModeQuota = maxModeQuotaBeforeUse;
+          try {
+            const baseData = {
+              threadId: thread.id,
+              turnIndex: nextTurnIndex,
+              originalPrompt: data.prompt,
+              enhancedPrompt: result.enhancedPrompt,
+              model: result.model,
+              inputTokens: result.inputTokens,
+              outputTokens: result.outputTokens,
+              totalTokens: result.totalTokens,
+              processingMs: result.processingMs,
+            };
+
+            let turn: { id: string };
             try {
-              await recordUsage(req.user!.id);
-            } catch (usageError) {
-              logger.error(
-                { err: usageError, userId: req.user!.id },
-                'Failed to record daily usage for thread turn',
-              );
+              turn = await prisma.threadTurn.create({
+                data: {
+                  ...baseData,
+                  ...(supportsImageAttachment
+                    ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
+                    : {}),
+                },
+                select: { id: true },
+              });
+            } catch (createError) {
+              if (supportsImageAttachment && isMissingColumnError(createError)) {
+                resetSchemaCompatibilityCache();
+                logger.warn(
+                  { err: createError, threadId: thread.id },
+                  'ThreadTurn imageAttachment column missing; retrying persist without it',
+                );
+                turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
+              } else {
+                throw createError;
+              }
             }
+            turnId = turn.id;
 
-            let turnId: string | null = null;
-            let maxModeQuota = maxModeQuotaBeforeUse;
-            try {
-              const baseData = {
-                threadId: thread.id,
-                turnIndex: nextTurnIndex,
-                originalPrompt: data.prompt,
-                enhancedPrompt: result.enhancedPrompt,
-                model: result.model,
+            // Update thread timestamp + user stats in parallel (quota already charged above)
+            await Promise.all([
+              prisma.thread.update({
+                where: { id: thread.id },
+                data: { updatedAt: new Date() },
+              }),
+              prisma.user.update({
+                where: { id: req.user!.id },
+                data: {
+                  promptCount: { increment: 1 },
+                  tokenUsage: { increment: BigInt(result.totalTokens) },
+                },
+              }),
+              prisma.usageRecord.upsert({
+                where: {
+                  userId_date: {
+                    userId: req.user!.id,
+                    date: new Date(new Date().setHours(0, 0, 0, 0)),
+                  },
+                },
+                update: {
+                  promptCount: { increment: 1 },
+                  tokenCount: { increment: BigInt(result.totalTokens) },
+                },
+                create: {
+                  userId: req.user!.id,
+                  date: new Date(new Date().setHours(0, 0, 0, 0)),
+                  promptCount: 1,
+                  tokenCount: BigInt(result.totalTokens),
+                },
+              }),
+            ]);
+            maxModeQuota =
+              data.mode === 'max'
+                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                : maxModeQuotaBeforeUse;
+          } catch (persistError) {
+            logger.error(
+              { err: persistError, threadId: thread.id },
+              'Failed to persist thread turn; returning result to client without saving',
+            );
+          }
+
+          // Send completion event (always — the enhancement succeeded)
+          res.write(
+            `data: ${JSON.stringify({
+              type: 'complete',
+              threadId: thread.id,
+              turnId,
+              turnIndex: nextTurnIndex,
+              usage: {
                 inputTokens: result.inputTokens,
                 outputTokens: result.outputTokens,
                 totalTokens: result.totalTokens,
                 processingMs: result.processingMs,
-              };
-
-              let turn: { id: string };
-              try {
-                turn = await prisma.threadTurn.create({
-                  data: {
-                    ...baseData,
-                    ...(supportsImageAttachment
-                      ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
-                      : {}),
-                  },
-                  select: { id: true },
-                });
-              } catch (createError) {
-                if (supportsImageAttachment && isMissingColumnError(createError)) {
-                  resetSchemaCompatibilityCache();
-                  logger.warn(
-                    { err: createError, threadId: thread.id },
-                    'ThreadTurn imageAttachment column missing; retrying persist without it',
-                  );
-                  turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
-                } else {
-                  throw createError;
-                }
-              }
-              turnId = turn.id;
-
-              // Update thread timestamp + user stats in parallel (quota already charged above)
-              await Promise.all([
-                prisma.thread.update({
-                  where: { id: thread.id },
-                  data: { updatedAt: new Date() },
-                }),
-                prisma.user.update({
-                  where: { id: req.user!.id },
-                  data: {
-                    promptCount: { increment: 1 },
-                    tokenUsage: { increment: BigInt(result.totalTokens) },
-                  },
-                }),
-                prisma.usageRecord.upsert({
-                  where: {
-                    userId_date: {
-                      userId: req.user!.id,
-                      date: new Date(new Date().setHours(0, 0, 0, 0)),
-                    },
-                  },
-                  update: {
-                    promptCount: { increment: 1 },
-                    tokenCount: { increment: BigInt(result.totalTokens) },
-                  },
-                  create: {
-                    userId: req.user!.id,
-                    date: new Date(new Date().setHours(0, 0, 0, 0)),
-                    promptCount: 1,
-                    tokenCount: BigInt(result.totalTokens),
-                  },
-                }),
-              ]);
-              maxModeQuota =
-                data.mode === 'max'
-                  ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-                  : maxModeQuotaBeforeUse;
-            } catch (persistError) {
-              logger.error(
-                { err: persistError, threadId: thread.id },
-                'Failed to persist thread turn; returning result to client without saving',
-              );
-            }
-
-            // Send completion event (always — the enhancement succeeded)
-            res.write(
-              `data: ${JSON.stringify({
-                type: 'complete',
-                threadId: thread.id,
-                turnId,
-                turnIndex: nextTurnIndex,
-                usage: {
-                  inputTokens: result.inputTokens,
-                  outputTokens: result.outputTokens,
-                  totalTokens: result.totalTokens,
-                  processingMs: result.processingMs,
-                },
-                subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
-                imageAttachment: result.imageAttachment,
-              })}\n\n`,
-            );
-            res.write('data: [DONE]\n\n');
-            res.end();
-          },
-          onError: (error) => {
-            logger.error({ err: error }, 'Thread turn stream error');
-            res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
-            res.end();
-          },
+              },
+              subscription: buildSubscriptionPayload(subscriptionInfo, maxModeQuota),
+              imageAttachment: result.imageAttachment,
+            })}\n\n`,
+          );
+          res.write('data: [DONE]\n\n');
+          res.end();
         },
-      );
+        onError: async (error) => {
+          await generation.settleWithoutCompletion();
+          if (abortController.signal.aborted) return;
+          logger.error({ err: error }, 'Thread turn stream error');
+          writeThreadFailure(res, error);
+        },
+      });
     } catch (error) {
+      await charge?.settleWithoutCompletion();
       logger.error({ err: error }, 'Add turn error');
-      if (error instanceof z.ZodError) {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`,
-        );
-      } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`,
-        );
-      } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(
-          `data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`,
-        );
-      } else {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to add turn' })}\n\n`);
-      }
-      res.end();
+      writeThreadFailure(res, error);
     }
   },
 );

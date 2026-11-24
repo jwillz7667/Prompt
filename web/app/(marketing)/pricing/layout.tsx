@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'Pricing - Promptomize',
   description:
-    'Choose the perfect plan for AI prompt enhancement. Free, Pro ($4.99/mo), or Premium ($14.99/mo) with a 7-day free trial. Upgrade for more prompts, better quality, and advanced features.',
+    'Promptomize Premium: the prompt optimizer and AI chat assistant on web and iOS. 3-day free trial, then $9.99/month, cancel anytime.',
   keywords: [
     'promptomize pricing',
     'AI prompt subscription',
@@ -13,16 +13,14 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'Pricing - Promptomize',
-    description:
-      'Choose the perfect plan for AI prompt enhancement. Start free or upgrade for more features.',
+    description: 'One plan with everything: 3-day free trial, then $9.99/month, cancel anytime.',
     url: 'https://promptomize.app/pricing',
     type: 'website',
   },
   twitter: {
     card: 'summary',
     title: 'Pricing - Promptomize',
-    description:
-      'Choose the perfect plan for AI prompt enhancement. Start free or upgrade for more features.',
+    description: 'One plan with everything: 3-day free trial, then $9.99/month, cancel anytime.',
   },
   alternates: {
     canonical: '/pricing',

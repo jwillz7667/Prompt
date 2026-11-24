@@ -27,7 +27,7 @@ final class OptimizeViewModel {
         case failed(message: String, isRetryable: Bool)
         /// REFLECTION_LOOP_ENABLED is off server-side — hide the surface.
         case featureDisabled
-        /// Tier gate or quota — route to the paywall.
+        /// Subscription gate — route to the paywall.
         case upgradeRequired
     }
 
@@ -346,8 +346,8 @@ final class OptimizeViewModel {
         case .featureDisabled:
             state = .featureDisabled
         case .upgradeRequired, .quotaExceeded:
-            // Both resolve the same way for the user: upgrade. Mirrors
-            // PromptViewModel routing quota exhaustion to the paywall.
+            // A 403 SUBSCRIPTION_REQUIRED has already flipped the app to the
+            // hard paywall (APIClient); this state covers legacy tier gates.
             state = .upgradeRequired
         case .sessionExpired:
             // APIClient already signaled AuthManager.handleSessionExpiration()
@@ -367,7 +367,7 @@ final class OptimizeViewModel {
 
 // MARK: - Template Save Wire Types (createTemplateSchema, routes/templates.ts)
 
-private struct CreateTemplateRequest: Encodable {
+private nonisolated struct CreateTemplateRequest: Encodable {
     let name: String
     let content: String
     let description: String?
@@ -376,7 +376,7 @@ private struct CreateTemplateRequest: Encodable {
     let icon: String
 }
 
-private struct CreateTemplateResponse: Decodable {
+private nonisolated struct CreateTemplateResponse: Decodable {
     struct Template: Decodable {
         let id: String
     }

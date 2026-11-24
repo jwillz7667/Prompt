@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getModalityDetail } from '../shared/modalityDetails'
+import { LENGTH_OPTIONS, TONE_OPTIONS } from '../shared/enhanceOptions'
 import type {
   CapabilitiesPayload,
   EnhanceRequestPayload,
@@ -35,16 +36,8 @@ const fallbackCapabilities: CapabilitiesPayload = {
     { id: 'code', name: 'Code', description: getModalityDetail('code').description },
     { id: '3d', name: '3D', description: getModalityDetail('3d').description },
   ],
-  tones: [
-    { id: 'professional', name: 'Professional' },
-    { id: 'creative', name: 'Creative' },
-    { id: 'technical', name: 'Technical' },
-  ],
-  lengths: [
-    { id: 'concise', name: 'Concise' },
-    { id: 'standard', name: 'Standard' },
-    { id: 'detailed', name: 'Detailed' },
-  ],
+  tones: [...TONE_OPTIONS],
+  lengths: [...LENGTH_OPTIONS],
   limits: {
     maxPromptLength: 100000,
     maxTokens: 8192,
@@ -120,7 +113,7 @@ export default function App() {
 
   async function handleEnhance() {
     if (!window.openai?.callTool) {
-      setError('ChatGPT host tooling is unavailable in this widget context.')
+      setError('Host tooling is unavailable in this widget context.')
       return
     }
 

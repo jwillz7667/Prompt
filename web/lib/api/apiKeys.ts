@@ -238,6 +238,9 @@ export interface ApiSubscriptionStatus {
   }
   features: string[]
   canMakeRequests: boolean
+  /** Optional while an older backend that predates the paid-only API is live. */
+  hasActivePaidPlan?: boolean
+  upgradeUrl?: string
   overageAllowed: boolean
   hasBillingAccount: boolean
 }

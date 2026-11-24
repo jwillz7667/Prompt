@@ -12,11 +12,8 @@ import { cn } from '@/lib/utils/cn'
 
 export function Header() {
   const { user } = useAuthStore()
-  const { subscription, usage } = useSubscriptionStore()
+  const { subscription, isEntitled, hasLoaded } = useSubscriptionStore()
   const { toggleMobileMenu, sidebarCollapsed } = useUIStore()
-
-  const tier = subscription.tier
-  const remaining = usage.dailyPromptsLimit - usage.dailyPromptsUsed
 
   return (
     <header
@@ -52,46 +49,19 @@ export function Header() {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
-          {/* Usage indicator */}
-          <div
-            className="hidden items-center gap-2 rounded-xl bg-[var(--bg-tertiary)] px-3 py-1.5 sm:flex"
-            role="status"
-            aria-label={`${remaining} of ${usage.dailyPromptsLimit} prompts remaining`}
-          >
-            <div
-              className="relative h-2 w-16 overflow-hidden rounded-full bg-[var(--border)]"
-              role="progressbar"
-              aria-valuenow={usage.dailyPromptsUsed}
-              aria-valuemin={0}
-              aria-valuemax={usage.dailyPromptsLimit}
-            >
-              <div
-                className={cn(
-                  'absolute left-0 top-0 h-full rounded-full transition-all',
-                  remaining <= 0
-                    ? 'bg-red-500'
-                    : remaining <= 3
-                      ? 'bg-yellow-500'
-                      : 'bg-brand-cyan',
-                )}
-                style={{
-                  width: `${Math.min((usage.dailyPromptsUsed / usage.dailyPromptsLimit) * 100, 100)}%`,
-                }}
-              />
-            </div>
-            <span className="text-xs text-[var(--text-secondary)]">
-              {remaining}/{usage.dailyPromptsLimit}
-            </span>
-          </div>
-
-          {/* Tier badge */}
-          <Badge
-            variant={tier === 'PREMIUM' ? 'premium' : tier === 'PRO' ? 'pro' : 'outline'}
-            aria-label={`Current subscription tier: ${tier}`}
-          >
-            {tier === 'PREMIUM' && <Crown className="mr-1 h-3 w-3" aria-hidden="true" />}
-            {tier}
-          </Badge>
+          {/* Plan badge */}
+          {isEntitled ? (
+            <Badge variant="premium" aria-label="Current plan: Premium">
+              <Crown className="mr-1 h-3 w-3" aria-hidden="true" />
+              {subscription.isTrialing ? 'Premium trial' : 'Premium'}
+            </Badge>
+          ) : (
+            hasLoaded && (
+              <Link href="/upgrade" aria-label="Start your Premium free trial">
+                <Badge variant="outline">Start free trial</Badge>
+              </Link>
+            )
+          )}
 
           {/* Theme Toggle */}
           <ThemeToggle />

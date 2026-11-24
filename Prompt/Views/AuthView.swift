@@ -2,7 +2,9 @@
 //  AuthView.swift
 //  Prompt
 //
-//  Sign in screen with Apple and Google authentication
+//  Required Sign in with Apple screen shown before the app (RootView).
+//  An account is required because chats, history and the subscription are
+//  stored on it and sync across devices.
 //  Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
 //  AAA WCAG Compliant Colors
 //
@@ -11,19 +13,9 @@ import SwiftUI
 import AuthenticationServices
 
 struct AuthView: View {
-    enum Mode {
-        case standard
-        case guestUnlock
-    }
-
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
     @Environment(AuthManager.self) private var authManager
 
-    let mode: Mode
-    var onAuthenticated: (() -> Void)? = nil
-
-    // AAA Compliant Colors
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var accentColor: Color { Color.brandCyan }
@@ -34,42 +26,15 @@ struct AuthView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
-                    // Always offer a way out. In guest-unlock mode the user
-                    // arrived here by tapping Send; trapping them behind a
-                    // non-dismissable cover (e.g. after cancelling the Apple
-                    // sheet) forces a force-quit. Their draft stays in the
-                    // composer when they close this.
-                    HStack {
-                        Spacer()
-
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(textPrimary)
-                        }
-                        .buttonStyle(GlassIconButtonStyle(size: 40))
-                        .accessibilityLabel(mode == .guestUnlock ? "Not now" : "Close")
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-
-                    VStack(spacing: 18) {
-                        heroCard
-
-                        if mode == .guestUnlock {
-                            unlockCard
-                        }
-
-                        signInCard
-
-                        termsFooter
-                    }
-                    .frame(maxWidth: 560)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
+                    heroCard
+                    benefitsCard
+                    signInCard
+                    termsFooter
                 }
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 20)
+                .padding(.top, 32)
+                .padding(.bottom, 32)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -80,12 +45,12 @@ struct AuthView: View {
             AppBrandMark(size: 96, showsGlassBackdrop: true)
 
             VStack(spacing: 10) {
-                Text(title)
+                Text("Welcome to Promptomize")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(textPrimary)
                     .multilineTextAlignment(.center)
 
-                Text(subtitle)
+                Text("Turn rough ideas into sharp prompts and get answers from an AI assistant.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(textSecondary)
                     .multilineTextAlignment(.center)
@@ -98,23 +63,11 @@ struct AuthView: View {
         .liquidGlass(cornerRadius: 28, shadowIntensity: 0.74, borderGlow: true)
     }
 
-    private var unlockCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(accentColor)
-
-                Text("What you get")
-                    .font(.system(.headline, design: .rounded, weight: .bold))
-                    .foregroundStyle(textPrimary)
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                benefitRow(systemImage: "wand.and.stars", text: "AI-powered prompt enhancement across all modalities")
-                benefitRow(systemImage: "gift.fill", text: "Eligible new subscribers can try Premium free for 7 days")
-                benefitRow(systemImage: "clock.arrow.circlepath", text: "Save history, sync across devices, and unlock all tools")
-            }
+    private var benefitsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            benefitRow(systemImage: "wand.and.stars", text: "Prompt optimizer for text, images, video, music, code and more")
+            benefitRow(systemImage: "bubble.left.and.text.bubble.right", text: "AI chat assistant for questions, drafts and brainstorming")
+            benefitRow(systemImage: "icloud", text: "Your chats and history are saved to your account and sync across devices")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
@@ -123,11 +76,11 @@ struct AuthView: View {
 
     private var signInCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(mode == .guestUnlock ? "Continue with Apple" : "Sign in with Apple")
+            Text("Sign in to continue")
                 .font(.system(.headline, design: .rounded, weight: .bold))
                 .foregroundStyle(textPrimary)
 
-            Text(mode == .guestUnlock ? "Sign in to keep this workflow moving and unlock the Premium offer." : "Use your Apple account to sync prompts, history, and plan access.")
+            Text("Your subscription, chats and history belong to your account, so they work on every device you sign in on.")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -137,12 +90,7 @@ struct AuthView: View {
             } onCompletion: { result in
                 switch result {
                 case .success(let authorization):
-                    Task {
-                        if await authManager.handleAppleSignIn(authorization: authorization) {
-                            onAuthenticated?()
-                            dismiss()
-                        }
-                    }
+                    Task { await authManager.handleAppleSignIn(authorization: authorization) }
                 case .failure(let error):
                     authManager.handleAppleSignInFailure(error)
                 }
@@ -185,33 +133,15 @@ struct AuthView: View {
                 .foregroundStyle(textSecondary)
 
             HStack(spacing: 4) {
-                Link("Terms of Service", destination: URL(string: "https://promptomize.app/terms")!)
+                Link("Terms of Use", destination: LegalLinks.termsOfUse)
                 Text("and")
                     .foregroundStyle(textSecondary)
-                Link("Privacy Policy", destination: URL(string: "https://promptomize.app/privacy")!)
+                Link("Privacy Policy", destination: LegalLinks.privacyPolicy)
             }
             .font(.caption)
         }
         .padding(.top, 4)
         .padding(.bottom, 12)
-    }
-
-    private var title: String {
-        switch mode {
-        case .standard:
-            return "Promptomize"
-        case .guestUnlock:
-            return "Sign in to get started"
-        }
-    }
-
-    private var subtitle: String {
-        switch mode {
-        case .standard:
-            return "Upgrade weak prompts into production-ready instructions with a cleaner, faster chat workflow."
-        case .guestUnlock:
-            return "Sign in with Apple to start enhancing prompts and save your history."
-        }
     }
 
     private func benefitRow(systemImage: String, text: String) -> some View {
@@ -230,6 +160,6 @@ struct AuthView: View {
 }
 
 #Preview {
-    AuthView(mode: .guestUnlock)
+    AuthView()
         .environment(AuthManager.shared)
 }

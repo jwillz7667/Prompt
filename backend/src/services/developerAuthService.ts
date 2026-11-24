@@ -8,6 +8,7 @@ import { prisma } from '../utils/prisma.js';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt.js';
 import { authLogger } from '../utils/logger.js';
 import { sendEmail } from './emailService.js';
+import { API_TIER_CONFIG } from './apiSubscriptionService.js';
 
 export interface DeveloperAuthResult {
   developer: {
@@ -61,7 +62,7 @@ export async function registerDeveloper(
         create: {
           tier: 'API_FREE',
           status: 'ACTIVE',
-          includedRequests: 100,
+          includedRequests: API_TIER_CONFIG.API_FREE.monthlyRequests,
           currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         },
       },
@@ -84,7 +85,7 @@ export async function registerDeveloper(
         <li>Test the API in our playground</li>
       </ul>
       <p>Visit the <a href="https://promptomize.app/developers">Developer Portal</a> to get started.</p>
-      <p>You start with 100 free API requests per month.</p>
+      <p>Prompt enhancement requests need a paid API plan. Choose one on the <a href="https://promptomize.app/developers/billing">Billing page</a> when you are ready to start.</p>
     `,
   }).catch((err: unknown) => {
     authLogger.warn({ error: err, email }, 'Failed to send developer welcome email');

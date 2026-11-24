@@ -411,6 +411,16 @@ adminRouter.post(
   },
 );
 
+// Tiers collapsed to one entitlement; PRO is still accepted from older admin
+// tooling and stored as PREMIUM.
+const adminTierSchema = z.object({ tier: z.enum(['FREE', 'PRO', 'PREMIUM']) });
+
+function parseAdminTier(body: unknown): 'FREE' | 'PREMIUM' | null {
+  const parsed = adminTierSchema.safeParse(body);
+  if (!parsed.success) return null;
+  return parsed.data.tier === 'FREE' ? 'FREE' : 'PREMIUM';
+}
+
 // ============================================================================
 // DEBUG: SET TIER BY EMAIL
 // ============================================================================
@@ -420,15 +430,15 @@ adminRouter.post(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const email = req.params['email'] as string;
-      const { tier } = req.body;
+      const tier = parseAdminTier(req.body);
 
       if (!email) {
         res.status(400).json({ error: 'Email required' });
         return;
       }
 
-      if (!['FREE', 'PRO', 'PREMIUM'].includes(tier)) {
-        res.status(400).json({ error: 'Invalid tier. Must be FREE, PRO, or PREMIUM' });
+      if (!tier) {
+        res.status(400).json({ error: 'Invalid tier. Must be FREE or PREMIUM' });
         return;
       }
 
@@ -588,15 +598,15 @@ adminRouter.post(
 adminRouter.post('/debug/set-tier/:userId', async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.params['userId'] as string;
-    const { tier } = req.body;
+    const tier = parseAdminTier(req.body);
 
     if (!userId) {
       res.status(400).json({ error: 'User ID required' });
       return;
     }
 
-    if (!['FREE', 'PRO', 'PREMIUM'].includes(tier)) {
-      res.status(400).json({ error: 'Invalid tier. Must be FREE, PRO, or PREMIUM' });
+    if (!tier) {
+      res.status(400).json({ error: 'Invalid tier. Must be FREE or PREMIUM' });
       return;
     }
 

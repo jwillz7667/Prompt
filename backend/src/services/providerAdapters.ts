@@ -2,15 +2,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 
+import { getLlmConfig } from '../features/llm/index.js';
 import { promptLogger } from '../utils/logger.js';
 import { DEEPSEEK_THINKING_DISABLED, resolveDeepseekModel } from './deepseekModels.js';
 import { requestCompletion } from './deepseekService.js';
 
 /**
  * Uniform non-streaming completion across AI providers, used by the
- * multi-provider compare feature. DeepSeek is always available (it is a
- * REQUIRED env var); the others activate when their API key is set, so the
- * compare surface grows as keys are added without a code change.
+ * multi-provider compare feature. The 'deepseek' entry runs through the LLM
+ * gateway (so it inherits provider failover) and is available whenever the
+ * gateway chain is non-empty; the others activate when their API key is set,
+ * so the compare surface grows as keys are added without a code change.
  *
  * Model ids are env-overridable so a model deprecation is an ops change,
  * not a deploy.
@@ -40,24 +42,30 @@ export interface ProviderCompletionResult {
   processingMs: number;
 }
 
-const PROVIDER_KEYS: Record<CompareProvider, string> = {
-  deepseek: 'DEEPSEEK_API_KEY',
+type DirectProvider = Exclude<CompareProvider, 'deepseek'>;
+
+const PROVIDER_KEYS: Record<DirectProvider, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   gemini: 'GEMINI_API_KEY',
 };
 
-function apiKeyFor(provider: CompareProvider): string | undefined {
+function apiKeyFor(provider: DirectProvider): string | undefined {
   const value = process.env[PROVIDER_KEYS[provider]];
   return value && value.trim().length > 0 ? value : undefined;
 }
 
+function isAvailable(provider: CompareProvider): boolean {
+  return provider === 'deepseek'
+    ? getLlmConfig().chain.length > 0
+    : apiKeyFor(provider) !== undefined;
+}
+
 export function getAvailableProviders(): CompareProvider[] {
-  return COMPARE_PROVIDERS.filter((provider) => apiKeyFor(provider) !== undefined);
+  return COMPARE_PROVIDERS.filter(isAvailable);
 }
 
 async function completeDeepseek(
-  apiKey: string,
   request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   // Compare is a non-thinking surface; a legacy id in DEEPSEEK_COMPARE_MODEL
@@ -76,7 +84,6 @@ async function completeDeepseek(
       stream: false,
       thinking: DEEPSEEK_THINKING_DISABLED,
     },
-    apiKey,
     'chat',
   );
   return {
@@ -173,31 +180,33 @@ async function completeGemini(
   };
 }
 
-export async function completeWithProvider(
-  provider: CompareProvider,
+async function completeDirect(
+  provider: DirectProvider,
   request: ProviderCompletionRequest,
-): Promise<ProviderCompletionResult> {
+): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   const apiKey = apiKeyFor(provider);
   if (!apiKey) {
     throw new Error(`Provider ${provider} is not configured (${PROVIDER_KEYS[provider]} unset)`);
   }
-
-  const startTime = Date.now();
-  let result: Omit<ProviderCompletionResult, 'processingMs'>;
   switch (provider) {
-    case 'deepseek':
-      result = await completeDeepseek(apiKey, request);
-      break;
     case 'anthropic':
-      result = await completeAnthropic(apiKey, request);
-      break;
+      return completeAnthropic(apiKey, request);
     case 'openai':
-      result = await completeOpenai(apiKey, request);
-      break;
+      return completeOpenai(apiKey, request);
     case 'gemini':
-      result = await completeGemini(apiKey, request);
-      break;
+      return completeGemini(apiKey, request);
   }
+}
+
+export async function completeWithProvider(
+  provider: CompareProvider,
+  request: ProviderCompletionRequest,
+): Promise<ProviderCompletionResult> {
+  const startTime = Date.now();
+  const result =
+    provider === 'deepseek'
+      ? await completeDeepseek(request)
+      : await completeDirect(provider, request);
 
   const processingMs = Date.now() - startTime;
   promptLogger.info(

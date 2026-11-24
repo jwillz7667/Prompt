@@ -2,783 +2,609 @@
 //  PaywallView.swift
 //  Prompt
 //
+//  Promptomize Premium subscription screen.
+//  - `.hard`: full-screen gate shown by RootView to signed-in users without
+//    an active subscription or trial. No close button; the user can restore,
+//    subscribe, or sign out to switch accounts.
+//  - `.manage`: sheet opened from inside the app. Shows plan status and the
+//    system Manage Subscriptions sheet when entitled.
+//
 //  Brand Colors: Purple (#512AD4) and Cyan (#00FFF9)
 //
 
 import SwiftUI
 import StoreKit
 
+enum LegalLinks {
+    static let termsOfUse = URL(string: "https://promptomize.app/terms")!
+    static let privacyPolicy = URL(string: "https://promptomize.app/privacy")!
+    static let support = URL(string: "https://promptomize.app/support")!
+}
+
 struct PaywallView: View {
+    enum Mode {
+        case hard
+        case manage
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthManager.self) private var authManager
     @Environment(StoreKitManager.self) private var storeKit
+    @Environment(PromptHistoryManager.self) private var historyManager
 
-    @State private var selectedProduct: Product?
-    @State private var isProcessing = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    @State private var showSuccess = false
-    @State private var showAuthGate = false
-    @State private var successMessage = ""
-    /// Apple introductory-offer eligibility per product ID. The App Store
-    /// free trial is the only trial this app offers.
-    @State private var introOfferEligibility: [String: Bool] = [:]
+    let mode: Mode
+
+    @State private var isEligibleForIntroOffer = false
+    @State private var isRestoring = false
+    @State private var isSigningOut = false
+    @State private var alertMessage: String?
+    @State private var isConfirmingAccountDeletion = false
+
+    init(mode: Mode = .manage) {
+        self.mode = mode
+    }
 
     private var textPrimary: Color { Color.adaptiveTextPrimary }
     private var textSecondary: Color { Color.adaptiveTextSecondary }
     private var textTertiary: Color { Color.adaptiveTextTertiary }
     private var accentColor: Color { Color.adaptiveButtonPrimary }
     private var brandPurple: Color { colorScheme == .dark ? Color.brandPurple : Color.brandPurpleDark }
-    private var successColor: Color {
-        colorScheme == .dark ? Color(red: 48/255, green: 209/255, blue: 88/255) : Color(red: 0.1, green: 0.7, blue: 0.4)
-    }
     private var warningColor: Color {
-        colorScheme == .dark ? Color(red: 255/255, green: 159/255, blue: 10/255) : Color(red: 0.9, green: 0.6, blue: 0.1)
-    }
-    private var currentPlanTitle: String {
-        switch storeKit.currentTier {
-        case .free:
-            return "Unlock the full experience"
-        case .pro:
-            return "Upgrade from Pro to Premium"
-        case .premium:
-            return "Premium is active"
-        }
-    }
-    private var currentPlanSubtitle: String {
-        switch storeKit.currentTier {
-        case .free:
-            return "Unlock all modalities, MAX mode, advanced prompt quality, and unlimited daily usage."
-        case .pro:
-            return "Move into unlimited usage, MAX mode, and the strongest prompt engineering available."
-        case .premium:
-            return "This account has the full experience unlocked across all modalities."
-        }
-    }
-    private var headerTitle: String {
-        storeKit.currentTier == .premium ? "Premium" : "Unlock Premium"
-    }
-    private var headerSubtitle: String {
-        switch storeKit.currentTier {
-        case .free:
-            return "Choose a plan and unlock every modality, MAX mode, and stronger prompts."
-        case .pro:
-            return "Step up from Pro and unlock unlimited usage, MAX mode, and the strongest prompts."
-        case .premium:
-            return "Your account has the strongest prompt workflow unlocked."
-        }
-    }
-    private var selectedProductIsCurrent: Bool {
-        guard let selectedProduct, storeKit.hasActiveSubscription,
-              ProductID(rawValue: selectedProduct.id)?.tier == storeKit.currentTier else { return false }
-        return storeKit.purchasedProductIDs.contains(selectedProduct.id)
+        colorScheme == .dark ? Color(red: 255/255, green: 159/255, blue: 10/255) : Color(red: 0.75, green: 0.45, blue: 0.0)
     }
 
-    private var requiresAuthentication: Bool {
-        !authManager.isAuthenticated || authManager.isSessionExpired
+    private var isBusy: Bool {
+        storeKit.isPurchasing || isRestoring || isSigningOut
     }
 
-    private var primaryActionTitle: String {
-        if selectedProductIsCurrent {
-            return "Current plan active"
-        }
-
-        guard let selectedProduct, let productId = ProductID(rawValue: selectedProduct.id) else {
-            return "Choose a Plan"
-        }
-
-        if freeTrialText(for: selectedProduct) != nil {
-            return "Start Free Trial"
-        }
-
-        return "Unlock \(productId.tier.displayName)"
+    private var showsManagement: Bool {
+        mode == .manage && storeKit.isEntitled
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                LiquidGlassBackground()
+        ZStack {
+            LiquidGlassBackground()
 
-                ScrollView {
-                    VStack(spacing: 18) {
-                        // Clean header matching chat UI theme
-                        HStack {
-                            Spacer()
+            ScrollView {
+                VStack(spacing: 18) {
+                    header
 
-                            Text(headerTitle)
-                                .font(.system(.headline, design: .rounded, weight: .bold))
-                                .foregroundStyle(textPrimary)
-
-                            Spacer()
-                        }
-                        .overlay(alignment: .trailing) {
-                            Button {
-                                dismiss()
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(textSecondary)
-                                    .frame(width: 32, height: 32)
-                                    .background {
-                                        Circle()
-                                            .fill(Color.adaptiveBackgroundTertiary)
-                                    }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.top, 16)
-
+                    if showsManagement {
+                        managementCard
+                        restoreButton
+                        legalLinks
+                    } else {
                         heroCard
-
-                        tierComparisonSection
-                        productSelectionSection
-                        actionSection
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
-                }
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .task {
-                await loadData()
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("Try Again") {
-                    Task {
-                        await loadData()
+                        if let notice = storeKit.activationNotice {
+                            noticeBanner(notice.localizedDescription)
+                        }
+                        featuresCard
+                        offerSection
+                        restoreButton
+                        legalLinks
+                        if mode == .hard {
+                            switchAccountButton
+                        }
                     }
                 }
-                Button("OK", role: .cancel) {
-                    errorMessage = ""
-                }
-            } message: {
-                Text(errorMessage)
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity)
             }
-            .alert("Success", isPresented: $showSuccess) {
-                Button("Great!") {
-                    dismiss()
-                }
-            } message: {
-                Text(successMessage)
-            }
-            .fullScreenCover(isPresented: $showAuthGate) {
-                AuthView(mode: .standard) {
-                    Task {
-                        await loadData()
-                    }
-                }
-            }
+        }
+        .interactiveDismissDisabled(mode == .hard)
+        .task {
+            await loadOffer()
+        }
+        .alert(
+            "Promptomize Premium",
+            isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { alertMessage = nil }
+        } message: {
+            Text(alertMessage ?? "")
         }
     }
 
-    // MARK: - Hero
+    // MARK: - Header
 
-    private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 14) {
-                AppBrandMark(size: 58, showsGlassBackdrop: true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(currentPlanTitle)
-                        .font(.system(.title3, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
-
-                    Text(currentPlanSubtitle)
-                        .font(.system(.subheadline, design: .rounded))
+    private var header: some View {
+        HStack {
+            Spacer()
+            Text(showsManagement ? "Subscription" : "Promptomize Premium")
+                .font(.system(.headline, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+            Spacer()
+        }
+        .overlay(alignment: .trailing) {
+            if mode == .manage {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 32, height: 32)
+                        .background {
+                            Circle()
+                                .fill(Color.adaptiveBackgroundTertiary)
+                        }
                 }
-            }
-
-            HStack(spacing: 8) {
-                benefitChip(
-                    title: storeKit.currentTier == .free ? "MAX Mode" : "\(storeKit.currentTier.displayName) Active",
-                    systemImage: storeKit.currentTier == .free ? "flame.fill" : "checkmark.seal.fill",
-                    tint: storeKit.currentTier == .free ? warningColor : successColor
-                )
-
-                benefitChip(
-                    title: "All modalities",
-                    systemImage: "slider.horizontal.3",
-                    tint: brandPurple
-                )
-
-                benefitChip(
-                    title: "Advanced AI",
-                    systemImage: "wand.and.stars",
-                    tint: accentColor
-                )
-            }
-
-            if let usage = storeKit.usageInfo, !usage.isUnlimited {
-                HStack(spacing: 10) {
-                    UsageIndicator(used: usage.dailyPromptsUsed, limit: usage.dailyPromptsLimit)
-                    Text("\(usage.remainingPrompts) prompts left today")
-                        .font(.system(.caption, design: .rounded, weight: .semibold))
-                        .foregroundStyle(textSecondary)
-                    Spacer()
-                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
+        .padding(.top, 16)
+    }
+
+    // MARK: - Purchase Flow
+
+    private var heroCard: some View {
+        VStack(spacing: 14) {
+            AppBrandMark(size: 72, showsGlassBackdrop: true)
+
+            Text(mode == .hard ? "Subscribe to start using Promptomize" : "Unlock Promptomize Premium")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+                .multilineTextAlignment(.center)
+
+            Text("Promptomize Premium includes everything in the app: the prompt optimizer and the AI chat assistant.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(22)
         .liquidGlass(cornerRadius: 24, shadowIntensity: 0.74, borderGlow: true)
     }
 
-    private var signInSuggestionCard: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "person.badge.key.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(accentColor)
-
-            Text("Sign in to subscribe or start a free trial. Your plan then works on all your devices.")
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer()
-
-            Button {
-                showAuthGate = true
-            } label: {
-                Text("Sign In")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .foregroundStyle(textPrimary)
-            }
-            .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 12))
-        }
-    }
-
-    // MARK: - Tier Comparison
-
-    private var tierComparisonSection: some View {
+    private var featuresCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            LiquidGlassSectionHeader(title: "Why upgrade", icon: "chart.line.uptrend.xyaxis")
+            featureRow(
+                icon: "wand.and.stars",
+                title: "Prompt optimizer",
+                detail: "Turn rough ideas into precise prompts for text, images, video, music, code and 3D."
+            )
+            featureRow(
+                icon: "bubble.left.and.text.bubble.right.fill",
+                title: "AI chat assistant",
+                detail: "Ask questions, draft and rewrite, brainstorm, and get help with code."
+            )
+            featureRow(
+                icon: "clock.arrow.circlepath",
+                title: "History on all your devices",
+                detail: "Chats and results are saved to your account."
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 22, shadowIntensity: 0.68)
+    }
 
-            VStack(spacing: 0) {
-                comparisonRow(
-                    title: "All modalities",
-                    subtitle: "Image, video, audio, code, and 3D prompt generation",
-                    value: "Pro & Premium",
-                    icon: "slider.horizontal.3",
-                    tint: brandPurple
-                )
-                LiquidGlassDivider()
-                comparisonRow(
-                    title: "MAX mode",
-                    subtitle: "Deeper reasoning for complex, multi-step prompts",
-                    value: "Pro & Premium",
-                    icon: "flame.fill",
-                    tint: warningColor
-                )
-                LiquidGlassDivider()
-                comparisonRow(
-                    title: "Prompt quality",
-                    subtitle: "From basic cleanup to cutting-edge prompt engineering",
-                    value: "Basic → Advanced",
-                    icon: "wand.and.stars",
-                    tint: accentColor
-                )
-                LiquidGlassDivider()
-                comparisonRow(
-                    title: "Daily usage",
-                    subtitle: "More prompts for active building sessions",
-                    value: "10 → Unlimited",
-                    icon: "arrow.up.right",
-                    tint: successColor
-                )
+    @ViewBuilder
+    private var offerSection: some View {
+        switch storeKit.productLoadState {
+        case .idle, .loading:
+            VStack(spacing: 12) {
+                ProgressView()
+                    .tint(accentColor)
+                Text("Loading subscription details…")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(textSecondary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(28)
             .liquidGlass(cornerRadius: 22, shadowIntensity: 0.68)
+
+        case .failed:
+            productLoadFailedCard
+
+        case .loaded:
+            if let product = storeKit.premiumProduct {
+                offerCard(for: product)
+            } else {
+                productLoadFailedCard
+            }
         }
     }
 
-    private func comparisonRow(title: String, subtitle: String, value: String, icon: String = "", tint: Color) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(tint.opacity(0.14))
-                    .frame(width: 36, height: 36)
-                Circle()
-                    .stroke(tint.opacity(0.35), lineWidth: 1)
-                    .frame(width: 36, height: 36)
+    private var productLoadFailedCard: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.icloud")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(warningColor)
+            Text("Subscription details couldn't be loaded")
+                .font(.system(.headline, design: .rounded, weight: .bold))
+                .foregroundStyle(textPrimary)
+                .multilineTextAlignment(.center)
+            Text("Check your connection and try again.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                Task { await loadOffer() }
+            } label: {
+                Text("Try Again")
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 16))
+            .accessibilityIdentifier("paywall.retryProducts")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(22)
+        .liquidGlass(cornerRadius: 22, shadowIntensity: 0.68)
+    }
 
-                if icon.isEmpty {
-                    Circle()
-                        .fill(tint)
-                        .frame(width: 10, height: 10)
-                } else {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(tint)
-                }
+    private func offerCard(for product: Product) -> some View {
+        let offer = SubscriptionOfferTerms(product: product, isEligibleForIntroOffer: isEligibleForIntroOffer)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Promptomize Premium")
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
+                Text("Auto-renewing subscription · \(offer.periodLength)")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(textSecondary)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+            // The billed amount is the most prominent price element.
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(product.displayPrice)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundStyle(textPrimary)
-                Text(subtitle)
-                    .font(.system(.caption, design: .rounded))
+                Text("/ \(offer.periodUnit)")
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .foregroundStyle(textSecondary)
+            }
+            .accessibilityElement(children: .combine)
+
+            if let trialTerms = offer.trialTerms {
+                Text(trialTerms)
+                    .font(.system(.footnote, design: .rounded, weight: .medium))
                     .foregroundStyle(textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Spacer()
-
-            Text(value)
-                .font(.system(.caption, design: .rounded, weight: .bold))
-                .foregroundStyle(textPrimary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .liquidGlassChip(isSelected: false, accentColor: tint)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Product Selection
-
-    private var productSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            LiquidGlassSectionHeader(title: "Choose a plan", icon: "crown.fill")
-
-            VStack(alignment: .leading, spacing: 14) {
-                if storeKit.isLoading && storeKit.products.isEmpty {
-                    HStack {
-                        Spacer()
+            Button {
+                Task { await purchase(product) }
+            } label: {
+                HStack(spacing: 8) {
+                    if storeKit.isPurchasing {
                         ProgressView()
-                            .padding(.vertical, 12)
-                        Spacer()
+                            .tint(Color.adaptiveTextOnAccent)
                     }
-                } else if storeKit.products.isEmpty {
-                    fallbackPlansSection
-                } else {
-                    if !storeKit.proProducts.isEmpty {
-                        tierProductGroup(tier: .pro, products: storeKit.proProducts)
-                    }
-
-                    if !storeKit.premiumProducts.isEmpty {
-                        tierProductGroup(tier: .premium, products: storeKit.premiumProducts)
-                    }
-                }
-            }
-            .padding(18)
-            .liquidGlass(cornerRadius: 22, shadowIntensity: 0.72, borderGlow: true)
-        }
-    }
-
-    private var fallbackPlansSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("App Store products are temporarily unavailable. These cards show what each tier unlocks while pricing reloads.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            fallbackPlanCard(
-                tier: .pro,
-                highlight: "All modalities + MAX",
-                details: "100 daily prompts, all modalities (image, video, audio, code, 3D), MAX mode, and standard-quality prompt engineering."
-            )
-
-            fallbackPlanCard(
-                tier: .premium,
-                highlight: "Unlimited + Advanced",
-                details: "Unlimited prompts, all modalities, MAX mode, and the most advanced prompt engineering with cutting-edge techniques."
-            )
-        }
-    }
-
-    private func fallbackPlanCard(tier: SubscriptionTier, highlight: String, details: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(tier.displayName)
-                    .font(.system(.headline, design: .rounded, weight: .bold))
-                    .foregroundStyle(tier == .premium ? brandPurple : textPrimary)
-
-                Spacer()
-
-                Text(highlight)
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .foregroundStyle(textPrimary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .liquidGlassChip(
-                        isSelected: false,
-                        accentColor: tier == .premium ? brandPurple : accentColor
-                    )
-            }
-
-            Text(details)
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(16)
-        .liquidGlass(cornerRadius: 18, shadowIntensity: 0.48)
-    }
-
-    private func tierProductGroup(tier: SubscriptionTier, products: [Product]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(tier.displayName)
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
-                    .foregroundStyle(tier == .premium ? brandPurple : textPrimary)
-
-                if tier == .premium {
-                    Text("Recommended")
-                        .font(.system(.caption2, design: .rounded, weight: .bold))
-                        .foregroundStyle(Color.adaptiveTextOnAccent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [brandPurple, accentColor],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        )
-                }
-
-                Spacer()
-            }
-
-            ForEach(products, id: \.id) { product in
-                productCard(product, tier: tier)
-            }
-        }
-    }
-
-    private func productCard(_ product: Product, tier: SubscriptionTier) -> some View {
-        let isSelected = selectedProduct?.id == product.id
-        let productId = ProductID(rawValue: product.id)
-        let isAnnual = productId?.isAnnual ?? false
-        let selectionColor = tier == .premium ? brandPurple : accentColor
-
-        return Button {
-            selectedProduct = product
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                            Text(isAnnual ? "Annual" : "Monthly")
-                            .font(.system(.headline, design: .rounded, weight: .bold))
-                            .foregroundStyle(textPrimary)
-
-                        if isAnnual {
-                            Text("Save 17%")
-                                .font(.system(.caption2, design: .rounded, weight: .bold))
-                                .foregroundStyle(Color.adaptiveTextOnAccent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(successColor)
-                                .clipShape(Capsule())
-                        }
-                    }
-
-                    if isAnnual, let monthlyEquiv = storeKit.monthlyEquivalent(for: product) {
-                        Text("\(monthlyEquiv)/month")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(textSecondary)
-                    }
-
-                    if let trial = freeTrialText(for: product) {
-                        Text(trial)
-                            .font(.system(.caption, design: .rounded, weight: .bold))
-                            .foregroundStyle(successColor)
-                    }
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(product.displayPrice)
-                        .font(.system(.title3, design: .rounded, weight: .bold))
-                        .foregroundStyle(textPrimary)
-
-                    Text(isAnnual ? "/year" : "/month")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(textSecondary)
-                    }
-
-                // Selection indicator with glass effect
-                ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 28, height: 28)
-
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: isSelected
-                                    ? [selectionColor.opacity(0.8), selectionColor.opacity(0.4)]
-                                    : [Color.adaptiveBorder.opacity(0.8), Color.adaptiveBorder.opacity(0.4)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
-                        )
-                        .frame(width: 28, height: 28)
-
-                    if isSelected {
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [selectionColor, selectionColor.opacity(0.8)],
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 10
-                                )
-                            )
-                            .frame(width: 16, height: 16)
-                            .shadow(color: selectionColor.opacity(0.5), radius: 4)
-                    }
-                }
-                .padding(.leading, 8)
-            }
-            .padding()
-        }
-        .buttonStyle(LiquidGlassButtonStyle(
-            cornerRadius: 18,
-            tintColor: isSelected ? selectionColor : nil,
-            intensity: isSelected ? .standard : .subtle
-        ))
-        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: isSelected)
-    }
-
-    // MARK: - Action Section
-
-    private var actionSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            LiquidGlassSectionHeader(title: "Unlock Premium", icon: "creditcard.fill")
-
-            VStack(alignment: .leading, spacing: 14) {
-                if let selectedProduct {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Selected")
-                                .font(.system(.caption, design: .rounded, weight: .medium))
-                                .foregroundStyle(textTertiary)
-                            Text(productSummary(for: selectedProduct))
-                                .font(.system(.subheadline, design: .rounded, weight: .bold))
-                                .foregroundStyle(textPrimary)
-                        }
-
-                        Spacer()
-
-                        if selectedProductIsCurrent {
-                            Text("Current")
-                                .font(.system(.caption, design: .rounded, weight: .bold))
-                                .foregroundStyle(textPrimary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .liquidGlassChip(isSelected: false, accentColor: successColor)
-                        }
-                    }
-                }
-
-                purchaseButton
-
-                if let selectedProduct, let terms = trialTerms(for: selectedProduct) {
-                    Text(terms)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                restoreButton
-
-                if requiresAuthentication {
-                    signInSuggestionCard
-                }
-
-                legalSection
-            }
-            .padding(18)
-            .liquidGlass(cornerRadius: 22, shadowIntensity: 0.72)
-        }
-    }
-
-    private var purchaseButton: some View {
-        Button {
-            Task {
-                await purchase()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                if isProcessing {
-                    ProgressView()
-                        .tint(Color.adaptiveTextOnAccent)
-                } else {
-                    Image(systemName: selectedProductIsCurrent ? "checkmark.seal.fill" : "crown.fill")
-                        .font(.system(size: 14, weight: .bold))
-                    Text(primaryActionTitle)
+                    Text(offer.callToAction)
                         .font(.system(.headline, design: .rounded, weight: .bold))
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .foregroundStyle(Color.adaptiveTextOnAccent)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .foregroundStyle(selectedProduct != nil ? Color.adaptiveTextOnAccent : textTertiary)
+            .buttonStyle(LiquidGlassButtonStyle(
+                cornerRadius: 18,
+                tintColor: accentColor,
+                intensity: .prominent
+            ))
+            .disabled(isBusy)
+            .accessibilityIdentifier("paywall.subscribe")
+
+            Text(offer.renewalDisclosure)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .buttonStyle(LiquidGlassButtonStyle(
-            cornerRadius: 18,
-            tintColor: selectedProduct != nil ? accentColor : nil,
-            intensity: selectedProduct != nil ? .prominent : .subtle
-        ))
-        .disabled(selectedProduct == nil || isProcessing || selectedProductIsCurrent)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 22, shadowIntensity: 0.72, borderGlow: true)
     }
 
     private var restoreButton: some View {
         Button {
-            Task {
-                await restorePurchases()
-            }
+            Task { await restore() }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "arrow.clockwise")
-                Text("Restore Purchase")
+                if isRestoring {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                }
+                Text("Restore Purchases")
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
         }
         .buttonStyle(GlassSecondaryButtonStyle(cornerRadius: 18))
-        .disabled(isProcessing)
+        .disabled(isBusy)
+        .accessibilityIdentifier("paywall.restore")
     }
 
-    private var legalSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period. Renewal is charged within 24 hours of the next billing date. If a free trial is offered, the paid subscription starts when the trial ends unless you cancel at least 24 hours before. Manage or cancel in Settings > Apple Account > Subscriptions.")
-                .font(.system(.caption2, design: .rounded))
-                .foregroundStyle(textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+    private var legalLinks: some View {
+        HStack(spacing: 16) {
+            Link("Terms of Use (EULA)", destination: LegalLinks.termsOfUse)
+            Link("Privacy Policy", destination: LegalLinks.privacyPolicy)
+        }
+        .font(.system(.caption, design: .rounded, weight: .semibold))
+        .foregroundStyle(textSecondary)
+        .frame(maxWidth: .infinity)
+    }
 
-            HStack(spacing: 16) {
-                Link("Terms of Service", destination: URL(string: "https://promptomize.app/terms")!)
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                    .foregroundStyle(textSecondary)
-
-                Link("Privacy Policy", destination: URL(string: "https://promptomize.app/privacy")!)
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
+    private var switchAccountButton: some View {
+        VStack(spacing: 4) {
+            if let email = authManager.currentUser?.email {
+                Text("Signed in as \(email)")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textTertiary)
+            }
+            Button {
+                Task { await signOut() }
+            } label: {
+                Text("Sign out or use a different account")
+                    .font(.system(.footnote, design: .rounded, weight: .semibold))
+                    .underline()
                     .foregroundStyle(textSecondary)
             }
+            .buttonStyle(.plain)
+            .disabled(isBusy)
+            .accessibilityIdentifier("paywall.signOut")
+
+            // An account exists from sign-in onward, so it must be deletable
+            // without subscribing (App Review 5.1.1(v)).
+            Button(role: .destructive) {
+                isConfirmingAccountDeletion = true
+            } label: {
+                Text("Delete Account")
+                    .font(.system(.footnote, design: .rounded, weight: .semibold))
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(warningColor)
+            .disabled(isBusy)
+            .padding(.top, 6)
+            .accessibilityIdentifier("paywall.deleteAccount")
         }
+        .padding(.top, 4)
+        .deleteAccountFlow(isPresented: $isConfirmingAccountDeletion)
+    }
+
+    private func noticeBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(warningColor)
+            Text(message)
+                .font(.system(.footnote, design: .rounded, weight: .medium))
+                .foregroundStyle(textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(warningColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func featureRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(brandPurple)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                    .foregroundStyle(textPrimary)
+                Text(detail)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - Management
+
+    private var managementCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                AppBrandMark(size: 48, showsGlassBackdrop: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Promptomize Premium")
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                        .foregroundStyle(textPrimary)
+                    Text(storeKit.isTrialing ? "Free trial active" : "Active")
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                }
+            }
+
+            if let line = billingDateLine {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .foregroundStyle(textTertiary)
+                    Text(line.label)
+                        .foregroundStyle(textSecondary)
+                    Text(line.date, style: .date)
+                        .foregroundStyle(textPrimary)
+                }
+                .font(.system(.subheadline, design: .rounded))
+            }
+
+            if storeKit.billingProvider == "stripe" {
+                Text("This subscription is billed on the web. Manage it at promptomize.app.")
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Button {
+                    Task { await showManageSubscriptions() }
+                } label: {
+                    Text("Manage Subscription")
+                        .font(.system(.headline, design: .rounded, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .foregroundStyle(Color.adaptiveTextOnAccent)
+                }
+                .buttonStyle(LiquidGlassButtonStyle(
+                    cornerRadius: 16,
+                    tintColor: accentColor,
+                    intensity: .prominent
+                ))
+                .accessibilityIdentifier("paywall.manage")
+
+                Text("Change or cancel anytime in Settings > Apple Account > Subscriptions.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(textTertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .liquidGlass(cornerRadius: 22, shadowIntensity: 0.72, borderGlow: true)
+    }
+
+    private var billingDateLine: (label: String, date: Date)? {
+        guard let info = storeKit.subscriptionInfo else { return nil }
+        if info.isTrialing, let trialEnd = info.trialEndsAt ?? info.expiresAt {
+            return ("Free trial ends", trialEnd)
+        }
+        guard let expiresAt = info.expiresAt else { return nil }
+        let renews = storeKit.isAutoRenewEnabled ?? (info.status == .active)
+        return (renews ? "Renews" : "Access ends", expiresAt)
     }
 
     // MARK: - Actions
 
-    private func loadData() async {
-        await storeKit.loadProducts()
-
-        var eligibility: [String: Bool] = [:]
-        for product in storeKit.products {
-            guard let subscription = product.subscription,
-                  subscription.introductoryOffer != nil else { continue }
-            eligibility[product.id] = await subscription.isEligibleForIntroOffer
+    private func loadOffer() async {
+        if storeKit.productLoadState != .loaded {
+            await storeKit.loadProducts()
         }
-        introOfferEligibility = eligibility
-
-        // Auto-select premium monthly
-        if let premiumMonthly = storeKit.products.first(where: { $0.id == ProductID.premiumMonthly.rawValue }) {
-            selectedProduct = premiumMonthly
-        } else if let firstProduct = storeKit.products.first {
-            selectedProduct = firstProduct
-        }
-    }
-
-    private func purchase() async {
-        guard !requiresAuthentication else {
-            showAuthGate = true
+        guard let subscription = storeKit.premiumProduct?.subscription else {
+            isEligibleForIntroOffer = false
             return
         }
-        guard let product = selectedProduct else { return }
+        isEligibleForIntroOffer = await subscription.isEligibleForIntroOffer
+    }
 
-        isProcessing = true
-        defer { isProcessing = false }
-
+    private func purchase(_ product: Product) async {
         do {
-            if let _ = try await storeKit.purchase(product) {
-                successMessage = "Your \(storeKit.currentTier.displayName) subscription is active on this account."
-                showSuccess = true
+            let result = try await storeKit.purchase(product)
+            if case .activated = result, mode == .manage {
+                dismiss()
             }
         } catch {
-            errorMessage = error.localizedDescription
-            showError = true
+            alertMessage = error.localizedDescription
         }
     }
 
-    private func restorePurchases() async {
-        guard !requiresAuthentication else {
-            showAuthGate = true
-            return
-        }
-        isProcessing = true
-        defer { isProcessing = false }
-
+    private func restore() async {
+        isRestoring = true
+        defer { isRestoring = false }
         do {
             try await storeKit.restorePurchases()
-            if storeKit.hasActiveSubscription {
-                successMessage = "Your \(storeKit.currentTier.displayName) subscription is active on this account."
-                showSuccess = true
-            } else {
-                errorMessage = "No active subscriptions found"
-                showError = true
+            // When entitled, hard mode is replaced by RootView and manage
+            // mode switches to the subscription status view.
+            if !storeKit.isEntitled {
+                alertMessage = StoreError.noActivePurchases.localizedDescription
             }
         } catch {
-            errorMessage = error.localizedDescription
-            showError = true
+            alertMessage = error.localizedDescription
         }
     }
 
-    private func benefitChip(title: String, systemImage: String, tint: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
-            Text(title)
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .lineLimit(1)
-        }
-        .foregroundStyle(textPrimary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .liquidGlassChip(isSelected: false, accentColor: tint)
+    private func signOut() async {
+        isSigningOut = true
+        defer { isSigningOut = false }
+        await authManager.signOut()
+        historyManager.clearLocalData()
     }
 
-    /// "7 days free" when this Apple ID is eligible for the product's
-    /// free-trial introductory offer, otherwise nil.
-    private func freeTrialText(for product: Product) -> String? {
-        guard introOfferEligibility[product.id] == true,
-              let offer = product.subscription?.introductoryOffer,
-              offer.paymentMode == .freeTrial else { return nil }
-        let value = offer.period.value
-        switch offer.period.unit {
-        case .day: return value == 1 ? "1 day free" : "\(value) days free"
-        case .week: return value == 1 ? "7 days free" : "\(value) weeks free"
-        case .month: return value == 1 ? "1 month free" : "\(value) months free"
-        case .year: return value == 1 ? "1 year free" : "\(value) years free"
-        @unknown default: return "Free trial"
+    private func showManageSubscriptions() async {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else { return }
+        do {
+            try await AppStore.showManageSubscriptions(in: scene)
+            await storeKit.refreshEntitlement()
+        } catch {
+            alertMessage = String(localized: "Subscription settings couldn't be opened. Go to Settings > Apple Account > Subscriptions.")
         }
     }
+}
 
-    /// Plain-language trial terms shown next to the purchase button, as
-    /// App Review expects for introductory offers.
-    private func trialTerms(for product: Product) -> String? {
-        guard let trial = freeTrialText(for: product) else { return nil }
-        let isAnnual = ProductID(rawValue: product.id)?.isAnnual ?? false
-        return "\(trial), then \(product.displayPrice)/\(isAnnual ? "year" : "month"). Cancel at least 24 hours before the trial ends and you won't be charged."
+// MARK: - Offer Terms
+
+/// Everything App Review Guideline 3.1.2 requires next to the purchase
+/// button, derived from the StoreKit product so price and trial length are
+/// never hard-coded.
+struct SubscriptionOfferTerms {
+    let periodLength: String
+    let periodUnit: String
+    let callToAction: String
+    let trialTerms: String?
+    let renewalDisclosure: String
+
+    init(product: Product, isEligibleForIntroOffer: Bool) {
+        let price = product.displayPrice
+        let period = product.subscription?.subscriptionPeriod
+        if let period {
+            periodLength = Self.length(of: period)
+            periodUnit = Self.unitName(period.unit)
+        } else {
+            periodLength = String(localized: "1 month")
+            periodUnit = String(localized: "month")
+        }
+        let pricePerPeriod: String
+        if let period, period.value != 1 {
+            pricePerPeriod = String(localized: "\(price) every \(Self.length(of: period))")
+        } else {
+            pricePerPeriod = "\(price)/\(periodUnit)"
+        }
+
+        if isEligibleForIntroOffer,
+           let intro = product.subscription?.introductoryOffer,
+           intro.paymentMode == .freeTrial {
+            let trialAdjective = Self.adjective(of: intro.period)
+            callToAction = String(localized: "Start \(trialAdjective.capitalized) Free Trial")
+            trialTerms = String(localized: "\(trialAdjective) free trial, then \(pricePerPeriod). Cancel at least 24 hours before the trial ends to avoid being charged.")
+            renewalDisclosure = String(localized: "Payment is charged to your Apple Account when the free trial ends, unless you cancel at least 24 hours before. The subscription then renews automatically at \(pricePerPeriod) unless canceled at least 24 hours before the end of the current period. Manage or cancel anytime in Settings > Apple Account > Subscriptions.")
+        } else {
+            callToAction = String(localized: "Subscribe for \(pricePerPeriod)")
+            trialTerms = nil
+            renewalDisclosure = String(localized: "Payment is charged to your Apple Account at confirmation of purchase. The subscription renews automatically at \(pricePerPeriod) unless canceled at least 24 hours before the end of the current period. Manage or cancel anytime in Settings > Apple Account > Subscriptions.")
+        }
     }
 
-    private func productSummary(for product: Product) -> String {
-        let isAnnual = ProductID(rawValue: product.id)?.isAnnual ?? false
-        return "\(product.displayPrice) • \(isAnnual ? "Annual" : "Monthly")"
+    /// "1 month", "3 days".
+    private static func length(of period: Product.SubscriptionPeriod) -> String {
+        let unit = unitName(period.unit)
+        return period.value == 1 ? "1 \(unit)" : "\(period.value) \(unit)s"
     }
 
+    /// "3-day", "1-week".
+    private static func adjective(of period: Product.SubscriptionPeriod) -> String {
+        "\(period.value)-\(unitName(period.unit))"
+    }
+
+    private static func unitName(_ unit: Product.SubscriptionPeriod.Unit) -> String {
+        switch unit {
+        case .day: return String(localized: "day")
+        case .week: return String(localized: "week")
+        case .month: return String(localized: "month")
+        case .year: return String(localized: "year")
+        @unknown default: return String(localized: "period")
+        }
+    }
 }
 
 #Preview {
-    PaywallView()
+    PaywallView(mode: .hard)
         .environment(AuthManager.shared)
         .environment(StoreKitManager.shared)
+        .environment(PromptHistoryManager.shared)
 }

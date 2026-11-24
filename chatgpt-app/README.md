@@ -7,7 +7,12 @@ Standalone MCP server and React widget for the Promptomize ChatGPT app.
 Copy `.env.example` to `.env` and fill in:
 
 - `PROMPTOMIZE_PUBLIC_API_BASE_URL`
-- `PROMPTOMIZE_CHATGPT_API_KEY`
+- `PROMPTOMIZE_CHATGPT_API_KEY` — a key from a Promptomize developer account on an
+  active **paid** API plan (Starter, Pro or Enterprise). The developer API has no
+  free enhancement allowance: a key without a paid plan gets
+  `402 API_PLAN_REQUIRED` on `/public/enhance`, and the app tells users the
+  service is temporarily unavailable. Every enhancement made through the app
+  counts against that plan's quota.
 - `CHATGPT_APP_BASE_URL`
 - `CHATGPT_WIDGET_DOMAIN`
 - `OPENAI_APPS_DOMAIN_CHALLENGE_TOKEN` (optional, for OpenAI domain verification)

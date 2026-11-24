@@ -55,7 +55,7 @@ describe('saving generated prompts to iOS history', () => {
       expect(response.body.subscription).toMatchObject({
         tier: 'FREE',
         dailyPromptsUsed: used,
-        dailyPromptsLimit: 10,
+        dailyPromptsLimit: 0,
       });
       const [account, daily, analytics] = await Promise.all([
         prisma.user.findUniqueOrThrow({ where: { id: user.id } }),

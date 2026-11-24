@@ -2,7 +2,8 @@
 //  ContentView.swift
 //  Prompt
 //
-//  Chat-native home screen that hosts the primary optimization thread.
+//  App shell shown only to signed-in, entitled users (see RootView). Hosts
+//  the primary optimization thread, the threads drawer and settings.
 //
 
 import SwiftUI
@@ -12,17 +13,19 @@ import StoreKit
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
-    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(SettingsManager.self) private var settings
-    @Environment(StoreKitManager.self) private var storeKit
     @Environment(PromptHistoryManager.self) private var historyManager
 
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var deeplinkManager = DeeplinkManager.shared
     @State private var homeThreadViewModel = ThreadViewModel()
+    @State private var chatViewModel = ChatViewModel()
+    @State private var chatListViewModel = ConversationListViewModel()
+    @AppStorage("primarySurface") private var surface: AppSurface = .optimize
+    @AppStorage("chatConversationId") private var chatConversationId = ""
 
     @State private var showProfile = false
-    @State private var showPaywall = false
+    @State private var showSubscription = false
     @State private var showWhatsNew = false
     @State private var didHydrateHomeThread = false
     @State private var lastObservedTurnCount = 0
@@ -30,8 +33,6 @@ struct ContentView: View {
     @AppStorage("homeThreadId") private var homeThreadId = ""
     @State private var backgroundedAt: Date?
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
-    @AppStorage("hasSeenOnboardingPaywall") private var hasSeenOnboardingPaywall = false
-    @AppStorage("lastPaywallShownDate") private var lastPaywallShownDateString = ""
     @AppStorage("lastReviewPromptDate") private var lastReviewPromptDateString = ""
     @AppStorage("enhancementCount") private var enhancementCount = 0
     @AppStorage("didAskNotificationPermission") private var didAskNotificationPermission = false
@@ -43,15 +44,17 @@ struct ContentView: View {
         .task {
             await loadHomeThreadIfNeeded()
         }
+        .task {
+            await restoreChatConversation()
+        }
+        .onChange(of: chatViewModel.conversation?.id) { _, newId in
+            chatConversationId = newId ?? ""
+        }
         .onAppear {
             checkWhatsNew()
         }
         .onChange(of: scenePhase) { _, newPhase in
             handleScenePhaseChange(newPhase)
-        }
-        .onChange(of: authManager.currentUser?.id) { _, newId in
-            guard newId != nil else { return }
-            guestSession.completeAuthenticationFlow()
         }
         .onChange(of: homeThreadViewModel.currentThread?.id) { _, newId in
             handleThreadIdentityChange(newId)
@@ -84,7 +87,7 @@ struct ContentView: View {
         NavigationStack {
             ZStack {
                 // Main content - shifts right when sidebar is open
-                mainThreadContent
+                primaryContent
                     .offset(x: showSidebar ? sidebarWidth : 0)
                     .animation(.spring(response: 0.32, dampingFraction: 0.86), value: showSidebar)
 
@@ -102,6 +105,7 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     ChatSidebarView(
                         threadViewModel: sidebarThreadViewModel,
+                        surface: surface,
                         onSelectThread: { threadId in
                             closeSidebar()
                             Task {
@@ -118,7 +122,8 @@ struct ContentView: View {
                                 showProfile = true
                             }
                         },
-                        onDismiss: { closeSidebar() }
+                        onDismiss: { closeSidebar() },
+                        chatList: { chatConversationList }
                     )
                     .frame(width: sidebarWidth)
 
@@ -130,9 +135,8 @@ struct ContentView: View {
             .toolbar(.hidden, for: .navigationBar)
             .gesture(sidebarDragGesture)
             .sheet(isPresented: $showProfile, content: profileSheet)
-            .sheet(isPresented: $showPaywall, content: paywallSheet)
+            .sheet(isPresented: $showSubscription, content: subscriptionSheet)
             .sheet(isPresented: $showWhatsNew, content: whatsNewSheet)
-            .fullScreenCover(isPresented: authenticationGateBinding, content: authGateSheet)
             .overlay(alignment: .top) {
                 OfflineBanner()
                     .animation(.spring(response: 0.3), value: networkMonitor.isConnected)
@@ -140,15 +144,53 @@ struct ContentView: View {
         }
     }
 
-    private var mainThreadContent: some View {
-        ThreadView(
-            viewModel: homeThreadViewModel,
-            presentationStyle: .home,
-            onOpenThreads: { openSidebar() },
-            onOpenProfile: { showProfile = true },
-            onOpenHistory: { openSidebar() },
-            onOpenPaywall: { showPaywall = true },
-            onStartNewConversation: newConversation
+    /// The main surface: the prompt optimizer or the assistant chat, chosen
+    /// by the mode switch that sits centered in both surfaces' header row.
+    /// The drawer, sheets and deeplink handling around it are shared.
+    private var primaryContent: some View {
+        ZStack(alignment: .top) {
+            switch surface {
+            case .optimize:
+                ThreadView(
+                    viewModel: homeThreadViewModel,
+                    presentationStyle: .home,
+                    onOpenThreads: { openSidebar() },
+                    onOpenProfile: { showProfile = true },
+                    onOpenHistory: { openSidebar() },
+                    onOpenSubscription: { showSubscription = true },
+                    onStartNewConversation: newConversation
+                )
+                .transition(.opacity)
+            case .chat:
+                ChatView(
+                    viewModel: chatViewModel,
+                    onOpenSidebar: { openSidebar() },
+                    onOpenProfile: { showProfile = true }
+                )
+                .transition(.opacity)
+            }
+
+            // Same top padding and control height as the surfaces' header rows.
+            AppSurfacePicker(selection: $surface)
+                .padding(.top, 11)
+        }
+        .animation(.easeInOut(duration: 0.2), value: surface)
+    }
+
+    private var chatConversationList: some View {
+        ConversationListView(
+            viewModel: chatListViewModel,
+            selectedConversationId: chatViewModel.conversation?.id,
+            onSelect: { conversationId in
+                closeSidebar()
+                Task { await chatViewModel.openConversation(id: conversationId) }
+            },
+            onNewChat: {
+                closeSidebar()
+                chatViewModel.startNewConversation()
+            },
+            onRenamed: { chatViewModel.conversationWasRenamed($0) },
+            onDeleted: { chatViewModel.conversationWasDeleted(id: $0) }
         )
     }
 
@@ -157,7 +199,24 @@ struct ContentView: View {
             showSidebar = true
         }
         Task {
-            await sidebarThreadViewModel.fetchThreads(refresh: true)
+            switch surface {
+            case .optimize:
+                await sidebarThreadViewModel.fetchThreads(refresh: true)
+            case .chat:
+                await chatListViewModel.refresh()
+            }
+        }
+    }
+
+    // MARK: - Chat
+
+    private func restoreChatConversation() async {
+        chatViewModel.listSync = chatListViewModel
+        guard !chatConversationId.isEmpty, chatViewModel.conversation == nil else { return }
+        await chatViewModel.openConversation(id: chatConversationId)
+        // Deleted elsewhere: forget it. A network failure keeps it for next launch.
+        if chatViewModel.conversation == nil, case .idle = chatViewModel.loadState {
+            chatConversationId = ""
         }
     }
 
@@ -223,7 +282,6 @@ struct ContentView: View {
                 newConversation()
             }
             backgroundedAt = nil
-            checkWeeklyPaywallReminder()
         default:
             break
         }
@@ -266,20 +324,13 @@ struct ContentView: View {
 
     private func handlePaywallDeeplink(_ shouldOpen: Bool) {
         guard shouldOpen else { return }
-        showPaywall = true
+        showSubscription = true
         deeplinkManager.clearPaywallTrigger()
     }
 
     private func handleEnhanceDeeplink(_ shouldOpen: Bool) {
         guard shouldOpen else { return }
         deeplinkManager.clearEnhanceTrigger()
-    }
-
-    private var authenticationGateBinding: Binding<Bool> {
-        Binding(
-            get: { guestSession.shouldPresentAuthenticationGate },
-            set: { guestSession.shouldPresentAuthenticationGate = $0 }
-        )
     }
 
     @ViewBuilder
@@ -291,8 +342,8 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private func paywallSheet() -> some View {
-        PaywallView()
+    private func subscriptionSheet() -> some View {
+        PaywallView(mode: .manage)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(24)
@@ -307,14 +358,6 @@ struct ContentView: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(24)
-    }
-
-    @ViewBuilder
-    private func authGateSheet() -> some View {
-        AuthView(mode: .guestUnlock) {
-            guestSession.completeAuthenticationFlow()
-            sendPendingPromptAfterSignIn()
-        }
     }
 
     // MARK: - What's New
@@ -337,19 +380,16 @@ struct ContentView: View {
 
     // MARK: - Automatic Popups
 
-    /// Something is already on screen (a sheet, the drawer, the sign-in
-    /// cover) or a reply is still streaming.
+    /// Something is already on screen (a sheet or the drawer) or a reply is
+    /// still streaming.
     private var isBusyOrPresenting: Bool {
-        showProfile || showPaywall || showWhatsNew || showSidebar
-            || guestSession.shouldPresentAuthenticationGate
-            || homeThreadViewModel.isStreaming
+        showProfile || showSubscription || showWhatsNew || showSidebar
+            || homeThreadViewModel.isStreaming || chatViewModel.isStreaming
     }
 
     /// Single gate for every popup the app shows on its own (What's New,
-    /// plan reminders, the notification prompt, the review prompt). It
-    /// allows one per app session and never stacks one on top of another
-    /// sheet. User-initiated sheets and the limit-reached paywall do not go
-    /// through here.
+    /// the notification prompt, the review prompt). It allows one per app
+    /// session and never stacks one on top of another sheet.
     private func presentAutomatically(after delay: TimeInterval, _ present: @escaping () -> Void) {
         guard !didAutoPresentThisSession else { return }
         Task {
@@ -360,9 +400,8 @@ struct ContentView: View {
         }
     }
 
-    /// After a result arrives, ask for at most one thing, in this order:
-    /// notifications (first result ever), the plans intro (second result,
-    /// free plan, once), then an App Store review (later, rarely).
+    /// After a result arrives, ask for at most one thing: notifications
+    /// (first result ever), otherwise an App Store review (later, rarely).
     private func handleSuccessfulResult() {
         guard authManager.isAuthenticated else { return }
 
@@ -374,64 +413,16 @@ struct ContentView: View {
             return
         }
 
-        if !hasSeenOnboardingPaywall, enhancementCount >= 2, storeKit.currentTier == .free {
-            presentAutomatically(after: 1.5) {
-                hasSeenOnboardingPaywall = true
-                updateLastPaywallShownDate()
-                showPaywall = true
-            }
-            return
-        }
-
         checkReviewPrompt()
     }
 
-    /// After signing in from the guest cover, send the prompt the user was
-    /// trying to send instead of making them tap Send again.
-    private func sendPendingPromptAfterSignIn() {
-        Task {
-            // Let the sign-in cover finish dismissing first.
-            try? await Task.sleep(for: .milliseconds(450))
-            guard authManager.isAuthenticated,
-                  homeThreadViewModel.canSend,
-                  !settings.maxModeEnabled else { return }
-            await homeThreadViewModel.addTurn(settings: settings, historyManager: historyManager)
-            await storeKit.syncWithBackend()
-        }
-    }
-
-    // MARK: - Paywall
-
-    /// Free users who already saw the plans intro get a reminder at most
-    /// once a week (it used to be every day on first foreground).
-    private func checkWeeklyPaywallReminder() {
-        guard authManager.isAuthenticated,
-              hasSeenOnboardingPaywall,
-              storeKit.currentTier == .free else { return }
-        if let last = parseDate(lastPaywallShownDateString),
-           let days = Calendar.current.dateComponents([.day], from: last, to: Date()).day,
-           days < 7 {
-            return
-        }
-
-        presentAutomatically(after: 1.5) {
-            guard storeKit.currentTier == .free else { return }
-            updateLastPaywallShownDate()
-            showPaywall = true
-        }
-    }
-
-    private func updateLastPaywallShownDate() {
-        lastPaywallShownDateString = formattedDate(Date())
-    }
+    // MARK: - Review Prompt
 
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
-
-    // MARK: - Review Prompt
 
     private func checkReviewPrompt() {
         guard enhancementCount >= 5 else { return }

@@ -72,3 +72,34 @@ enum EnhancementStage: String, Codable, Hashable {
         }
     }
 }
+
+// MARK: - Access State
+
+/// What the widget may offer, from the entitlement the app last verified.
+/// The app writes `subscriptionTier` = "PREMIUM" only while entitled.
+enum WidgetAccessState: Equatable {
+    case signedOut
+    case subscriptionRequired
+    case active
+
+    static func load(from defaults: UserDefaults?) -> WidgetAccessState {
+        guard defaults?.bool(forKey: "isAuthenticated") == true else { return .signedOut }
+        return defaults?.string(forKey: "subscriptionTier") == "PREMIUM" ? .active : .subscriptionRequired
+    }
+
+    var callToAction: String {
+        switch self {
+        case .signedOut: return "Sign in — open Promptomize"
+        case .subscriptionRequired: return "Subscription required — open Promptomize"
+        case .active: return "Enhance New Prompt"
+        }
+    }
+
+    var destination: URL {
+        switch self {
+        case .signedOut: return URL(string: "promptomize://enhance")!
+        case .subscriptionRequired: return URL(string: "promptomize://paywall")!
+        case .active: return URL(string: "promptomize://enhance")!
+        }
+    }
+}

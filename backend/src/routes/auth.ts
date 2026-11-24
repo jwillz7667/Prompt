@@ -11,6 +11,7 @@ import {
 } from '../services/authService.js';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { authLogger } from '../utils/logger.js';
+import { AI_CONSENT_SELECT, toAiDataConsent } from '../services/aiConsentService.js';
 
 export const authRouter = Router();
 
@@ -201,7 +202,9 @@ authRouter.get(
           isPremium: true,
           premiumUntil: true,
           promptCount: true,
+          appAccountToken: true,
           createdAt: true,
+          ...AI_CONSENT_SELECT,
         },
       });
 
@@ -210,7 +213,14 @@ authRouter.get(
         return;
       }
 
-      res.json({ user });
+      // iOS restores its session from this payload and syncs consent from it.
+      const { aiDataConsentAt, aiDataConsentVersion, ...profile } = user;
+      res.json({
+        user: {
+          ...profile,
+          aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }),
+        },
+      });
     } catch (error) {
       authLogger.error({ err: error, userId: req.user?.id }, 'Failed to get user info');
       res.status(500).json({ error: 'Failed to get user info' });

@@ -14,6 +14,10 @@ datasource db {
 
 enum SubscriptionTier {
   FREE
+  // Deprecated: tiers collapsed to a single PREMIUM entitlement (migration
+  // 20261124000000 rewrote every PRO row). Kept for one release so a rollback
+  // to the previous image can still read the enum; remove in the next schema
+  // release once no deployed build writes PRO.
   PRO
   PREMIUM
 }
@@ -30,7 +34,7 @@ enum SubscriptionStatus {
 // ============================================================================
 
 enum ApiTier {
-  API_FREE // 100 requests/month, free
+  API_FREE // No enhancement requests; account, keys and docs only
   API_STARTER // 1,000 requests/month, $29/month
   API_PRO // 10,000 requests/month, $99/month
   API_ENTERPRISE // Unlimited, custom pricing
@@ -55,8 +59,10 @@ model User {
   avatarUrl     String?
 
   // Auth providers
-  appleId  String? @unique
-  googleId String? @unique
+  appleId           String? @unique
+  /// Sealed (AES-256-GCM) Sign in with Apple refresh token; revoked when the account is deleted.
+  appleRefreshToken String? @db.Text
+  googleId          String? @unique
 
   // Security
   passwordHash String?
@@ -74,8 +80,19 @@ model User {
   // Stripe (for web payments)
   stripeCustomerId String? @unique
 
+  // StoreKit appAccountToken: iOS passes it on every purchase so App Store
+  // notifications can be attributed to this account even before a
+  // transaction row exists for it.
+  appAccountToken String @unique @default(uuid()) @db.Uuid
+
   // User preferences
   customInstructions String? @db.Text
+
+  // AI data-sharing consent (App Store guideline 5.1.2(i)): when the user agreed
+  // to their content being sent to third-party AI providers, and which version
+  // of the disclosure they agreed to. Both null when never granted or withdrawn.
+  aiDataConsentAt      DateTime?
+  aiDataConsentVersion Int?
 
   // Usage tracking
   promptCount Int    @default(0)
@@ -87,17 +104,20 @@ model User {
   lastLoginAt DateTime?
 
   // Relations
-  sessions           Session[]
-  prompts            Prompt[]
-  threads            Thread[]
-  subscription       Subscription?
-  supportTickets     SupportTicket[]
-  workflows          Workflow[]
-  workflowExecutions WorkflowExecution[]
-  variationResults   VariationResult[]
-  projectContexts    ProjectContext[]
-  platformSettings   UserPlatformSettings[]
-  sandboxTests       SandboxTest[]
+  sessions             Session[]
+  prompts              Prompt[]
+  threads              Thread[]
+  subscription         Subscription?
+  supportTickets       SupportTicket[]
+  workflows            Workflow[]
+  workflowExecutions   WorkflowExecution[]
+  variationResults     VariationResult[]
+  projectContexts      ProjectContext[]
+  platformSettings     UserPlatformSettings[]
+  sandboxTests         SandboxTest[]
+  appStoreTransactions AppStoreTransaction[]
+  chatConversations    ChatConversation[]
+  chatMessageReports   ChatMessageReport[]
 
   // Indexes for performance at scale
   @@index([email])
@@ -348,7 +368,7 @@ model ApiSubscription {
   stripePriceId        String?
 
   // Quota Configuration
-  includedRequests Int @default(100) // Requests included in plan
+  includedRequests Int @default(0) // Plan requests plus purchased credits; the free tier includes none
   overageRateCents Int @default(1) // Cost per 100 overage requests
 
   // Current Billing Period
@@ -456,6 +476,10 @@ model Subscription {
   autoRenewEnabled   Boolean @default(true)
   autoRenewProductId String?
 
+  // App Store environment of the backing transaction ("Production" |
+  // "Sandbox"); null for Stripe-backed or never-purchased rows.
+  environment String?
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -469,6 +493,7 @@ model Subscription {
 model AppStoreTransaction {
   id     String @id @default(cuid())
   userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Transaction identifiers
   transactionId         String  @unique
@@ -483,6 +508,11 @@ model AppStoreTransaction {
   purchaseDate   DateTime
   expirationDate DateTime?
   revocationDate DateTime?
+
+  // Offer redeemed by this transaction (1 introductory, 2 promotional,
+  // 3 offer code, 4 win-back) and its discount type (FREE_TRIAL, ...).
+  offerType         Int?
+  offerDiscountType String?
 
   // Environment
   environment String // Production, Sandbox
@@ -505,8 +535,11 @@ model DailyUsage {
   id     String @id @default(cuid())
   userId String
 
-  date        DateTime @db.Date
-  promptCount Int      @default(0)
+  date              DateTime @db.Date
+  /// Provider generations reserved today (fair-use cap / legacy allowance).
+  promptCount       Int      @default(0)
+  /// Support-assistant replies reserved today (SUPPORT_AI_DAILY_LIMIT).
+  supportReplyCount Int      @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1039,4 +1072,97 @@ model PlatformTestResult {
 
   @@unique([testId, platform])
   @@index([testId])
+}
+
+// ============================================================================
+// GENERAL-PURPOSE CHAT
+// ============================================================================
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+enum ChatMessageStatus {
+  COMPLETE
+  STOPPED
+  TRUNCATED
+  FAILED
+}
+
+enum ChatReportReason {
+  HARMFUL
+  INACCURATE
+  INAPPROPRIATE
+  OTHER
+}
+
+model ChatConversation {
+  id                 String        @id @default(cuid())
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title              String        @default("New chat")
+  systemPrompt       String?       @db.Text
+  lastMessagePreview String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  messages           ChatMessage[]
+
+  // Serves the cursor-paginated conversation list (WHERE userId ORDER BY updatedAt DESC, id DESC).
+  @@index([userId, updatedAt(sort: Desc), id])
+}
+
+model ChatMessage {
+  id              String              @id @default(cuid())
+  conversationId  String
+  conversation    ChatConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            ChatRole
+  content         String              @db.Text
+  status          ChatMessageStatus   @default(COMPLETE)
+  // Client idempotency key for user messages; NULLs never collide in the unique index.
+  clientMessageId String?
+  inputTokens     Int?
+  outputTokens    Int?
+  // Internal attribution only; never serialized to clients.
+  provider        String?
+  model           String?
+  createdAt       DateTime            @default(now())
+  reports         ChatMessageReport[]
+
+  @@unique([conversationId, clientMessageId])
+  @@index([conversationId, createdAt, id])
+}
+
+model ChatMessageReport {
+  id             String           @id @default(cuid())
+  // Null once the message is regenerated away or its conversation deleted;
+  // the report itself must survive until a human has reviewed it.
+  messageId      String?
+  message        ChatMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  // Snapshot of the reported reply as the user saw it.
+  messageContent String           @db.Text
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason         ChatReportReason
+  details        String?          @db.Text
+  createdAt      DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([messageId])
+  @@index([userId])
+}
+
+/// A Sign in with Apple token revocation that failed while an account was
+/// being deleted. Not linked to User (the user row is already gone); retried
+/// with backoff by the subscription-maintenance worker.
+model AppleTokenRevocation {
+  id            String   @id @default(cuid())
+  sealedGrant   String   @db.Text
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError     String?
+  createdAt     DateTime @default(now())
+
+  // Serves the retry sweep (WHERE nextAttemptAt <= now ORDER BY nextAttemptAt).
+  @@index([nextAttemptAt])
 }

@@ -103,10 +103,11 @@ The full inventory lives in [`.env.example`](./.env.example). Required variables
 | `DATABASE_URL`                                                             | Postgres connection string (with `connection_limit` for production) |
 | `DATABASE_DIRECT_URL`                                                      | Bypasses pooler for migrations                                      |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`                                 | 64-char base64 secrets (`openssl rand -base64 64`)                  |
-| `APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In + ASSN verification                                   |
-| `APPLE_BUNDLE_ID` / `APPLE_APP_ID` / `APPLE_ISSUER_ID`                     | App Store Server API                                                |
+| `APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In audience, APNs key                                    |
+| `APPLE_IAP_ISSUER_ID` / `APPLE_IAP_KEY_ID` / `APPLE_IAP_PRIVATE_KEY`       | App Store Server API (status reconciliation, history)               |
+| `APPLE_BUNDLE_ID` / `APPLE_APP_ID`                                         | Signed transaction / notification verification                      |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                                | Google OAuth                                                        |
-| `DEEPSEEK_API_KEY`                                                         | Primary AI provider                                                 |
+| One provider key in `LLM_PROVIDER_CHAIN` (e.g. `LLM_DEEPSEEK_API_KEY`)     | `/health` reports a config error only when no provider is usable    |
 | `BACKEND_WEBHOOK_SECRET`                                                   | HMAC for Next.js → Express webhook forwarding                       |
 
 Optional / scaling variables:
@@ -118,6 +119,134 @@ Optional / scaling variables:
 | `SENTRY_DSN`                                                  | Error reporting                                              |
 | `CORS_ORIGIN`                                                 | Comma-separated origin allowlist additions                   |
 | `RATE_LIMIT_*`                                                | Tier-specific rate limit overrides                           |
+
+### LLM gateway
+
+All AI text and vision calls go through `src/features/llm` (provider chain,
+first-token failover, Redis-shared circuit breaker). Config is Zod-parsed once
+at boot by `validateLlmConfig()`; malformed values stop the boot, missing
+credentials only skip that provider. Runbook, home-GPU setup and cost table:
+[`docs/AI-OPERATIONS.md`](../docs/AI-OPERATIONS.md).
+
+| Variable                                                                      | Default                                                             | Purpose                                                                            |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `LLM_PROVIDER_CHAIN`                                                          | `deepseek,openrouter`                                               | Ordered failover chain (`deepseek`, `openrouter`, `local`)                         |
+| `LLM_DEEPSEEK_API_KEY` / `LLM_DEEPSEEK_BASE_URL` / `LLM_DEEPSEEK_MODEL`       | — / `https://api.deepseek.com` / `deepseek-flash`                   | Primary provider; key and model fall back to `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` |
+| `LLM_OPENROUTER_API_KEY` / `LLM_OPENROUTER_BASE_URL` / `LLM_OPENROUTER_MODEL` | — / `https://openrouter.ai/api/v1` / `deepseek/deepseek-v4.1-flash` | Fallback provider                                                                  |
+| `LLM_OPENROUTER_PROVIDER_PREFS`                                               | unset                                                               | JSON passed as the request `provider` routing object                               |
+| `LLM_LOCAL_BASE_URL` / `LLM_LOCAL_API_KEY` / `LLM_LOCAL_MODEL`                | unset                                                               | Self-hosted OpenAI-compatible endpoint (all three required)                        |
+| `LLM_LOCAL_CF_ACCESS_CLIENT_ID` / `LLM_LOCAL_CF_ACCESS_CLIENT_SECRET`         | unset                                                               | Cloudflare Access service token headers for the local endpoint                     |
+| `LLM_<PROVIDER>_SUPPORTS_IMAGES`                                              | deepseek `true`, others `false`                                     | Whether image turns may be routed to that provider                                 |
+| `LLM_TTFT_TIMEOUT_MS` / `LLM_IDLE_TIMEOUT_MS` / `LLM_TOTAL_TIMEOUT_MS`        | `15000` / `60000` / `180000`                                        | First-token (failover trigger), stream-stall and hard deadlines                    |
+| `LLM_BREAKER_LONG_COOLDOWN_MS`                                                | `300000`                                                            | Breaker open time after 401/402                                                    |
+| `LLM_LAST_PROVIDER_RETRIES`                                                   | `1`                                                                 | Retries on the last provider for transient failures                                |
+| `PROMPT_VISION_PROVIDER`                                                      | `deepseek`                                                          | `deepseek` = gateway vision; `openai` = dedicated vision model                     |
+
+### Subscriptions, paywall and daily usage
+
+Every app route that can reach a model runs `requireEntitlement` (403
+`{code:'QUOTA_EXCEEDED', reason:'SUBSCRIPTION_REQUIRED'}` for non-subscribers).
+The gate only reads today's count. Each provider call is then **reserved**
+on the user's `DailyUsage` row with one atomic upsert-increment before the
+call, and returned only if nothing was delivered. Streams count as charged
+once a token reaches the client. Workflows, sandbox tests and variations
+reserve per provider call.
+
+| Variable                             | Default | Purpose                                                                                     |
+| ------------------------------------ | ------- | ------------------------------------------------------------------------------------------- |
+| `HARD_PAYWALL_ENABLED`               | `true`  | Rollback switch (see below)                                                                 |
+| `FREE_DAILY_PROMPT_LIMIT`            | `10`    | Legacy free generations per UTC day, only while the paywall is off                          |
+| `PREMIUM_DAILY_GENERATION_SOFT_CAP`  | `300`   | Subscriber fair-use ceiling per UTC day (`429 FAIR_USE_LIMIT`)                              |
+| `SUPPORT_AI_DAILY_LIMIT`             | `20`    | Support-assistant replies per UTC day; support needs no subscription                        |
+| `APPLE_ACCEPT_SANDBOX_TRANSACTIONS`  | `true`  | Accept App Review / TestFlight (Sandbox) purchases at all                                   |
+| `APPLE_SANDBOX_ACCOUNT_MAX_AGE_DAYS` | `14`    | Sandbox purchases unlock only accounts younger than this (App Review uses a fresh Apple ID) |
+| `APPLE_SANDBOX_ALLOWED_USER_IDS`     | empty   | Comma-separated internal testers whose Sandbox purchases always unlock                      |
+
+**`HARD_PAYWALL_ENABLED` rollout and cleanup.** It ships `true` together with
+the iOS hard-paywall build. If conversion or App Review forces a rollback,
+set it to `false` in Railway and restart: non-subscribers get
+`FREE_DAILY_PROMPT_LIMIT` generations a day again, with no deploy. Once the
+paywall build has been live for one full release with the flag untouched,
+remove the flag, the legacy-allowance branch in `requireEntitlement` /
+`generationDailyLimit`, and `FREE_DAILY_PROMPT_LIMIT`, and drop the `PRO`
+enum value in the same release.
+
+**Sign in with Apple revocation.** `APPLE_SIWA_KEY_ID`,
+`APPLE_SIWA_PRIVATE_KEY` (a key with Sign in with Apple enabled) and
+`APPLE_SIWA_TOKEN_ENCRYPTION_KEY` (32 bytes, base64) let the backend exchange
+the sign-in authorization code for a refresh token and store it encrypted
+(AES-256-GCM). It is revoked when the account is deleted, as guideline
+5.1.1(v) requires. A failed revoke is queued in `AppleTokenRevocation` and
+retried every 15 minutes, so deletion never blocks. Set all three keys or
+none: a partial set fails boot, and none logs that revocation is disabled.
+
+**Developer API.** `/api/v1/public/*` is a separately billed product
+([ADR 0002](../docs/adr/0002-developer-api-paid-plans-only.md)). There is no
+free allowance: `POST /public/enhance` (JSON and streaming) answers
+`402 {code:'API_PLAN_REQUIRED', upgradeUrl:'/developers/billing'}` unless the
+developer is on an ACTIVE paid plan (`API_STARTER`, `API_PRO`,
+`API_ENTERPRISE`); a paid plan over its quota gets `429 QUOTA_EXCEEDED`.
+Free keys can still call `/usage`, `/models`, `/history` and `/recent`.
+`DEVELOPER_SIGNUPS_PER_IP_PER_HOUR` (default `5`) throttles signups.
+
+**AI data-sharing consent (App Store 5.1.2(i)).** The account's consent is
+stored on `User.aiDataConsentAt` / `aiDataConsentVersion` and managed with
+`POST` / `DELETE /api/v1/users/me/ai-consent`. Every user payload carries
+`aiDataConsent`. When enforced, every AI route (after the paywall check) and
+the support assistant answer
+`403 {code:'AI_CONSENT_REQUIRED', requiredVersion}` before any provider call.
+
+| Variable                  | Default | Purpose                                                            |
+| ------------------------- | ------- | ------------------------------------------------------------------ |
+| `AI_CONSENT_ENFORCED`     | `false` | Enforce the consent gate (see rollout in `aiConsentService.ts`)    |
+| `AI_DATA_CONSENT_VERSION` | `1`     | Disclosure version; raising it re-requires consent from every user |
+
+Turn `AI_CONSENT_ENFORCED` on only once the consent-syncing iOS build is the
+minimum supported version; the web dashboard handles the 403 with its own
+consent dialog.
+
+### Chat
+
+`src/features/chat` serves the general-purpose chatbot at `/api/v1/chat`
+(conversations CRUD, SSE replies, regenerate, report). Message-creating routes
+require an active subscription (`requireEntitlement`); reading, renaming,
+deleting and reporting need only sign-in. Replies stream through the LLM
+gateway with the client-disconnect signal, so a stopped reply aborts upstream
+and is saved as `stopped`.
+
+What happens when a reply fails:
+
+- **Before `start`:** nothing is stored and the daily slot is refunded.
+- **After `start` but before any output:** the user's message is kept and the
+  empty reply is saved as `failed`. The client retries it with regenerate.
+  A failed regenerate keeps the reply it was replacing.
+- **Regenerate:** only allowed on the newest visible message. Otherwise the
+  route returns `409 {error, code:'NOT_LATEST_MESSAGE'}`. A reused
+  `clientMessageId` returns `409 {error, code:'DUPLICATE_MESSAGE'}`.
+- **Saving:** a reply, the removal of the reply it replaces, and the
+  conversation bump commit in one transaction.
+
+Moderation runs at two points: on user messages before the model is called,
+and on finished replies before they are saved. Flagged text gets a fixed
+response:
+
+- Sexual content involving minors gets a refusal.
+- Self-harm intent gets supportive copy with crisis resources (988,
+  findahelpline.com).
+- Explicit sexual content, threatening hate or harassment, graphic violence
+  and violent wrongdoing get a refusal.
+
+A replaced reply is sent in `complete.content`. Reports keep a snapshot of
+the reported text, so they outlive the message. The conversation list cursor
+is opaque. `CHAT_*` values are Zod-parsed when the router is built at boot.
+
+| Variable                    | Default | Purpose                                                              |
+| --------------------------- | ------- | -------------------------------------------------------------------- |
+| `CHAT_MAX_OUTPUT_TOKENS`    | `2048`  | Output cap per reply (`length` finish → status `truncated`)          |
+| `CHAT_CONTEXT_TOKEN_BUDGET` | `12000` | History budget per turn (Latin ~4 chars/token, CJK 1 token/char)     |
+| `CHAT_DAILY_MESSAGE_LIMIT`  | `150`   | Replies per user per UTC day (`429 FAIR_USE_LIMIT`)                  |
+| `CHAT_MODERATION_ENABLED`   | `true`  | Input + output moderation; needs `OPENAI_API_KEY` (boot log if off)  |
+| `OPENAI_API_KEY`            | unset   | Also used for the free moderation endpoint (2 s timeout, fails open) |
 
 Env vars are read with bracket notation (`process.env['NAME']`) because of
 `noUncheckedIndexedAccess`. Do not introduce dot-notation reads.
@@ -174,6 +303,7 @@ All routes are mounted under `/api/v1/` from `src/index.ts`.
 | `/api/v1/users`         | `routes/users.ts`         | Profile management                      |
 | `/api/v1/prompts`       | `routes/prompts.ts`       | CRUD + `/enhance` (SSE-streamed)        |
 | `/api/v1/threads`       | `routes/threads.ts`       | Multi-turn conversation threads         |
+| `/api/v1/chat`          | `features/chat/`          | General-purpose chatbot (SSE replies)   |
 | `/api/v1/collections`   | `routes/collections.ts`   | Folders for organising prompts          |
 | `/api/v1/contexts`      | `routes/contexts.ts`      | Reusable project context                |
 | `/api/v1/platforms`     | `routes/platforms.ts`     | Platform presets                        |

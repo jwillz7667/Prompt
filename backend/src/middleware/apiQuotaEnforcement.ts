@@ -1,12 +1,18 @@
 /**
  * API Quota Enforcement Middleware
  *
- * Enforces monthly request quotas for API subscriptions.
- * Tracks usage and blocks requests when quota is exceeded.
+ * Guards every developer API route that reaches a model: only an ACTIVE paid
+ * plan passes (402 API_PLAN_REQUIRED otherwise), then the monthly quota is
+ * enforced (429 QUOTA_EXCEEDED). Non-AI routes must not use it so free
+ * accounts can still read usage, models and history.
  */
 
 import { type Response, type NextFunction } from 'express';
-import { getApiSubscriptionInfo, canMakeRequest } from '../services/apiSubscriptionService.js';
+import {
+  getApiSubscriptionInfo,
+  canMakeRequest,
+  API_BILLING_PATH,
+} from '../services/apiSubscriptionService.js';
 import { recordUsage, recordUsageAsync } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
 import type { ApiKeyRequest } from './apiKeyAuth.js';
@@ -52,11 +58,22 @@ export const enforceApiQuota = async (
     const developerId = req.apiKey.developerId;
     const quotaCheck = await canMakeRequest(developerId);
 
-    if (!quotaCheck.allowed) {
-      logger.warn(
-        { developerId, keyId: req.apiKey.id, reason: quotaCheck.reason },
-        'API quota exceeded',
+    if (!quotaCheck.allowed && quotaCheck.reason === 'API_PLAN_REQUIRED') {
+      logger.info(
+        { developerId, keyId: req.apiKey.id },
+        'Blocked AI request without a paid API plan',
       );
+      res.status(402).json({
+        error: 'A paid API plan is required',
+        code: 'API_PLAN_REQUIRED',
+        message: quotaCheck.message,
+        upgradeUrl: API_BILLING_PATH,
+      });
+      return;
+    }
+
+    if (!quotaCheck.allowed) {
+      logger.warn({ developerId, keyId: req.apiKey.id }, 'API quota exceeded');
 
       // Get full info for response
       const info = await getApiSubscriptionInfo(developerId);
@@ -64,7 +81,7 @@ export const enforceApiQuota = async (
       res.status(429).json({
         error: 'Quota exceeded',
         code: 'QUOTA_EXCEEDED',
-        message: quotaCheck.reason || 'Monthly API quota exceeded',
+        message: quotaCheck.message,
         quota: {
           tier: info.tier,
           used: info.currentPeriodUsage,
@@ -76,7 +93,7 @@ export const enforceApiQuota = async (
           info.tier !== 'API_ENTERPRISE'
             ? {
                 message: 'Upgrade your plan for more requests',
-                url: '/developers/billing',
+                url: API_BILLING_PATH,
               }
             : undefined,
       });
@@ -197,6 +214,11 @@ export async function getQuotaInfo(developerId: string): Promise<{
     monthlyIncluded: number | 'unlimited';
   };
   features: string[];
+  plan: {
+    canEnhance: boolean;
+    upgradeRequired: boolean;
+    upgradeUrl: string;
+  };
 }> {
   const info = await getApiSubscriptionInfo(developerId);
 
@@ -218,6 +240,11 @@ export async function getQuotaInfo(developerId: string): Promise<{
       monthlyIncluded: info.baseMonthlyRequests === -1 ? 'unlimited' : info.baseMonthlyRequests,
     },
     features: info.features,
+    plan: {
+      canEnhance: info.canMakeRequests,
+      upgradeRequired: !info.hasActivePaidPlan,
+      upgradeUrl: API_BILLING_PATH,
+    },
   };
 }
 

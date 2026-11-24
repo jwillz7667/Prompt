@@ -2,7 +2,11 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod';
 
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
-import { enforceQuota, type RequestWithSubscription } from '../middleware/quotaEnforcement.js';
+import {
+  getEntitlement,
+  requireEntitlement,
+  type EntitledRequest,
+} from '../middleware/requireEntitlement.js';
 import { promptLogger } from '../utils/logger.js';
 import { TARGET_MODEL_FAMILIES } from '../services/reflectionLoop/index.js';
 import {
@@ -19,7 +23,7 @@ import {
  *   GET    /:jobId/stream  SSE progress + terminal result
  *   GET    /:jobId         poll fallback for clients without SSE
  *
- * App-tier gating only (Subscription, via enforceQuota) — this surface is not
+ * App-tier gating only (Subscription, via requireEntitlement) — this surface is not
  * part of the enterprise API (ApiSubscription) and never uses apiKeyAuth.
  */
 export const optimizeRouter = Router();
@@ -58,27 +62,29 @@ const optimizeRequestSchema = z.object({
 
 optimizeRouter.post(
   '/',
-  enforceQuota('enhance_prompt'),
-  async (req: RequestWithSubscription, res: Response): Promise<void> => {
+  requireEntitlement,
+  async (req: EntitledRequest, res: Response): Promise<void> => {
     try {
-      if (!req.user) {
+      const subscriptionInfo = getEntitlement(req);
+      if (!req.user || !subscriptionInfo) {
         res.status(401).json({ error: 'Not authenticated' });
         return;
       }
 
       const data = optimizeRequestSchema.parse(req.body);
 
-      // §8 tier gate: FREE gets P0 + the single-pass fast path; PRO/PREMIUM
-      // get the full loop. enforceQuota attached the Subscription-derived
-      // tier (never ApiSubscription — separate system).
-      const tier = req.subscription?.tier ?? 'FREE';
+      // §8 tier gate: FREE (only reachable while HARD_PAYWALL_ENABLED=false)
+      // gets P0 + the single-pass fast path; PREMIUM gets the full loop.
+      // requireEntitlement resolved the Subscription-derived tier (never
+      // ApiSubscription — separate system).
+      const tier = subscriptionInfo.tier;
       const mode: ReflectionJobMode = tier === 'FREE' ? 'fast_path' : 'full_loop';
 
       // §8 target-model profiles: Free 1 / Pro all. FREE is locked to the
       // generic profile — 'unknown' (or omitting the field) is the only
       // accepted value. Body matches the MODALITY/MAX_MODE/COMPARE gates in
       // routes/prompts.ts. No quota is consumed: recordUsage runs on job
-      // completion, not in enforceQuota.
+      // completion, not in requireEntitlement.
       if (
         tier === 'FREE' &&
         data.target_model_family !== undefined &&
@@ -87,7 +93,7 @@ optimizeRouter.post(
         res.status(403).json({
           error: 'Subscription required',
           code: 'TARGET_MODEL_REQUIRES_SUBSCRIPTION',
-          message: 'Upgrade to Pro or Premium to optimize for a specific model family.',
+          message: 'Upgrade to Premium to optimize for a specific model family.',
         });
         return;
       }
@@ -95,7 +101,7 @@ optimizeRouter.post(
       const jobId = await enqueueReflectionJob({
         userId: req.user.id,
         mode,
-        singlePassTier: req.subscription?.promptQuality ?? 'basic',
+        singlePassTier: subscriptionInfo.features.promptQuality,
         rawPrompt: data.raw_prompt,
         goal: data.goal,
         targetModelFamily: data.target_model_family,
@@ -199,7 +205,13 @@ optimizeRouter.get(
             return;
           case 'error':
             // Mirrors enhance/stream onError: error event, then end (no [DONE]).
-            writeEvent({ type: 'error', message: message.message });
+            // The job service only ever emits its generic failure copy here.
+            writeEvent({
+              type: 'error',
+              code: 'INTERNAL_ERROR',
+              message: message.message,
+              retryable: true,
+            });
             endStream(false);
             return;
         }

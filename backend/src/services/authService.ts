@@ -7,6 +7,8 @@ import { generateTokenPair, verifyRefreshToken, type TokenPayload } from '../uti
 import { authLogger } from '../utils/logger.js';
 import { cache } from '../utils/redis.js';
 import { sendWelcomeEmail } from './emailService.js';
+import { appleAccountService } from '../features/apple-account/index.js';
+import { toAiDataConsent, type AiDataConsent } from './aiConsentService.js';
 
 const googleClient = new OAuth2Client(process.env['GOOGLE_CLIENT_ID']);
 
@@ -23,6 +25,10 @@ export interface AuthResult {
     name: string | null;
     avatarUrl: string | null;
     isPremium: boolean;
+    /** Lowercase UUID; iOS passes it to StoreKit as .appAccountToken. */
+    appAccountToken: string;
+    /** Account-level AI data-sharing consent; iOS skips its consent screen when present. */
+    aiDataConsent: AiDataConsent;
   };
   accessToken: string;
   refreshToken: string;
@@ -50,7 +56,7 @@ export class SignInError extends Error {
 
 export async function authenticateWithApple(
   identityToken: string,
-  _authorizationCode: string,
+  authorizationCode: string,
   fullName?: { givenName?: string; familyName?: string },
   deviceInfo?: { deviceId?: string; deviceName?: string },
   expectedNonce?: string,
@@ -181,6 +187,13 @@ export async function authenticateWithApple(
       authLogger.warn({ err: error, userId: result.user.id }, 'Failed to send welcome email');
     });
   }
+  // Kept so the token can be revoked on account deletion; runs off the
+  // sign-in path because Apple's token endpoint must never delay a login.
+  void appleAccountService.rememberRefreshToken(
+    result.user.id,
+    authorizationCode,
+    applePayload.aud,
+  );
   return {
     user: {
       id: result.user.id,
@@ -188,6 +201,8 @@ export async function authenticateWithApple(
       name: result.user.name,
       avatarUrl: result.user.avatarUrl,
       isPremium: result.user.isPremium,
+      appAccountToken: result.user.appAccountToken,
+      aiDataConsent: toAiDataConsent(result.user),
     },
     ...result.tokens,
   };
@@ -278,6 +293,8 @@ export async function authenticateWithGoogle(
       name: user.name,
       avatarUrl: user.avatarUrl,
       isPremium: user.isPremium,
+      appAccountToken: user.appAccountToken,
+      aiDataConsent: toAiDataConsent(user),
     },
     ...tokens,
   };
@@ -367,6 +384,8 @@ export async function refreshTokens(refreshToken: string): Promise<AuthResult> {
       name: session.user.name,
       avatarUrl: session.user.avatarUrl,
       isPremium: session.user.isPremium,
+      appAccountToken: session.user.appAccountToken,
+      aiDataConsent: toAiDataConsent(session.user),
     },
     ...tokens,
   };

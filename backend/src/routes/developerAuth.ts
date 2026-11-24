@@ -3,7 +3,8 @@
  * Handles signup, login, and token refresh for developer accounts
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import {
   registerDeveloper,
@@ -21,6 +22,26 @@ import {
 import { logger } from '../utils/logger.js';
 
 export const developerAuthRouter = Router();
+
+const signupThrottleEnvSchema = z.object({
+  DEVELOPER_SIGNUPS_PER_IP_PER_HOUR: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(1).default(5),
+  ),
+});
+
+// Developer accounts include no model requests, but signups send email and
+// create rows, so they are still throttled per network.
+const signupThrottle = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: signupThrottleEnvSchema.parse(process.env).DEVELOPER_SIGNUPS_PER_IP_PER_HOUR,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many signups from this network. Please try again later.',
+    code: 'SIGNUP_RATE_LIMITED',
+  },
+});
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -57,35 +78,39 @@ const changePasswordSchema = z.object({
 // SIGNUP
 // ============================================================================
 
-developerAuthRouter.post('/signup', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const data = signupSchema.parse(req.body);
+developerAuthRouter.post(
+  '/signup',
+  signupThrottle,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const data = signupSchema.parse(req.body);
 
-    const result = await registerDeveloper(data.email, data.password, data.name, data.company);
+      const result = await registerDeveloper(data.email, data.password, data.name, data.company);
 
-    res.status(201).json({
-      developer: result.developer,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      expiresIn: result.expiresIn,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.issues });
-      return;
-    }
-    if (error instanceof Error) {
-      if (error.message === 'Email already registered') {
+      res.status(201).json({
+        developer: result.developer,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresIn: result.expiresIn,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
+        return;
+      }
+      if (error instanceof Error && error.message === 'Email already registered') {
         res.status(409).json({ error: error.message });
         return;
       }
-      res.status(400).json({ error: error.message });
-      return;
+      if (error instanceof Error && error.message === 'Password must be at least 8 characters') {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      logger.error({ error }, 'Developer signup error');
+      res.status(500).json({ error: 'Registration failed' });
     }
-    logger.error({ error }, 'Developer signup error');
-    res.status(500).json({ error: 'Registration failed' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // LOGIN
@@ -144,7 +169,12 @@ developerAuthRouter.post('/refresh', async (req: Request, res: Response): Promis
       return;
     }
     if (error instanceof Error) {
-      res.status(401).json({ error: error.message });
+      // Refresh failures range from bad signatures to revoked or deleted
+      // accounts; the client only needs to know it must sign in again.
+      logger.warn({ error }, 'Developer token refresh rejected');
+      res
+        .status(401)
+        .json({ error: 'Invalid or expired refresh token', code: 'INVALID_REFRESH_TOKEN' });
       return;
     }
     logger.error({ error }, 'Developer token refresh error');

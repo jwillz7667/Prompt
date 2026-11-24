@@ -1,20 +1,18 @@
 import { create } from 'zustand'
 import type { SubscriptionInfo } from '@/lib/types/models'
-import {
-  getSubscriptionStatus,
-  getTrialEligibility,
-  startFreeTrial as apiStartTrial,
-} from '@/lib/api/subscriptions'
+import { getSubscriptionStatus } from '@/lib/api/subscriptions'
 
 interface SubscriptionState extends SubscriptionInfo {
+  // Server-decided: true while any store (App Store or Stripe) grants Premium.
+  isEntitled: boolean
+  // Whether a web checkout would include the free trial right now.
+  trialEligible: boolean
+  hasLoaded: boolean
   isLoading: boolean
   error: string | null
-  trialEligible: boolean | null
 
   // Actions
   fetchSubscription: () => Promise<void>
-  checkTrialEligibility: () => Promise<boolean>
-  startTrial: () => Promise<boolean>
   setError: (error: string | null) => void
   refreshAfterPurchase: () => Promise<boolean>
   reset: () => void
@@ -31,8 +29,8 @@ const defaultSubscription: SubscriptionInfo = {
   },
   usage: {
     dailyPromptsUsed: 0,
-    dailyPromptsLimit: 10,
-    canCreatePrompt: true,
+    dailyPromptsLimit: 0,
+    canCreatePrompt: false,
   },
   features: {
     promptQuality: 'basic',
@@ -45,19 +43,23 @@ let subscriptionGeneration = 0
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   ...defaultSubscription,
+  isEntitled: false,
+  trialEligible: false,
+  hasLoaded: false,
   isLoading: false,
   error: null,
-  trialEligible: null,
 
   reset: () => {
     subscriptionGeneration++
     set({
       ...defaultSubscription,
+      isEntitled: false,
+      trialEligible: false,
+      hasLoaded: false,
       billingProvider: null,
       stripeCustomerId: null,
       error: null,
       isLoading: false,
-      trialEligible: null,
     })
   },
 
@@ -74,8 +76,12 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
         },
         usage: data.usage,
         features: data.features,
+        // Older backends omit isEntitled; any paid tier was entitled there.
+        isEntitled: data.isEntitled ?? data.subscription.tier !== 'FREE',
+        trialEligible: data.trialEligible ?? false,
         billingProvider: data.billingProvider,
         stripeCustomerId: data.stripeCustomerId,
+        hasLoaded: true,
         isLoading: false,
       })
     } catch (err) {
@@ -85,85 +91,24 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     }
   },
 
-  checkTrialEligibility: async () => {
-    const generation = subscriptionGeneration
-    try {
-      const { eligible } = await getTrialEligibility()
-      if (generation !== subscriptionGeneration) return false
-      set({ trialEligible: eligible })
-      return eligible
-    } catch {
-      if (generation !== subscriptionGeneration) return false
-      set({ trialEligible: false })
-      return false
-    }
-  },
-
-  startTrial: async () => {
-    const generation = subscriptionGeneration
-    try {
-      set({ isLoading: true, error: null })
-      const result = await apiStartTrial()
-      if (generation !== subscriptionGeneration) return false
-      if (result.success) {
-        await get().fetchSubscription()
-        if (generation !== subscriptionGeneration) return false
-        set({ trialEligible: false })
-        return true
-      }
-      set({ isLoading: false })
-      return false
-    } catch (err) {
-      if (generation !== subscriptionGeneration) return false
-      const message = err instanceof Error ? err.message : 'Failed to start trial'
-      set({ error: message, isLoading: false })
-      return false
-    }
-  },
-
   setError: (error) => set({ error }),
 
   refreshAfterPurchase: async () => {
     const generation = subscriptionGeneration
     // Checkout redirects can arrive before webhooks. Confirm entitlement before
     // announcing activation; a delayed webhook must never look like a payment failure.
+    // A trialing subscription is a successful activation.
     for (let attempt = 0; attempt < 6; attempt++) {
       await get().fetchSubscription()
       if (generation !== subscriptionGeneration) return false
       const state = get()
-      if (
-        !state.error &&
-        state.billingProvider === 'stripe' &&
-        state.subscription.tier !== 'FREE' &&
-        !state.subscription.isTrialing &&
-        state.subscription.status === 'ACTIVE'
-      )
-        return true
+      if (!state.error && state.billingProvider === 'stripe' && state.isEntitled) return true
       if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 2000))
     }
     return false
   },
 }))
 
-// Helper selectors
-export const useIsPremium = () =>
-  useSubscriptionStore((state) => state.subscription.tier === 'PREMIUM')
-
-export const useIsPro = () =>
-  useSubscriptionStore(
-    (state) => state.subscription.tier === 'PRO' || state.subscription.tier === 'PREMIUM',
-  )
-
-export const useCanCreatePrompt = () => useSubscriptionStore((state) => state.usage.canCreatePrompt)
-
-export const useDailyUsage = () =>
-  useSubscriptionStore((state) => ({
-    used: state.usage.dailyPromptsUsed,
-    limit: state.usage.dailyPromptsLimit,
-    remaining:
-      state.usage.dailyPromptsLimit === -1
-        ? Infinity
-        : Math.max(0, state.usage.dailyPromptsLimit - state.usage.dailyPromptsUsed),
-  }))
+export const useIsEntitled = () => useSubscriptionStore((state) => state.isEntitled)
 
 export const useCanExport = () => useSubscriptionStore((state) => state.features.canExport)

@@ -1,18 +1,26 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
-import { enforceQuota } from '../middleware/quotaEnforcement.js';
+import { requireEntitlement } from '../middleware/requireEntitlement.js';
 import { sandboxService } from '../services/sandboxService.js';
 import { PlatformType } from '@prisma/client';
 import { logger } from '../utils/logger.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 
 const router = Router();
+
+// Duplicates are dropped so one request runs each platform at most once.
+const platformsSchema = z
+  .array(z.nativeEnum(PlatformType))
+  .min(1)
+  .max(Object.keys(PlatformType).length)
+  .transform((platforms) => [...new Set(platforms)]);
 
 // Validation schemas
 const createTestSchema = z.object({
   promptId: z.string().optional(),
   testPrompt: z.string().min(1).max(10000),
-  platforms: z.array(z.nativeEnum(PlatformType)).min(1),
+  platforms: platformsSchema,
   parameters: z
     .object({
       temperature: z.number().min(0).max(2).optional(),
@@ -29,7 +37,7 @@ const createTestSchema = z.object({
 /**
  * Create a new sandbox test
  */
-router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
+router.post('/', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const validatedData = createTestSchema.parse(req.body);
 
@@ -61,7 +69,7 @@ router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, 
 /**
  * Execute a specific test (if it was scheduled)
  */
-router.post('/:id/execute', authenticate, async (req, res, next) => {
+router.post('/:id/execute', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     // Verify ownership
     const test = await sandboxService.getTest(req.params.id!, req.user!.id);
@@ -193,7 +201,7 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       availablePlatforms.push({
         platform: PlatformType.CHATGPT,
         name: 'AI Chat',
-        models: ['gpt-4-turbo-preview', 'gpt-4', 'gpt-3.5-turbo'],
+        models: ['standard', 'advanced'],
       });
     }
 
@@ -201,7 +209,7 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       availablePlatforms.push({
         platform: PlatformType.CLAUDE,
         name: 'AI Assistant',
-        models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
+        models: ['standard', 'advanced'],
       });
     }
 
@@ -209,7 +217,7 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       availablePlatforms.push({
         platform: PlatformType.GEMINI,
         name: 'AI Search',
-        models: ['gemini-pro', 'gemini-pro-vision'],
+        models: ['standard', 'vision'],
       });
     }
 
@@ -217,7 +225,7 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       availablePlatforms.push({
         platform: PlatformType.PERPLEXITY,
         name: 'AI Research',
-        models: ['pplx-70b-online', 'pplx-7b-online'],
+        models: ['online'],
       });
     }
 
@@ -226,25 +234,25 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
       {
         platform: PlatformType.MIDJOURNEY,
         name: 'Image Generator',
-        models: ['v6'],
+        models: ['standard'],
         simulated: true,
       },
       {
         platform: PlatformType.DALLE,
         name: 'Image Creator',
-        models: ['dall-e-3'],
+        models: ['standard'],
         simulated: true,
       },
       {
         platform: PlatformType.STABLE_DIFFUSION,
         name: 'Diffusion Model',
-        models: ['sdxl'],
+        models: ['standard'],
         simulated: true,
       },
       {
         platform: PlatformType.GITHUB_COPILOT,
         name: 'Code Assistant',
-        models: ['copilot'],
+        models: ['standard'],
         simulated: true,
       },
     );
@@ -261,11 +269,11 @@ router.get('/platforms/available', authenticate, async (req, res, next) => {
 /**
  * Batch test creation - test the same prompt across multiple platforms
  */
-router.post('/batch', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
+router.post('/batch', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const schema = z.object({
       prompts: z.array(z.string().min(1).max(10000)).min(1).max(10),
-      platforms: z.array(z.nativeEnum(PlatformType)).min(1),
+      platforms: platformsSchema,
       parameters: z
         .object({
           temperature: z.number().min(0).max(2).optional(),
@@ -305,6 +313,29 @@ router.post('/batch', authenticate, enforceQuota('enhance_prompt'), async (req, 
     }
     return next(error);
   }
+});
+
+// Service errors are plain Errors; only these messages are safe to show.
+// Everything else (provider, configuration, database) is logged once here
+// and mapped to the generic client copy so nothing upstream leaks.
+const CLIENT_SAFE_ERRORS = new Map<string, { status: number; message: string }>([
+  ['Test not found', { status: 404, message: 'Test not found' }],
+]);
+
+router.use((error: unknown, _req: Request, res: Response, _next: NextFunction): void => {
+  const safe = error instanceof Error ? CLIENT_SAFE_ERRORS.get(error.message) : undefined;
+  if (safe) {
+    res.status(safe.status).json({ success: false, error: safe.message });
+    return;
+  }
+  logger.error({ err: error }, 'Sandbox route error');
+  const clientError = toClientStreamError(error);
+  res.status(clientErrorHttpStatus(clientError.code)).json({
+    success: false,
+    error: clientError.message,
+    code: clientError.code,
+    retryable: clientError.retryable,
+  });
 });
 
 export default router;

@@ -120,15 +120,16 @@ NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
 
 Full inventory in [`.env.example`](./.env.example). Required:
 
-| Variable                                                                               | Purpose                                         |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `NEXT_PUBLIC_API_URL`                                                                  | Express backend base URL (`/api/v1`)            |
-| `NEXT_PUBLIC_APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In (web service ID)                  |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                                | Google OAuth                                    |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`   | Stripe                                          |
-| `NEXT_PUBLIC_STRIPE_PRICE_*`                                                           | Stripe price IDs (Pro/Premium × monthly/annual) |
-| `BACKEND_WEBHOOK_SECRET`                                                               | HMAC for Next.js → Express webhook forwarding   |
-| `NEXTAUTH_URL` / `NEXTAUTH_SECRET`                                                     | Cookie / session secret                         |
+| Variable                                                                               | Purpose                                        |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`                                                                  | Express backend base URL (`/api/v1`)           |
+| `NEXT_PUBLIC_APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In (web service ID)                 |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                                | Google OAuth                                   |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`                                          | Stripe (optional: unset disables web checkout) |
+| `STRIPE_PREMIUM_MONTHLY_PRICE_ID`                                                      | The $9.99/month Premium price                  |
+| `STRIPE_LEGACY_CONSUMER_PRICE_IDS`                                                     | Retired Pro/annual price IDs still honored     |
+| `BACKEND_WEBHOOK_SECRET`                                                               | HMAC for Next.js → Express webhook forwarding  |
+| `NEXTAUTH_URL` / `NEXTAUTH_SECRET`                                                     | Cookie / session secret                        |
 
 All `NEXT_PUBLIC_*` variables are inlined at build time and visible to the client.
 Server-only secrets (without the `NEXT_PUBLIC_` prefix) stay on the server.
@@ -198,13 +199,23 @@ edge middleware uses the `refreshToken` cookie as a fast-path signal only.
 
 ## Payments
 
-- **App tier subscriptions** (FREE / PRO / PREMIUM): Stripe Checkout from the web
-  product, StoreKit 2 from iOS. Both write back to the same `Subscription` model on
-  the backend.
-- **Enterprise API tiers** (API_FREE / API_STARTER / API_PRO / API_ENTERPRISE):
-  Stripe-only, written to the separate `ApiSubscription` model.
-- Stripe webhooks are received by the **backend** (not Next.js) for idempotency. The
-  Next.js `/api/stripe/*` routes only initiate Checkout sessions.
+- **Promptomize Premium** is the only consumer plan: $9.99/month with a 3-day free
+  trial (card required), the same entitlement as the iOS product
+  `com.promptomizer.premium.monthly`. There is no free tier; AI routes answer
+  `403 SUBSCRIPTION_REQUIRED` and the web app sends the user to `/upgrade`.
+- `POST /api/stripe/checkout` takes no client price: it charges
+  `STRIPE_PREMIUM_MONTHLY_PRICE_ID`, adds `trial_period_days: 3` only when the backend
+  reports `trialEligible` and Stripe has no earlier subscription for the customer, and
+  answers `409 ALREADY_SUBSCRIBED` for anyone already entitled (App Store included),
+  or `503 BILLING_NOT_CONFIGURED` while Stripe env is unset.
+- `POST /api/stripe/portal` opens the Stripe customer portal; App Store subscribers are
+  told to manage the subscription in iOS Settings > Apple Account > Subscriptions.
+- `POST /api/stripe/webhook` verifies the Stripe signature, re-reads the subscription
+  and relays it to the backend `/webhooks/stripe` (with `BACKEND_WEBHOOK_SECRET`),
+  which records it and marks the account's trial as used. Retired Pro/annual prices
+  still map to Premium until those subscriptions lapse.
+- **Developer API tiers** (API_FREE / API_STARTER / API_PRO / API_ENTERPRISE):
+  Stripe-only, billed by the backend and written to the separate `ApiSubscription` model.
 
 ---
 

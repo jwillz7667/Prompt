@@ -1,5 +1,11 @@
-/** Central provider model selection. Thinking must be explicit to avoid hidden reasoning spend. */
-export const DEEPSEEK_FLASH_MODEL = 'deepseek-flash';
+import {
+  DEFAULT_DEEPSEEK_MODEL,
+  getLlmConfig,
+  resolveDeepseekModelAlias,
+} from '../features/llm/index.js';
+
+/** Central DeepSeek model selection. Thinking must be explicit to avoid hidden reasoning spend. */
+export const DEEPSEEK_FLASH_MODEL = DEFAULT_DEEPSEEK_MODEL;
 // Compatibility export used by older route definitions.
 export const DEEPSEEK_V4_FLASH_MODEL = DEEPSEEK_FLASH_MODEL;
 
@@ -10,20 +16,13 @@ export interface DeepSeekThinkingConfig {
 export const DEEPSEEK_THINKING_ENABLED: DeepSeekThinkingConfig = { type: 'enabled' };
 export const DEEPSEEK_THINKING_DISABLED: DeepSeekThinkingConfig = { type: 'disabled' };
 
-// Env-overridable so the next model deprecation is an ops change, not a
-// deploy. Read at call time (not module scope) so dotenv load order and test
-// overrides both work.
+/**
+ * The configured DeepSeek model (LLM_DEEPSEEK_MODEL, then DEEPSEEK_MODEL, then
+ * deepseek-flash), used exactly as configured apart from the documented
+ * retired-id aliases in features/llm/config.ts.
+ */
 export function getDeepseekModel(): string {
-  const configured = process.env['DEEPSEEK_MODEL']?.trim();
-  return !configured ||
-    [
-      'deepseek-chat',
-      'deepseek-reasoner',
-      'deepseek-v4-flash',
-      'deepseek-v4-flash-vision-exp',
-    ].includes(configured)
-    ? DEEPSEEK_FLASH_MODEL
-    : configured;
+  return getLlmConfig().deepseekModel;
 }
 
 export interface DeepSeekModelSelection {
@@ -38,26 +37,23 @@ const LEGACY_THINKING_MODELS: ReadonlySet<string> = new Set(['deepseek-reasoner'
 const LEGACY_NON_THINKING_MODELS: ReadonlySet<string> = new Set(['deepseek-chat']);
 
 /**
- * Resolves a caller-supplied model id (possibly a deprecated legacy name)
- * plus the desired thinking state into the model + explicit thinking
- * parameter to send upstream.
+ * Resolves a caller-supplied model id (possibly a retired alias) plus the
+ * desired thinking state into the model + explicit thinking parameter to send
+ * upstream. Unknown explicit ids pass through untouched.
  */
 export function resolveDeepseekModel(
   requestedModel: string | undefined,
   shouldThink: boolean,
 ): DeepSeekModelSelection {
-  if (requestedModel && LEGACY_THINKING_MODELS.has(requestedModel)) {
+  const requested = requestedModel?.trim();
+  if (requested && LEGACY_THINKING_MODELS.has(requested)) {
     return { model: getDeepseekModel(), thinking: DEEPSEEK_THINKING_ENABLED };
   }
-  if (requestedModel && LEGACY_NON_THINKING_MODELS.has(requestedModel)) {
+  if (requested && LEGACY_NON_THINKING_MODELS.has(requested)) {
     return { model: getDeepseekModel(), thinking: DEEPSEEK_THINKING_DISABLED };
   }
   return {
-    model:
-      !requestedModel?.trim() ||
-      ['deepseek-v4-flash', 'deepseek-v4-flash-vision-exp'].includes(requestedModel)
-        ? getDeepseekModel()
-        : requestedModel.trim(),
+    model: requested ? resolveDeepseekModelAlias(requested) : getDeepseekModel(),
     thinking: shouldThink ? DEEPSEEK_THINKING_ENABLED : DEEPSEEK_THINKING_DISABLED,
   };
 }

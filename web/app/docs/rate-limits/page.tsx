@@ -8,6 +8,11 @@ export default function RateLimitsPage() {
 
       <section className="space-y-4">
         <h2 className="text-primary text-2xl font-semibold">Tier Limits</h2>
+        <p className="text-muted">
+          Prompt enhancement requires an active paid plan. Without one, <code>POST /enhance</code>{' '}
+          returns <code>402 API_PLAN_REQUIRED</code>; your keys can still read usage, models and
+          history.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -19,12 +24,6 @@ export default function RateLimitsPage() {
               </tr>
             </thead>
             <tbody className="text-muted">
-              <tr className="border-border border-b">
-                <td className="text-primary px-4 py-3 font-medium">Free</td>
-                <td className="px-4 py-3">100</td>
-                <td className="px-4 py-3">10</td>
-                <td className="px-4 py-3">$0</td>
-              </tr>
               <tr className="border-border border-b">
                 <td className="text-primary px-4 py-3 font-medium">Starter</td>
                 <td className="px-4 py-3">1,000</td>
@@ -95,8 +94,7 @@ export default function RateLimitsPage() {
       <section className="space-y-4">
         <h2 className="text-primary text-2xl font-semibold">Overage Billing</h2>
         <p className="text-muted">
-          Starter and Pro tiers allow overage requests at $0.01 per 100 requests. Free tier does not
-          allow overage.
+          Starter and Pro tiers allow overage requests at $0.01 per 100 requests.
         </p>
       </section>
     </div>

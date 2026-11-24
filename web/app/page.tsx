@@ -16,6 +16,7 @@ import {
   PlayCircle,
 } from 'lucide-react'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
+import { PREMIUM_PLAN, PREMIUM_TRIAL_SUMMARY } from '@/lib/billing/premium-plan'
 import PromptComparison from '@/components/hero/PromptComparison'
 
 const features = [
@@ -51,47 +52,6 @@ const features = [
     icon: Smartphone,
     title: 'Native iOS App',
     description: 'Beautiful, fast native app designed for iPhone and iPad with dark mode support.',
-  },
-]
-
-const pricingPlans = [
-  {
-    name: 'Free',
-    price: '$0',
-    period: '',
-    description: 'Perfect for getting started',
-    features: ['10 prompts per day', 'Basic prompt quality', 'Prompt history', 'Dark mode support'],
-    cta: 'Get Started',
-    popular: false,
-  },
-  {
-    name: 'Pro',
-    price: '$4.99',
-    period: '/month',
-    description: 'For regular users',
-    features: [
-      '100 prompts per day',
-      'Standard prompt quality',
-      'Export prompts',
-      'Priority support',
-      'All Free features',
-    ],
-    cta: 'Start Pro',
-    popular: false,
-  },
-  {
-    name: 'Premium',
-    price: '$9.99',
-    period: '/month',
-    description: 'For power users',
-    features: [
-      'Unlimited prompts',
-      'Advanced prompt quality',
-      '7-day free trial',
-      'All Pro features',
-    ],
-    cta: 'Start Free Trial',
-    popular: true,
   },
 ]
 
@@ -137,30 +97,12 @@ export default function Home() {
             offers: [
               {
                 '@type': 'Offer',
-                name: 'Free',
-                price: '0',
-                priceCurrency: 'USD',
-              },
-              {
-                '@type': 'Offer',
-                name: 'Pro',
-                price: '4.99',
-                priceCurrency: 'USD',
-                priceValidUntil: '2027-12-31',
-              },
-              {
-                '@type': 'Offer',
-                name: 'Premium',
-                price: '9.99',
+                name: PREMIUM_PLAN.name,
+                price: PREMIUM_PLAN.priceUsd.toFixed(2),
                 priceCurrency: 'USD',
                 priceValidUntil: '2027-12-31',
               },
             ],
-            aggregateRating: {
-              '@type': 'AggregateRating',
-              ratingValue: '4.8',
-              ratingCount: '1250',
-            },
           }),
         }}
       />
@@ -341,69 +283,46 @@ export default function Home() {
               Simple Pricing
             </h2>
             <p className="mx-auto max-w-2xl text-xl text-[var(--text-secondary)]">
-              Choose the plan that works for you
+              One plan with everything included
             </p>
           </header>
-          <div className="mx-auto grid max-w-5xl items-stretch gap-8 md:grid-cols-3" role="list">
-            {pricingPlans.map((plan, index) => (
-              <article
-                key={index}
-                className={`relative flex flex-col rounded-3xl border bg-[var(--bg-secondary)] p-8 ${
-                  plan.popular ? 'glow-cyan border-[var(--accent-cyan)]' : 'border-[var(--border)]'
-                }`}
-                role="listitem"
-                itemScope
-                itemType="https://schema.org/Offer"
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <span className="rounded-full bg-[var(--accent-cyan)] px-4 py-1 text-sm font-medium text-[var(--text-on-accent)]">
-                      Most Popular
-                    </span>
-                  </div>
-                )}
-                <div className="mb-8 text-center">
-                  <h3 className="mb-2 text-xl font-semibold" itemProp="name">
-                    {plan.name}
-                  </h3>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold" itemProp="price">
-                      {plan.price}
-                    </span>
-                    <span className="text-[var(--text-secondary)]" itemProp="priceCurrency">
-                      {plan.period}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-[var(--text-tertiary)]" itemProp="description">
-                    {plan.description}
-                  </p>
-                </div>
-                <ul className="flex-grow space-y-4" aria-label={`${plan.name} plan features`}>
-                  {plan.features.map((feature, fIndex) => (
-                    <li key={fIndex} className="flex items-center gap-3">
-                      <Check
-                        className="h-5 w-5 flex-shrink-0 text-[var(--accent-cyan)]"
-                        aria-hidden="true"
-                      />
-                      <span className="text-[var(--text-secondary)]">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <a
-                  href="https://apps.apple.com/us/app/promptomize/id6758075605"
-                  className={`mt-8 block w-full rounded-xl py-3 text-center font-semibold transition ${
-                    plan.popular
-                      ? 'btn-cyan'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--border)]'
-                  }`}
-                  rel="noopener noreferrer"
-                  aria-label={`${plan.cta} - ${plan.name} plan`}
-                >
-                  {plan.cta}
-                </a>
-              </article>
-            ))}
-          </div>
+          <article
+            className="glow-cyan relative mx-auto flex max-w-md flex-col rounded-3xl border border-[var(--accent-cyan)] bg-[var(--bg-secondary)] p-8"
+            itemScope
+            itemType="https://schema.org/Offer"
+          >
+            <div className="mb-8 text-center">
+              <h3 className="mb-2 text-xl font-semibold" itemProp="name">
+                {PREMIUM_PLAN.name}
+              </h3>
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-5xl font-bold" itemProp="price">
+                  {PREMIUM_PLAN.priceLabel}
+                </span>
+                <span className="text-[var(--text-secondary)]">/{PREMIUM_PLAN.intervalLabel}</span>
+              </div>
+              <p className="mt-2 text-[var(--text-tertiary)]" itemProp="description">
+                {PREMIUM_TRIAL_SUMMARY}
+              </p>
+            </div>
+            <ul className="flex-grow space-y-4" aria-label="Premium features">
+              {PREMIUM_PLAN.features.map((feature) => (
+                <li key={feature} className="flex items-center gap-3">
+                  <Check
+                    className="h-5 w-5 flex-shrink-0 text-[var(--accent-cyan)]"
+                    aria-hidden="true"
+                  />
+                  <span className="text-[var(--text-secondary)]">{feature}</span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/pricing"
+              className="btn-cyan mt-8 block w-full rounded-xl py-3 text-center font-semibold transition"
+            >
+              Start {PREMIUM_PLAN.trialDays}-day free trial
+            </Link>
+          </article>
         </div>
       </section>
 

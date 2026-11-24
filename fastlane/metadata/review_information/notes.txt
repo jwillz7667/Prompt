@@ -1,0 +1,15 @@
+SIGN IN
+Promptomize requires Sign in with Apple. Chats, optimized prompts and the subscription are stored on the user's account so they sync across devices and survive reinstalling the app. No demo account is needed: sign in with the Apple Account on the review device. "Sign out" and "Delete Account" are available on the subscription screen (no purchase needed) and in Settings > Account Actions, so an account can be deleted whether or not it ever subscribed.
+
+AI DATA CONSENT
+Right after sign-in, a one-time screen explains that messages, prompts and attached images are sent to third-party AI service providers to generate answers, links the Privacy Policy, and asks for explicit permission ("Agree and Continue"). Nothing is sent to an AI service before the user agrees; "Not Now, Sign Out" and "Delete Account" are offered on the same screen.
+
+SUBSCRIPTION (HARD PAYWALL)
+All app features use AI services that cost us per request, so the app requires an active subscription. After sign-in, users without one see the Promptomize Premium screen. There is one auto-renewable subscription: Promptomize Premium Monthly (com.promptomizer.premium.monthly), $9.99/month, with a 3-day free trial introductory offer for new subscribers. The screen shows the title, length, price, trial terms, auto-renewal terms, Restore Purchases, and links to the Terms of Use (EULA) https://promptomize.app/terms and Privacy Policy https://promptomize.app/privacy before purchase. Earlier subscribers to retired plans keep access until their subscription lapses.
+
+HOW TO TEST IN SANDBOX
+1. Launch the app, tap "Sign in with Apple", then tap "Agree and Continue" on the AI data consent screen.
+2. On the Promptomize Premium screen, tap the free-trial button (its label states the trial length shown by the App Store) and confirm with a Sandbox Apple Account.
+3. The app opens immediately. Enter any idea (for example "a poster for a jazz night") and tap send to get an optimized prompt; the AI chat assistant is available from the same screen.
+4. Settings > Subscription shows the trial status and opens Manage Subscription. "Restore Purchases" is on both the subscription screen and the Settings subscription screen.
+If subscription details do not load, the screen shows "Try Again"; this only happens when the App Store sandbox is unreachable.

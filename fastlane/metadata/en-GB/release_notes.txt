@@ -1,12 +1,15 @@
-Promptomize 2.1 — your prompt enhancer now works from anywhere on your iPhone.
+Promptomize now comes with an AI chat assistant, alongside the prompt optimiser you already use.
 
-NEW: SIRI & SHORTCUTS
-- Say "Enhance a prompt with Promptomize", or run it from the Shortcuts app and Spotlight.
-- The enhanced prompt is copied to your clipboard automatically — perfect for chaining into your own shortcuts.
+NEW: AI CHAT ASSISTANT
+- Ask questions, draft and rewrite, brainstorm or get help with code in a full conversation.
+
+NEW: PROMPTOMIZE PREMIUM
+- One simple plan that includes the prompt optimiser and the AI chat assistant.
+- New subscribers can try it free for 3 days.
+- Existing subscribers keep full access with their current plan.
 
 IMPROVED
-- Stay signed in: brief network hiccups no longer sign you out or hide your history.
-- Subscription status stays accurate right after you upgrade, change, or restore a plan.
-- Faster, more dependable enhancements with smarter recovery on slow connections.
+- Sign in with Apple keeps your chats and history synced across your devices.
+- Clearer messages when a reply is interrupted, and your message stays ready to resend.
 
-Thanks for using Promptomize — your feedback shapes every release.
+Thanks for using Promptomize. Your feedback shapes every release.

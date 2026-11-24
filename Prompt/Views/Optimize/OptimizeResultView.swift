@@ -218,7 +218,7 @@ struct OptimizeResultView: View {
         HStack(spacing: 4) {
             Image(systemName: family.sfSymbol)
                 .font(.system(size: 10, weight: .semibold))
-            Text(family == .unknown ? "Auto profile" : family.displayName)
+            Text(family == .unknown ? String(localized: "Auto format") : family.displayName)
                 .font(.system(.caption2, design: .rounded, weight: .semibold))
         }
         .foregroundStyle(textSecondary)

@@ -11,7 +11,6 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthManager.self) private var authManager
-    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(PromptHistoryManager.self) private var historyManager
     @Environment(StoreKitManager.self) private var storeKit
     @Environment(SettingsManager.self) private var settings
@@ -20,7 +19,7 @@ struct ProfileView: View {
     @StateObject private var unreadManager = UnreadMessageManager.shared
     @State private var showSignOutAlert = false
     @State private var showDeleteAccountAlert = false
-    @State private var showPaywall = false
+    @State private var showSubscription = false
     @State private var showSupport = false
     @State private var stats: UserStats?
     @State private var isLoadingStats = false
@@ -153,35 +152,6 @@ struct ProfileView: View {
                                 .buttonStyle(.plain)
                                 .disabled(isSavingProfile)
                             }
-                        } else {
-                            Text("Guest")
-                                .font(.system(.title2, design: .rounded, weight: .bold))
-                                .foregroundStyle(textPrimary)
-
-                            Button {
-                                guestSession.presentAuthenticationGate()
-                                dismiss()
-                            } label: {
-                                Label("Sign In with Apple", systemImage: "apple.logo")
-                                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(Color.adaptiveTextOnAccent)
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 10)
-                                    .background {
-                                        Capsule()
-                                            .fill(accentColor)
-                                    }
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        if authManager.isSessionExpired {
-                            Button("Sign in again") {
-                                guestSession.presentAuthenticationGate()
-                                dismiss()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .accessibilityIdentifier("auth.signInAgain")
                         }
 
                         if let error = profileSaveError {
@@ -202,40 +172,29 @@ struct ProfileView: View {
                         settingsRow(icon: "envelope.fill", iconColor: accentColor, title: "Email", value: user.email)
                     }
 
-                    settingsRow(
-                        icon: "plus.rectangle.on.rectangle",
-                        iconColor: accentColor,
-                        title: "Subscription",
-                        value: storeKit.currentTier.displayName
-                    )
-
                     Button {
-                        handlePlanAction()
+                        showSubscription = true
                     } label: {
-                        settingsRowContent(
-                            icon: "diamond.fill",
-                            iconColor: accentColor,
-                            title: "Upgrade to Premium",
-                            showChevron: false
-                        )
+                        HStack(spacing: 14) {
+                            Image(systemName: "crown.fill")
+                                .foregroundStyle(accentColor)
+                                .frame(width: 28)
+
+                            Text("Subscription")
+                                .foregroundStyle(textPrimary)
+
+                            Spacer()
+
+                            Text(subscriptionSummary)
+                                .foregroundStyle(textSecondary)
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(textTertiary)
+                        }
                     }
                     .listRowBackground(bgSecondary)
-
-                    Button {
-                        Task { try? await storeKit.restorePurchases() }
-                    } label: {
-                        settingsRowContent(
-                            icon: "arrow.clockwise",
-                            iconColor: textSecondary,
-                            title: "Restore purchases",
-                            showChevron: false
-                        )
-                    }
-                    .listRowBackground(bgSecondary)
-
-                    if storeKit.isTrialing, let remaining = storeKit.subscriptionInfo?.trialDaysRemaining {
-                        settingsRow(icon: "clock.fill", iconColor: .orange, title: "Trial", value: "\(remaining) days left")
-                    }
+                    .accessibilityIdentifier("profile.subscription")
                 } header: {
                     Text("Account")
                         .foregroundStyle(textSecondary)
@@ -374,6 +333,8 @@ struct ProfileView: View {
                         .foregroundStyle(textSecondary)
                 }
 
+                AIDataSharingSettingsSection()
+
                 // Sign out / danger
                 Section {
                     Button(role: .destructive) {
@@ -408,9 +369,8 @@ struct ProfileView: View {
                 Section {
                     statsRow(label: "Version", value: appVersion)
                     statsRow(label: "Build", value: buildNumber)
-                    statsRow(label: "Powered By", value: "DeepSeek AI")
 
-                    Link(destination: URL(string: "https://promptomize.app/support")!) {
+                    Link(destination: LegalLinks.support) {
                         HStack {
                             Label("Help & Support", systemImage: "questionmark.circle.fill")
                                 .foregroundStyle(textPrimary)
@@ -421,7 +381,7 @@ struct ProfileView: View {
                     }
                     .listRowBackground(bgSecondary)
 
-                    Link(destination: URL(string: "https://promptomize.app/privacy")!) {
+                    Link(destination: LegalLinks.privacyPolicy) {
                         HStack {
                             Label("Privacy Policy", systemImage: "hand.raised.fill")
                                 .foregroundStyle(textPrimary)
@@ -432,9 +392,9 @@ struct ProfileView: View {
                     }
                     .listRowBackground(bgSecondary)
 
-                    Link(destination: URL(string: "https://promptomize.app/terms")!) {
+                    Link(destination: LegalLinks.termsOfUse) {
                         HStack {
-                            Label("Terms of Service", systemImage: "doc.text.fill")
+                            Label("Terms of Use", systemImage: "doc.text.fill")
                                 .foregroundStyle(textPrimary)
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
@@ -477,18 +437,11 @@ struct ProfileView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
-            .alert("Delete Account", isPresented: $showDeleteAccountAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) {
-                    Task {
-                        try? await deleteAccount()
-                    }
-                }
-            } message: {
-                Text("This will permanently delete your account and all data. This action cannot be undone.")
+            .deleteAccountFlow(isPresented: $showDeleteAccountAlert) {
+                dismiss()
             }
-            .sheet(isPresented: $showPaywall) {
-                PaywallView()
+            .sheet(isPresented: $showSubscription) {
+                PaywallView(mode: .manage)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(24)
@@ -627,16 +580,15 @@ struct ProfileView: View {
         }
     }
 
-    private func deleteAccount() async throws {
-        try await APIClient.shared.requestVoid("/users/account", method: .delete)
-        await APIClient.shared.clearTokens()
-        authManager.currentUser = nil
-        historyManager.clearLocalData()
-        dismiss()
-    }
-
-    private func handlePlanAction() {
-        showPaywall = true
+    private var subscriptionSummary: String {
+        switch storeKit.entitlementState {
+        case .entitled(_, let isTrialing):
+            return isTrialing ? String(localized: "Free trial") : String(localized: "Premium")
+        case .notEntitled:
+            return String(localized: "Not subscribed")
+        case .unknown:
+            return String(localized: "Checking…")
+        }
     }
 
     private func formatTokens(_ tokens: String) -> String {
@@ -652,7 +604,7 @@ struct ProfileView: View {
 
 // MARK: - Stats Models
 
-struct UserStats: Decodable {
+nonisolated struct UserStats: Decodable {
     let totalPrompts: Int
     let favoritePrompts: Int
     let totalTokens: String
@@ -682,7 +634,7 @@ struct UserStats: Decodable {
     }
 }
 
-struct StatsResponse: Decodable {
+nonisolated struct StatsResponse: Decodable {
     let stats: UserStats
 }
 

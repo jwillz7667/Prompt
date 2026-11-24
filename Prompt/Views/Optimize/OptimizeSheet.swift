@@ -13,8 +13,6 @@ import UIKit
 struct OptimizeSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
-    @Environment(StoreKitManager.self) private var storeKit
-    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(AuthManager.self) private var authManager
 
     let viewModel: OptimizeViewModel
@@ -44,10 +42,8 @@ struct OptimizeSheet: View {
         promptText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Auto first, then the named families — mirrors spec §8: Free gets the
-    /// single generic profile, Pro unlocks every named family.
     private var familyOptions: [TargetModelFamily] {
-        [.unknown] + TargetModelFamily.allCases.filter { $0 != .unknown }
+        TargetModelFamily.selectableOptions
     }
 
     var body: some View {
@@ -165,7 +161,7 @@ struct OptimizeSheet: View {
 
     private var familyPickerCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            LiquidGlassSectionHeader(title: "Target Model Profile", icon: "cpu")
+            LiquidGlassSectionHeader(title: "Output Format", icon: "text.badge.checkmark")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -177,7 +173,7 @@ struct OptimizeSheet: View {
                 .padding(.vertical, 6)
             }
 
-            Text("The winning prompt is formatted for the model family you pick. Auto infers it from your prompt.")
+            Text("The winning prompt uses the format you pick. Auto chooses one from your prompt.")
                 .font(.system(.caption2, design: .rounded))
                 .foregroundStyle(textTertiary)
         }
@@ -185,17 +181,11 @@ struct OptimizeSheet: View {
 
     private func familyChip(_ family: TargetModelFamily) -> some View {
         let isSelected = selectedFamily == family
-        // Same tier read as the MAX-mode gating UI (ThreadView.maxModeCard).
-        let isLocked = family.isProOnly && !storeKit.hasActiveSubscription
 
         return Button {
             triggerHaptic(.light)
-            if isLocked {
-                showPaywall = true
-            } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    selectedFamily = family
-                }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedFamily = family
             }
         } label: {
             HStack(spacing: 6) {
@@ -204,13 +194,8 @@ struct OptimizeSheet: View {
 
                 Text(family.displayName)
                     .font(.system(.caption, design: .rounded, weight: .semibold))
-
-                if isLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9, weight: .semibold))
-                }
             }
-            .foregroundStyle(isSelected ? .white : (isLocked ? textTertiary : textSecondary))
+            .foregroundStyle(isSelected ? .white : textSecondary)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .liquidGlassChip(isSelected: isSelected, accentColor: accentColor)
@@ -249,8 +234,7 @@ struct OptimizeSheet: View {
         viewModel.optimize(
             rawPrompt: trimmedPrompt,
             goal: goal.isEmpty ? nil : goal,
-            // Omitted and 'unknown' are equivalent on the wire; omitting keeps
-            // Free-tier requests clear of the target-model gate.
+            // Omitted and 'unknown' are equivalent on the wire.
             targetModelFamily: selectedFamily == .unknown ? nil : selectedFamily
         )
     }
@@ -356,7 +340,9 @@ struct OptimizeSheet: View {
         ) {
             Button {
                 triggerHaptic(.light)
-                guestSession.presentAuthenticationGate()
+                // RootView swaps to the sign-in screen once the session is
+                // marked expired.
+                authManager.handleSessionExpiration()
                 dismiss()
             } label: {
                 Label("Sign In with Apple", systemImage: "apple.logo")
@@ -391,7 +377,7 @@ struct OptimizeSheet: View {
             icon: "crown.fill",
             iconColor: .yellow,
             title: "Upgrade to keep optimizing",
-            message: "The full optimization loop — candidates, test runs, and receipts — requires Pro or Premium."
+            message: "The full optimization loop — candidates, test runs, and receipts — requires Promptomize Premium."
         ) {
             Button {
                 triggerHaptic(.light)

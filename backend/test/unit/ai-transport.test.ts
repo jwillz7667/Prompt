@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
+  process.env['LLM_PROVIDER_CHAIN'] = 'deepseek';
   process.env['DEEPSEEK_API_KEY'] = 'test-key-never-sent';
-  process.env['DEEPSEEK_MAX_RETRIES'] = '0';
-  process.env['DEEPSEEK_REQUEST_TIMEOUT_MS'] = '50';
-  process.env['DEEPSEEK_STREAM_IDLE_TIMEOUT_MS'] = '50';
-  process.env['DEEPSEEK_STREAM_TOTAL_TIMEOUT_MS'] = '200';
+  process.env['LLM_LAST_PROVIDER_RETRIES'] = '0';
+  process.env['LLM_TTFT_TIMEOUT_MS'] = '50';
+  process.env['LLM_IDLE_TIMEOUT_MS'] = '50';
+  process.env['LLM_TOTAL_TIMEOUT_MS'] = '200';
+  delete process.env['DEEPSEEK_MODEL'];
+  delete process.env['LLM_DEEPSEEK_MODEL'];
+  delete process.env['PROMPT_VISION_PROVIDER'];
 });
-vi.mock('../../src/utils/logger.js', () => ({
-  promptLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
+vi.mock('../../src/utils/logger.js', () => {
+  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+  return { promptLogger: log, logger: log };
+});
 vi.mock('../../src/services/imageAnalysisService.js', () => ({
   imageAnalysisService: { enrichAttachmentForPrompt: vi.fn() },
 }));
@@ -22,6 +27,8 @@ import { imageAnalysisService } from '../../src/services/imageAnalysisService.js
 import { getDeepseekModel, resolveDeepseekModel } from '../../src/services/deepseekModels.js';
 import { enhancePromptV2 } from '../../src/services/promptEnhancementEngine.js';
 import { completeWithProvider } from '../../src/services/providerAdapters.js';
+import { ProviderError, loadLlmConfig, resetDefaultLlmGateway } from '../../src/features/llm/index.js';
+import { createDeepseekReflectionLlmCall } from '../../src/services/reflectionLoop/transport.js';
 
 const request: DeepSeekRequest = {
   model: 'deepseek-flash', messages: [{ role: 'user', content: 'Improve this prompt' }],
@@ -48,35 +55,66 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   vi.useRealTimers();
+  // Breaker state is process-local in unit tests; isolate each case.
+  resetDefaultLlmGateway();
 });
 
-describe('DeepSeek transport', () => {
+describe('prompt transport through the LLM gateway', () => {
   it('handles arbitrary SSE chunk boundaries, CRLF, usage and a final event without a newline', async () => {
     const wire = (token('A prompt') + finish()).replaceAll('\n', '\r\n');
     const fetch = vi.fn().mockResolvedValue(respond(wire.slice(0, 8), wire.slice(8, 80), wire.slice(80)));
     vi.stubGlobal('fetch', fetch);
     const cb = callbacks();
-    await streamCompletion({ ...request, stream: true }, 'test-key', 'chat', cb);
+    await streamCompletion({ ...request, stream: true }, 'chat', cb);
     expect(cb.onError).not.toHaveBeenCalled();
     expect(cb.onToken).toHaveBeenCalledWith('A prompt');
     expect(cb.onComplete).toHaveBeenCalledWith(expect.objectContaining({
       enhancedPrompt: 'A prompt', inputTokens: 20, outputTokens: 10, totalTokens: 30,
     }));
+    expect(fetch.mock.calls[0]![0]).toBe('https://api.deepseek.com/chat/completions');
     expect(JSON.parse(fetch.mock.calls[0]![1].body).stream_options.include_usage).toBe(true);
   });
 
+  it('serves reflection calls on an OpenRouter-only chain without DEEPSEEK_API_KEY', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', undefined);
+    resetDefaultLlmGateway(loadLlmConfig({
+      LLM_PROVIDER_CHAIN: 'openrouter', LLM_OPENROUTER_API_KEY: 'or-key', LLM_LAST_PROVIDER_RETRIES: '0',
+    }));
+    const fetch = vi.fn().mockResolvedValue(completion('{"verdict":"ok"}'));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await createDeepseekReflectionLlmCall()({
+      stage: 'critique', model: 'deepseek-flash', systemPrompt: 'Judge it', userMessage: 'Prompt',
+      temperature: 0, maxTokens: 64, thinking: { type: 'disabled' },
+    });
+
+    expect(result.content).toBe('{"verdict":"ok"}');
+    expect(fetch.mock.calls[0]![0]).toBe('https://openrouter.ai/api/v1/chat/completions');
+  });
+
   it.each([
-    ['empty', finish()],
-    ['truncated', token('Partial answer')],
-    ['length-limited', token('Partial answer') + finish('length')],
-    ['filtered', token('Partial answer') + finish('content_filter')],
-    ['malformed', token('Partial answer') + 'data: {broken}\n\n' + finish()],
-  ])('does not persist %s streams as successful completions', async (_name, wire) => {
+    ['empty', finish(), 'interrupted'],
+    ['truncated', token('Partial answer'), 'interrupted'],
+    ['length-limited', token('Partial answer') + finish('length'), 'interrupted'],
+    ['filtered', token('Partial answer') + finish('content_filter'), 'content_filter'],
+  ])('does not persist %s streams as successful completions', async (_name, wire, kind) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(wire)));
     const cb = callbacks();
-    await streamCompletion({ ...request, stream: true }, 'test-key', 'chat', cb);
+    await streamCompletion({ ...request, stream: true }, 'chat', cb);
     expect(cb.onComplete).not.toHaveBeenCalled();
     expect(cb.onError).toHaveBeenCalledOnce();
+    expect(cb.onError.mock.calls[0]![0]).toBeInstanceOf(ProviderError);
+    expect(cb.onError.mock.calls[0]![0].kind).toBe(kind);
+  });
+
+  it('skips a malformed data line and completes with the remaining tokens', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      respond(token('Partial ') + 'data: {broken}\n\n' + token('answer') + finish()),
+    ));
+    const cb = callbacks();
+    await streamCompletion({ ...request, stream: true }, 'chat', cb);
+    expect(cb.onError).not.toHaveBeenCalled();
+    expect(cb.onComplete).toHaveBeenCalledWith(expect.objectContaining({ enhancedPrompt: 'Partial answer' }));
   });
 
   it('propagates a failing token consumer instead of swallowing it as invalid JSON', async () => {
@@ -84,7 +122,7 @@ describe('DeepSeek transport', () => {
     vi.stubGlobal('fetch', fetch);
     const cb = callbacks();
     cb.onToken.mockRejectedValue(new Error('Client disconnected'));
-    await streamCompletion({ ...request, stream: true }, 'test-key', 'chat', cb);
+    await streamCompletion({ ...request, stream: true }, 'chat', cb);
     expect(cb.onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Client disconnected' }));
     expect(cb.onComplete).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledOnce();
@@ -106,7 +144,7 @@ describe('DeepSeek transport', () => {
     expect(settled).toBe(true);
   });
 
-  it('applies the one-shot timeout to a body that stalls after successful headers', async () => {
+  it('applies the total deadline to a one-shot body that stalls after successful headers', async () => {
     vi.useFakeTimers();
     const fetch = vi.fn().mockImplementation(async (_url, init: RequestInit) => new Response(new ReadableStream({
       start(controller) {
@@ -114,10 +152,10 @@ describe('DeepSeek transport', () => {
       },
     })));
     vi.stubGlobal('fetch', fetch);
-    const pending = expect(requestCompletion(request, 'test-key', 'chat')).rejects.toThrow('Timed out');
-    await vi.advanceTimersByTimeAsync(60);
+    const pending = expect(requestCompletion(request, 'chat')).rejects.toMatchObject({ kind: 'timeout' });
+    await vi.advanceTimersByTimeAsync(250);
     await pending;
-    expect(fetch).toHaveBeenCalledOnce(); // Explicit MAX_RETRIES=0 must be honored.
+    expect(fetch).toHaveBeenCalledOnce(); // LLM_LAST_PROVIDER_RETRIES=0 must be honored.
   });
 
   it('reports an idle stream as failure even after content has arrived', async () => {
@@ -129,25 +167,29 @@ describe('DeepSeek transport', () => {
       },
     }))));
     const cb = callbacks();
-    const pending = streamCompletion({ ...request, stream: true }, 'test-key', 'chat', cb);
+    const pending = streamCompletion({ ...request, stream: true }, 'chat', cb);
     await vi.advanceTimersByTimeAsync(60);
     await pending;
     expect(cb.onComplete).not.toHaveBeenCalled();
     expect(cb.onError).toHaveBeenCalledOnce();
+    expect(cb.onError.mock.calls[0]![0]).toMatchObject({ kind: 'timeout', hasStreamedOutput: true });
   });
 
   it('does not echo error bodies or retry invalid provider credentials', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response('secret prompt and credentials', { status: 401 }));
     vi.stubGlobal('fetch', fetch);
-    await expect(requestCompletion(request, 'test-key', 'chat')).rejects.toThrow('DeepSeek API error: 401');
+    const failure: unknown = await requestCompletion(request, 'chat').catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ProviderError);
+    expect(failure).toMatchObject({ kind: 'auth', status: 401 });
+    expect(failure instanceof Error ? failure.message : '').not.toContain('secret');
     expect(fetch).toHaveBeenCalledOnce();
   });
 
   it('rejects truncated one-shot output and computes missing total usage', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(completion('Partial', 'length')).mockResolvedValueOnce(completion());
     vi.stubGlobal('fetch', fetch);
-    await expect(requestCompletion(request, 'test-key', 'chat')).rejects.toThrow('interrupted');
-    expect((await requestCompletion(request, 'test-key', 'chat')).totalTokens).toBe(30);
+    await expect(requestCompletion(request, 'chat')).rejects.toThrow('interrupted');
+    expect((await requestCompletion(request, 'chat')).totalTokens).toBe(30);
   });
 
   it('uses the same validated transport for V2 enhancement and provider comparison', async () => {
@@ -160,14 +202,18 @@ describe('DeepSeek transport', () => {
 });
 
 describe('efficient model routing', () => {
-  it('maps retired environment and client model aliases to Flash while preserving explicit reasoning mode', () => {
-    vi.stubEnv('DEEPSEEK_MODEL', 'deepseek-chat');
+  it('maps retired client model aliases to Flash while preserving explicit reasoning mode', () => {
     expect(getDeepseekModel()).toBe('deepseek-flash');
     expect(resolveDeepseekModel('deepseek-reasoner', false)).toEqual({ model: 'deepseek-flash', thinking: { type: 'enabled' } });
     expect(resolveDeepseekModel('deepseek-chat', true)).toEqual({ model: 'deepseek-flash', thinking: { type: 'disabled' } });
+    expect(resolveDeepseekModel('deepseek-v4-flash', false).model).toBe('deepseek-flash');
   });
 
-  it('sends actual pixels using one DeepSeek call without an OpenAI key or pre-analysis', async () => {
+  it('never rewrites an explicit unknown model id', () => {
+    expect(resolveDeepseekModel('deepseek-flash-2027', false).model).toBe('deepseek-flash-2027');
+  });
+
+  it('sends actual pixels using one gateway call without an OpenAI key or pre-analysis', async () => {
     const fetch = vi.fn().mockResolvedValue(respond(token('Image-aware answer') + finish()));
     vi.stubGlobal('fetch', fetch);
     const attachment = { dataUrl: 'data:image/png;base64,AA==', mimeType: 'image/png', width: 1, height: 1 };

@@ -30,7 +30,9 @@ export interface CapabilitiesPayload {
   fetchedAt: string
 }
 
-export interface EnhanceRequestPayload {
+// A type alias, not an interface, so it is assignable to the host's
+// Record<string, unknown> tool-argument type.
+export type EnhanceRequestPayload = {
   prompt: string
   modality: Modality
   tone?: Tone

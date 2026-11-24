@@ -123,7 +123,7 @@ Prompt/
 - `AnalyticsService.swift` — Firebase Analytics wrapper (no PII).
 - `ErrorHandler.swift` — Centralised user-facing error mapping.
 - `DeeplinkManager.swift`, `ShareService.swift`, `BackgroundTaskManager.swift`,
-  `ThreadSyncBroadcaster.swift`, `GuestSessionManager.swift`,
+  `ThreadSyncBroadcaster.swift`,
   `AppStoreComplianceManager.swift`, `ContextService.swift`, `PlatformService.swift`,
   `SandboxService.swift`, `VariationsService.swift`, `WorkflowService.swift`,
   `ImageAttachmentProcessor.swift`, and provider-specific helpers.

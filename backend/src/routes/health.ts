@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.js';
 import { getRedis, isRedisAvailable } from '../utils/redis.js';
 import { queues } from '../utils/queue.js';
 import { getMissingRequiredEnvVars } from '../utils/env.js';
+import { getLlmConfig, LlmConfigError } from '../features/llm/index.js';
 import { getMigrationBootStatus } from '../services/bootStatusService.js';
 
 export const healthRouter = Router();
@@ -198,13 +199,30 @@ healthRouter.get('/status', async (_req: Request, res: Response): Promise<void> 
 // CI deploy verification fails fast on a misconfigured rollout. Railway's own
 // healthcheck targets /health/live (liveness only), so this never crash-loops a
 // deploy — it just makes the misconfiguration visible.
+function llmConfigProblem(): string | undefined {
+  try {
+    return getLlmConfig().chain.length === 0
+      ? 'no usable LLM provider in LLM_PROVIDER_CHAIN'
+      : undefined;
+  } catch (error) {
+    return error instanceof LlmConfigError
+      ? 'invalid LLM provider configuration'
+      : 'LLM configuration unreadable';
+  }
+}
+
 function checkConfig(): ServiceCheck {
   const missing = getMissingRequiredEnvVars();
-  if (missing.length > 0) {
+  const llmProblem = llmConfigProblem();
+  if (missing.length > 0 || llmProblem) {
+    const parts = [
+      ...(missing.length > 0 ? [`Missing required configuration: ${missing.join(', ')}`] : []),
+      ...(llmProblem ? [llmProblem] : []),
+    ];
     return {
       status: 'error',
       latency: 0,
-      message: `Missing required configuration: ${missing.join(', ')}`,
+      message: parts.join('; '),
     };
   }
   return {
@@ -231,7 +249,8 @@ async function checkDatabase(): Promise<ServiceCheck> {
     return {
       status: 'error',
       latency: -1,
-      message: error instanceof Error ? error.message : 'Database connection failed',
+      // Public endpoint: the driver error (hosts, credentials) stays in the log.
+      message: 'Database connection failed',
     };
   }
 }
@@ -270,7 +289,7 @@ async function checkRedis(): Promise<ServiceCheck> {
     return {
       status: 'error',
       latency: -1,
-      message: error instanceof Error ? error.message : 'Redis connection failed',
+      message: 'Redis connection failed',
     };
   }
 }

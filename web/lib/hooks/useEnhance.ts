@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { enhancePromptStream } from '@/lib/api/prompts'
+import { isAiConsentRequired, isSubscriptionRequired } from '@/lib/api/client'
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
 import type { EnhanceRequest, EnhancementResult } from '@/lib/types/api'
@@ -23,19 +25,25 @@ interface EnhanceState {
   error: string | null
   warning: string | null
   progress: 'idle' | 'starting' | 'streaming' | 'completing' | 'done' | 'error'
+  /** Set when the backend needs AI data-sharing consent before this request can run. */
+  consentRequiredVersion: number | null
+}
+
+const IDLE_STATE: EnhanceState = {
+  isEnhancing: false,
+  streamedContent: '',
+  result: null,
+  error: null,
+  warning: null,
+  progress: 'idle',
+  consentRequiredVersion: null,
 }
 
 export function useEnhance() {
-  const [state, setState] = useState<EnhanceState>({
-    isEnhancing: false,
-    streamedContent: '',
-    result: null,
-    error: null,
-    warning: null,
-    progress: 'idle',
-  })
+  const [state, setState] = useState<EnhanceState>(IDLE_STATE)
 
   const abortRef = useRef<AbortController | null>(null)
+  const router = useRouter()
   const { fetchSubscription } = useSubscriptionStore()
   const settings = useSettingsStore()
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -50,14 +58,7 @@ export function useEnhance() {
       const controller = new AbortController()
       abortRef.current = controller
 
-      setState({
-        isEnhancing: true,
-        streamedContent: '',
-        result: null,
-        error: null,
-        warning: null,
-        progress: 'starting',
-      })
+      setState({ ...IDLE_STATE, isEnhancing: true, progress: 'starting' })
 
       const request: EnhanceRequest = {
         prompt,
@@ -116,10 +117,9 @@ export function useEnhance() {
           )
 
         setState({
-          isEnhancing: false,
+          ...IDLE_STATE,
           streamedContent: content,
           result: finalPrompt,
-          error: null,
           warning,
           progress: 'done',
         })
@@ -129,21 +129,25 @@ export function useEnhance() {
         return finalPrompt
       } catch (err) {
         if (controller.signal.aborted || abortRef.current !== controller) return null
+        // Rejected before any AI call: the caller shows the consent dialog
+        // and runs the same request again once the user agrees.
+        if (isAiConsentRequired(err)) {
+          setState({ ...IDLE_STATE, consentRequiredVersion: err.requiredVersion })
+          return null
+        }
         const message = err instanceof Error ? err.message : 'Enhancement failed'
-        setState({
-          isEnhancing: false,
-          streamedContent: content,
-          result: null,
-          error: message,
-          warning: null,
-          progress: 'error',
-        })
+        // No free tier: a lapsed or never-subscribed account goes to the paywall.
+        if (isSubscriptionRequired(err)) {
+          void fetchSubscription()
+          router.push('/upgrade')
+        }
+        setState({ ...IDLE_STATE, streamedContent: content, error: message, progress: 'error' })
         throw err
       } finally {
         if (abortRef.current === controller) abortRef.current = null
       }
     },
-    [settings, fetchSubscription],
+    [settings, fetchSubscription, router],
   )
 
   const cancel = useCallback(() => {
@@ -160,14 +164,11 @@ export function useEnhance() {
   const reset = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
-    setState({
-      isEnhancing: false,
-      streamedContent: '',
-      result: null,
-      error: null,
-      warning: null,
-      progress: 'idle',
-    })
+    setState(IDLE_STATE)
+  }, [])
+
+  const dismissConsentRequest = useCallback(() => {
+    setState((prev) => ({ ...prev, consentRequiredVersion: null }))
   }, [])
 
   return {
@@ -175,5 +176,6 @@ export function useEnhance() {
     enhance,
     cancel,
     reset,
+    dismissConsentRequest,
   }
 }

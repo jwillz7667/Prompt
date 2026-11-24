@@ -5,10 +5,64 @@ import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import { sendAccountDeleted } from '../services/emailService.js';
 import { registerDeviceToken, unregisterDeviceToken } from '../services/notificationService.js';
+import { appleAccountService } from '../features/apple-account/index.js';
+import {
+  AI_CONSENT_SELECT,
+  AiConsentError,
+  grantAiConsent,
+  toAiDataConsent,
+  withdrawAiConsent,
+} from '../services/aiConsentService.js';
 
 export const userRouter = Router();
 
 userRouter.use(authenticate);
+
+// ============================================================================
+// CURRENT USER
+// ============================================================================
+
+userRouter.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        isPremium: true,
+        premiumUntil: true,
+        promptCount: true,
+        customInstructions: true,
+        appAccountToken: true,
+        createdAt: true,
+        ...AI_CONSENT_SELECT,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const { aiDataConsentAt, aiDataConsentVersion, ...profile } = user;
+    res.json({
+      user: {
+        ...profile,
+        aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }),
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error, userId: req.user?.id }, 'Get current user error');
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
 
 // ============================================================================
 // UPDATE PROFILE
@@ -39,10 +93,18 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
         avatarUrl: true,
         isPremium: true,
         customInstructions: true,
+        appAccountToken: true,
+        ...AI_CONSENT_SELECT,
       },
     });
 
-    res.json({ user });
+    const { aiDataConsentAt, aiDataConsentVersion, ...profile } = user;
+    res.json({
+      user: {
+        ...profile,
+        aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }),
+      },
+    });
   } catch (error) {
     logger.error({ err: error }, 'Update profile error');
     if (error instanceof z.ZodError) {
@@ -52,6 +114,61 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
+
+// ============================================================================
+// AI DATA-SHARING CONSENT (App Store guideline 5.1.2(i))
+// ============================================================================
+
+const grantAiConsentSchema = z.object({
+  version: z.number().int().min(1),
+});
+
+function sendAiConsentError(res: Response, error: unknown, userId: string, action: string): void {
+  if (error instanceof z.ZodError) {
+    res.status(400).json({ error: 'Invalid request data', details: error.issues });
+    return;
+  }
+  if (error instanceof AiConsentError) {
+    res.status(error.statusCode).json({ error: error.message, code: error.code });
+    return;
+  }
+  logger.error({ err: error, userId }, `AI consent ${action} error`);
+  res.status(500).json({ error: `Failed to ${action} AI data sharing consent` });
+}
+
+// Idempotent: re-posting a version already granted keeps the original grant.
+userRouter.post(
+  '/me/ai-consent',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const userId = req.user.id;
+    try {
+      const { version } = grantAiConsentSchema.parse(req.body);
+      res.json(await grantAiConsent(userId, version));
+    } catch (error) {
+      sendAiConsentError(res, error, userId, 'record');
+    }
+  },
+);
+
+userRouter.delete(
+  '/me/ai-consent',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const userId = req.user.id;
+    try {
+      res.json(await withdrawAiConsent(userId));
+    } catch (error) {
+      sendAiConsentError(res, error, userId, 'withdraw');
+    }
+  },
+);
 
 // ============================================================================
 // GET USAGE STATS
@@ -207,6 +324,12 @@ userRouter.delete('/account', async (req: AuthenticatedRequest, res: Response): 
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { email: true, name: true },
+    });
+
+    // Apple requires revoking Sign in with Apple tokens on deletion; a failed
+    // revoke is queued for retry and never blocks the deletion itself.
+    await appleAccountService.revokeBeforeAccountDeletion(req.user.id).catch((error: unknown) => {
+      logger.error({ err: error, userId: req.user?.id }, 'Sign in with Apple revocation errored');
     });
 
     // Delete all user data (cascades to sessions, prompts, etc.)

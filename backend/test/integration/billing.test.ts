@@ -32,8 +32,8 @@ import {
   processVerifiedTransaction,
   type VerifiedTransaction,
 } from '../../src/services/appleStoreService.js';
-import { getSubscriptionInfo, startFreeTrial } from '../../src/services/subscriptionService.js';
-import { updateApiSubscription } from '../../src/services/apiSubscriptionService.js';
+import { getSubscriptionInfo } from '../../src/services/subscriptionService.js';
+import { API_TIER_CONFIG, updateApiSubscription } from '../../src/services/apiSubscriptionService.js';
 
 const users: string[] = [];
 const developers: string[] = [];
@@ -149,7 +149,9 @@ describe('App Store entitlement integrity', () => {
     const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
     expect(rejected.reason.code).toBe('TRANSACTION_OWNED_BY_ANOTHER_USER');
     expect(
-      await prisma.subscription.count({ where: { userId: { in: [a.id, b.id] }, tier: 'PRO' } }),
+      await prisma.subscription.count({
+        where: { userId: { in: [a.id, b.id] }, tier: 'PREMIUM' },
+      }),
     ).toBe(1);
   });
   it('rejects non-subscription, unknown, and undated products', async () => {
@@ -203,19 +205,13 @@ describe('App Store entitlement integrity', () => {
     await prisma.subscription.create({
       data: {
         userId: a.id,
-        tier: 'PRO',
+        tier: 'PREMIUM',
         status: 'GRACE_PERIOD',
         expiresAt: new Date(Date.now() - 1000),
         gracePeriodEndDate: new Date(Date.now() + 86400000),
       },
     });
-    expect((await getSubscriptionInfo(a.id)).tier).toBe('PRO');
-  });
-  it('starts a missing subscription trial exactly once', async () => {
-    const a = await user();
-    const results = await Promise.all([startFreeTrial(a.id), startFreeTrial(a.id)]);
-    expect(results.filter((r) => r.success)).toHaveLength(1);
-    expect((await getSubscriptionInfo(a.id)).isTrialing).toBe(true);
+    expect((await getSubscriptionInfo(a.id)).tier).toBe('PREMIUM');
   });
 });
 
@@ -311,7 +307,7 @@ describe('API billing webhooks', () => {
     expect(
       (await prisma.apiSubscription.findUniqueOrThrow({ where: { developerId: d.id } }))
         .includedRequests,
-    ).toBe(5100);
+    ).toBe(API_TIER_CONFIG.API_FREE.monthlyRequests + 5000);
   });
   it('rejects invalid Stripe signatures before processing', async () => {
     expect(
@@ -356,7 +352,7 @@ describe('consumer Stripe relay', () => {
     expect(
       (await relay({ ...data, eventCreated: 150, stripeEventId: `evt_${randomUUID()}` })).status,
     ).toBe(200);
-    expect((await getSubscriptionInfo(a.id)).tier).toBe('PRO');
+    expect((await getSubscriptionInfo(a.id)).tier).toBe('PREMIUM');
   });
   it('allows a Stripe subscription after the previous Apple subscription expired', async () => {
     const a = await user();
@@ -379,13 +375,18 @@ describe('consumer Stripe relay', () => {
       ).status,
     ).toBe(200);
     const subscription = await prisma.subscription.findUniqueOrThrow({ where: { userId: a.id } });
-    expect(subscription.tier).toBe('PRO');
+    expect(subscription.tier).toBe('PREMIUM');
     expect(subscription.originalTransactionId).toBeNull();
   });
   it('ignores cancellation for an old subscription agreement', async () => {
     const a = await user();
     await prisma.subscription.create({
-      data: { userId: a.id, tier: 'PRO', stripeSubscriptionId: 'sub_new' },
+      data: {
+        userId: a.id,
+        tier: 'PREMIUM',
+        stripeSubscriptionId: 'sub_new',
+        expiresAt: new Date(Date.now() + 86400000),
+      },
     });
     expect(
       (
@@ -395,6 +396,6 @@ describe('consumer Stripe relay', () => {
         )
       ).status,
     ).toBe(200);
-    expect((await getSubscriptionInfo(a.id)).tier).toBe('PRO');
+    expect((await getSubscriptionInfo(a.id)).tier).toBe('PREMIUM');
   });
 });

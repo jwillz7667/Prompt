@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
-import { enforceQuota } from '../middleware/quotaEnforcement.js';
-import { workflowService } from '../services/workflowService.js';
+import { requireEntitlement } from '../middleware/requireEntitlement.js';
+import { MAX_WORKFLOW_STEPS, workflowService } from '../services/workflowService.js';
 import { WorkflowStatus } from '@prisma/client';
 import { logger } from '../utils/logger.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 
 const router = Router();
 
@@ -29,14 +30,14 @@ const workflowStepSchema = z.object({
 const createWorkflowSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
-  steps: z.array(workflowStepSchema).min(1),
+  steps: z.array(workflowStepSchema).min(1).max(MAX_WORKFLOW_STEPS),
   metadata: z.any().optional(),
 });
 
 const updateWorkflowSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().optional(),
-  steps: z.array(workflowStepSchema).min(1).optional(),
+  steps: z.array(workflowStepSchema).min(1).max(MAX_WORKFLOW_STEPS).optional(),
   metadata: z.any().optional(),
 });
 
@@ -50,7 +51,7 @@ const executeWorkflowSchema = z.object({
 /**
  * Create a new workflow
  */
-router.post('/', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
+router.post('/', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const validatedData = createWorkflowSchema.parse(req.body);
 
@@ -178,37 +179,32 @@ router.get('/', authenticate, async (req, res, next) => {
 /**
  * Execute a workflow
  */
-router.post(
-  '/:id/execute',
-  authenticate,
-  enforceQuota('enhance_prompt'),
-  async (req, res, next) => {
-    try {
-      const validatedData = executeWorkflowSchema.parse(req.body);
+router.post('/:id/execute', authenticate, requireEntitlement, async (req, res, next) => {
+  try {
+    const validatedData = executeWorkflowSchema.parse(req.body);
 
-      const execution = await workflowService.executeWorkflow(
-        req.params.id!,
-        req.user!.id,
-        validatedData,
-      );
+    const execution = await workflowService.executeWorkflow(
+      req.params.id!,
+      req.user!.id,
+      validatedData,
+    );
 
-      return res.status(202).json({
-        success: true,
-        data: execution,
-        message: 'Workflow execution started',
+    return res.status(202).json({
+      success: true,
+      data: execution,
+      message: 'Workflow execution started',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request data',
+        details: error.issues,
       });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid request data',
-          details: error.issues,
-        });
-      }
-      return next(error);
     }
-  },
-);
+    return next(error);
+  }
+});
 
 /**
  * Get workflow execution details
@@ -301,7 +297,7 @@ router.get('/:id/export', authenticate, async (req, res, next) => {
 /**
  * Import workflow from JSON
  */
-router.post('/import', authenticate, enforceQuota('enhance_prompt'), async (req, res, next) => {
+router.post('/import', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const importedWorkflow = await workflowService.importWorkflow(req.user!.id, req.body);
 
@@ -312,6 +308,38 @@ router.post('/import', authenticate, enforceQuota('enhance_prompt'), async (req,
   } catch (error) {
     return next(error);
   }
+});
+
+// Service errors are plain Errors; only these messages are safe to show.
+// Everything else (provider, configuration, database) is logged once here
+// and mapped to the generic client copy so nothing upstream leaks.
+const CLIENT_SAFE_ERRORS = new Map<string, { status: number; message: string }>([
+  ['Workflow not found', { status: 404, message: 'Workflow not found' }],
+  [
+    'Cannot execute archived workflow',
+    { status: 400, message: 'Cannot execute archived workflow' },
+  ],
+  [
+    'Workflow must have at least one step',
+    { status: 400, message: 'Workflow must have at least one step' },
+  ],
+  ['Invalid workflow data', { status: 400, message: 'Invalid workflow data' }],
+]);
+
+router.use((error: unknown, _req: Request, res: Response, _next: NextFunction): void => {
+  const safe = error instanceof Error ? CLIENT_SAFE_ERRORS.get(error.message) : undefined;
+  if (safe) {
+    res.status(safe.status).json({ success: false, error: safe.message });
+    return;
+  }
+  logger.error({ err: error }, 'Workflow route error');
+  const clientError = toClientStreamError(error);
+  res.status(clientErrorHttpStatus(clientError.code)).json({
+    success: false,
+    error: clientError.message,
+    code: clientError.code,
+    retryable: clientError.retryable,
+  });
 });
 
 export default router;

@@ -2,23 +2,24 @@
 //  ChatSidebarView.swift
 //  Prompt
 //
-//  Left-sliding sidebar drawer showing chat history, search, and user profile.
-//  Left-sliding sidebar drawer for chat navigation.
+//  Left-sliding sidebar drawer: optimizer history or assistant chats
+//  (depending on the active surface), plus the user profile row.
 //
 
 import SwiftUI
 
-struct ChatSidebarView: View {
+struct ChatSidebarView<ChatList: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthManager.self) private var authManager
-    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(StoreKitManager.self) private var storeKit
 
     @Bindable var threadViewModel: ThreadViewModel
+    let surface: AppSurface
     let onSelectThread: (String) -> Void
     let onNewChat: () -> Void
     let onOpenSettings: () -> Void
     let onDismiss: () -> Void
+    @ViewBuilder let chatList: () -> ChatList
 
     @State private var searchText = ""
 
@@ -46,116 +47,11 @@ struct ChatSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar + new chat button
-            HStack(spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(textTertiary)
-
-                    TextField("Search", text: $searchText)
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(textPrimary)
-                        .autocorrectionDisabled()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.adaptiveBackgroundTertiary.opacity(colorScheme == .dark ? 1 : 0.6))
-                }
-
-                Button(action: {
-                    triggerHaptic(.light)
-                    onNewChat()
-                }) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(textPrimary)
-                        .frame(width: 42, height: 42)
-                        .background {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.adaptiveBackgroundTertiary.opacity(colorScheme == .dark ? 1 : 0.6))
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-
-            // Thread list - simple text rows
-            if threadViewModel.isLoadingThreads && threadViewModel.threads.isEmpty {
-                Spacer()
-                ProgressView()
-                    .tint(accentColor)
-                Spacer()
-            } else if isSessionExpired {
-                statusState(
-                    icon: "person.crop.circle.badge.exclamationmark",
-                    title: "Session expired",
-                    message: "Your chats are still saved. Sign in again to see them.",
-                    actionTitle: "Sign In Again"
-                ) {
-                    guestSession.presentAuthenticationGate()
-                    onDismiss()
-                }
-            } else if case .failed(let message) = threadViewModel.threadListState, threadViewModel.threads.isEmpty {
-                statusState(
-                    icon: "wifi.exclamationmark",
-                    title: "Couldn't load chats",
-                    message: message,
-                    actionTitle: "Retry"
-                ) {
-                    Task { await threadViewModel.fetchThreads(refresh: true) }
-                }
-            } else if threadViewModel.threadListState == .idle, !authManager.isAuthenticated {
-                statusState(
-                    icon: "person.crop.circle",
-                    title: "Sign in to see your chats",
-                    message: "Chats sync to your account once you sign in.",
-                    actionTitle: "Sign In"
-                ) {
-                    guestSession.presentAuthenticationGate()
-                    onDismiss()
-                }
-            } else if filteredThreads.isEmpty {
-                Spacer()
-                VStack(spacing: 12) {
-                    if threadViewModel.threadListState == .loaded || !searchText.isEmpty {
-                        Image(systemName: "bubble.left.and.bubble.right")
-                            .font(.system(size: 32, weight: .light))
-                            .foregroundStyle(textTertiary)
-                        // "No chats yet" only after the server confirmed an empty list
-                        Text(searchText.isEmpty ? "No chats yet" : "No results")
-                            .font(.system(.subheadline, design: .rounded, weight: .medium))
-                            .foregroundStyle(textSecondary)
-                    } else {
-                        // .idle while signed in: the fetch kicks off on appearance
-                        ProgressView()
-                            .tint(accentColor)
-                    }
-                }
-                Spacer()
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredThreads) { thread in
-                            sidebarThreadRow(thread)
-                        }
-
-                        if threadViewModel.hasMorePages && searchText.isEmpty {
-                            ProgressView()
-                                .tint(accentColor)
-                                .padding(.vertical, 16)
-                                .task {
-                                    threadViewModel.currentPage += 1
-                                    await threadViewModel.fetchThreads()
-                                }
-                        }
-                    }
-                }
-                .scrollDismissesKeyboard(.interactively)
+            switch surface {
+            case .optimize:
+                optimizeHistory
+            case .chat:
+                chatList()
             }
 
             Spacer(minLength: 0)
@@ -166,9 +62,116 @@ struct ChatSidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.adaptiveBackgroundPrimary)
         .task {
-            if authManager.isAuthenticated {
+            if authManager.isAuthenticated, surface == .optimize {
                 await threadViewModel.fetchThreads(refresh: true)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var optimizeHistory: some View {
+        // Search bar + new chat button
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(textTertiary)
+
+                TextField("Search", text: $searchText)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(textPrimary)
+                    .autocorrectionDisabled()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.adaptiveBackgroundTertiary.opacity(colorScheme == .dark ? 1 : 0.6))
+            }
+
+            Button(action: {
+                triggerHaptic(.light)
+                onNewChat()
+            }) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(textPrimary)
+                    .frame(width: 42, height: 42)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.adaptiveBackgroundTertiary.opacity(colorScheme == .dark ? 1 : 0.6))
+                    }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+
+        // Thread list - simple text rows
+        if threadViewModel.isLoadingThreads && threadViewModel.threads.isEmpty {
+            Spacer()
+            ProgressView()
+                .tint(accentColor)
+            Spacer()
+        } else if isSessionExpired {
+            statusState(
+                icon: "person.crop.circle.badge.exclamationmark",
+                title: "Session expired",
+                message: "Your chats are still saved. Sign in again to see them.",
+                actionTitle: "Sign In Again"
+            ) {
+                // RootView shows the sign-in screen once the session is
+                // marked expired; cached history stays on the account.
+                authManager.handleSessionExpiration()
+                onDismiss()
+            }
+        } else if case .failed(let message) = threadViewModel.threadListState, threadViewModel.threads.isEmpty {
+            statusState(
+                icon: "wifi.exclamationmark",
+                title: "Couldn't load chats",
+                message: message,
+                actionTitle: "Retry"
+            ) {
+                Task { await threadViewModel.fetchThreads(refresh: true) }
+            }
+        } else if filteredThreads.isEmpty {
+            Spacer()
+            VStack(spacing: 12) {
+                if threadViewModel.threadListState == .loaded || !searchText.isEmpty {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(textTertiary)
+                    // "No chats yet" only after the server confirmed an empty list
+                    Text(searchText.isEmpty ? "No chats yet" : "No results")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(textSecondary)
+                } else {
+                    // .idle while signed in: the fetch kicks off on appearance
+                    ProgressView()
+                        .tint(accentColor)
+                }
+            }
+            Spacer()
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredThreads) { thread in
+                        sidebarThreadRow(thread)
+                    }
+
+                    if threadViewModel.hasMorePages && searchText.isEmpty {
+                        ProgressView()
+                            .tint(accentColor)
+                            .padding(.vertical, 16)
+                            .task {
+                                threadViewModel.currentPage += 1
+                                await threadViewModel.fetchThreads()
+                            }
+                    }
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
         }
     }
 
@@ -292,15 +295,18 @@ struct ChatSidebarView: View {
     }
 
     private var subscriptionLabel: String {
-        storeKit.currentTier.displayName
+        switch storeKit.entitlementState {
+        case .entitled(_, let isTrialing):
+            return isTrialing ? String(localized: "Free trial") : String(localized: "Premium")
+        case .notEntitled:
+            return String(localized: "Not subscribed")
+        case .unknown:
+            return String(localized: "Checking…")
+        }
     }
 
     private var subscriptionColor: Color {
-        switch storeKit.currentTier {
-        case .premium: return .orange
-        case .pro: return accentColor
-        case .free: return textTertiary
-        }
+        storeKit.isEntitled ? .orange : textTertiary
     }
 
     private var userAvatar: some View {

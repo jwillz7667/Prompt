@@ -6,7 +6,7 @@ import {
   sendTicketNotificationToSupport,
   sendTicketResponse,
 } from './emailService.js';
-import { DEEPSEEK_THINKING_DISABLED, getDeepseekModel } from './deepseekModels.js';
+import { completeChat, type LlmMessage } from '../features/llm/index.js';
 import { emitNewMessage } from '../utils/socket.js';
 import { sendSupportMessageNotification } from './notificationService.js';
 
@@ -23,7 +23,10 @@ export interface ChatRequest {
   userId: string;
   ticketId?: string;
   message: string;
+  /** Turns the model may see; must come from a trusted source (persisted or caller-only). */
   conversationHistory?: SupportMessage[];
+  /** Full client transcript stored on a created ticket for human review only. */
+  ticketTranscript?: SupportMessage[];
 }
 
 export interface ChatResponse {
@@ -62,7 +65,6 @@ export interface TicketWithMessages extends Ticket {
 // CONFIGURATION
 // ============================================================================
 
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const MAX_TOKENS = 1024;
 const TEMPERATURE = 0.3; // Lower temperature for more consistent support responses
 
@@ -212,15 +214,8 @@ function generateTicketSubject(userMessage: string, category: TicketCategory): s
 // ============================================================================
 
 export async function chatWithSupport(request: ChatRequest): Promise<ChatResponse> {
-  const apiKey = process.env['DEEPSEEK_API_KEY'];
-  if (!apiKey) {
-    throw new Error('DEEPSEEK_API_KEY environment variable not configured');
-  }
-
   // Build conversation messages
-  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: SUPPORT_SYSTEM_PROMPT },
-  ];
+  const messages: LlmMessage[] = [{ role: 'system', content: SUPPORT_SYSTEM_PROMPT }];
 
   // Add conversation history if provided
   if (request.conversationHistory) {
@@ -233,35 +228,17 @@ export async function chatWithSupport(request: ChatRequest): Promise<ChatRespons
   messages.push({ role: 'user', content: request.message });
 
   try {
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: getDeepseekModel(),
-        messages,
-        temperature: TEMPERATURE,
-        max_tokens: MAX_TOKENS,
-        stream: false,
-        // Support chat never needs CoT; V4 Flash defaults thinking ON and
-        // bills it as output tokens, so disable it explicitly.
-        thinking: DEEPSEEK_THINKING_DISABLED,
-      }),
+    // Support chat never needs reasoning; the gateway sends the explicit off
+    // switch because reasoning tokens are billed as output.
+    const completion = await completeChat({
+      messages,
+      temperature: TEMPERATURE,
+      maxTokens: MAX_TOKENS,
+      reasoning: 'off',
+      purpose: 'support',
     });
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      logger.error({ status: response.status, body: errorBody }, 'DeepSeek Support API error');
-      throw new Error(`Support AI error: ${response.status}`);
-    }
-
-    const data = (await response.json()) as {
-      choices: Array<{ message: { content: string } }>;
-    };
-
-    const rawReply = data.choices[0]?.message?.content || '';
+    const rawReply = completion.content;
     const category = parseTicketCategory(rawReply);
     const cleanedReply = cleanResponse(rawReply);
 
@@ -274,7 +251,7 @@ export async function chatWithSupport(request: ChatRequest): Promise<ChatRespons
         priority: determinePriority(category),
         initialMessage: request.message,
         aiSummary: cleanedReply,
-        conversationHistory: request.conversationHistory,
+        conversationHistory: request.ticketTranscript ?? request.conversationHistory,
       });
 
       return {

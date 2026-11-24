@@ -211,15 +211,3 @@ export interface UserSettings {
   customInstructions: string
   targetCharacterLength?: number
 }
-
-// Stripe
-export interface StripeProduct {
-  id: string
-  name: string
-  description: string
-  priceId: string
-  tier: SubscriptionTier
-  interval: 'month' | 'year'
-  amount: number
-  currency: string
-}
