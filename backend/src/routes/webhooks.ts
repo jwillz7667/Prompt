@@ -97,7 +97,9 @@ webhookRouter.post('/stripe', async (req: Request, res: Response): Promise<void>
         if (event === 'subscription.created' || event === 'subscription.updated') {
           const updateData = payload.data;
           const entitled = ['active', 'trialing', 'past_due'].includes(updateData.status);
-          const tier = entitled ? updateData.tier : SubscriptionTier.FREE;
+          // Single entitlement: any live web subscription is PREMIUM whatever
+          // tier the (legacy) price metadata carried.
+          const tier = entitled ? SubscriptionTier.PREMIUM : SubscriptionTier.FREE;
           const status =
             updateData.status === 'past_due'
               ? SubscriptionStatus.GRACE_PERIOD

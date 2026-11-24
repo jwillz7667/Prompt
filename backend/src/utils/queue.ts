@@ -9,7 +9,9 @@
  * This module gracefully degrades if BullMQ is not available.
  */
 
+import type { Queue as BullQueue, Worker as BullWorker } from 'bullmq';
 import { logger } from './logger.js';
+import { processExpiredSubscriptions } from '../services/subscriptionService.js';
 
 // Job types
 export interface PromptEnhanceJob {
@@ -43,7 +45,12 @@ let subscriptionQueue: any = null;
 let cleanupQueue: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let promptQueueEvents: any = null;
+let subscriptionMaintenanceQueue: BullQueue | null = null;
+let subscriptionMaintenanceWorker: BullWorker | null = null;
 let queuesAvailable = false;
+
+const SUBSCRIPTION_MAINTENANCE_QUEUE = 'subscription-maintenance';
+const EXPIRE_SUBSCRIPTIONS_JOB = 'expire-subscriptions';
 
 export async function initQueues(): Promise<void> {
   const redisUrl = process.env['REDIS_URL'];
@@ -57,7 +64,7 @@ export async function initQueues(): Promise<void> {
   try {
     // Dynamic import to make bullmq optional
     const bullmq = await import('bullmq');
-    const { Queue, QueueEvents } = bullmq;
+    const { Queue, QueueEvents, Worker } = bullmq;
 
     const connection = {
       host: redisHost || new URL(redisUrl!).hostname,
@@ -129,6 +136,37 @@ export async function initQueues(): Promise<void> {
 
     // Schedule recurring cleanup jobs
     await scheduleCleanupJobs();
+
+    // Hourly expiry/reconciliation sweep. The repeatable job is keyed by a
+    // fixed jobId, so every replica scheduling it still yields one run per
+    // hour; whichever replica's worker picks it up processes it, one at a time.
+    subscriptionMaintenanceQueue = new Queue(SUBSCRIPTION_MAINTENANCE_QUEUE, {
+      connection,
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 60_000 },
+        removeOnComplete: { age: 86400, count: 48 },
+        removeOnFail: { age: 7 * 86400 },
+      },
+    });
+    subscriptionMaintenanceWorker = new Worker(
+      SUBSCRIPTION_MAINTENANCE_QUEUE,
+      async () => {
+        const expired = await processExpiredSubscriptions();
+        logger.info({ expired }, 'Subscription expiry sweep completed');
+        return { expired };
+      },
+      { connection, concurrency: 1 },
+    );
+    subscriptionMaintenanceWorker.on('failed', (job, error) => {
+      logger.error({ err: error, jobId: job?.id }, 'Subscription expiry sweep failed');
+    });
+    await subscriptionMaintenanceQueue.add(
+      EXPIRE_SUBSCRIPTIONS_JOB,
+      {},
+      { repeat: { pattern: '15 * * * *' }, jobId: 'expire-subscriptions-hourly' },
+    );
+    logger.info('Subscription expiry sweep scheduled hourly');
   } catch (error) {
     logger.warn({ error }, 'BullMQ not available - queues disabled');
   }
@@ -294,6 +332,8 @@ export async function closeQueues(): Promise<void> {
     if (promptQueue) await promptQueue.close();
     if (subscriptionQueue) await subscriptionQueue.close();
     if (cleanupQueue) await cleanupQueue.close();
+    if (subscriptionMaintenanceWorker) await subscriptionMaintenanceWorker.close();
+    if (subscriptionMaintenanceQueue) await subscriptionMaintenanceQueue.close();
     queuesAvailable = false;
     logger.info('Queues closed');
   } catch (error) {
