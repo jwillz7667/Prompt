@@ -8,6 +8,7 @@ import { prisma } from '../utils/prisma.js';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt.js';
 import { authLogger } from '../utils/logger.js';
 import { sendEmail } from './emailService.js';
+import { API_TIER_CONFIG } from './apiSubscriptionService.js';
 
 export interface DeveloperAuthResult {
   developer: {
@@ -61,7 +62,7 @@ export async function registerDeveloper(
         create: {
           tier: 'API_FREE',
           status: 'ACTIVE',
-          includedRequests: 100,
+          includedRequests: API_TIER_CONFIG.API_FREE.monthlyRequests,
           currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         },
       },

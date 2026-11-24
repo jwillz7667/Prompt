@@ -4,8 +4,9 @@
  * Serves OpenAPI 3.1 specification and related documentation.
  */
 
-import { Router, Response, Request } from 'express';
+import { Router, type Response, type Request } from 'express';
 import YAML from 'yaml';
+import { API_TIER_CONFIG } from '../services/apiSubscriptionService.js';
 
 export const docsRouter = Router();
 
@@ -841,10 +842,11 @@ console.log(enhancedPrompt);`,
     rateLimits: {
       description: 'Rate limits vary by tier',
       tiers: [
-        { tier: 'API_FREE', requestsPerMinute: 10, monthlyRequests: 100 },
-        { tier: 'API_STARTER', requestsPerMinute: 60, monthlyRequests: 1000 },
-        { tier: 'API_PRO', requestsPerMinute: 100, monthlyRequests: 10000 },
-        { tier: 'API_ENTERPRISE', requestsPerMinute: 1000, monthlyRequests: 'unlimited' },
+        ...Object.values(API_TIER_CONFIG).map((plan) => ({
+          tier: plan.tier,
+          requestsPerMinute: plan.requestsPerMinute,
+          monthlyRequests: plan.monthlyRequests === -1 ? 'unlimited' : plan.monthlyRequests,
+        })),
       ],
     },
     headers: {

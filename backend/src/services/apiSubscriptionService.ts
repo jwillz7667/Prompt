@@ -5,6 +5,7 @@
  */
 
 import Stripe from 'stripe';
+import { z } from 'zod';
 import { prisma } from '../utils/prisma.js';
 import { cache } from '../utils/redis.js';
 import { logger } from '../utils/logger.js';
@@ -53,16 +54,35 @@ export interface ApiCreditPackConfig {
   featured?: boolean;
 }
 
+/**
+ * The developer API is a separately billed B2B product, deliberately outside
+ * the app's hard paywall (docs/adr/0001-developer-api-free-tier.md). Its free
+ * allowance is kept small because a verified email is the only signup
+ * barrier; signups are also throttled per IP in routes/developerAuth.
+ */
+const freeTierEnvSchema = z.object({
+  API_FREE_MONTHLY_REQUESTS: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(0).default(25),
+  ),
+});
+const API_FREE_MONTHLY_REQUESTS = freeTierEnvSchema.parse(process.env).API_FREE_MONTHLY_REQUESTS;
+
 export const API_TIER_CONFIG: Record<ApiTier, ApiTierConfig> = {
   API_FREE: {
     tier: ApiTier.API_FREE,
     name: 'Free',
     description: 'Perfect for testing and development',
-    monthlyRequests: 100,
+    monthlyRequests: API_FREE_MONTHLY_REQUESTS,
     requestsPerMinute: 10,
     priceMonthly: 0,
     overagePerHundred: 0, // No overage allowed
-    features: ['100 requests/month', '10 requests/minute', 'Basic support', 'Community access'],
+    features: [
+      `${API_FREE_MONTHLY_REQUESTS} requests/month`,
+      '10 requests/minute',
+      'Basic support',
+      'Community access',
+    ],
   },
   API_STARTER: {
     tier: ApiTier.API_STARTER,
