@@ -1,6 +1,7 @@
 import { Router, type Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
+import { requireAiConsent } from '../middleware/requireAiConsent.js';
 import { logger } from '../utils/logger.js';
 import {
   entitlementConfig,
@@ -22,6 +23,8 @@ export const supportRouter = Router();
 // a subscription: lapsed users and App Review must always be able to reach
 // support. AI replies are capped per user per UTC day instead, and the
 // assistant only ever sees its own system prompt plus the caller's turns.
+// The routes that send the caller's messages to the AI provider still require
+// AI data-sharing consent (requireAiConsent, a no-op until AI_CONSENT_ENFORCED).
 supportRouter.use(authenticate);
 
 /**
@@ -97,6 +100,7 @@ const ticketChatSchema = z.object({
 
 supportRouter.post(
   '/chat',
+  requireAiConsent,
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     let reservation: UsageReservation | undefined;
     try {
@@ -194,6 +198,7 @@ supportRouter.get(
 
 supportRouter.post(
   '/tickets/:ticketId/chat',
+  requireAiConsent,
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     let reservation: UsageReservation | undefined;
     try {

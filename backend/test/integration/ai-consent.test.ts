@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { promptRouter } from '../../src/routes/prompts.js';
 import { userRouter } from '../../src/routes/users.js';
 import { authRouter } from '../../src/routes/auth.js';
+import { supportRouter } from '../../src/routes/support.js';
 import { buildChatRouter, loadChatConfig } from '../../src/features/chat/index.js';
 import { SUBSCRIPTION_REQUIRED_BODY } from '../../src/middleware/requireEntitlement.js';
 import { aiConsentRequiredBody } from '../../src/middleware/requireAiConsent.js';
@@ -23,6 +24,7 @@ function buildApp(): Express {
   app.use('/api/v1/prompts', promptRouter);
   app.use('/api/v1/users', userRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/support', supportRouter);
   app.use('/api/v1/chat', buildChatRouter({ config: loadChatConfig({}) }));
   return app;
 }
@@ -174,6 +176,44 @@ describe('AI consent gate', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.code).toBe('AI_CONSENT_REQUIRED');
+  });
+});
+
+describe('support assistant consent', () => {
+  it('returns 403 AI_CONSENT_REQUIRED from the support assistant to a user without consent', async () => {
+    const user = await freeUser();
+
+    const response = await request(app)
+      .post('/api/v1/support/chat')
+      .set('Authorization', `Bearer ${user.accessToken}`)
+      .send({ message: 'I cannot sign in' });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual(aiConsentRequiredBody(1));
+  });
+
+  it('returns 403 AI_CONSENT_REQUIRED from a ticket chat to a user without consent', async () => {
+    const user = await freeUser();
+
+    const response = await request(app)
+      .post(`/api/v1/support/tickets/${randomUUID()}/chat`)
+      .set('Authorization', `Bearer ${user.accessToken}`)
+      .send({ message: 'Any update?' });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual(aiConsentRequiredBody(1));
+  });
+
+  it('lets a free user with consent reach the support assistant validation', async () => {
+    const user = await freeUser();
+    await grant(user, 1);
+
+    const response = await request(app)
+      .post('/api/v1/support/chat')
+      .set('Authorization', `Bearer ${user.accessToken}`)
+      .send({ message: '' });
+
+    expect(response.status).toBe(400);
   });
 });
 
