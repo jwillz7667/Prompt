@@ -1,0 +1,12 @@
+SIGN IN
+Promptomize requires Sign in with Apple. Chats, optimized prompts and the subscription are stored on the user's account so they sync across devices and survive reinstalling the app. No demo account is needed: sign in with the Apple Account on the review device. "Sign out" is available on the subscription screen and in Settings, and accounts can be deleted in Settings > Account Actions > Delete Account.
+
+SUBSCRIPTION (HARD PAYWALL)
+All app features use AI services that cost us per request, so the app requires an active subscription. After sign-in, users without one see the Promptomize Premium screen. There is one auto-renewable subscription: Promptomize Premium Monthly (com.promptomizer.premium.monthly), $9.99/month, with a 3-day free trial introductory offer for new subscribers. The screen shows the title, length, price, trial terms, auto-renewal terms, Restore Purchases, and links to the Terms of Use (EULA) https://promptomize.app/terms and Privacy Policy https://promptomize.app/privacy before purchase. Earlier subscribers to retired plans keep access until their subscription lapses.
+
+HOW TO TEST IN SANDBOX
+1. Launch the app and tap "Sign in with Apple".
+2. On the Promptomize Premium screen, tap "Start 3-Day Free Trial" and confirm with a Sandbox Apple Account.
+3. The app opens immediately. Enter any idea (for example "a poster for a jazz night") and tap send to get an optimized prompt; the AI chat assistant is available from the same screen.
+4. Settings > Subscription shows the trial status and opens Manage Subscription. "Restore Purchases" is on both the subscription screen and the Settings subscription screen.
+If subscription details do not load, the screen shows "Try Again"; this only happens when the App Store sandbox is unreachable.

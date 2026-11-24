@@ -1,27 +1,24 @@
-Turn a rough idea into a clear, useful AI prompt.
+Turn rough ideas into precise prompts, and get answers from an AI chat assistant, all in one app.
 
-Promptomize helps you explain what you want, add the right context, and refine the result. Start with a sentence, a creative brief, or an image reference. Then shape a prompt you can copy into the AI tool of your choice.
-
-MAKE YOUR IDEAS CLEARER
-Use Optimize to improve a prompt’s structure, detail, and direction. Switch to Chat to brainstorm, explore ideas, and work through follow-up questions.
-
-KEEP THE CONVERSATION GOING
-Refine the result in the same thread. Ask for a different tone, a tighter format, or more specific instructions without starting over.
+PROMPT OPTIMIZER
+Start with a sentence, a creative brief, or an image reference. Promptomize rewrites it into a clear, detailed prompt with the right structure, context, and constraints. Refine the result in the same thread: change the tone, tighten the format, or add specifics without starting over.
 
 CREATE ACROSS 7 MODALITIES
-Write prompts for text, images, video, music, audio, code, and 3D. Promptomize creates the instructions; use your preferred creative tool to generate the final media.
+Write prompts for text, images, video, music, audio, code, and 3D. Promptomize writes the instructions; use your preferred creative tool to generate the final media.
 
-ADD THE CONTEXT THAT MATTERS
-Attach an image for visual reference. Choose MAX Mode when you need deeper prompt refinement, within your plan’s allowance.
+AI CHAT ASSISTANT
+Ask questions, draft and rewrite, brainstorm, summarize, or get help with code in a full conversation.
 
-PICK UP WHERE YOU LEFT OFF
-Return to any saved conversation from the menu. Copy a result when you’re ready to put it to work.
+YOUR HISTORY ON EVERY DEVICE
+Sign in with Apple to keep your chats and results saved to your account and synced across your devices.
 
-START FREE. UPGRADE WHEN YOU NEED MORE.
-Free includes a daily allowance of text prompts. Pro adds a larger daily allowance, all modalities, and MAX Mode. Premium includes unlimited standard prompts, all modalities, and MAX Mode. Features and usage limits are shown in the app. AI generation requires an internet connection.
+WORKS WHERE YOU ARE
+Enhance a prompt from Siri, Shortcuts, and Spotlight. The result is copied to your clipboard, ready to paste.
 
-SUBSCRIPTIONS
-Optional Pro and Premium subscriptions are available monthly or annually. Payment is charged to your Apple Account when you confirm a purchase. Subscriptions renew automatically unless canceled at least 24 hours before the current period ends. Manage or cancel your subscription in Settings > Apple Account > Subscriptions. Any introductory offer is shown before purchase and is subject to eligibility.
+SUBSCRIPTION REQUIRED
+Promptomize requires a Promptomize Premium subscription, which includes the prompt optimizer and the AI chat assistant. Promptomize Premium is $9.99 per month (or the equivalent price in your local currency, shown in the app before you subscribe). New subscribers get a 3-day free trial. When the trial ends, the monthly subscription starts automatically unless you cancel at least 24 hours before the trial ends.
 
-Terms of Use: https://promptomize.app/terms
+Payment is charged to your Apple Account at confirmation of purchase or, with a free trial, when the trial ends. The subscription renews automatically every month unless canceled at least 24 hours before the end of the current period, and your account is charged for renewal within 24 hours before the current period ends. Manage or cancel anytime in Settings > Apple Account > Subscriptions. An internet connection is required.
+
+Terms of Use (EULA): https://promptomize.app/terms
 Privacy Policy: https://promptomize.app/privacy
