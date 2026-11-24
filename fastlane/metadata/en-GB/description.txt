@@ -1,46 +1,27 @@
-Promptomize transforms your ideas into powerful, optimised prompts for any AI platform. Whether you're generating text, images, videos, music, code, or 3D models, Promptomize ensures your prompts deliver stronger, more consistent results.
+Turn a rough idea into a clear, useful AI prompt.
 
-HOW IT WORKS
-Type what you want to achieve, select your target modality, and tap Enhance. Our advanced AI engine rewrites your prompt using proven prompt engineering techniques — or switch to Chat mode for open-ended conversation.
+Promptomize helps you explain what you want, add the right context, and refine the result. Start with a sentence, a creative brief, or an image reference. Then shape a prompt you can copy into the AI tool of your choice.
 
-TWO MODES
-Optimise mode refines and strengthens your prompts with expert-level prompt engineering. Chat mode gives you a general-purpose AI assistant for brainstorming, research, and creative exploration.
+MAKE YOUR IDEAS CLEARER
+Use Optimize to improve a prompt’s structure, detail, and direction. Switch to Chat to brainstorm, explore ideas, and work through follow-up questions.
 
-MAX MODE
-Activate MAX Mode for our most advanced enhancement — deeper reasoning, stronger structure, and expert-level prompt construction. Available with daily quota based on your plan.
+KEEP THE CONVERSATION GOING
+Refine the result in the same thread. Ask for a different tone, a tighter format, or more specific instructions without starting over.
 
-7 CREATIVE MODALITIES
-Text, Image, Video, Music, Audio, Code, and 3D. Each modality tailors your prompt for its target output — with platform-aware suggestions and optimised phrasing.
+CREATE ACROSS 7 MODALITIES
+Write prompts for text, images, video, music, audio, code, and 3D. Promptomize creates the instructions; use your preferred creative tool to generate the final media.
 
-PROJECT CONTEXTS
-Attach reusable project contexts to keep your tone, terminology, and goals consistent across sessions — no need to repeat background information.
+ADD THE CONTEXT THAT MATTERS
+Attach an image for visual reference. Choose MAX Mode when you need deeper prompt refinement, within your plan’s allowance.
 
-CONVERSATION THREADS
-Refine prompts through multi-turn conversations. Each turn builds on the previous result for increasingly precise outputs.
+PICK UP WHERE YOU LEFT OFF
+Return to any saved conversation from the menu. Copy a result when you’re ready to put it to work.
 
-COLLECTIONS
-Organise your best prompts into folders. Star your favourites for quick access later.
+START FREE. UPGRADE WHEN YOU NEED MORE.
+Free includes a daily allowance of text prompts. Pro adds a larger daily allowance, all modalities, and MAX Mode. Premium includes unlimited standard prompts, all modalities, and MAX Mode. Features and usage limits are shown in the app. AI generation requires an internet connection.
 
-KEY FEATURES
-- 7 creative modalities with platform-aware suggestions
-- MAX Mode for expert-level prompt engineering
-- Optimise and Chat conversation modes
-- Project contexts for domain-specific consistency
-- Collections to organise prompts into folders
-- Prompt history with favourites and swipe-to-delete
-- Offline support with automatic sync
-- iOS Widget for quick-access enhancement
-- Siri & Shortcuts: enhance a prompt by voice, from Spotlight, or inside your own shortcuts
-- Image attachments for visual context
-
-SUBSCRIPTION TIERS
-- Free: Daily prompts to get started
-- Pro: More prompts per day, all modalities, and MAX Mode
-- Premium: Unlimited prompts, all modalities, MAX Mode, and advanced prompt engineering
-
-Premium includes a 7-day free trial for new subscribers. After the trial, your subscription automatically renews at the price shown at purchase (monthly or annually) unless you cancel at least 24 hours before the trial ends. Subscriptions are billed through your Apple ID and renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your device Settings under Subscriptions.
-
-Privacy-first: your prompts are processed securely and never used for training.
+SUBSCRIPTIONS
+Optional Pro and Premium subscriptions are available monthly or annually. Payment is charged to your Apple Account when you confirm a purchase. Subscriptions renew automatically unless cancelled at least 24 hours before the current period ends. Manage or cancel your subscription in Settings > Apple Account > Subscriptions. Any introductory offer is shown before purchase and is subject to eligibility.
 
 Terms of Use: https://promptomize.app/terms
 Privacy Policy: https://promptomize.app/privacy

@@ -34,25 +34,26 @@ struct AuthView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
-                    if mode == .standard {
-                        HStack {
-                            Spacer()
+                    // Always offer a way out. In guest-unlock mode the user
+                    // arrived here by tapping Send; trapping them behind a
+                    // non-dismissable cover (e.g. after cancelling the Apple
+                    // sheet) forces a force-quit. Their draft stays in the
+                    // composer when they close this.
+                    HStack {
+                        Spacer()
 
-                            Button {
-                                dismiss()
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(textPrimary)
-                            }
-                            .buttonStyle(GlassIconButtonStyle(size: 40))
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(textPrimary)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                    } else {
-                        Color.clear
-                            .frame(height: 20)
+                        .buttonStyle(GlassIconButtonStyle(size: 40))
+                        .accessibilityLabel(mode == .guestUnlock ? "Not now" : "Close")
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
 
                     VStack(spacing: 18) {
                         heroCard
@@ -111,7 +112,7 @@ struct AuthView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 benefitRow(systemImage: "wand.and.stars", text: "AI-powered prompt enhancement across all modalities")
-                benefitRow(systemImage: "gift.fill", text: "7-day Premium trial with unlimited prompts and MAX mode")
+                benefitRow(systemImage: "gift.fill", text: "Eligible new subscribers can try Premium free for 7 days")
                 benefitRow(systemImage: "clock.arrow.circlepath", text: "Save history, sync across devices, and unlock all tools")
             }
         }
@@ -209,7 +210,7 @@ struct AuthView: View {
         case .standard:
             return "Upgrade weak prompts into production-ready instructions with a cleaner, faster chat workflow."
         case .guestUnlock:
-            return "Sign in with Apple to start enhancing prompts, save your history, and claim your 7-day Premium trial."
+            return "Sign in with Apple to start enhancing prompts and save your history."
         }
     }
 

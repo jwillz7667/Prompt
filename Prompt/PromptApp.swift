@@ -112,7 +112,6 @@ struct PromptApp: App {
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AuthManager.self) private var authManager
-    @State private var showSupportTicket: String?
     @State private var splashMinimumDurationElapsed = false
 
     // Check if running in UI test / screenshot mode
@@ -166,18 +165,24 @@ struct RootView: View {
     }
 
     private func setupNotifications() async {
-        // Request authorization
-        _ = await NotificationManager.shared.requestAuthorization()
-
-        // Set up notification handlers
-        NotificationManager.shared.onSupportMessageReceived = { ticketId in
-            // Handle support message tap - could navigate to ticket
-            showSupportTicket = ticketId
+        // Notification taps previously did nothing. Route them to the
+        // closest existing screen: support replies live under Profile,
+        // finished prompts live in the chat sidebar.
+        NotificationManager.shared.onSupportMessageReceived = { _ in
+            DeeplinkManager.shared.shouldOpenSettings = true
         }
 
-        NotificationManager.shared.onEnhancementComplete = { promptId in
-            // Handle enhancement complete tap - could navigate to prompt
-            print("[Notifications] Enhancement complete for prompt: \(promptId)")
+        NotificationManager.shared.onEnhancementComplete = { _ in
+            DeeplinkManager.shared.shouldOpenHistory = true
+        }
+
+        // Do not show the system permission prompt on launch. Ask after the
+        // first successful result (ContentView), when the value is obvious.
+        // If the user already answered, this refreshes the APNs token
+        // without prompting again.
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if status != .notDetermined {
+            _ = await NotificationManager.shared.requestAuthorization()
         }
     }
 }

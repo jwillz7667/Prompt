@@ -6,7 +6,6 @@ on:
     paths:
       - 'Prompt/**'
       - 'Prompt.xcodeproj/**'
-      - 'PromptKeyboard/**'
       - 'PromptWidgetExtension/**'
       - 'tests/ios/**'
       - '.github/workflows/ios.yml'
@@ -15,7 +14,6 @@ on:
     paths:
       - 'Prompt/**'
       - 'Prompt.xcodeproj/**'
-      - 'PromptKeyboard/**'
       - 'PromptWidgetExtension/**'
       - 'tests/ios/**'
       - '.github/workflows/ios.yml'

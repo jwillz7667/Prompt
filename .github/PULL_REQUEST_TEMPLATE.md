@@ -27,7 +27,6 @@ External contributors must include the CLA acknowledgement at the bottom of this
 - [ ] `web/`
 - [ ] `Prompt/` (iOS app)
 - [ ] `PromptWidgetExtension/`
-- [ ] `PromptKeyboard/`
 - [ ] `chatgpt-app/`
 - [ ] `fastlane/` / iOS CI
 - [ ] Repository tooling / docs
