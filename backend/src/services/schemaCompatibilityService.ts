@@ -146,6 +146,9 @@ const EXPECTED_COLUMNS: ReadonlyArray<{ table: string; column: string }> = [
   { table: 'User', column: 'appleRefreshToken' },
   // Durable chat reports (20261124030000).
   { table: 'ChatMessageReport', column: 'messageContent' },
+  // Server-side AI data-sharing consent (20261124050000).
+  { table: 'User', column: 'aiDataConsentAt' },
+  { table: 'User', column: 'aiDataConsentVersion' },
 ];
 
 const EXPECTED_TABLES: ReadonlyArray<string> = [

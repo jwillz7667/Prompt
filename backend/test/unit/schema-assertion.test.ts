@@ -31,6 +31,8 @@ const ALL_COLUMNS = [
   { table_name: 'DailyUsage', column_name: 'supportReplyCount' },
   { table_name: 'User', column_name: 'appleRefreshToken' },
   { table_name: 'ChatMessageReport', column_name: 'messageContent' },
+  { table_name: 'User', column_name: 'aiDataConsentAt' },
+  { table_name: 'User', column_name: 'aiDataConsentVersion' },
 ];
 const ALL_TABLES = [
   { table_name: 'SharedPrompt' },
@@ -55,6 +57,8 @@ describe('assertExpectedSchemaAtBoot', () => {
       expect.arrayContaining([
         'DailyUsage.supportReplyCount',
         'ChatMessageReport.messageContent',
+        'User.aiDataConsentAt',
+        'User.aiDataConsentVersion',
         'ChatConversation (table)',
         'ChatMessage (table)',
         'ChatMessageReport (table)',

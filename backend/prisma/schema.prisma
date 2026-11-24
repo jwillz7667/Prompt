@@ -88,6 +88,12 @@ model User {
   // User preferences
   customInstructions String? @db.Text
 
+  // AI data-sharing consent (App Store guideline 5.1.2(i)): when the user agreed
+  // to their content being sent to third-party AI providers, and which version
+  // of the disclosure they agreed to. Both null when never granted or withdrawn.
+  aiDataConsentAt      DateTime?
+  aiDataConsentVersion Int?
+
   // Usage tracking
   promptCount Int    @default(0)
   tokenUsage  BigInt @default(0)
