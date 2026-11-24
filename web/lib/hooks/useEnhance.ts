@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { enhancePromptStream } from '@/lib/api/prompts'
+import { isSubscriptionRequired } from '@/lib/api/client'
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
 import type { EnhanceRequest, EnhancementResult } from '@/lib/types/api'
@@ -36,6 +38,7 @@ export function useEnhance() {
   })
 
   const abortRef = useRef<AbortController | null>(null)
+  const router = useRouter()
   const { fetchSubscription } = useSubscriptionStore()
   const settings = useSettingsStore()
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -130,6 +133,11 @@ export function useEnhance() {
       } catch (err) {
         if (controller.signal.aborted || abortRef.current !== controller) return null
         const message = err instanceof Error ? err.message : 'Enhancement failed'
+        // No free tier: a lapsed or never-subscribed account goes to the paywall.
+        if (isSubscriptionRequired(err)) {
+          void fetchSubscription()
+          router.push('/upgrade')
+        }
         setState({
           isEnhancing: false,
           streamedContent: content,
@@ -143,7 +151,7 @@ export function useEnhance() {
         if (abortRef.current === controller) abortRef.current = null
       }
     },
-    [settings, fetchSubscription],
+    [settings, fetchSubscription, router],
   )
 
   const cancel = useCallback(() => {

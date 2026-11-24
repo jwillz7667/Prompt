@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, clearTokens, getAccessToken, refreshAccessToken, setTokens } from '@/lib/api/client'
+import {
+  api,
+  clearTokens,
+  getAccessToken,
+  isSubscriptionRequired,
+  refreshAccessToken,
+  setTokens,
+  SubscriptionRequiredError,
+} from '@/lib/api/client'
 import { getCurrentUser, logout } from '@/lib/api/auth'
 
 const fetchMock = vi.fn()
@@ -20,7 +28,7 @@ describe('authentication and streaming', () => {
     setTokens('old', undefined, -1)
     fetchMock.mockResolvedValueOnce(Response.json({ accessToken: 'new', expiresIn: 900 }))
     fetchMock.mockResolvedValueOnce(Response.json({ url: 'https://checkout.stripe.com/test' }))
-    await api.post('/api/stripe/checkout', { priceId: 'price_1' }, { local: true })
+    await api.post('/api/stripe/checkout', { plan: 'premium_monthly' }, { local: true })
     expect(fetchMock.mock.calls[1][0]).toBe('/api/stripe/checkout')
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer new')
   })
@@ -101,4 +109,54 @@ it('does not let an old refresh rejection clear a new login', async () => {
   finish(new Response('', { status: 401 }))
   await expect(pending).rejects.toMatchObject({ statusCode: 401 })
   expect(getAccessToken()).toBe('account-b')
+})
+
+describe('hard paywall responses', () => {
+  const paywallBody = {
+    error: 'Subscription required',
+    code: 'QUOTA_EXCEEDED',
+    reason: 'SUBSCRIPTION_REQUIRED',
+    remainingQuota: 0,
+  }
+
+  it('throws SubscriptionRequiredError for a 403 SUBSCRIPTION_REQUIRED request', async () => {
+    setTokens('access', undefined, 900)
+    fetchMock.mockResolvedValue(Response.json(paywallBody, { status: 403 }))
+
+    const failure = await api.post('/prompts/enhance', {}).catch((error: unknown) => error)
+
+    expect(isSubscriptionRequired(failure)).toBe(true)
+  })
+
+  it('throws SubscriptionRequiredError before an enhancement stream starts', async () => {
+    setTokens('access', undefined, 900)
+    fetchMock.mockResolvedValue(Response.json(paywallBody, { status: 403 }))
+
+    await expect(api.stream('/prompts/enhance/stream', {}).next()).rejects.toBeInstanceOf(
+      SubscriptionRequiredError,
+    )
+  })
+
+  it('keeps other 403 responses as ordinary API errors', async () => {
+    setTokens('access', undefined, 900)
+    fetchMock.mockResolvedValue(Response.json({ error: 'Forbidden' }, { status: 403 }))
+
+    const failure = await api.get('/admin/tickets').catch((error: unknown) => error)
+
+    expect(isSubscriptionRequired(failure)).toBe(false)
+    expect(failure).toMatchObject({ statusCode: 403, error: 'Forbidden' })
+  })
+
+  it('preserves the billing error code from a local Stripe route', async () => {
+    setTokens('access', undefined, 900)
+    fetchMock.mockResolvedValue(
+      Response.json({ error: 'Unavailable', code: 'BILLING_NOT_CONFIGURED' }, { status: 503 }),
+    )
+
+    const failure = await api
+      .post('/api/stripe/checkout', {}, { local: true })
+      .catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ statusCode: 503, code: 'BILLING_NOT_CONFIGURED' })
+  })
 })
