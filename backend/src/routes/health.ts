@@ -245,7 +245,8 @@ async function checkDatabase(): Promise<ServiceCheck> {
     return {
       status: 'error',
       latency: -1,
-      message: error instanceof Error ? error.message : 'Database connection failed',
+      // Public endpoint: the driver error (hosts, credentials) stays in the log.
+      message: 'Database connection failed',
     };
   }
 }
@@ -284,7 +285,7 @@ async function checkRedis(): Promise<ServiceCheck> {
     return {
       status: 'error',
       latency: -1,
-      message: error instanceof Error ? error.message : 'Redis connection failed',
+      message: 'Redis connection failed',
     };
   }
 }
