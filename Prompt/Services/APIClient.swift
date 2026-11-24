@@ -311,7 +311,8 @@ actor APIClient {
         method: HTTPMethod,
         body: (any Encodable & Sendable)?,
         requiresAuth: Bool,
-        isRetry: Bool
+        isRetry: Bool,
+        isConsentRetry: Bool = false
     ) async throws -> EventStreamConnection {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
@@ -364,7 +365,8 @@ actor APIClient {
                     method: method,
                     body: body,
                     requiresAuth: requiresAuth,
-                    isRetry: true
+                    isRetry: true,
+                    isConsentRetry: isConsentRetry
                 )
             }
             throw APIError.unauthorized
@@ -372,7 +374,18 @@ actor APIClient {
 
         guard httpResponse.statusCode == 200 else {
             let errorBody = try await Self.readErrorBody(from: bytes)
-            throw surfaced(Self.mapErrorResponse(statusCode: httpResponse.statusCode, body: errorBody))
+            let error = surfaced(Self.mapErrorResponse(statusCode: httpResponse.statusCode, body: errorBody))
+            if !isConsentRetry, await shouldRetryAfterConsent(error, sessionVersion: requestSessionVersion) {
+                return try await openEventStream(
+                    endpoint,
+                    method: method,
+                    body: body,
+                    requiresAuth: requiresAuth,
+                    isRetry: isRetry,
+                    isConsentRetry: true
+                )
+            }
+            throw error
         }
 
         return EventStreamConnection(bytes: bytes, sessionVersion: requestSessionVersion)
@@ -422,6 +435,14 @@ actor APIClient {
 
     /// Entitlement loss is global state: any route that reports it flips the
     /// app back to the hard paywall, regardless of which screen made the call.
+    /// 403 AI_CONSENT_REQUIRED is answered before any provider call, so the
+    /// request is safe to repeat: ask the user and retry once if they agree.
+    private func shouldRetryAfterConsent(_ error: APIError, sessionVersion requestSessionVersion: UInt) async -> Bool {
+        guard case .aiConsentRequired(let requiredVersion) = error else { return false }
+        let isGranted = await AIDataConsentStore.requestConsentFromUser(requiredVersion: requiredVersion)
+        return isGranted && sessionVersion == requestSessionVersion
+    }
+
     private func surfaced(_ error: APIError) -> APIError {
         if case .subscriptionRequired = error {
             Task { @MainActor in
@@ -445,7 +466,8 @@ actor APIClient {
             retryable: envelope.retryable,
             retryAfterMs: envelope.retryAfterMs,
             resetAt: envelope.resetAt,
-            remainingQuota: envelope.remainingQuota
+            remainingQuota: envelope.remainingQuota,
+            requiredVersion: envelope.requiredVersion
         ) {
             return mapped
         }
@@ -478,7 +500,8 @@ actor APIClient {
         requiresAuth: Bool,
         timeoutInterval: TimeInterval,
         connectivity: ConnectivityPolicy,
-        isRetry: Bool = false
+        isRetry: Bool = false,
+        isConsentRetry: Bool = false
     ) async throws -> Data {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
@@ -549,13 +572,27 @@ actor APIClient {
                     requiresAuth: requiresAuth,
                     timeoutInterval: timeoutInterval,
                     connectivity: connectivity,
-                    isRetry: true
+                    isRetry: true,
+                    isConsentRetry: isConsentRetry
                 )
             }
             throw APIError.unauthorized
 
         default:
-            throw surfaced(Self.mapErrorResponse(statusCode: httpResponse.statusCode, body: data))
+            let error = surfaced(Self.mapErrorResponse(statusCode: httpResponse.statusCode, body: data))
+            if !isConsentRetry, await shouldRetryAfterConsent(error, sessionVersion: requestSessionVersion) {
+                return try await performRequest(
+                    endpoint,
+                    method: method,
+                    body: body,
+                    requiresAuth: requiresAuth,
+                    timeoutInterval: timeoutInterval,
+                    connectivity: connectivity,
+                    isRetry: isRetry,
+                    isConsentRetry: true
+                )
+            }
+            throw error
         }
     }
 
@@ -729,6 +766,9 @@ enum APIError: LocalizedError, Sendable {
     case subscriptionRequired
     /// 429 FAIR_USE_LIMIT: the daily fair-use ceiling for subscribers.
     case fairUseLimit(resetAt: Date?)
+    /// 403 AI_CONSENT_REQUIRED: the account has not agreed to the current AI
+    /// data-sharing disclosure. APIClient prompts and retries before throwing.
+    case aiConsentRequired(requiredVersion: Int)
     /// A typed AI-service failure (`toClientStreamError` on the backend).
     case service(ServiceFailure)
     /// 409 TRANSACTION_OWNED_BY_ANOTHER_USER from purchase activation.
@@ -755,6 +795,7 @@ enum APIError: LocalizedError, Sendable {
         case .featureLocked: return "This feature requires a subscription"
         case .subscriptionRequired: return ServiceMessages.subscriptionRequired
         case .fairUseLimit(let resetAt): return ServiceMessages.fairUseLimit(resetAt: resetAt)
+        case .aiConsentRequired: return ServiceMessages.aiConsentRequired
         case .service(let failure): return failure.code.userMessage
         case .transactionOwnedByAnotherAccount: return ServiceMessages.transactionOwnedByAnotherAccount
         case .conflict(let conflict): return conflict.userMessage
@@ -785,7 +826,8 @@ enum APIError: LocalizedError, Sendable {
         retryable: Bool?,
         retryAfterMs: Int?,
         resetAt: String?,
-        remainingQuota: Int?
+        remainingQuota: Int?,
+        requiredVersion: Int? = nil
     ) -> APIError? {
         guard let code else { return nil }
         switch code {
@@ -799,6 +841,8 @@ enum APIError: LocalizedError, Sendable {
             return .featureLocked
         case "FAIR_USE_LIMIT":
             return .fairUseLimit(resetAt: ServerDate.parse(resetAt))
+        case "AI_CONSENT_REQUIRED":
+            return .aiConsentRequired(requiredVersion: requiredVersion ?? AIDataConsentStore.currentDisclosureVersion)
         case "AUTH_REQUIRED":
             return .unauthorized
         case "TRANSACTION_OWNED_BY_ANOTHER_USER":
@@ -873,6 +917,7 @@ nonisolated struct APIErrorEnvelope: Decodable, Sendable {
     let resetAt: String?
     let retryable: Bool?
     let retryAfterMs: Int?
+    let requiredVersion: Int?
 }
 
 // MARK: - Server-Sent Event Contract
@@ -953,6 +998,9 @@ struct UserDTO: Codable, Sendable {
     /// StoreKit `appAccountToken` binding App Store purchases to this
     /// account. Optional so responses from backends that predate it decode.
     let appAccountToken: UUID?
+    /// Account-level AI data-sharing consent. `.unknown` when the backend
+    /// predates server-side consent and omits the field.
+    let aiDataConsent: ServerConsentSnapshot
 
     nonisolated init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -965,6 +1013,13 @@ struct UserDTO: Codable, Sendable {
         // purchases re-fetch the profile before buying.
         appAccountToken = try container.decodeIfPresent(String.self, forKey: .appAccountToken)
             .flatMap(UUID.init(uuidString:))
+        if !container.contains(.aiDataConsent) {
+            aiDataConsent = .unknown
+        } else if let consent = try container.decodeIfPresent(ServerAIDataConsent.self, forKey: .aiDataConsent) {
+            aiDataConsent = .granted(consent)
+        } else {
+            aiDataConsent = .none
+        }
     }
 
     nonisolated func encode(to encoder: any Encoder) throws {
@@ -975,10 +1030,18 @@ struct UserDTO: Codable, Sendable {
         try container.encodeIfPresent(avatarUrl, forKey: .avatarUrl)
         try container.encode(isPremium, forKey: .isPremium)
         try container.encodeIfPresent(appAccountToken?.uuidString.lowercased(), forKey: .appAccountToken)
+        switch aiDataConsent {
+        case .unknown:
+            break
+        case .none:
+            try container.encodeNil(forKey: .aiDataConsent)
+        case .granted(let consent):
+            try container.encode(consent, forKey: .aiDataConsent)
+        }
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, email, name, avatarUrl, isPremium, appAccountToken
+        case id, email, name, avatarUrl, isPremium, appAccountToken, aiDataConsent
     }
 }
 

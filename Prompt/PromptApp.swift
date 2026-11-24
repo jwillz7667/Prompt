@@ -161,6 +161,17 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: stage)
+        // An AI request the server rejected for missing consent waits on this
+        // prompt and retries once the user agrees; on the consent stage the
+        // full-screen gate already resolves it.
+        .fullScreenCover(isPresented: Binding(
+            get: { consentStore.isPromptPresented && stage != .aiConsent },
+            set: { isPresented in
+                if !isPresented, consentStore.isPromptPresented { consentStore.declinePrompt() }
+            }
+        )) {
+            AIDataConsentView(consentStore: consentStore, presentation: .prompt)
+        }
         .task {
             if !splashMinimumDurationElapsed {
                 try? await Task.sleep(for: .seconds(1.15))

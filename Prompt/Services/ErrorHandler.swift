@@ -80,6 +80,7 @@ enum AppError: AppErrorProtocol, Equatable {
     case featureLocked
     case subscriptionRequired
     case fairUseLimit(resetAt: Date?)
+    case aiConsentRequired
     case service(ServiceFailure)
 
     // Validation Errors
@@ -119,7 +120,8 @@ enum AppError: AppErrorProtocol, Equatable {
             return .network
         case .notAuthenticated, .sessionExpired, .invalidCredentials, .accountDisabled:
             return .authentication
-        case .unauthorized, .quotaExceeded, .featureLocked, .subscriptionRequired, .fairUseLimit:
+        case .unauthorized, .quotaExceeded, .featureLocked, .subscriptionRequired, .fairUseLimit,
+             .aiConsentRequired:
             return .authorization
         case .invalidInput, .missingRequired:
             return .validation
@@ -185,6 +187,8 @@ enum AppError: AppErrorProtocol, Equatable {
             return ServiceMessages.subscriptionRequired
         case .fairUseLimit(let resetAt):
             return ServiceMessages.fairUseLimit(resetAt: resetAt)
+        case .aiConsentRequired:
+            return ServiceMessages.aiConsentRequired
         case .service(let failure):
             return failure.code.userMessage
 
@@ -248,7 +252,7 @@ enum AppError: AppErrorProtocol, Equatable {
             return .signIn
         case .quotaExceeded, .featureLocked, .subscriptionRequired:
             return .upgrade
-        case .fairUseLimit, .ownedByAnotherAccount:
+        case .fairUseLimit, .ownedByAnotherAccount, .aiConsentRequired:
             return ErrorAction.none
         case .service(let failure):
             return failure.isRetryable ? .retry : ErrorAction.none
@@ -288,6 +292,7 @@ enum AppError: AppErrorProtocol, Equatable {
              (.restoreFailed, .restoreFailed),
              (.ownedByAnotherAccount, .ownedByAnotherAccount),
              (.subscriptionRequired, .subscriptionRequired),
+             (.aiConsentRequired, .aiConsentRequired),
              (.dataCorrupted, .dataCorrupted),
              (.maintenanceMode, .maintenanceMode):
             return true
@@ -318,6 +323,10 @@ enum AppError: AppErrorProtocol, Equatable {
 enum ServiceMessages {
     nonisolated static var subscriptionRequired: String {
         String(localized: "A Promptomize Premium subscription is required to use this feature.")
+    }
+
+    nonisolated static var aiConsentRequired: String {
+        String(localized: "To use AI features, allow Promptomize to share your content with AI service providers.")
     }
 
     nonisolated static var transactionOwnedByAnotherAccount: String {
@@ -433,6 +442,8 @@ final class ErrorHandler: ObservableObject {
                 return .subscriptionRequired
             case .fairUseLimit(let resetAt):
                 return .fairUseLimit(resetAt: resetAt)
+            case .aiConsentRequired:
+                return .aiConsentRequired
             case .service(let failure):
                 return .service(failure)
             case .transactionOwnedByAnotherAccount:

@@ -851,7 +851,7 @@ final class ChatViewModel {
         if let apiError = error as? APIError {
             switch apiError {
             case .subscriptionRequired, .fairUseLimit, .badRequest, .notAuthenticated, .unauthorized,
-                 .quotaExceeded, .featureLocked, .transactionOwnedByAnotherAccount:
+                 .quotaExceeded, .featureLocked, .transactionOwnedByAnotherAccount, .aiConsentRequired:
                 return false
             case .service(let failure):
                 return failure.isRetryable

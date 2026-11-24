@@ -167,6 +167,7 @@ final class AuthManager: NSObject {
                 self.currentUser = User(from: response.user)
                 cacheUser(self.currentUser!)
                 markAsSignedIn()
+                syncAIDataConsent(from: response.user)
                 #if DEBUG
                 print("[Auth] Session restored from server")
                 #endif
@@ -290,6 +291,7 @@ final class AuthManager: NSObject {
             currentUser = user
             cacheUser(user)
             markAsSignedIn()
+            syncAIDataConsent(from: response.user)
             AnalyticsService.shared.trackSignIn(provider: "apple", success: true)
 
             // Sign-in is complete once the session exists. Receipt history can
@@ -346,6 +348,7 @@ final class AuthManager: NSObject {
         clearSignedInState()
         StoreKitManager.shared.clearSubscriptionState()
         SupportSocketManager.shared.disconnect()
+        AIDataConsentStore.shared.declinePrompt()
         currentUser = nil
         isLoading = false
     }
@@ -377,6 +380,7 @@ final class AuthManager: NSObject {
         clearSignedInState()
         StoreKitManager.shared.clearSubscriptionState()
         SupportSocketManager.shared.disconnect()
+        AIDataConsentStore.shared.declinePrompt()
         currentUser = nil
     }
 }
@@ -409,6 +413,9 @@ struct User: Codable, Identifiable, Sendable {
     var isPremium: Bool
     /// Lowercase UUID the backend issued for StoreKit purchase attribution.
     var appAccountToken: UUID?
+    /// Server-side AI data-sharing consent from the last user payload. Optional
+    /// so profiles cached by earlier builds still decode.
+    var aiDataConsent: ServerConsentSnapshot?
 
     nonisolated init(from dto: UserDTO) {
         self.id = dto.id
@@ -417,6 +424,7 @@ struct User: Codable, Identifiable, Sendable {
         self.avatarUrl = dto.avatarUrl
         self.isPremium = dto.isPremium
         self.appAccountToken = dto.appAccountToken
+        self.aiDataConsent = dto.aiDataConsent
     }
 }
 
@@ -433,6 +441,19 @@ extension AuthManager {
         let user = User(from: response.user)
         currentUser = user
         cacheUser(user)
+        syncAIDataConsent(from: response.user)
+    }
+
+    /// Reconciles the on-device consent with the account's, so a new device
+    /// or reinstall skips the consent screen and consent given on a build
+    /// that stored it only locally reaches the server. Runs off the caller's
+    /// path: sign-in and session restore never wait on it.
+    func syncAIDataConsent(from dto: UserDTO) {
+        let userId = dto.id
+        let snapshot = dto.aiDataConsent
+        Task {
+            await AIDataConsentStore.shared.sync(userId: userId, server: snapshot)
+        }
     }
 
     /// The token StoreKit attaches to a purchase so the backend can bind the

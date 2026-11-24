@@ -2,21 +2,32 @@
 //  AIDataConsentView.swift
 //  Prompt
 //
-//  One-time disclosure shown after sign-in and before any AI feature:
-//  what is sent, to whom (by category, never by vendor name) and why.
-//  Nothing reaches an AI service until the user agrees.
+//  Disclosure shown after sign-in and before any AI feature: what is sent,
+//  to whom (by category, never by vendor name) and why. Nothing reaches an
+//  AI service until the user agrees and the server has recorded it. Also
+//  presented over the app when the server rejects an AI request for missing
+//  consent; the rejected request retries once the user agrees.
 //
 
 import SwiftUI
 
 struct AIDataConsentView: View {
+    enum Presentation {
+        /// Launch gate after sign-in: declining means signing out or deleting.
+        case launchGate
+        /// Over the app after a 403 AI_CONSENT_REQUIRED: declining cancels the request.
+        case prompt
+    }
+
     @Environment(AuthManager.self) private var authManager
     @Environment(PromptHistoryManager.self) private var historyManager
 
     let consentStore: AIDataConsentStore
+    var presentation: Presentation = .launchGate
 
     @State private var isConfirmingAccountDeletion = false
     @State private var isSigningOut = false
+    @State private var submitError: String?
 
     var body: some View {
         ZStack {
@@ -35,6 +46,28 @@ struct AIDataConsentView: View {
             }
         }
         .deleteAccountFlow(isPresented: $isConfirmingAccountDeletion)
+        .alert(
+            "Couldn't save your choice",
+            isPresented: Binding(
+                get: { submitError != nil },
+                set: { if !$0 { submitError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(submitError ?? "")
+        }
+    }
+
+    private func agree() {
+        guard let userId = authManager.currentUser?.id else { return }
+        Task {
+            do {
+                try await consentStore.grantConsent(userId: userId)
+            } catch {
+                submitError = ErrorHandler.shared.mapToAppError(error).userMessage
+            }
+        }
     }
 
     private var header: some View {
@@ -52,7 +85,7 @@ struct AIDataConsentView: View {
         VStack(alignment: .leading, spacing: 14) {
             disclosureRow(
                 systemImage: "paperplane",
-                text: String(localized: "To answer you, Promptomize sends your messages, prompts and any images you attach to third-party AI service providers that process them on our behalf.")
+                text: String(localized: "To generate responses, Promptomize sends your prompts, chat messages and any images you attach to third-party AI service providers that process them on our behalf.")
             )
             disclosureRow(
                 systemImage: "lock.shield",
@@ -89,24 +122,57 @@ struct AIDataConsentView: View {
 
     private var actions: some View {
         VStack(spacing: 14) {
-            Button {
-                guard let userId = authManager.currentUser?.id else { return }
-                consentStore.recordConsent(userId: userId)
-            } label: {
-                Text("Agree and Continue")
-                    .font(.system(.headline, design: .rounded, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .foregroundStyle(Color.adaptiveTextOnAccent)
+            Button(action: agree) {
+                ZStack {
+                    Text("Agree and Continue")
+                        .opacity(consentStore.isSubmitting ? 0 : 1)
+                    if consentStore.isSubmitting {
+                        ProgressView()
+                            .tint(Color.adaptiveTextOnAccent)
+                    }
+                }
+                .font(.system(.headline, design: .rounded, weight: .bold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .foregroundStyle(Color.adaptiveTextOnAccent)
             }
             .buttonStyle(LiquidGlassButtonStyle(
                 cornerRadius: 16,
                 tintColor: Color.adaptiveButtonPrimary,
                 intensity: .prominent
             ))
-            .disabled(isSigningOut)
+            .disabled(isSigningOut || consentStore.isSubmitting)
             .accessibilityIdentifier("consent.agree")
 
+            switch presentation {
+            case .launchGate:
+                launchGateAlternatives
+            case .prompt:
+                promptAlternatives
+            }
+        }
+    }
+
+    private var promptAlternatives: some View {
+        VStack(spacing: 14) {
+            Text("AI features can't work without this. You'll be asked again the next time you use one.")
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.adaptiveTextSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button("Not Now") {
+                consentStore.declinePrompt()
+            }
+            .font(.system(.footnote, design: .rounded, weight: .semibold))
+            .foregroundStyle(Color.adaptiveTextSecondary)
+            .disabled(consentStore.isSubmitting)
+            .accessibilityIdentifier("consent.notNow")
+        }
+    }
+
+    private var launchGateAlternatives: some View {
+        VStack(spacing: 14) {
             Text("AI features can't work without this. If you don't agree, you can sign out or delete your account.")
                 .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(Color.adaptiveTextSecondary)

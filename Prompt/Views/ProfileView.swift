@@ -333,6 +333,8 @@ struct ProfileView: View {
                         .foregroundStyle(textSecondary)
                 }
 
+                AIDataSharingSettingsSection()
+
                 // Sign out / danger
                 Section {
                     Button(role: .destructive) {
