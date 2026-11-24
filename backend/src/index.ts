@@ -50,6 +50,7 @@ import { initializeSocket } from './utils/socket.js';
 import { validateEnvAtBoot } from './utils/env.js';
 import { initSentry } from './utils/sentry.js';
 import { shouldCompressResponse, validateLlmConfig } from './features/llm/index.js';
+import { buildChatRouter } from './features/chat/index.js';
 
 config();
 
@@ -203,6 +204,8 @@ app.use('/api/v1/collections', collectionRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/support', supportRouter);
 app.use('/api/v1/threads', threadRouter);
+// Built here (after dotenv) so CHAT_* values from .env apply; malformed values throw at boot.
+app.use('/api/v1/chat', buildChatRouter());
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/platforms', platformRouter);
 app.use('/api/v1/contexts', contextsRouter);
