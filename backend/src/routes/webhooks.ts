@@ -1,7 +1,10 @@
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { Webhook } from 'svix';
-import { processAppStoreNotification, requestTestNotification } from '../services/appleStoreService.js';
+import {
+  processAppStoreNotification,
+  requestTestNotification,
+} from '../services/appleStoreService.js';
 import { invalidateSubscriptionCaches } from '../services/subscriptionService.js';
 import { addAgentReplyToTicket, addMessageToTicket } from '../services/supportService.js';
 import { webhookLogger } from '../utils/logger.js';
@@ -17,159 +20,182 @@ export const webhookRouter = Router();
 
 const BACKEND_WEBHOOK_SECRET = process.env['BACKEND_WEBHOOK_SECRET'] || '';
 
-const stripeWebhookSchema = z.object({
-  event: z.enum(['subscription.created', 'subscription.updated', 'subscription.deleted', 'payment.failed']),
-  data: z.record(z.unknown()),
+const stripeEventDataSchema = z.object({
+  userId: z.string().min(1),
+  stripeCustomerId: z.string().min(1),
+  stripeSubscriptionId: z.string().min(1),
+  stripeEventId: z.string().min(1).optional(),
+  eventCreated: z.number().int().nonnegative().optional(),
 });
+const stripeWebhookSchema = z.discriminatedUnion('event', [
+  z.object({
+    event: z.enum(['subscription.created', 'subscription.updated']),
+    data: stripeEventDataSchema.extend({
+      stripePriceId: z.string().min(1),
+      tier: z.nativeEnum(SubscriptionTier),
+      status: z.enum([
+        'active',
+        'trialing',
+        'past_due',
+        'canceled',
+        'unpaid',
+        'incomplete',
+        'incomplete_expired',
+        'paused',
+      ]),
+      currentPeriodEnd: z.string().datetime(),
+      cancelAtPeriodEnd: z.boolean(),
+    }),
+  }),
+  z.object({ event: z.literal('subscription.deleted'), data: stripeEventDataSchema }),
+  z.object({ event: z.literal('payment.failed'), data: stripeEventDataSchema }),
+]);
 
 webhookRouter.post('/stripe', async (req: Request, res: Response): Promise<void> => {
   try {
-    // Verify webhook secret
     const webhookSecret = req.headers['x-webhook-secret'];
     if (!BACKEND_WEBHOOK_SECRET || webhookSecret !== BACKEND_WEBHOOK_SECRET) {
-      webhookLogger.warn('Invalid Stripe webhook secret');
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-
-    const { event, data } = stripeWebhookSchema.parse(req.body);
-    webhookLogger.info({ event }, 'Received Stripe webhook from web app');
-
-    switch (event) {
-      case 'subscription.created':
-      case 'subscription.updated': {
-        const {
-          userId,
-          stripeCustomerId,
-          stripeSubscriptionId,
-          stripePriceId,
-          tier,
-          status,
-          currentPeriodEnd,
-          cancelAtPeriodEnd,
-        } = data as {
-          userId: string;
-          stripeCustomerId?: string;
-          stripeSubscriptionId: string;
-          stripePriceId: string;
-          tier: string;
-          status: string;
-          currentPeriodEnd: string;
-          cancelAtPeriodEnd: boolean;
-        };
-
-        // Map Stripe status to our status
-        let subscriptionStatus: SubscriptionStatus = SubscriptionStatus.ACTIVE;
-        if (status === 'canceled') {
-          subscriptionStatus = SubscriptionStatus.CANCELED;
-        } else if (status === 'past_due') {
-          subscriptionStatus = SubscriptionStatus.GRACE_PERIOD;
+    const payload = stripeWebhookSchema.parse(req.body);
+    const { event, data } = payload;
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`subscription:${data.userId}`}, 0))`;
+      const idempotencyKey = data.stripeEventId ? `consumer-stripe:${data.stripeEventId}` : null;
+      if (
+        idempotencyKey &&
+        (await tx.webhookIdempotencyKey.findUnique({ where: { idempotencyKey } }))
+      )
+        return;
+      const user = await tx.user.findUnique({ where: { id: data.userId } });
+      if (!user || (user.stripeCustomerId && user.stripeCustomerId !== data.stripeCustomerId)) {
+        throw new Error('Stripe customer does not match subscription owner');
+      }
+      const current = await tx.subscription.findUnique({ where: { userId: data.userId } });
+      const stateKey = `consumer-stripe-state:${data.userId}`;
+      const state = await tx.webhookIdempotencyKey.findUnique({
+        where: { idempotencyKey: stateKey },
+      });
+      const previousEventCreated =
+        (state?.payload as { eventCreated?: number } | null)?.eventCreated ?? 0;
+      const stale = data.eventCreated !== undefined && data.eventCreated < previousEventCreated;
+      const wrongAgreement =
+        (event === 'subscription.deleted' || event === 'payment.failed') &&
+        current?.stripeSubscriptionId !== data.stripeSubscriptionId;
+      const appStoreExpiry =
+        current?.status === SubscriptionStatus.GRACE_PERIOD
+          ? current.gracePeriodEndDate || current.expiresAt
+          : current?.expiresAt;
+      const appStoreEntitlement =
+        current?.originalTransactionId &&
+        !current.stripeSubscriptionId &&
+        current.tier !== SubscriptionTier.FREE &&
+        appStoreExpiry &&
+        appStoreExpiry > new Date();
+      if (!stale && !wrongAgreement && !appStoreEntitlement) {
+        if (event === 'subscription.created' || event === 'subscription.updated') {
+          const updateData = payload.data;
+          const entitled = ['active', 'trialing', 'past_due'].includes(updateData.status);
+          const tier = entitled ? updateData.tier : SubscriptionTier.FREE;
+          const status =
+            updateData.status === 'past_due'
+              ? SubscriptionStatus.GRACE_PERIOD
+              : entitled
+                ? SubscriptionStatus.ACTIVE
+                : SubscriptionStatus.CANCELED;
+          const subscriptionData = {
+            tier,
+            status,
+            originalTransactionId: null,
+            productId: null,
+            autoRenewProductId: null,
+            stripeSubscriptionId: data.stripeSubscriptionId,
+            stripePriceId: updateData.stripePriceId,
+            expiresAt: new Date(updateData.currentPeriodEnd),
+            cancelAtPeriodEnd: updateData.cancelAtPeriodEnd,
+            autoRenewEnabled: entitled && !updateData.cancelAtPeriodEnd,
+            isTrialing: updateData.status === 'trialing',
+            trialEndDate:
+              updateData.status === 'trialing' ? new Date(updateData.currentPeriodEnd) : null,
+            gracePeriodEndDate: null,
+          };
+          await tx.subscription.upsert({
+            where: { userId: data.userId },
+            update: subscriptionData,
+            create: { userId: data.userId, ...subscriptionData },
+          });
+          await tx.user.update({
+            where: { id: data.userId },
+            data: {
+              stripeCustomerId: data.stripeCustomerId,
+              subscriptionTier: tier,
+              isPremium: tier !== SubscriptionTier.FREE,
+            },
+          });
+        } else if (event === 'subscription.deleted') {
+          await tx.subscription.update({
+            where: { userId: data.userId },
+            data: {
+              tier: SubscriptionTier.FREE,
+              status: SubscriptionStatus.CANCELED,
+              stripeSubscriptionId: null,
+              stripePriceId: null,
+              autoRenewEnabled: false,
+              isTrialing: false,
+              trialEndDate: null,
+              gracePeriodEndDate: null,
+            },
+          });
+          await tx.user.update({
+            where: { id: data.userId },
+            data: {
+              subscriptionTier: SubscriptionTier.FREE,
+              isPremium: false,
+            },
+          });
+        } else {
+          await tx.subscription.update({
+            where: { userId: data.userId },
+            data: { status: SubscriptionStatus.GRACE_PERIOD },
+          });
         }
-
-        // Map tier
-        const subscriptionTier = tier === 'PREMIUM'
-          ? SubscriptionTier.PREMIUM
-          : tier === 'PRO'
-            ? SubscriptionTier.PRO
-            : SubscriptionTier.FREE;
-
-        // Update or create subscription
-        await prisma.subscription.upsert({
-          where: { userId },
-          update: {
-            tier: subscriptionTier,
-            status: subscriptionStatus,
-            stripeSubscriptionId,
-            stripePriceId,
-            expiresAt: new Date(currentPeriodEnd),
-            cancelAtPeriodEnd,
-            isTrialing: false,
-          },
-          create: {
-            userId,
-            tier: subscriptionTier,
-            status: subscriptionStatus,
-            stripeSubscriptionId,
-            stripePriceId,
-            expiresAt: new Date(currentPeriodEnd),
-            cancelAtPeriodEnd,
-          },
-        });
-
-        // Update user's Stripe customer ID and tier
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            stripeCustomerId: stripeCustomerId || undefined,
-            subscriptionTier,
-            isPremium: subscriptionTier !== SubscriptionTier.FREE,
-          },
-        });
-
-        await invalidateSubscriptionCaches(userId);
-
-        webhookLogger.info({ userId, tier: subscriptionTier }, 'Stripe subscription updated');
-        break;
+        if (data.eventCreated !== undefined) {
+          const watermark = { eventCreated: data.eventCreated };
+          await tx.webhookIdempotencyKey.upsert({
+            where: { idempotencyKey: stateKey },
+            update: { payload: watermark },
+            create: {
+              idempotencyKey: stateKey,
+              endpoint: '/api/v1/webhooks/stripe/state',
+              payload: watermark,
+              status: 'COMPLETED',
+              expiresAt: new Date('9999-12-31T00:00:00Z'),
+            },
+          });
+        }
       }
-
-      case 'subscription.deleted': {
-        const { userId, stripeSubscriptionId } = data as {
-          userId: string;
-          stripeSubscriptionId: string;
-        };
-
-        // Downgrade to free
-        await prisma.subscription.update({
-          where: { userId },
+      if (idempotencyKey) {
+        await tx.webhookIdempotencyKey.create({
           data: {
-            tier: SubscriptionTier.FREE,
-            status: SubscriptionStatus.CANCELED,
-            stripeSubscriptionId: null,
-            stripePriceId: null,
+            idempotencyKey,
+            endpoint: '/api/v1/webhooks/stripe',
+            payload: { event, userId: data.userId },
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 86400000),
           },
         });
-
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            subscriptionTier: SubscriptionTier.FREE,
-            isPremium: false,
-          },
-        });
-
-        await invalidateSubscriptionCaches(userId);
-
-        webhookLogger.info({ userId }, 'Stripe subscription deleted, downgraded to FREE');
-        break;
       }
-
-      case 'payment.failed': {
-        const { userId, invoiceId } = data as { userId: string; invoiceId: string };
-
-        // Mark as grace period
-        await prisma.subscription.update({
-          where: { userId },
-          data: {
-            status: SubscriptionStatus.GRACE_PERIOD,
-          },
-        });
-
-        await invalidateSubscriptionCaches(userId);
-
-        webhookLogger.warn({ userId, invoiceId }, 'Payment failed, entered grace period');
-        break;
-      }
-    }
-
+    });
+    await invalidateSubscriptionCaches(data.userId);
     res.json({ success: true });
   } catch (error) {
     webhookLogger.error({ err: error }, 'Stripe webhook error');
-
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Invalid webhook payload' });
       return;
     }
-
     res.status(500).json({ error: 'Failed to process webhook' });
   }
 });
@@ -191,37 +217,38 @@ webhookRouter.post(
     ttlMs: 24 * 60 * 60 * 1000, // 24 hours
   }),
   async (req: Request, res: Response): Promise<void> => {
-  try {
-    webhookLogger.debug('Received App Store webhook');
+    try {
+      webhookLogger.debug('Received App Store webhook');
 
-    const { signedPayload } = appStoreNotificationSchema.parse(req.body);
+      const { signedPayload } = appStoreNotificationSchema.parse(req.body);
 
-    const result = await processAppStoreNotification(signedPayload);
+      const result = await processAppStoreNotification(signedPayload);
 
-    // Apple expects a 200 response to acknowledge receipt
-    res.status(200).json({
-      success: true,
-      message: result.message,
-    });
-  } catch (error) {
-    webhookLogger.error({ err: error }, 'App Store webhook error');
-
-    if (error instanceof z.ZodError) {
-      // Still return 200 to prevent Apple from retrying for malformed requests
+      // Apple expects a 200 response to acknowledge receipt
       res.status(200).json({
-        success: false,
-        error: 'Invalid notification format',
+        success: true,
+        message: result.message,
       });
-      return;
-    }
+    } catch (error) {
+      webhookLogger.error({ err: error }, 'App Store webhook error');
 
-    // Return 500 so Apple will retry
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process notification',
-    });
-  }
-});
+      if (error instanceof z.ZodError) {
+        // Still return 200 to prevent Apple from retrying for malformed requests
+        res.status(200).json({
+          success: false,
+          error: 'Invalid notification format',
+        });
+        return;
+      }
+
+      // Return 500 so Apple will retry
+      res.status(500).json({
+        success: false,
+        error: 'Failed to process notification',
+      });
+    }
+  },
+);
 
 // ============================================================================
 // TEST NOTIFICATION (Development only)
@@ -261,7 +288,7 @@ const RESEND_TRUSTED_AGENT_EMAILS = new Set(
   (process.env['RESEND_TRUSTED_AGENT_EMAILS'] || process.env['SUPPORT_EMAIL'] || '')
     .split(',')
     .map((email) => normalizeEmail(email))
-    .filter(Boolean)
+    .filter(Boolean),
 );
 
 // No boot-time throw here: this module is imported unconditionally by
@@ -312,10 +339,14 @@ const resendInboundSchema = z.object({
     subject: z.string(),
     text: z.string().optional(),
     html: z.string().optional(),
-    headers: z.array(z.object({
-      name: z.string(),
-      value: z.string(),
-    })).optional(),
+    headers: z
+      .array(
+        z.object({
+          name: z.string(),
+          value: z.string(),
+        }),
+      )
+      .optional(),
   }),
 });
 
@@ -328,7 +359,10 @@ webhookRouter.post('/resend/inbound', async (req: Request, res: Response): Promi
     }
 
     const payload = resendInboundSchema.parse(req.body);
-    webhookLogger.info({ type: payload.type, from: payload.data.from, subject: payload.data.subject }, 'Received Resend inbound email');
+    webhookLogger.info(
+      { type: payload.type, from: payload.data.from, subject: payload.data.subject },
+      'Received Resend inbound email',
+    );
 
     // Only process email.received events
     if (payload.type !== 'email.received') {
@@ -430,7 +464,10 @@ webhookRouter.post('/resend/inbound', async (req: Request, res: Response): Promi
     } else if (senderEmail === userEmail) {
       await addMessageToTicket(ticket.id, ticket.userId, replyContent, 'user', false);
     } else {
-      webhookLogger.warn({ ticketId: ticket.id, from }, 'Rejected inbound email from untrusted sender');
+      webhookLogger.warn(
+        { ticketId: ticket.id, from },
+        'Rejected inbound email from untrusted sender',
+      );
       res.status(202).json({ success: false, message: 'Sender is not authorized for this ticket' });
       return;
     }
@@ -439,7 +476,7 @@ webhookRouter.post('/resend/inbound', async (req: Request, res: Response): Promi
     res.status(200).json({ success: true, ticketId: ticket.id });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      webhookLogger.warn({ error: error.errors }, 'Invalid Resend inbound webhook format');
+      webhookLogger.warn({ error: error.issues }, 'Invalid Resend inbound webhook format');
       res.status(200).json({ success: false, error: 'Invalid format' });
       return;
     }

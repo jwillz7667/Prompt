@@ -16,37 +16,39 @@ export default function UsagePage() {
 
   const quota = subscription?.quota
   const quotaUsedPercent =
-    quota && typeof quota.limit === 'number'
-      ? Math.min((quota.used / quota.limit) * 100, 100)
-      : 0
+    quota && typeof quota.limit === 'number' ? Math.min((quota.used / quota.limit) * 100, 100) : 0
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-semibold text-primary">Usage Analytics</h2>
-        <p className="text-sm text-muted">Monitor your API usage and quota.</p>
+        <h2 className="text-primary text-xl font-semibold">Usage Analytics</h2>
+        <p className="text-muted text-sm">Monitor your API usage and quota.</p>
       </div>
 
       {/* Quota Overview */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="p-6">
-            <div className="text-sm text-muted">Monthly Requests</div>
-            <div className="mt-2 text-3xl font-bold text-primary">
+            <div className="text-muted text-sm">Monthly Requests</div>
+            <div className="text-primary mt-2 text-3xl font-bold">
               {subLoading ? '...' : subscription?.usage?.totalRequests?.toLocaleString() || 0}
             </div>
             <div className="mt-2">
-              <div className="h-2 bg-secondary rounded-full overflow-hidden">
+              <div className="bg-secondary h-2 overflow-hidden rounded-full">
                 <div
                   className={cn(
                     'h-full rounded-full transition-all',
-                    quotaUsedPercent > 90 ? 'bg-red-500' : quotaUsedPercent > 70 ? 'bg-yellow-500' : 'bg-accent'
+                    quotaUsedPercent > 90
+                      ? 'bg-red-500'
+                      : quotaUsedPercent > 70
+                        ? 'bg-yellow-500'
+                        : 'bg-accent',
                   )}
                   style={{ width: `${quotaUsedPercent}%` }}
                 />
               </div>
-              <div className="mt-1 text-xs text-muted">
+              <div className="text-muted mt-1 text-xs">
                 {quota?.remaining === 'unlimited'
                   ? 'Unlimited'
                   : `${quota?.remaining?.toLocaleString() || 0} remaining of ${quota?.limit?.toLocaleString() || 0}`}
@@ -57,32 +59,30 @@ export default function UsagePage() {
 
         <Card>
           <CardContent className="p-6">
-            <div className="text-sm text-muted">Tokens Used</div>
-            <div className="mt-2 text-3xl font-bold text-primary">
+            <div className="text-muted text-sm">Tokens Used</div>
+            <div className="text-primary mt-2 text-3xl font-bold">
               {subLoading ? '...' : subscription?.usage?.totalTokens?.toLocaleString() || 0}
             </div>
-            <div className="mt-2 text-xs text-muted">
-              Input + Output tokens this period
-            </div>
+            <div className="text-muted mt-2 text-xs">Input + Output tokens this period</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-6">
-            <div className="text-sm text-muted">Period Ends</div>
-            <div className="mt-2 text-xl font-bold text-primary">
+            <div className="text-muted text-sm">Period Ends</div>
+            <div className="text-primary mt-2 text-xl font-bold">
               {subLoading
                 ? '...'
                 : subscription?.period?.end
                   ? new Date(subscription.period.end).toLocaleDateString()
                   : 'N/A'}
             </div>
-            <div className="mt-2 text-xs text-muted">
+            <div className="text-muted mt-2 text-xs">
               {subscription?.period?.end && (
                 <>
                   {Math.ceil(
                     (new Date(subscription.period.end).getTime() - Date.now()) /
-                      (1000 * 60 * 60 * 24)
+                      (1000 * 60 * 60 * 24),
                   )}{' '}
                   days remaining
                 </>
@@ -95,11 +95,11 @@ export default function UsagePage() {
       {/* Key Selector */}
       {apiKeys && apiKeys.length > 1 && (
         <div>
-          <label className="text-sm font-medium text-primary">View usage for:</label>
+          <label className="text-primary text-sm font-medium">View usage for:</label>
           <select
             value={activeKeyId || ''}
             onChange={(e) => setSelectedKeyId(e.target.value || undefined)}
-            className="ml-3 rounded border border-border bg-secondary px-3 py-1.5 text-sm text-primary"
+            className="border-border bg-secondary text-primary ml-3 rounded border px-3 py-1.5 text-sm"
           >
             {apiKeys.map((key) => (
               <option key={key.id} value={key.id}>
@@ -116,15 +116,15 @@ export default function UsagePage() {
           {/* Requests by Day Chart */}
           <Card>
             <CardContent className="p-6">
-              <h3 className="font-medium text-primary mb-4">Requests by Day</h3>
+              <h3 className="text-primary mb-4 font-medium">Requests by Day</h3>
               {usageLoading ? (
-                <div className="h-48 flex items-center justify-center text-muted">Loading...</div>
+                <div className="text-muted flex h-48 items-center justify-center">Loading...</div>
               ) : usage?.requestsByDay && usage.requestsByDay.length > 0 ? (
                 <div className="h-48">
                   <SimpleBarChart data={usage.requestsByDay} />
                 </div>
               ) : (
-                <div className="h-48 flex items-center justify-center text-muted">
+                <div className="text-muted flex h-48 items-center justify-center">
                   No data available
                 </div>
               )}
@@ -134,34 +134,34 @@ export default function UsagePage() {
           {/* Stats Summary */}
           <Card>
             <CardContent className="p-6">
-              <h3 className="font-medium text-primary mb-4">Key Statistics</h3>
+              <h3 className="text-primary mb-4 font-medium">Key Statistics</h3>
               {usageLoading ? (
                 <div className="text-muted">Loading...</div>
               ) : usage ? (
                 <dl className="space-y-4">
                   <div className="flex justify-between">
                     <dt className="text-muted">Total Requests</dt>
-                    <dd className="font-medium text-primary">
+                    <dd className="text-primary font-medium">
                       {usage.totalRequests.toLocaleString()}
                     </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted">Success Rate</dt>
-                    <dd className="font-medium text-primary">{usage.successRate}%</dd>
+                    <dd className="text-primary font-medium">{usage.successRate}%</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted">Avg Latency</dt>
-                    <dd className="font-medium text-primary">{usage.avgLatencyMs}ms</dd>
+                    <dd className="text-primary font-medium">{usage.avgLatencyMs}ms</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted">Input Tokens</dt>
-                    <dd className="font-medium text-primary">
+                    <dd className="text-primary font-medium">
                       {usage.totalInputTokens.toLocaleString()}
                     </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted">Output Tokens</dt>
-                    <dd className="font-medium text-primary">
+                    <dd className="text-primary font-medium">
                       {usage.totalOutputTokens.toLocaleString()}
                     </dd>
                   </div>
@@ -175,20 +175,19 @@ export default function UsagePage() {
           {/* Requests by Endpoint */}
           <Card>
             <CardContent className="p-6">
-              <h3 className="font-medium text-primary mb-4">Requests by Endpoint</h3>
+              <h3 className="text-primary mb-4 font-medium">Requests by Endpoint</h3>
               {usageLoading ? (
                 <div className="text-muted">Loading...</div>
-              ) : usage?.requestsByEndpoint &&
-                Object.keys(usage.requestsByEndpoint).length > 0 ? (
+              ) : usage?.requestsByEndpoint && Object.keys(usage.requestsByEndpoint).length > 0 ? (
                 <div className="space-y-3">
                   {Object.entries(usage.requestsByEndpoint)
                     .sort((a, b) => b[1] - a[1])
                     .map(([endpoint, count]) => (
                       <div key={endpoint} className="flex items-center gap-3">
-                        <code className="text-xs text-muted bg-secondary px-2 py-1 rounded flex-1 truncate">
+                        <code className="text-muted bg-secondary flex-1 truncate rounded px-2 py-1 text-xs">
                           {endpoint}
                         </code>
-                        <span className="font-medium text-primary">{count.toLocaleString()}</span>
+                        <span className="text-primary font-medium">{count.toLocaleString()}</span>
                       </div>
                     ))}
                 </div>
@@ -201,21 +200,20 @@ export default function UsagePage() {
           {/* Requests by Modality */}
           <Card>
             <CardContent className="p-6">
-              <h3 className="font-medium text-primary mb-4">Requests by Modality</h3>
+              <h3 className="text-primary mb-4 font-medium">Requests by Modality</h3>
               {usageLoading ? (
                 <div className="text-muted">Loading...</div>
-              ) : usage?.requestsByModality &&
-                Object.keys(usage.requestsByModality).length > 0 ? (
+              ) : usage?.requestsByModality && Object.keys(usage.requestsByModality).length > 0 ? (
                 <div className="space-y-3">
                   {Object.entries(usage.requestsByModality)
                     .sort((a, b) => b[1] - a[1])
                     .map(([modality, count]) => (
                       <div key={modality} className="flex items-center gap-3">
-                        <span className="text-sm text-primary capitalize flex-1">{modality}</span>
-                        <span className="font-medium text-primary">{count.toLocaleString()}</span>
-                        <div className="w-24 h-2 bg-secondary rounded-full overflow-hidden">
+                        <span className="text-primary flex-1 text-sm capitalize">{modality}</span>
+                        <span className="text-primary font-medium">{count.toLocaleString()}</span>
+                        <div className="bg-secondary h-2 w-24 overflow-hidden rounded-full">
                           <div
-                            className="h-full bg-accent rounded-full"
+                            className="bg-accent h-full rounded-full"
                             style={{
                               width: `${(count / usage.totalRequests) * 100}%`,
                             }}
@@ -244,20 +242,23 @@ function SimpleBarChart({
   const maxRequests = Math.max(...data.map((d) => d.requests), 1)
 
   return (
-    <div className="flex items-end gap-1 h-full">
+    <div className="flex h-full items-end gap-1">
       {data.slice(-14).map((day) => (
-        <div key={day.date} className="flex-1 flex flex-col items-center">
-          <div className="w-full flex-1 flex items-end">
+        <div key={day.date} className="flex flex-1 flex-col items-center">
+          <div className="flex w-full flex-1 items-end">
             <div
-              className="w-full bg-accent/20 hover:bg-accent/40 rounded-t transition-all cursor-pointer group relative"
-              style={{ height: `${(day.requests / maxRequests) * 100}%`, minHeight: day.requests > 0 ? '4px' : 0 }}
+              className="bg-accent/20 hover:bg-accent/40 group relative w-full cursor-pointer rounded-t transition-all"
+              style={{
+                height: `${(day.requests / maxRequests) * 100}%`,
+                minHeight: day.requests > 0 ? '4px' : 0,
+              }}
             >
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-primary text-secondary text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+              <div className="bg-primary text-secondary pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded px-2 py-1 text-xs opacity-0 transition-opacity group-hover:opacity-100">
                 {day.requests} requests
               </div>
             </div>
           </div>
-          <div className="text-xs text-muted mt-1 truncate w-full text-center">
+          <div className="text-muted mt-1 w-full truncate text-center text-xs">
             {new Date(day.date).getDate()}
           </div>
         </div>

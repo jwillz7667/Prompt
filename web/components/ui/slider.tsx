@@ -32,7 +32,7 @@ export function Slider({
   return (
     <div className={cn('w-full', className)}>
       {(label || showValue) && (
-        <div className="flex items-center justify-between mb-2">
+        <div className="mb-2 flex items-center justify-between">
           {label && (
             <label className="text-sm font-medium text-[var(--text-primary)]">{label}</label>
           )}
@@ -51,7 +51,7 @@ export function Slider({
           onChange={(e) => onChange(parseFloat(e.target.value))}
           disabled={disabled}
           className={cn(
-            'w-full h-2 rounded-full appearance-none cursor-pointer',
+            'h-2 w-full cursor-pointer appearance-none rounded-full',
             'bg-[var(--border)]',
             '[&::-webkit-slider-thumb]:appearance-none',
             '[&::-webkit-slider-thumb]:w-4',
@@ -68,7 +68,7 @@ export function Slider({
             '[&::-moz-range-thumb]:bg-brand-indigo',
             '[&::-moz-range-thumb]:border-0',
             '[&::-moz-range-thumb]:cursor-pointer',
-            'disabled:opacity-50 disabled:cursor-not-allowed'
+            'disabled:cursor-not-allowed disabled:opacity-50',
           )}
           style={{
             background: `linear-gradient(to right, var(--brand-accent) 0%, var(--brand-accent) ${percentage}%, var(--border) ${percentage}%, var(--border) 100%)`,

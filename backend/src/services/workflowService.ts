@@ -1,10 +1,4 @@
-import { 
-  Workflow, 
-  WorkflowStep, 
-  WorkflowExecution, 
-  WorkflowStatus,
-  Prisma 
-} from '@prisma/client';
+import { Workflow, WorkflowStep, WorkflowExecution, WorkflowStatus, Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import { enhancePrompt } from './deepseekService.js';
@@ -71,12 +65,15 @@ class WorkflowService {
    */
   private registerHelpers() {
     // Conditional helper
-    this.templateEngine.registerHelper('ifEquals', function(this: any, arg1: any, arg2: any, options: any) {
-      return arg1 === arg2 ? options.fn(this) : options.inverse(this);
-    });
+    this.templateEngine.registerHelper(
+      'ifEquals',
+      function (this: any, arg1: any, arg2: any, options: any) {
+        return arg1 === arg2 ? options.fn(this) : options.inverse(this);
+      },
+    );
 
     // Array iteration with index
-    this.templateEngine.registerHelper('eachWithIndex', function(context: any[], options: any) {
+    this.templateEngine.registerHelper('eachWithIndex', function (context: any[], options: any) {
       let ret = '';
       context.forEach((item, index) => {
         ret += options.fn({ ...item, index });
@@ -87,8 +84,10 @@ class WorkflowService {
     // String manipulation
     this.templateEngine.registerHelper('uppercase', (str: string) => str?.toUpperCase());
     this.templateEngine.registerHelper('lowercase', (str: string) => str?.toLowerCase());
-    this.templateEngine.registerHelper('truncate', (str: string, length: number) => 
-      str?.substring(0, length) + (str?.length > length ? '...' : '')
+    this.templateEngine.registerHelper(
+      'truncate',
+      (str: string, length: number) =>
+        str?.substring(0, length) + (str?.length > length ? '...' : ''),
     );
 
     // JSON helpers
@@ -127,16 +126,18 @@ class WorkflowService {
               promptTemplate: step.promptTemplate,
               contextRequired: step.contextRequired || [],
               outputFormat: step.outputFormat,
-              validationRules: (step.validationRules ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
-              metadata: step.metadata as unknown as Prisma.InputJsonValue
-            }))
-          }
+              validationRules: (step.validationRules ?? undefined) as unknown as
+                | Prisma.InputJsonValue
+                | undefined,
+              metadata: step.metadata as unknown as Prisma.InputJsonValue,
+            })),
+          },
         },
         include: {
           steps: {
-            orderBy: { stepOrder: 'asc' }
-          }
-        }
+            orderBy: { stepOrder: 'asc' },
+          },
+        },
       });
 
       logger.info({ workflowId: workflow.id }, 'Workflow created');
@@ -153,12 +154,12 @@ class WorkflowService {
   async updateWorkflow(
     workflowId: string,
     userId: string,
-    data: Partial<WorkflowCreateData>
+    data: Partial<WorkflowCreateData>,
   ): Promise<Workflow | null> {
     try {
       // Verify ownership
       const existing = await prisma.workflow.findFirst({
-        where: { id: workflowId, userId }
+        where: { id: workflowId, userId },
       });
 
       if (!existing) {
@@ -171,20 +172,20 @@ class WorkflowService {
         data: {
           ...(data.name && { name: data.name }),
           ...(data.description !== undefined && { description: data.description }),
-          ...(data.metadata && { metadata: data.metadata as Prisma.JsonValue })
+          ...(data.metadata && { metadata: data.metadata as Prisma.JsonValue }),
         },
         include: {
           steps: {
-            orderBy: { stepOrder: 'asc' }
-          }
-        }
+            orderBy: { stepOrder: 'asc' },
+          },
+        },
       });
 
       // Update steps if provided
       if (data.steps) {
         // Delete existing steps
         await prisma.workflowStep.deleteMany({
-          where: { workflowId }
+          where: { workflowId },
         });
 
         // Create new steps
@@ -196,9 +197,11 @@ class WorkflowService {
             promptTemplate: step.promptTemplate,
             contextRequired: step.contextRequired || [],
             outputFormat: step.outputFormat,
-            validationRules: (step.validationRules ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
-            metadata: step.metadata as unknown as Prisma.InputJsonValue
-          }))
+            validationRules: (step.validationRules ?? undefined) as unknown as
+              | Prisma.InputJsonValue
+              | undefined,
+            metadata: step.metadata as unknown as Prisma.InputJsonValue,
+          })),
         });
       }
 
@@ -216,7 +219,7 @@ class WorkflowService {
   async deleteWorkflow(workflowId: string, userId: string): Promise<boolean> {
     try {
       const result = await prisma.workflow.deleteMany({
-        where: { id: workflowId, userId }
+        where: { id: workflowId, userId },
       });
 
       return result.count > 0;
@@ -235,13 +238,13 @@ class WorkflowService {
         where: { id: workflowId, userId },
         include: {
           steps: {
-            orderBy: { stepOrder: 'asc' }
+            orderBy: { stepOrder: 'asc' },
           },
           executions: {
             take: 5,
-            orderBy: { startedAt: 'desc' }
-          }
-        }
+            orderBy: { startedAt: 'desc' },
+          },
+        },
       });
     } catch (error) {
       logger.error({ error, workflowId }, 'Failed to get workflow');
@@ -256,7 +259,7 @@ class WorkflowService {
     try {
       const where: Prisma.WorkflowWhereInput = {
         userId,
-        ...(status && { status })
+        ...(status && { status }),
       };
 
       return await prisma.workflow.findMany({
@@ -264,12 +267,12 @@ class WorkflowService {
         orderBy: { updatedAt: 'desc' },
         include: {
           steps: {
-            orderBy: { stepOrder: 'asc' }
+            orderBy: { stepOrder: 'asc' },
           },
           _count: {
-            select: { executions: true }
-          }
-        }
+            select: { executions: true },
+          },
+        },
       });
     } catch (error) {
       logger.error({ error, userId }, 'Failed to list workflows');
@@ -283,7 +286,7 @@ class WorkflowService {
   async executeWorkflow(
     workflowId: string,
     userId: string,
-    options: WorkflowExecutionOptions = {}
+    options: WorkflowExecutionOptions = {},
   ): Promise<WorkflowExecution> {
     try {
       // Get workflow with steps
@@ -291,9 +294,9 @@ class WorkflowService {
         where: { id: workflowId, userId },
         include: {
           steps: {
-            orderBy: { stepOrder: 'asc' }
-          }
-        }
+            orderBy: { stepOrder: 'asc' },
+          },
+        },
       });
 
       if (!workflow) {
@@ -313,13 +316,13 @@ class WorkflowService {
           currentStep: 0,
           metadata: {
             options,
-            startContext: options.initialContext || {}
-          } as unknown as Prisma.InputJsonValue
-        }
+            startContext: options.initialContext || {},
+          } as unknown as Prisma.InputJsonValue,
+        },
       });
 
       // Execute workflow asynchronously
-      this.runWorkflow(execution.id, workflow, options).catch(error => {
+      this.runWorkflow(execution.id, workflow, options).catch((error) => {
         logger.error({ error, executionId: execution.id }, 'Workflow execution failed');
       });
 
@@ -336,15 +339,15 @@ class WorkflowService {
   private async runWorkflow(
     executionId: string,
     workflow: Workflow & { steps: WorkflowStep[] },
-    options: WorkflowExecutionOptions
+    options: WorkflowExecutionOptions,
   ): Promise<void> {
     const context: Record<string, any> = {
       ...options.initialContext,
       workflow: {
         id: workflow.id,
         name: workflow.name,
-        executionId
-      }
+        executionId,
+      },
     };
 
     const stepResults: StepExecutionResult[] = [];
@@ -354,7 +357,7 @@ class WorkflowService {
         // Update current step
         await prisma.workflowExecution.update({
           where: { id: executionId },
-          data: { currentStep: step.stepOrder }
+          data: { currentStep: step.stepOrder },
         });
 
         // Load required context
@@ -370,7 +373,7 @@ class WorkflowService {
         context[`step${step.stepOrder}`] = {
           name: step.name,
           output: result.output,
-          metadata: result.metadata
+          metadata: result.metadata,
         };
 
         if (!result.success && !options.continueOnError) {
@@ -384,8 +387,8 @@ class WorkflowService {
         data: {
           status: 'completed',
           completedAt: new Date(),
-          stepResults: stepResults as unknown as Prisma.InputJsonValue
-        }
+          stepResults: stepResults as unknown as Prisma.InputJsonValue,
+        },
       });
 
       logger.info({ executionId }, 'Workflow execution completed');
@@ -396,8 +399,8 @@ class WorkflowService {
         data: {
           status: 'failed',
           error: error.message,
-          stepResults: stepResults as unknown as Prisma.InputJsonValue
-        }
+          stepResults: stepResults as unknown as Prisma.InputJsonValue,
+        },
       });
 
       logger.error({ error, executionId }, 'Workflow execution failed');
@@ -411,10 +414,10 @@ class WorkflowService {
   private async executeStep(
     step: WorkflowStep,
     context: Record<string, any>,
-    options: WorkflowExecutionOptions
+    options: WorkflowExecutionOptions,
   ): Promise<StepExecutionResult> {
     const startedAt = new Date();
-    
+
     try {
       // Render prompt template with context
       const template = this.templateEngine.compile(step.promptTemplate);
@@ -438,7 +441,7 @@ class WorkflowService {
             tier: 'standard',
             temperature: 0.7,
             maxTokens: 4096,
-            modality: 'text'
+            modality: 'text',
           });
 
           output = enhanceResult.enhancedPrompt;
@@ -459,9 +462,9 @@ class WorkflowService {
         } catch (error: any) {
           lastError = error;
           retryCount++;
-          
+
           if (retryCount < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+            await new Promise((resolve) => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
           }
         }
       }
@@ -482,7 +485,7 @@ class WorkflowService {
         completedAt,
         duration: completedAt.getTime() - startedAt.getTime(),
         tokens,
-        metadata
+        metadata,
       };
     } catch (error: any) {
       const completedAt = new Date();
@@ -496,7 +499,7 @@ class WorkflowService {
         error: error.message,
         startedAt,
         completedAt,
-        duration: completedAt.getTime() - startedAt.getTime()
+        duration: completedAt.getTime() - startedAt.getTime(),
       };
     }
   }
@@ -507,7 +510,7 @@ class WorkflowService {
   private async loadRequiredContext(
     step: WorkflowStep,
     context: Record<string, any>,
-    userId: string
+    userId: string,
   ): Promise<void> {
     for (const contextId of step.contextRequired) {
       if (!context[contextId]) {
@@ -605,7 +608,7 @@ class WorkflowService {
         const codeMatch = output.match(/```[\s\S]*?```/g);
         if (codeMatch) {
           return codeMatch
-            .map(block => block.replace(/```\w*\n?/, '').replace(/```/, ''))
+            .map((block) => block.replace(/```\w*\n?/, '').replace(/```/, ''))
             .join('\n\n');
         }
         return output;
@@ -626,11 +629,11 @@ class WorkflowService {
           workflow: {
             include: {
               steps: {
-                orderBy: { stepOrder: 'asc' }
-              }
-            }
-          }
-        }
+                orderBy: { stepOrder: 'asc' },
+              },
+            },
+          },
+        },
       });
     } catch (error) {
       logger.error({ error, executionId }, 'Failed to get execution');
@@ -646,7 +649,7 @@ class WorkflowService {
       return await prisma.workflowExecution.findMany({
         where: { workflowId, userId },
         orderBy: { startedAt: 'desc' },
-        take: 50
+        take: 50,
       });
     } catch (error) {
       logger.error({ error, workflowId }, 'Failed to list executions');
@@ -662,8 +665,8 @@ class WorkflowService {
       const original = await prisma.workflow.findFirst({
         where: { id: workflowId, userId },
         include: {
-          steps: { orderBy: { stepOrder: 'asc' } }
-        }
+          steps: { orderBy: { stepOrder: 'asc' } },
+        },
       });
       if (!original) {
         throw new Error('Workflow not found');
@@ -673,19 +676,19 @@ class WorkflowService {
         userId,
         name: newName,
         description: `Cloned from: ${original.name}`,
-        steps: original.steps.map(step => ({
+        steps: original.steps.map((step) => ({
           name: step.name,
           promptTemplate: step.promptTemplate,
           contextRequired: step.contextRequired,
           outputFormat: step.outputFormat || undefined,
           validationRules: (step.validationRules as any) || undefined,
-          metadata: step.metadata
+          metadata: step.metadata,
         })),
         metadata: {
-          ...original.metadata as any,
+          ...(original.metadata as any),
           clonedFrom: workflowId,
-          clonedAt: new Date().toISOString()
-        }
+          clonedAt: new Date().toISOString(),
+        },
       });
     } catch (error) {
       logger.error({ error, workflowId }, 'Failed to clone workflow');
@@ -701,8 +704,8 @@ class WorkflowService {
       const workflow = await prisma.workflow.findFirst({
         where: { id: workflowId, userId },
         include: {
-          steps: { orderBy: { stepOrder: 'asc' } }
-        }
+          steps: { orderBy: { stepOrder: 'asc' } },
+        },
       });
       if (!workflow) {
         throw new Error('Workflow not found');
@@ -711,16 +714,16 @@ class WorkflowService {
       return {
         name: workflow.name,
         description: workflow.description,
-        steps: workflow.steps.map(step => ({
+        steps: workflow.steps.map((step) => ({
           name: step.name,
           promptTemplate: step.promptTemplate,
           contextRequired: step.contextRequired,
           outputFormat: step.outputFormat,
           validationRules: step.validationRules,
-          metadata: step.metadata
+          metadata: step.metadata,
         })),
         metadata: workflow.metadata,
-        exportedAt: new Date().toISOString()
+        exportedAt: new Date().toISOString(),
       };
     } catch (error) {
       logger.error({ error, workflowId }, 'Failed to export workflow');
@@ -745,8 +748,8 @@ class WorkflowService {
         steps: workflowData.steps,
         metadata: {
           ...workflowData.metadata,
-          importedAt: new Date().toISOString()
-        }
+          importedAt: new Date().toISOString(),
+        },
       });
     } catch (error) {
       logger.error({ error }, 'Failed to import workflow');

@@ -1,8 +1,12 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions.js';
 import { type TierFeatures } from './subscriptionService.js';
-import { imageAnalysisService, type PromptImageAttachment } from './imageAnalysisService.js';
-import { resolveDeepseekModel, type DeepSeekThinkingConfig } from './deepseekModels.js';
+import type { PromptImageAttachment } from './imageAnalysisService.js';
+import {
+  DEEPSEEK_FLASH_MODEL,
+  getDeepseekModel,
+  type DeepSeekThinkingConfig,
+} from './deepseekModels.js';
 import { promptLogger } from '../utils/logger.js';
 
 export type PromptMode = 'standard' | 'max';
@@ -57,7 +61,7 @@ export interface DeepSeekMessage {
 
 export interface DeepSeekRequest {
   model: string;
-  messages: DeepSeekMessage[];
+  messages: ChatCompletionMessageParam[];
   temperature: number;
   max_tokens: number;
   stream: boolean;
@@ -71,6 +75,7 @@ interface DeepSeekResponse {
     message?: {
       content?: string;
     };
+    finish_reason?: string;
   }>;
   usage?: {
     prompt_tokens?: number;
@@ -86,10 +91,8 @@ const STANDARD_MAX_TOKENS = 3072;
 const MAX_MAX_TOKENS = 6144;
 const THREAD_CONTEXT_CHAR_BUDGET = 220_000;
 
-// Vision-capable OpenAI models used when a request includes an image. DeepSeek's
-// chat endpoint is text-only, so any image would collapse to a short analysis
-// blurb — we route those through GPT-4.1 vision so the model actually sees the
-// pixels and can maintain visual context across a whole thread.
+// Retained compatibility defaults for deployments explicitly selecting OpenAI.
+// Native DeepSeek Flash vision is the default; operators can override these IDs.
 const OPENAI_VISION_STANDARD_MODEL = 'gpt-4.1-mini';
 const OPENAI_VISION_MAX_MODEL = 'gpt-4.1';
 
@@ -105,14 +108,16 @@ const OPENAI_VISION_MAX_MODEL = 'gpt-4.1';
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
   if (typeof raw !== 'string') return fallback;
-  const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const parsed = Number(raw);
+  const minimum = name.endsWith('MAX_RETRIES') ? 0 : 1;
+  return Number.isInteger(parsed) && parsed >= minimum ? parsed : fallback;
 }
 
 const DEEPSEEK_REQUEST_TIMEOUT_MS = envInt('DEEPSEEK_REQUEST_TIMEOUT_MS', 90_000);
 const DEEPSEEK_CONNECT_TIMEOUT_MS = envInt('DEEPSEEK_CONNECT_TIMEOUT_MS', 30_000);
 const DEEPSEEK_STREAM_IDLE_TIMEOUT_MS = envInt('DEEPSEEK_STREAM_IDLE_TIMEOUT_MS', 60_000);
-const DEEPSEEK_MAX_RETRIES = envInt('DEEPSEEK_MAX_RETRIES', 2);
+const DEEPSEEK_MAX_RETRIES = Math.min(envInt('DEEPSEEK_MAX_RETRIES', 2), 3);
+const DEEPSEEK_STREAM_TOTAL_TIMEOUT_MS = envInt('DEEPSEEK_STREAM_TOTAL_TIMEOUT_MS', 180_000);
 const OPENAI_REQUEST_TIMEOUT_MS = envInt('OPENAI_REQUEST_TIMEOUT_MS', 120_000);
 const OPENAI_MAX_RETRIES = envInt('OPENAI_MAX_RETRIES', 2);
 
@@ -164,9 +169,11 @@ const QUALITY_PROFILES: Record<EnhancementTier, string> = {
 
 const CHAT_MODALITY_GUIDANCE: Record<PromptModality, string> = {
   text: '- answer clearly and directly; use structure only when it improves comprehension',
-  image: '- help the user iterate on visual direction, prompt wording, composition, and generation tradeoffs',
+  image:
+    '- help the user iterate on visual direction, prompt wording, composition, and generation tradeoffs',
   video: '- speak concretely about scene progression, motion, camera language, and continuity',
-  audio: '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
+  audio:
+    '- respond with practical guidance for music, lyrics, narration, voiceover, or sound design requests',
   code: '- give production-minded technical help, explain tradeoffs precisely, and include code only when useful',
   '3d': '- respond with concrete guidance on form, materials, topology, technical constraints, and downstream use',
 };
@@ -250,18 +257,26 @@ function normalizeRequest(request: EnhancePromptRequest) {
   const mode: PromptMode = request.mode ?? 'standard';
   const conversationMode: ConversationMode = request.conversationMode ?? 'optimize';
   const modality = request.modality ?? detectModality(request.prompt);
-  // MAX mode maps to thinking; standard stays non-thinking. Legacy model ids
-  // from older clients (deepseek-chat/-reasoner) are remapped inside.
-  const { model, thinking } = resolveDeepseekModel(request.model, mode === 'max');
-  const temperature = request.temperature ?? (mode === 'max' ? MAX_TEMPERATURE : STANDARD_TEMPERATURE);
+  // Provider selection is server-owned: a client model string must not route
+  // a free/standard request to a more expensive model outside its quota gate.
+  const model = getDeepseekModel();
+  // The server-authorized mode controls paid reasoning, never a legacy model ID.
+  const thinking: DeepSeekThinkingConfig = { type: mode === 'max' ? 'enabled' : 'disabled' };
+  const temperature =
+    request.temperature ?? (mode === 'max' ? MAX_TEMPERATURE : STANDARD_TEMPERATURE);
   const maxTokens = Math.min(
     request.maxTokens ?? (mode === 'max' ? MAX_MAX_TOKENS : STANDARD_MAX_TOKENS),
-    mode === 'max' ? 8192 : 4096
+    mode === 'max' ? 8192 : 4096,
   );
 
   return {
     ...request,
-    prompt: normalizePromptText(request.prompt, modality, request.imageAttachment, conversationMode),
+    prompt: normalizePromptText(
+      request.prompt,
+      modality,
+      request.imageAttachment,
+      conversationMode,
+    ),
     mode,
     conversationMode,
     modality,
@@ -276,7 +291,7 @@ function normalizePromptText(
   prompt: string,
   modality: PromptModality,
   imageAttachment: PromptImageAttachment | undefined,
-  conversationMode: ConversationMode
+  conversationMode: ConversationMode,
 ): string {
   const trimmed = prompt.trim();
   if (trimmed) {
@@ -308,25 +323,29 @@ function normalizePromptText(
   }
 }
 
-function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
-  const modeGuidance = request.mode === 'max'
-    ? [
-        'MAX mode objective:',
-        '- produce a materially stronger prompt than standard mode by tightening instruction hierarchy, constraints, decomposition, and evaluation criteria',
-        '- include only high-signal structure; do not add verbose fluff or generic persona filler',
-        '- when the task is complex, build a reliable execution plan into the rewritten prompt',
-      ].join('\n')
-    : [
-        'Standard mode objective:',
-        '- produce a clean, concise, reliable prompt that is clearly better than the raw user request',
-        '- improve structure and clarity without over-engineering the result',
-      ].join('\n');
+function buildOptimizeSystemPrompt(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): string {
+  const modeGuidance =
+    request.mode === 'max'
+      ? [
+          'MAX mode objective:',
+          '- produce a materially stronger prompt than standard mode by tightening instruction hierarchy, constraints, decomposition, and evaluation criteria',
+          '- include only high-signal structure; do not add verbose fluff or generic persona filler',
+          '- when the task is complex, build a reliable execution plan into the rewritten prompt',
+        ].join('\n')
+      : [
+          'Standard mode objective:',
+          '- produce a clean, concise, reliable prompt that is clearly better than the raw user request',
+          '- improve structure and clarity without over-engineering the result',
+        ].join('\n');
 
   const threadGuidance = threadAware
     ? [
         'Thread / refinement handling (CRITICAL):',
-        '- when prior turns exist, the user\'s newest message is almost always a REFINEMENT INSTRUCTION for the most recent enhanced prompt — NOT a brand-new raw request',
-        '- start from the most recent assistant output (the prior enhanced prompt) and apply the user\'s new instruction to it',
+        "- when prior turns exist, the user's newest message is almost always a REFINEMENT INSTRUCTION for the most recent enhanced prompt — NOT a brand-new raw request",
+        "- start from the most recent assistant output (the prior enhanced prompt) and apply the user's new instruction to it",
         '- preserve ALL prior decisions, structure, tone, constraints, and style unless the user explicitly asks to change them',
         '- when the user input is wrapped in <refinement_request>, treat <prior_enhanced_prompt> as the base and apply <user_refinement_instruction> as a targeted edit',
         '- only start from scratch if the user clearly changes topic, says "new prompt", or asks for something unrelated to the existing thread',
@@ -338,11 +357,11 @@ function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>,
   const modalityGuidance = MODALITY_GUIDANCE[request.modality][request.mode];
 
   return [
-    'You are Promptomize\'s production prompt transformation engine.',
-    'Rewrite the user\'s raw request into a better prompt for another AI system.',
+    "You are Promptomize's production prompt transformation engine.",
+    "Rewrite the user's raw request into a better prompt for another AI system.",
     '',
     'Core rules:',
-    '- preserve the user\'s actual intent',
+    "- preserve the user's actual intent",
     '- do not answer the task',
     '- do not explain what you changed',
     '- return only the rewritten prompt',
@@ -366,18 +385,22 @@ function buildOptimizeSystemPrompt(request: ReturnType<typeof normalizeRequest>,
   ].join('\n');
 }
 
-function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
-  const modeGuidance = request.mode === 'max'
-    ? [
-        'MAX mode objective:',
-        '- provide a materially stronger answer by reasoning carefully, tightening structure, and surfacing tradeoffs explicitly',
-        '- stay concise unless the user asks for more depth',
-      ].join('\n')
-    : [
-        'Standard mode objective:',
-        '- provide a direct, helpful answer quickly',
-        '- stay clear, concrete, and easy to use',
-      ].join('\n');
+function buildChatSystemPrompt(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): string {
+  const modeGuidance =
+    request.mode === 'max'
+      ? [
+          'MAX mode objective:',
+          '- provide a materially stronger answer by reasoning carefully, tightening structure, and surfacing tradeoffs explicitly',
+          '- stay concise unless the user asks for more depth',
+        ].join('\n')
+      : [
+          'Standard mode objective:',
+          '- provide a direct, helpful answer quickly',
+          '- stay clear, concrete, and easy to use',
+        ].join('\n');
 
   const threadGuidance = threadAware
     ? [
@@ -393,12 +416,12 @@ function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, thr
   const subModalityGuidance = buildSubModalityGuidance(request.modality, request.subModality);
 
   return [
-    'You are Promptomize\'s collaborative AI assistant inside a prompt-building workspace.',
+    "You are Promptomize's collaborative AI assistant inside a prompt-building workspace.",
     'Answer the user directly and help them continue the conversation.',
     '',
     'Core rules:',
     '- answer the user instead of rewriting their request into a prompt unless they explicitly ask for a rewrite',
-    '- keep the reply actionable and grounded in the user\'s latest message',
+    "- keep the reply actionable and grounded in the user's latest message",
     '- when the user asks to improve or rewrite a prompt, provide the improved prompt directly and keep commentary minimal unless asked',
     '- respect explicit constraints, tone, length, and formatting requirements',
     ...(request.imageAttachment
@@ -416,7 +439,10 @@ function buildChatSystemPrompt(request: ReturnType<typeof normalizeRequest>, thr
   ].join('\n');
 }
 
-function buildSystemPrompt(request: ReturnType<typeof normalizeRequest>, threadAware = false): string {
+function buildSystemPrompt(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): string {
   if (request.conversationMode === 'chat') {
     return buildChatSystemPrompt(request, threadAware);
   }
@@ -452,19 +478,23 @@ function buildLengthConstraint(prompt: string, customInstructions?: string): str
   const matches: string[] = [];
   const patterns: Array<{ regex: RegExp; formatter: (value: string) => string }> = [
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*(?:char(?:acter)?s?)\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*(?:char(?:acter)?s?)\b/gi,
       formatter: (value) => `Maximum ${value.replace(/,/g, '')} characters.`,
     },
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*words?\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d[\d,]*)\s*words?\b/gi,
       formatter: (value) => `Maximum ${value.replace(/,/g, '')} words.`,
     },
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to)|in)\s+(\d+)\s*sentences?\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to)|in)\s+(\d+)\s*sentences?\b/gi,
       formatter: (value) => `Maximum ${value} sentences.`,
     },
     {
-      regex: /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*lines?\b/gi,
+      regex:
+        /(?:under|below|max(?:imum)?|limit(?:\s+to)?|no\s+more\s+than|at\s+most|within|keep\s+(?:it\s+)?(?:under|below|to))\s+(\d+)\s*lines?\b/gi,
       formatter: (value) => `Maximum ${value} lines.`,
     },
   ];
@@ -499,10 +529,7 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
     sections.push('</custom_instructions>');
   }
 
-  const lengthConstraint = buildLengthConstraint(
-    request.prompt,
-    request.customInstructions
-  );
+  const lengthConstraint = buildLengthConstraint(request.prompt, request.customInstructions);
 
   if (lengthConstraint) {
     sections.push('<hard_length_constraint>');
@@ -513,7 +540,9 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
   if (request.imageAttachment) {
     sections.push('<source_image>');
     sections.push(`<mime_type>${request.imageAttachment.mimeType}</mime_type>`);
-    sections.push(`<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`);
+    sections.push(
+      `<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`,
+    );
     if (request.imageAttachment.analysis?.trim()) {
       sections.push('<visual_analysis>');
       sections.push(request.imageAttachment.analysis.trim());
@@ -527,16 +556,15 @@ function buildOptimizeUserMessage(request: ReturnType<typeof normalizeRequest>):
   sections.push('</raw_user_request>');
   sections.push('</prompt_transformation_request>');
   sections.push('');
-  sections.push('Rewrite the raw user request into a polished prompt that another AI system can execute immediately.');
+  sections.push(
+    'Rewrite the raw user request into a polished prompt that another AI system can execute immediately.',
+  );
   sections.push('Return only the rewritten prompt.');
 
   return sections.join('\n');
 }
 
-function buildOptimizeRefinementUserMessage(
-  request: ReturnType<typeof normalizeRequest>,
-  priorEnhancedPrompt: string
-): string {
+function buildOptimizeRefinementUserMessage(request: ReturnType<typeof normalizeRequest>): string {
   const sections = [
     '<refinement_request>',
     `<conversation_mode>${request.conversationMode}</conversation_mode>`,
@@ -555,10 +583,7 @@ function buildOptimizeRefinementUserMessage(
     sections.push('</custom_instructions>');
   }
 
-  const lengthConstraint = buildLengthConstraint(
-    request.prompt,
-    request.customInstructions
-  );
+  const lengthConstraint = buildLengthConstraint(request.prompt, request.customInstructions);
 
   if (lengthConstraint) {
     sections.push('<hard_length_constraint>');
@@ -569,7 +594,9 @@ function buildOptimizeRefinementUserMessage(
   if (request.imageAttachment) {
     sections.push('<source_image>');
     sections.push(`<mime_type>${request.imageAttachment.mimeType}</mime_type>`);
-    sections.push(`<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`);
+    sections.push(
+      `<dimensions>${request.imageAttachment.width}x${request.imageAttachment.height}</dimensions>`,
+    );
     if (request.imageAttachment.analysis?.trim()) {
       sections.push('<visual_analysis>');
       sections.push(request.imageAttachment.analysis.trim());
@@ -578,16 +605,16 @@ function buildOptimizeRefinementUserMessage(
     sections.push('</source_image>');
   }
 
-  sections.push('<prior_enhanced_prompt>');
-  sections.push(priorEnhancedPrompt);
-  sections.push('</prior_enhanced_prompt>');
+  sections.push('The most recent assistant message is the prior enhanced prompt to revise.');
 
   sections.push('<user_refinement_instruction>');
   sections.push(request.prompt);
   sections.push('</user_refinement_instruction>');
   sections.push('</refinement_request>');
   sections.push('');
-  sections.push('Apply the <user_refinement_instruction> to <prior_enhanced_prompt>. Preserve its structure, intent, and all prior constraints unless the user explicitly asks to change them. Do not start from scratch. Return only the full revised prompt — no explanation, no preamble, no diff.');
+  sections.push(
+    'Apply the <user_refinement_instruction> to the most recent assistant prompt. Preserve its structure, intent, and all prior constraints unless the user explicitly asks to change them. Do not start from scratch. Return only the full revised prompt — no explanation, no preamble, no diff.',
+  );
 
   return sections.join('\n');
 }
@@ -598,7 +625,9 @@ function buildChatUserMessage(request: ReturnType<typeof normalizeRequest>): str
   if (request.imageAttachment) {
     sections.push('Source image context:');
     sections.push(`- MIME type: ${request.imageAttachment.mimeType}`);
-    sections.push(`- Dimensions: ${request.imageAttachment.width}x${request.imageAttachment.height}`);
+    sections.push(
+      `- Dimensions: ${request.imageAttachment.width}x${request.imageAttachment.height}`,
+    );
     if (request.imageAttachment.analysis?.trim()) {
       sections.push(`- Visual analysis: ${request.imageAttachment.analysis.trim()}`);
     }
@@ -611,10 +640,7 @@ function buildChatUserMessage(request: ReturnType<typeof normalizeRequest>): str
     sections.push('');
   }
 
-  const lengthConstraint = buildLengthConstraint(
-    request.prompt,
-    request.customInstructions
-  );
+  const lengthConstraint = buildLengthConstraint(request.prompt, request.customInstructions);
 
   if (lengthConstraint) {
     sections.push(`Length constraint: ${lengthConstraint}`);
@@ -649,152 +675,113 @@ function sanitizeModelOutput(content: string, conversationMode: ConversationMode
 // Exported for the reflection-loop transport (services/reflectionLoop), which
 // reuses this hardened one-shot call path (timeouts, retries, backoff) with
 // its own stage-specific messages and thinking config.
+class DeepseekResponseError extends Error {
+  constructor(readonly status: number) {
+    super(`DeepSeek API error: ${status}`);
+  }
+}
+
+function mayRetry(error: unknown): boolean {
+  return error instanceof DeepseekResponseError
+    ? isRetryableStatus(error.status)
+    : error instanceof TypeError || (error instanceof Error && error.name === 'AbortError');
+}
+
 export async function requestCompletion(
   request: DeepSeekRequest,
   apiKey: string,
-  conversationMode: ConversationMode
+  conversationMode: ConversationMode,
 ): Promise<EnhancePromptResult> {
   const startedAt = Date.now();
-  const body = JSON.stringify(request);
-
-  let response: Response | null = null;
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= DEEPSEEK_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
+    // Keep the deadline active through body decoding, not just HTTP headers.
     const timer = setTimeout(() => controller.abort(), DEEPSEEK_REQUEST_TIMEOUT_MS);
-
-    let attemptResponse: Response;
     try {
-      attemptResponse = await fetch(DEEPSEEK_API_URL, {
+      const response = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(request),
         signal: controller.signal,
       });
-    } catch (error) {
-      // Network failure or abort (timeout). A one-shot request never emitted
-      // partial output, so retrying is always safe here.
-      lastError = error instanceof Error ? error : new Error(String(error));
-      if (attempt < DEEPSEEK_MAX_RETRIES) {
-        promptLogger.warn({ attempt, error: lastError.message }, 'DeepSeek completion request failed, retrying');
-        await delay(backoffDelayMs(attempt));
-        continue;
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new DeepseekResponseError(response.status);
       }
-      throw lastError;
+      const parsed = (await response.json()) as DeepSeekResponse;
+      const choice = parsed.choices?.[0];
+      if (choice?.finish_reason && choice.finish_reason !== 'stop') {
+        throw new Error(
+          'The AI response was interrupted or exceeded its output limit. Please try a shorter request.',
+        );
+      }
+      const content = sanitizeModelOutput(choice?.message?.content ?? '', conversationMode);
+      if (!content) throw new Error('DeepSeek returned an empty enhancement');
+      const inputTokens = parsed.usage?.prompt_tokens ?? 0;
+      const outputTokens = parsed.usage?.completion_tokens ?? 0;
+      return {
+        enhancedPrompt: content,
+        model: request.model,
+        inputTokens,
+        outputTokens,
+        totalTokens: parsed.usage?.total_tokens ?? inputTokens + outputTokens,
+        processingMs: Date.now() - startedAt,
+      };
+    } catch (error) {
+      if (attempt >= DEEPSEEK_MAX_RETRIES || !mayRetry(error)) throw error;
+      // Do not log upstream response bodies: they can echo user prompts.
+      promptLogger.warn(
+        { attempt, status: error instanceof DeepseekResponseError ? error.status : undefined },
+        'Retrying DeepSeek completion',
+      );
     } finally {
       clearTimeout(timer);
     }
-
-    if (attemptResponse.ok) {
-      response = attemptResponse;
-      break;
-    }
-
-    if (isRetryableStatus(attemptResponse.status) && attempt < DEEPSEEK_MAX_RETRIES) {
-      const errBody = await attemptResponse.text().catch(() => '');
-      promptLogger.warn({ attempt, status: attemptResponse.status, body: errBody }, 'DeepSeek completion transient error, retrying');
-      await delay(backoffDelayMs(attempt));
-      continue;
-    }
-
-    const errBody = await attemptResponse.text().catch(() => '');
-    promptLogger.error({ status: attemptResponse.status, body: errBody }, 'DeepSeek completion request failed');
-    throw new Error(`DeepSeek API error: ${attemptResponse.status}`);
+    await delay(backoffDelayMs(attempt));
   }
-
-  if (!response) {
-    throw lastError ?? new Error('DeepSeek API request failed after retries');
-  }
-
-  const processingMs = Date.now() - startedAt;
-  const parsed = (await response.json()) as DeepSeekResponse;
-  const content = sanitizeModelOutput(parsed.choices?.[0]?.message?.content ?? '', conversationMode);
-
-  if (!content) {
-    throw new Error('DeepSeek returned an empty enhancement');
-  }
-
-  return {
-    enhancedPrompt: content,
-    model: request.model,
-    inputTokens: parsed.usage?.prompt_tokens ?? 0,
-    outputTokens: parsed.usage?.completion_tokens ?? 0,
-    totalTokens: parsed.usage?.total_tokens ?? 0,
-    processingMs,
-  };
 }
 
-async function streamCompletion(
+/** Shared SSE transport for both enhancement engines. Never persist partial output as success. */
+export async function streamCompletion(
   request: DeepSeekRequest,
   apiKey: string,
   conversationMode: ConversationMode,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   const startedAt = Date.now();
-  const body = JSON.stringify(request);
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let collected = '';
-
-  // Phase 1 — establish the connection, with retry. This is safe to retry
-  // because no tokens have been emitted to the client yet. A fresh
-  // AbortController is created per attempt (an aborted controller cannot be
-  // reused); the successful one is kept for the read-phase idle watchdog.
-  let response: Response | null = null;
-  let streamController: AbortController | null = null;
-
-  for (let attempt = 0; attempt <= DEEPSEEK_MAX_RETRIES; attempt++) {
+  let response: Response | undefined;
+  let activeController: AbortController | undefined;
+  // Retry only the connection, before exposing any tokens to the caller.
+  for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
-    const connectTimer = setTimeout(() => controller.abort(), DEEPSEEK_CONNECT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), DEEPSEEK_CONNECT_TIMEOUT_MS);
     try {
-      const attemptResponse = await fetch(DEEPSEEK_API_URL, {
+      const candidate = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ ...request, stream_options: { include_usage: true } }),
         signal: controller.signal,
       });
-      clearTimeout(connectTimer);
-
-      if (attemptResponse.ok) {
-        response = attemptResponse;
-        streamController = controller;
-        break;
+      if (!candidate.ok) {
+        await candidate.body?.cancel();
+        throw new DeepseekResponseError(candidate.status);
       }
-
-      if (isRetryableStatus(attemptResponse.status) && attempt < DEEPSEEK_MAX_RETRIES) {
-        const errBody = await attemptResponse.text().catch(() => '');
-        promptLogger.warn({ attempt, status: attemptResponse.status, body: errBody }, 'DeepSeek streaming transient error, retrying');
-        await delay(backoffDelayMs(attempt));
-        continue;
-      }
-
-      const errBody = await attemptResponse.text().catch(() => '');
-      promptLogger.error({ status: attemptResponse.status, body: errBody }, 'DeepSeek streaming request failed');
-      await callbacks.onError(new Error(`DeepSeek API error: ${attemptResponse.status}`));
-      return;
+      response = candidate;
+      activeController = controller;
+      break;
     } catch (error) {
-      clearTimeout(connectTimer);
-      if (attempt < DEEPSEEK_MAX_RETRIES) {
-        const message = error instanceof Error ? error.message : String(error);
-        promptLogger.warn({ attempt, error: message }, 'DeepSeek streaming connection failed, retrying');
-        await delay(backoffDelayMs(attempt));
-        continue;
+      if (attempt >= DEEPSEEK_MAX_RETRIES || !mayRetry(error)) {
+        await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+        return;
       }
-      await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-      return;
+      promptLogger.warn(
+        { attempt, status: error instanceof DeepseekResponseError ? error.status : undefined },
+        'Retrying DeepSeek stream connection',
+      );
+    } finally {
+      clearTimeout(timer);
     }
-  }
-
-  if (!response || !streamController) {
-    await callbacks.onError(new Error('DeepSeek API request failed after retries'));
-    return;
+    await delay(backoffDelayMs(attempt));
   }
 
   const reader = response.body?.getReader();
@@ -802,103 +789,109 @@ async function streamCompletion(
     await callbacks.onError(new Error('DeepSeek stream body unavailable'));
     return;
   }
-
-  // Phase 2 — consume the stream under an inactivity watchdog so a stalled
-  // upstream cannot hang the request for undici's ~300s body-timeout default.
-  // The watchdog re-arms on every chunk; on stall it aborts the socket, which
-  // surfaces as a rejected reader.read() in the loop below.
-  const activeController = streamController;
+  const controller = activeController;
   const decoder = new TextDecoder();
   let buffer = '';
-  let streamStalled = false;
-  let idleTimer: NodeJS.Timeout | null = null;
-
+  let collected = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let finished = false;
+  let finishReason: string | undefined;
+  let idleTimer: NodeJS.Timeout | undefined;
+  const totalTimer = setTimeout(() => controller.abort(), DEEPSEEK_STREAM_TOTAL_TIMEOUT_MS);
   const armIdleTimer = (): void => {
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      streamStalled = true;
-      activeController.abort();
-    }, DEEPSEEK_STREAM_IDLE_TIMEOUT_MS);
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => controller.abort(), DEEPSEEK_STREAM_IDLE_TIMEOUT_MS);
   };
 
-  try {
-    armIdleTimer();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      armIdleTimer();
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-
-        const payload = line.slice(6).trim();
-        if (!payload || payload === '[DONE]') continue;
-
-        try {
-          // In thinking mode the CoT streams as `reasoning_content` deltas
-          // before `content`. It is intentionally NOT forwarded to clients —
-          // only the final answer streams out. Its cost still lands in
-          // usage.completion_tokens (thinking bills as output tokens).
-          const parsed = JSON.parse(payload) as {
-            choices?: Array<{ delta?: { content?: string; reasoning_content?: string } }>;
-            usage?: {
-              prompt_tokens?: number;
-              completion_tokens?: number;
-            };
-          };
-
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            collected += delta;
-            await callbacks.onToken(delta);
-          }
-
-          if (parsed.usage) {
-            inputTokens = parsed.usage.prompt_tokens ?? inputTokens;
-            outputTokens = parsed.usage.completion_tokens ?? outputTokens;
-          }
-        } catch {
-          continue;
-        }
-      }
-    }
-  } catch (error) {
-    // A watchdog abort lands here mid-stream. If tokens were already generated,
-    // finalize with the partial content rather than failing an almost-complete
-    // response; otherwise surface the error to the caller.
-    if (streamStalled && collected.trim().length > 0) {
-      promptLogger.warn({ contentLength: collected.length }, 'DeepSeek stream stalled; finalizing with partial content');
-    } else {
-      if (idleTimer) clearTimeout(idleTimer);
-      await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+  const consumeLine = async (line: string): Promise<void> => {
+    if (!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if (!payload) return;
+    if (payload === '[DONE]') {
+      finished = true;
       return;
     }
-  } finally {
-    if (idleTimer) clearTimeout(idleTimer);
-  }
+    // Invalid data is an upstream error, not a successful truncated answer.
+    const parsed = JSON.parse(payload) as {
+      choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+      error?: unknown;
+    };
+    if (parsed.error)
+      throw new Error('The AI provider interrupted the response. Please try again.');
+    const choice = parsed.choices?.[0];
+    if (choice?.finish_reason) finishReason = choice.finish_reason;
+    const delta = choice?.delta?.content;
+    if (delta) {
+      collected += delta;
+      // Await consumer errors instead of swallowing them as JSON parse errors.
+      await callbacks.onToken(delta);
+    }
+    inputTokens = parsed.usage?.prompt_tokens ?? inputTokens;
+    outputTokens = parsed.usage?.completion_tokens ?? outputTokens;
+  };
 
-  await callbacks.onComplete({
-    enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
-    model: request.model,
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-    processingMs: Date.now() - startedAt,
-  });
+  let result: EnhancePromptResult;
+  try {
+    armIdleTimer();
+    while (!finished) {
+      const { done, value } = await reader.read();
+      if (done) {
+        buffer += decoder.decode();
+        if (buffer.trim()) await consumeLine(buffer);
+        break;
+      }
+      armIdleTimer();
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        await consumeLine(line);
+        if (finished) break;
+      }
+    }
+    const content = sanitizeModelOutput(collected, conversationMode);
+    if (!finished || finishReason !== 'stop') {
+      throw new Error(
+        'The AI response was interrupted or exceeded its output limit. Please try a shorter request.',
+      );
+    }
+    if (!content) throw new Error('DeepSeek returned an empty enhancement');
+    result = {
+      enhancedPrompt: content,
+      model: request.model,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      processingMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    return;
+  } finally {
+    clearTimeout(idleTimer);
+    clearTimeout(totalTimer);
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+    controller.abort();
+  }
+  await callbacks.onComplete(result);
 }
 
-function buildMessages(request: ReturnType<typeof normalizeRequest>, threadAware = false): DeepSeekMessage[] {
+function buildMessages(
+  request: ReturnType<typeof normalizeRequest>,
+  threadAware = false,
+): DeepSeekMessage[] {
   return [
     { role: 'system', content: buildSystemPrompt(request, threadAware) },
     { role: 'user', content: buildUserMessage(request) },
   ];
 }
 
-function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+function buildThreadMessages(
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
+): DeepSeekMessage[] {
   if (request.conversationMode === 'chat') {
     return buildChatThreadMessages(request);
   }
@@ -917,7 +910,7 @@ function buildThreadMessages(request: ReturnType<typeof normalizeRequest> & { pr
  */
 function selectTurnsWithinBudget(
   previousTurns: ThreadTurnContext[],
-  alreadyUsedChars: number
+  alreadyUsedChars: number,
 ): ThreadTurnContext[] {
   if (previousTurns.length === 0) return [];
 
@@ -928,10 +921,7 @@ function selectTurnsWithinBudget(
     64;
 
   // Fast path: if every turn fits, keep them all in order.
-  const totalRequired = previousTurns.reduce(
-    (sum, turn) => sum + charCost(turn),
-    alreadyUsedChars
-  );
+  const totalRequired = previousTurns.reduce((sum, turn) => sum + charCost(turn), alreadyUsedChars);
   if (totalRequired <= THREAD_CONTEXT_CHAR_BUDGET) {
     return [...previousTurns];
   }
@@ -955,7 +945,9 @@ function selectTurnsWithinBudget(
   return [foundation, ...recentTurns];
 }
 
-function buildOptimizeThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+function buildOptimizeThreadMessages(
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
+): DeepSeekMessage[] {
   const messages: DeepSeekMessage[] = [
     { role: 'system', content: buildSystemPrompt(request, true) },
   ];
@@ -976,20 +968,23 @@ function buildOptimizeThreadMessages(request: ReturnType<typeof normalizeRequest
 
   const hasPriorEnhanced = turnsToInclude.length > 0;
   const latestPriorEnhanced = hasPriorEnhanced
-    ? turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? ''
+    ? (turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? '')
     : '';
 
   messages.push({
     role: 'user',
-    content: hasPriorEnhanced && latestPriorEnhanced
-      ? buildOptimizeRefinementUserMessage(request, latestPriorEnhanced)
-      : buildUserMessage(request),
+    content:
+      hasPriorEnhanced && latestPriorEnhanced
+        ? buildOptimizeRefinementUserMessage(request)
+        : buildUserMessage(request),
   });
 
   return messages;
 }
 
-function buildChatThreadMessages(request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }): DeepSeekMessage[] {
+function buildChatThreadMessages(
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
+): DeepSeekMessage[] {
   const messages: DeepSeekMessage[] = [
     { role: 'system', content: buildSystemPrompt(request, true) },
   ];
@@ -1042,21 +1037,6 @@ function buildPreviousTurnRequest(turn: ThreadTurnContext): string {
   return sections.join('\n\n');
 }
 
-async function enrichRequestWithImageAnalysis<T extends EnhancePromptRequest>(request: T): Promise<T> {
-  if (!request.imageAttachment) {
-    return request;
-  }
-
-  return {
-    ...request,
-    imageAttachment: await imageAnalysisService.enrichAttachmentForPrompt(
-      request.imageAttachment,
-      request.prompt,
-      request.modality ?? detectModality(request.prompt)
-    ),
-  };
-}
-
 function getApiKey(): string {
   const apiKey = process.env['DEEPSEEK_API_KEY'];
   if (!apiKey) {
@@ -1066,8 +1046,24 @@ function getApiKey(): string {
 }
 
 export async function enhancePrompt(request: EnhancePromptRequest): Promise<EnhancePromptResult> {
-  const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-  const normalized = normalizeRequest(enrichedRequest);
+  if (request.imageAttachment?.dataUrl) {
+    let result: EnhancePromptResult | undefined;
+    await enhancePromptInThreadVisionStream(
+      { ...request, previousTurns: [] },
+      {
+        onToken: () => undefined,
+        onComplete: (value) => {
+          result = value;
+        },
+        onError: (error) => {
+          throw error;
+        },
+      },
+    );
+    if (!result) throw new Error('The AI provider did not complete the image request');
+    return result;
+  }
+  const normalized = normalizeRequest(request);
   const apiKey = getApiKey();
 
   const result = await requestCompletion(
@@ -1080,7 +1076,7 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
       thinking: normalized.thinking,
     },
     apiKey,
-    normalized.conversationMode
+    normalized.conversationMode,
   );
 
   return {
@@ -1091,11 +1087,14 @@ export async function enhancePrompt(request: EnhancePromptRequest): Promise<Enha
 
 export async function enhancePromptStream(
   request: EnhancePromptRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   try {
-    const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-    const normalized = normalizeRequest(enrichedRequest);
+    if (request.imageAttachment?.dataUrl) {
+      await enhancePromptInThreadVisionStream({ ...request, previousTurns: [] }, callbacks);
+      return;
+    }
+    const normalized = normalizeRequest(request);
     const apiKey = getApiKey();
 
     await streamCompletion(
@@ -1112,15 +1111,15 @@ export async function enhancePromptStream(
       {
         ...callbacks,
         onComplete: (result) => {
-          callbacks.onComplete({
+          return callbacks.onComplete({
             ...result,
             imageAttachment: normalized.imageAttachment,
           });
         },
-      }
+      },
     );
   } catch (error) {
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -1130,7 +1129,9 @@ function hasImageContext(request: EnhancePromptInThreadRequest): boolean {
 }
 
 function selectVisionModel(mode: PromptMode): string {
-  return mode === 'max' ? OPENAI_VISION_MAX_MODEL : OPENAI_VISION_STANDARD_MODEL;
+  return mode === 'max'
+    ? process.env['OPENAI_VISION_MAX_MODEL']?.trim() || OPENAI_VISION_MAX_MODEL
+    : process.env['OPENAI_VISION_STANDARD_MODEL']?.trim() || OPENAI_VISION_STANDARD_MODEL;
 }
 
 function getOpenAIClient(): OpenAI {
@@ -1146,12 +1147,10 @@ function getOpenAIClient(): OpenAI {
 }
 
 function buildVisionThreadMessages(
-  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] }
+  request: ReturnType<typeof normalizeRequest> & { previousTurns: ThreadTurnContext[] },
 ): ChatCompletionMessageParam[] {
   const systemContent = buildSystemPrompt(request, true);
-  const messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemContent },
-  ];
+  const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: systemContent }];
 
   const turnsToInclude = selectTurnsWithinBudget(request.previousTurns, systemContent.length);
 
@@ -1177,14 +1176,15 @@ function buildVisionThreadMessages(
 
   const hasPrior = turnsToInclude.length > 0;
   const latestPriorEnhanced = hasPrior
-    ? turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? ''
+    ? (turnsToInclude[turnsToInclude.length - 1]?.enhancedPrompt?.trim() ?? '')
     : '';
 
-  const latestText = request.conversationMode === 'chat'
-    ? buildChatUserMessage(request)
-    : hasPrior && latestPriorEnhanced
-      ? buildOptimizeRefinementUserMessage(request, latestPriorEnhanced)
-      : buildOptimizeUserMessage(request);
+  const latestText =
+    request.conversationMode === 'chat'
+      ? buildChatUserMessage(request)
+      : hasPrior && latestPriorEnhanced
+        ? buildOptimizeRefinementUserMessage(request)
+        : buildOptimizeUserMessage(request);
 
   if (request.imageAttachment?.dataUrl) {
     messages.push({
@@ -1210,25 +1210,32 @@ async function streamOpenAIVisionCompletion(
   temperature: number,
   maxTokens: number,
   conversationMode: ConversationMode,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   const startedAt = Date.now();
   let collected = '';
   let inputTokens = 0;
   let outputTokens = 0;
+  let finishReason: string | null = null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OPENAI_REQUEST_TIMEOUT_MS);
 
   try {
     const client = getOpenAIClient();
-    const stream = await client.chat.completions.create({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-      stream: true,
-      stream_options: { include_usage: true },
-    });
+    const stream = await client.chat.completions.create(
+      {
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+        stream: true,
+        stream_options: { include_usage: true },
+      },
+      { signal: controller.signal },
+    );
 
     for await (const chunk of stream) {
+      finishReason = chunk.choices?.[0]?.finish_reason ?? finishReason;
       const delta = chunk.choices?.[0]?.delta?.content;
       if (delta) {
         collected += delta;
@@ -1240,8 +1247,15 @@ async function streamOpenAIVisionCompletion(
       }
     }
 
+    const content = sanitizeModelOutput(collected, conversationMode);
+    if (finishReason !== 'stop' || !content) {
+      throw new Error(
+        'The AI response was empty, interrupted or exceeded its output limit. Please try a shorter request.',
+      );
+    }
+    clearTimeout(timer);
     await callbacks.onComplete({
-      enhancedPrompt: sanitizeModelOutput(collected, conversationMode),
+      enhancedPrompt: content,
       model,
       inputTokens,
       outputTokens,
@@ -1249,21 +1263,49 @@ async function streamOpenAIVisionCompletion(
       processingMs: Date.now() - startedAt,
     });
   } catch (error) {
-    promptLogger.error({ err: error }, 'OpenAI vision streaming failed');
+    promptLogger.error('OpenAI vision streaming failed');
     await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
 }
 
 async function enhancePromptInThreadVisionStream(
   request: EnhancePromptInThreadRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
-  const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-  const normalized = normalizeRequest(enrichedRequest);
+  const normalized = normalizeRequest(request);
   const messages = buildVisionThreadMessages({
     ...normalized,
     previousTurns: request.previousTurns,
   });
+  // Flash now supports native images. Keep OpenAI as an explicit deployment
+  // option; do not silently require a second provider/key for image threads.
+  const provider = process.env['PROMPT_VISION_PROVIDER']?.trim() || 'deepseek';
+  if (provider !== 'deepseek' && provider !== 'openai') {
+    throw new Error('PROMPT_VISION_PROVIDER must be deepseek or openai');
+  }
+  if (provider === 'deepseek') {
+    await streamCompletion(
+      {
+        model: process.env['DEEPSEEK_VISION_MODEL']?.trim() || DEEPSEEK_FLASH_MODEL,
+        messages,
+        temperature: normalized.temperature,
+        max_tokens: normalized.maxTokens,
+        stream: true,
+        thinking: normalized.thinking,
+      },
+      getApiKey(),
+      normalized.conversationMode,
+      {
+        ...callbacks,
+        onComplete: (result) =>
+          callbacks.onComplete({ ...result, imageAttachment: normalized.imageAttachment }),
+      },
+    );
+    return;
+  }
   const model = selectVisionModel(normalized.mode);
 
   await streamOpenAIVisionCompletion(
@@ -1275,31 +1317,28 @@ async function enhancePromptInThreadVisionStream(
     {
       ...callbacks,
       onComplete: (result) => {
-        callbacks.onComplete({
+        return callbacks.onComplete({
           ...result,
           imageAttachment: normalized.imageAttachment,
         });
       },
-    }
+    },
   );
 }
 
 export async function enhancePromptInThreadStream(
   request: EnhancePromptInThreadRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   try {
-    // Any image anywhere in the thread (current turn or prior turn) routes
-    // through a vision-capable OpenAI model so the AI actually sees the
-    // pixels. DeepSeek is text-only and would only receive a text summary,
-    // which is why "images don't get used as context" was reported.
+    // Preserve actual pixels across image threads; a text summary is not a
+    // substitute for the source image when refining visual instructions.
     if (hasImageContext(request)) {
       await enhancePromptInThreadVisionStream(request, callbacks);
       return;
     }
 
-    const enrichedRequest = await enrichRequestWithImageAnalysis(request);
-    const normalized = normalizeRequest(enrichedRequest);
+    const normalized = normalizeRequest(request);
     const apiKey = getApiKey();
 
     await streamCompletion(
@@ -1319,15 +1358,15 @@ export async function enhancePromptInThreadStream(
       {
         ...callbacks,
         onComplete: (result) => {
-          callbacks.onComplete({
+          return callbacks.onComplete({
             ...result,
             imageAttachment: normalized.imageAttachment,
           });
         },
-      }
+      },
     );
   } catch (error) {
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+    await callbacks.onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -1345,7 +1384,11 @@ export function getPromptTierFromSubscription(features: TierFeatures): Enhanceme
 export function detectModality(prompt: string): PromptModality {
   const text = prompt.toLowerCase();
 
-  if (/(image|illustration|photo|poster|render|midjourney|dall[- ]?e|stable diffusion|flux)/.test(text)) {
+  if (
+    /(image|illustration|photo|poster|render|midjourney|dall[- ]?e|stable diffusion|flux)/.test(
+      text,
+    )
+  ) {
     return 'image';
   }
 
@@ -1357,7 +1400,9 @@ export function detectModality(prompt: string): PromptModality {
     return 'audio';
   }
 
-  if (/(code|function|class|typescript|swift|python|react|bug|refactor|api endpoint|sql)/.test(text)) {
+  if (
+    /(code|function|class|typescript|swift|python|react|bug|refactor|api endpoint|sql)/.test(text)
+  ) {
     return 'code';
   }
 

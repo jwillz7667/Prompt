@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,7 +56,10 @@ export async function POST(request: NextRequest) {
       const error = await response.json().catch(() => ({ message: 'Authentication failed' }))
       console.error('Apple auth error:', error)
       // Use 303 to convert POST to GET
-      return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message || 'auth_failed')}`, request.url), 303)
+      return NextResponse.redirect(
+        new URL(`/login?error=${encodeURIComponent(error.message || 'auth_failed')}`, request.url),
+        303,
+      )
     }
 
     const data = await response.json()

@@ -1,5 +1,10 @@
 import { api } from './client'
-import type { AnalyticsResponse, UserStatsResponse, SessionsListResponse, StreakResponse } from '@/lib/types/api'
+import type {
+  AnalyticsResponse,
+  UserStatsResponse,
+  SessionsListResponse,
+  StreakResponse,
+} from '@/lib/types/api'
 
 export interface AnalyticsQueryParams {
   period?: 7 | 30 | 90

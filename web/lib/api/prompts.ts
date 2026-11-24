@@ -4,9 +4,10 @@ import type {
   EnhanceResponse,
   PromptsListResponse,
   StreamEvent,
+  EnhancementResult,
   SuccessResponse,
 } from '@/lib/types/api'
-import type { Prompt } from '@/lib/types/models'
+import type { Prompt, PromptUsage } from '@/lib/types/models'
 
 export interface PromptsQueryParams {
   page?: number
@@ -29,25 +30,110 @@ export async function getPrompts(params: PromptsQueryParams = {}): Promise<Promp
 }
 
 export async function getPrompt(id: string): Promise<Prompt> {
-  return api.get<Prompt>(`/prompts/${id}`)
+  const { prompt } = await api.get<{ prompt: Prompt }>(`/prompts/${id}`)
+  return prompt
 }
 
 export async function enhancePrompt(request: EnhanceRequest): Promise<EnhanceResponse> {
-  return api.post<EnhanceResponse>('/prompts/enhance', request)
+  return api.post<EnhanceResponse>('/prompts/enhance', buildEnhancePayload(request))
+}
+
+/** Translate UI settings into the fields accepted by the enhancement backend. */
+export function buildEnhancePayload(request: EnhanceRequest) {
+  const instructions = [request.customInstructions?.trim()].filter(Boolean) as string[]
+  if (request.tone) instructions.push(`Use a ${request.tone} tone in the enhanced prompt.`)
+  const lengthInstructions = {
+    concise: 'Keep the enhanced prompt brief and focused; include only essential instructions.',
+    standard: 'Use a balanced level of detail in the enhanced prompt.',
+    detailed:
+      'Make the enhanced prompt comprehensive, with explicit constraints and output requirements.',
+  }
+  if (request.length) instructions.push(lengthInstructions[request.length])
+  if (request.targetCharacterLength !== undefined) {
+    if (!Number.isSafeInteger(request.targetCharacterLength) || request.targetCharacterLength < 1) {
+      throw new Error('Target length must be a positive whole number of characters.')
+    }
+    instructions.push(
+      `Aim for approximately ${request.targetCharacterLength} characters in the enhanced prompt without dropping essential requirements.`,
+    )
+  }
+  const customInstructions = instructions.join('\n')
+  if (customInstructions.length > 2000) {
+    throw new Error(
+      'Custom instructions and style settings must fit within 2,000 characters. Please shorten your instructions.',
+    )
+  }
+  return {
+    prompt: request.prompt,
+    modality: request.modality ?? 'text',
+    mode: request.mode === 'max' || request.deepThink ? 'max' : 'standard',
+    temperature: request.temperature,
+    maxTokens: request.maxTokens,
+    customInstructions: customInstructions || undefined,
+  }
+}
+
+interface BackendStreamEvent {
+  type: 'token' | 'complete' | 'error'
+  content?: string
+  promptId?: string | null
+  prompt?: Prompt
+  usage?: PromptUsage
+  subscription?: EnhanceResponse['subscription']
+  message?: string
+  error?: string
 }
 
 export async function* enhancePromptStream(
-  request: EnhanceRequest
+  request: EnhanceRequest,
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const stream = api.stream('/prompts/enhance/stream', request)
-
+  const stream = api.stream('/prompts/enhance/stream', buildEnhancePayload(request), signal)
+  let content = ''
   for await (const data of stream) {
-    try {
-      const event = JSON.parse(data) as StreamEvent
-      yield event
-    } catch {
-      // Skip malformed JSON
-      console.warn('Failed to parse stream event:', data)
+    const event = JSON.parse(data) as BackendStreamEvent
+    if (event?.type === 'token') {
+      if (typeof event.content !== 'string')
+        throw new Error('The enhancement stream contained an invalid response.')
+      content += event.content
+      yield { type: 'token', content: event.content }
+    } else if (event?.type === 'error') {
+      yield {
+        type: 'error',
+        message: event.message || event.error || 'Enhancement failed. Please try again.',
+      }
+    } else if (event?.type === 'complete') {
+      // The backend returns promptId (nullable), not a whole Prompt object.
+      // Use the streamed output immediately, without another network dependency.
+      const id = event.prompt?.id || event.promptId || null
+      const enhancedPrompt = event.prompt?.enhancedPrompt || content
+      if (!enhancedPrompt.trim())
+        throw new Error('The enhancement finished without any output. Please try again.')
+      const prompt: EnhancementResult = {
+        id,
+        originalPrompt: event.prompt?.originalPrompt ?? request.prompt,
+        enhancedPrompt,
+        modality: event.prompt?.modality ?? request.modality ?? 'text',
+        inputTokens: event.usage?.inputTokens ?? event.prompt?.inputTokens ?? null,
+        outputTokens: event.usage?.outputTokens ?? event.prompt?.outputTokens ?? null,
+        processingMs: event.usage?.processingMs ?? event.prompt?.processingMs ?? null,
+        isSaved: id !== null,
+      }
+      yield {
+        type: 'complete',
+        prompt,
+        usage: event.usage,
+        subscription: event.subscription,
+        ...(!id
+          ? {
+              warning:
+                'Your prompt was generated but could not be saved to history. Copy it before leaving this page.',
+            }
+          : {}),
+      }
+      return
+    } else {
+      throw new Error('The enhancement stream contained an invalid response.')
     }
   }
 }
@@ -63,14 +149,16 @@ export async function createPrompt(data: {
   outputTokens?: number
   processingMs?: number
 }): Promise<Prompt> {
-  return api.post<Prompt>('/prompts', data)
+  const { prompt } = await api.post<{ prompt: Prompt }>('/prompts', data)
+  return prompt
 }
 
 export async function updatePrompt(
   id: string,
-  data: Partial<Pick<Prompt, 'isFavorite' | 'tags'>>
+  data: Partial<Pick<Prompt, 'isFavorite' | 'tags'>>,
 ): Promise<Prompt> {
-  return api.patch<Prompt>(`/prompts/${id}`, data)
+  const { prompt } = await api.patch<{ prompt: Prompt }>(`/prompts/${id}`, data)
+  return prompt
 }
 
 export async function deletePrompt(id: string): Promise<void> {

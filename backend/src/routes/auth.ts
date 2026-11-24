@@ -5,6 +5,7 @@ import {
   authenticateWithGoogle,
   refreshTokens,
   RefreshTokenError,
+  SignInError,
   logout,
   logoutAllDevices,
 } from '../services/authService.js';
@@ -15,8 +16,12 @@ export const authRouter = Router();
 
 // Validation schemas
 const appleAuthSchema = z.object({
-  identityToken: z.string().min(1),
-  authorizationCode: z.string().min(1),
+  identityToken: z.string().min(1).max(16384),
+  authorizationCode: z.string().min(1).max(4096),
+  nonce: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   fullName: z
     .object({
       givenName: z.string().optional(),
@@ -45,13 +50,17 @@ authRouter.post('/apple', async (req: Request, res: Response): Promise<void> => 
   try {
     const data = appleAuthSchema.parse(req.body);
 
-    authLogger.debug({ appleClientConfigured: !!process.env['APPLE_CLIENT_ID'] }, 'Apple auth request received');
+    authLogger.debug(
+      { appleClientConfigured: !!process.env['APPLE_CLIENT_ID'] },
+      'Apple auth request received',
+    );
 
     const result = await authenticateWithApple(
       data.identityToken,
       data.authorizationCode,
       data.fullName,
-      { deviceId: data.deviceId, deviceName: data.deviceName }
+      { deviceId: data.deviceId, deviceName: data.deviceName },
+      data.nonce,
     );
 
     authLogger.info({ userId: result.user.id }, 'Apple auth successful');
@@ -59,11 +68,17 @@ authRouter.post('/apple', async (req: Request, res: Response): Promise<void> => 
   } catch (error) {
     authLogger.error({ err: error }, 'Apple auth failed');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
-    const message = error instanceof Error ? error.message : 'Authentication failed';
-    res.status(401).json({ error: message });
+    if (error instanceof SignInError) {
+      res.status(error.statusCode).json({ error: error.message, code: error.code });
+      return;
+    }
+    res.status(503).json({
+      error: 'Sign-in is temporarily unavailable. Please try again shortly.',
+      code: 'AUTH_UNAVAILABLE',
+    });
   }
 });
 
@@ -85,7 +100,7 @@ authRouter.post('/google', async (req: Request, res: Response): Promise<void> =>
   } catch (error) {
     authLogger.error({ err: error }, 'Google auth failed');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(401).json({ error: 'Authentication failed' });
@@ -124,69 +139,81 @@ authRouter.post('/refresh', async (req: Request, res: Response): Promise<void> =
 // LOGOUT
 // ============================================================================
 
-authRouter.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      await logout(authHeader.substring(7));
+authRouter.post(
+  '/logout',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+        await logout(authHeader.substring(7));
+      }
+      authLogger.debug({ userId: req.user?.id }, 'User logged out');
+      res.json({ success: true });
+    } catch (error) {
+      authLogger.error({ err: error }, 'Logout failed');
+      res.status(500).json({ error: 'Logout failed' });
     }
-    authLogger.debug({ userId: req.user?.id }, 'User logged out');
-    res.json({ success: true });
-  } catch (error) {
-    authLogger.error({ err: error }, 'Logout failed');
-    res.status(500).json({ error: 'Logout failed' });
-  }
-});
+  },
+);
 
-authRouter.post('/logout-all', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+authRouter.post(
+  '/logout-all',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+      await logoutAllDevices(req.user.id);
+      authLogger.info({ userId: req.user.id }, 'User logged out from all devices');
+      res.json({ success: true });
+    } catch (error) {
+      authLogger.error({ err: error }, 'Logout all devices failed');
+      res.status(500).json({ error: 'Logout failed' });
     }
-    await logoutAllDevices(req.user.id);
-    authLogger.info({ userId: req.user.id }, 'User logged out from all devices');
-    res.json({ success: true });
-  } catch (error) {
-    authLogger.error({ err: error }, 'Logout all devices failed');
-    res.status(500).json({ error: 'Logout failed' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // SESSION INFO
 // ============================================================================
 
-authRouter.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+authRouter.get(
+  '/me',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const { prisma } = await import('../utils/prisma.js');
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          isPremium: true,
+          premiumUntil: true,
+          promptCount: true,
+          createdAt: true,
+        },
+      });
+
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      res.json({ user });
+    } catch (error) {
+      authLogger.error({ err: error, userId: req.user?.id }, 'Failed to get user info');
+      res.status(500).json({ error: 'Failed to get user info' });
     }
-
-    const { prisma } = await import('../utils/prisma.js');
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        avatarUrl: true,
-        isPremium: true,
-        premiumUntil: true,
-        promptCount: true,
-        createdAt: true,
-      },
-    });
-
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-
-    res.json({ user });
-  } catch (error) {
-    authLogger.error({ err: error, userId: req.user?.id }, 'Failed to get user info');
-    res.status(500).json({ error: 'Failed to get user info' });
-  }
-});
+  },
+);

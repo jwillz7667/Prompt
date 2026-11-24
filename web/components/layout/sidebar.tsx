@@ -52,7 +52,7 @@ export function Sidebar() {
     <aside
       className={cn(
         'fixed left-0 top-0 z-40 h-screen border-r border-[var(--border)] bg-[var(--bg-secondary)] transition-all duration-300',
-        sidebarCollapsed ? 'w-20' : 'w-64'
+        sidebarCollapsed ? 'w-20' : 'w-64',
       )}
       role="navigation"
       aria-label="Main sidebar navigation"
@@ -66,12 +66,12 @@ export function Sidebar() {
         >
           <Logo size={40} className="rounded-xl" />
           {!sidebarCollapsed && (
-            <span className="text-lg font-bold gradient-text">Promptomize</span>
+            <span className="gradient-text text-lg font-bold">Promptomize</span>
           )}
         </Link>
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+          className="hidden h-8 w-8 items-center justify-center rounded-lg text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] lg:flex"
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!sidebarCollapsed}
         >
@@ -83,7 +83,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-col h-[calc(100vh-4rem)] p-4" aria-label="Dashboard navigation">
+      <nav className="flex h-[calc(100vh-4rem)] flex-col p-4" aria-label="Dashboard navigation">
         <ul className="flex-1 space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href
@@ -98,17 +98,27 @@ export function Sidebar() {
                     isActive
                       ? 'bg-brand-indigo text-white shadow-lg shadow-brand-indigo/25'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]',
-                    isPremiumLocked && 'opacity-60'
+                    isPremiumLocked && 'opacity-60',
                   )}
                   aria-current={isActive ? 'page' : undefined}
                 >
-                  <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-white')} aria-hidden="true" />
+                  <item.icon
+                    className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-white')}
+                    aria-hidden="true"
+                  />
                   {!sidebarCollapsed && (
                     <>
                       <span className="flex-1">{item.name}</span>
                       {item.premium && (
-                        <Badge variant={isPremiumLocked ? 'outline' : 'premium'} className="text-[10px]">
-                          {isPremiumLocked ? 'PRO' : <Crown className="h-3 w-3" aria-hidden="true" />}
+                        <Badge
+                          variant={isPremiumLocked ? 'outline' : 'premium'}
+                          className="text-[10px]"
+                        >
+                          {isPremiumLocked ? (
+                            'PRO'
+                          ) : (
+                            <Crown className="h-3 w-3" aria-hidden="true" />
+                          )}
                         </Badge>
                       )}
                     </>
@@ -123,11 +133,14 @@ export function Sidebar() {
         {!sidebarCollapsed && tier === 'FREE' && (
           <Link
             href="/upgrade"
-            className="mb-4 rounded-xl bg-brand-indigo/10 dark:bg-brand-cyan/10 border border-brand-indigo/20 dark:border-brand-cyan/20 p-4 hover:border-brand-indigo/40 dark:hover:border-brand-cyan/40 transition-colors"
+            className="mb-4 rounded-xl border border-brand-indigo/20 bg-brand-indigo/10 p-4 transition-colors hover:border-brand-indigo/40 dark:border-brand-cyan/20 dark:bg-brand-cyan/10 dark:hover:border-brand-cyan/40"
             aria-label="Upgrade to Pro for more features"
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Crown className="h-5 w-5 text-brand-indigo dark:text-brand-cyan" aria-hidden="true" />
+            <div className="mb-2 flex items-center gap-2">
+              <Crown
+                className="h-5 w-5 text-brand-indigo dark:text-brand-cyan"
+                aria-hidden="true"
+              />
               <span className="font-semibold text-[var(--text-primary)]">Upgrade to Pro</span>
             </div>
             <p className="text-xs text-[var(--text-secondary)]">
@@ -149,11 +162,14 @@ export function Sidebar() {
                     'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
                     isActive
                       ? 'bg-brand-indigo text-white shadow-lg shadow-brand-indigo/25'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]',
                   )}
                   aria-current={isActive ? 'page' : undefined}
                 >
-                  <item.icon className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-white')} aria-hidden="true" />
+                  <item.icon
+                    className={cn('h-5 w-5 flex-shrink-0', isActive && 'text-white')}
+                    aria-hidden="true"
+                  />
                   {!sidebarCollapsed && <span>{item.name}</span>}
                 </Link>
               </li>

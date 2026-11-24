@@ -31,58 +31,52 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promi
     startDate.setHours(0, 0, 0, 0);
 
     // Get aggregate stats
-    const [
-      totalPrompts,
-      favoriteCount,
-      totalTokens,
-      promptsByDay,
-      topCategories,
-      modelUsage,
-    ] = await Promise.all([
-      // Total prompts
-      prisma.prompt.count({
-        where: { userId: req.user.id },
-      }),
+    const [totalPrompts, favoriteCount, totalTokens, promptsByDay, topCategories, modelUsage] =
+      await Promise.all([
+        // Total prompts
+        prisma.prompt.count({
+          where: { userId: req.user.id },
+        }),
 
-      // Favorite count
-      prisma.prompt.count({
-        where: { userId: req.user.id, isFavorite: true },
-      }),
+        // Favorite count
+        prisma.prompt.count({
+          where: { userId: req.user.id, isFavorite: true },
+        }),
 
-      // Total tokens
-      prisma.prompt.aggregate({
-        where: { userId: req.user.id },
-        _sum: { totalTokens: true },
-      }),
+        // Total tokens
+        prisma.prompt.aggregate({
+          where: { userId: req.user.id },
+          _sum: { totalTokens: true },
+        }),
 
-      // Prompts by day (for chart)
-      prisma.prompt.groupBy({
-        by: ['createdAt'],
-        where: {
-          userId: req.user.id,
-          createdAt: { gte: startDate },
-        },
-        _count: { id: true },
-        orderBy: { createdAt: 'asc' },
-      }),
+        // Prompts by day (for chart)
+        prisma.prompt.groupBy({
+          by: ['createdAt'],
+          where: {
+            userId: req.user.id,
+            createdAt: { gte: startDate },
+          },
+          _count: { id: true },
+          orderBy: { createdAt: 'asc' },
+        }),
 
-      // Top tags/categories
-      prisma.prompt.findMany({
-        where: {
-          userId: req.user.id,
-          tags: { isEmpty: false },
-        },
-        select: { tags: true },
-        take: 100,
-      }),
+        // Top tags/categories
+        prisma.prompt.findMany({
+          where: {
+            userId: req.user.id,
+            tags: { isEmpty: false },
+          },
+          select: { tags: true },
+          take: 100,
+        }),
 
-      // Model usage breakdown
-      prisma.prompt.groupBy({
-        by: ['model'],
-        where: { userId: req.user.id },
-        _count: { id: true },
-      }),
-    ]);
+        // Model usage breakdown
+        prisma.prompt.groupBy({
+          by: ['model'],
+          where: { userId: req.user.id },
+          _count: { id: true },
+        }),
+      ]);
 
     // Process prompts by day for chart data
     const dailyData = new Map<string, number>();
@@ -133,7 +127,8 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promi
 
     // Calculate averages
     const avgPromptsPerDay = query.days > 0 ? totalPrompts / query.days : 0;
-    const avgTokensPerPrompt = totalPrompts > 0 ? (totalTokens._sum.totalTokens || 0) / totalPrompts : 0;
+    const avgTokensPerPrompt =
+      totalPrompts > 0 ? (totalTokens._sum.totalTokens || 0) / totalPrompts : 0;
 
     // Get collection count
     const collectionCount = await prisma.collection.count({
@@ -171,7 +166,7 @@ analyticsRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promi
   } catch (error) {
     logger.error({ err: error }, 'Get analytics error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to get analytics' });
@@ -203,9 +198,7 @@ analyticsRouter.get('/streak', async (req: AuthenticatedRequest, res: Response):
       select: { date: true },
     });
 
-    const activityDates = new Set(
-      dailyActivity.map((d) => d.date.toISOString().split('T')[0])
-    );
+    const activityDates = new Set(dailyActivity.map((d) => d.date.toISOString().split('T')[0]));
 
     // Calculate current streak
     let currentStreak = 0;

@@ -17,41 +17,41 @@ export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d
 // ============================================================================
 
 export type TextSubModality =
-  | 'general'      // General-purpose text generation
-  | 'reasoning'    // Analytical, logical, problem-solving
-  | 'creative'     // Storytelling, fiction, poetry
-  | 'technical';   // Documentation, specifications, tutorials
+  | 'general' // General-purpose text generation
+  | 'reasoning' // Analytical, logical, problem-solving
+  | 'creative' // Storytelling, fiction, poetry
+  | 'technical'; // Documentation, specifications, tutorials
 
 export type ImageSubModality =
-  | 'photorealistic'  // Real-world photography style
-  | 'artistic'        // Paintings, illustrations, stylized art
-  | 'concept'         // Concept art, sketches, ideation
-  | 'product';        // Product photography, marketing visuals
+  | 'photorealistic' // Real-world photography style
+  | 'artistic' // Paintings, illustrations, stylized art
+  | 'concept' // Concept art, sketches, ideation
+  | 'product'; // Product photography, marketing visuals
 
 export type VideoSubModality =
-  | 'cinematic'    // Film-quality, narrative videos
-  | 'animation'    // 2D/3D animated content
-  | 'timelapse'    // Time-compressed footage
-  | 'tutorial';    // Educational, how-to content
+  | 'cinematic' // Film-quality, narrative videos
+  | 'animation' // 2D/3D animated content
+  | 'timelapse' // Time-compressed footage
+  | 'tutorial'; // Educational, how-to content
 
 export type AudioSubModality =
-  | 'music'        // Songs, instrumentals, compositions
-  | 'lyrics'       // Lyric writing for AI music generators
-  | 'speech'       // Voice synthesis, narration
-  | 'soundscape'   // Ambient, environmental sounds
-  | 'voiceover';   // Professional VO, podcasts
+  | 'music' // Songs, instrumentals, compositions
+  | 'lyrics' // Lyric writing for AI music generators
+  | 'speech' // Voice synthesis, narration
+  | 'soundscape' // Ambient, environmental sounds
+  | 'voiceover'; // Professional VO, podcasts
 
 export type CodeSubModality =
-  | 'function'     // Single function implementation
-  | 'component'    // UI component, module
-  | 'algorithm'    // Algorithm design and implementation
-  | 'refactor';    // Code improvement, optimization
+  | 'function' // Single function implementation
+  | 'component' // UI component, module
+  | 'algorithm' // Algorithm design and implementation
+  | 'refactor'; // Code improvement, optimization
 
 export type ThreeDSubModality =
-  | 'game-asset'      // Game-ready 3D models
-  | 'print-ready'     // 3D printing optimized
-  | 'visualization'   // Architectural, product viz
-  | 'animation';      // Rigged, animated models
+  | 'game-asset' // Game-ready 3D models
+  | 'print-ready' // 3D printing optimized
+  | 'visualization' // Architectural, product viz
+  | 'animation'; // Rigged, animated models
 
 export type SubModality =
   | TextSubModality
@@ -67,41 +67,41 @@ export type SubModality =
 // ============================================================================
 
 export type ImagePlatform =
-  | 'midjourney'       // Image Generator (--ar, --v, --s syntax)
-  | 'dalle'            // Image Creator (natural language)
+  | 'midjourney' // Image Generator (--ar, --v, --s syntax)
+  | 'dalle' // Image Creator (natural language)
   | 'stable-diffusion' // Diffusion Model (weights, LoRA, embeddings)
-  | 'flux'             // Image Studio (clean, minimal syntax)
-  | 'general';         // Platform-agnostic
+  | 'flux' // Image Studio (clean, minimal syntax)
+  | 'general'; // Platform-agnostic
 
 export type VideoPlatform =
-  | 'sora'      // Video Generator
-  | 'runway'    // Video Creator
-  | 'pika'      // Video Animator
-  | 'kling'     // Video Studio
-  | 'general';  // Platform-agnostic
+  | 'sora' // Video Generator
+  | 'runway' // Video Creator
+  | 'pika' // Video Animator
+  | 'kling' // Video Studio
+  | 'general'; // Platform-agnostic
 
 export type AudioPlatform =
-  | 'suno'      // Music Generator
-  | 'udio'      // Music Creator
-  | 'musicgen'  // Audio Generator
-  | 'general';  // Platform-agnostic
+  | 'suno' // Music Generator
+  | 'udio' // Music Creator
+  | 'musicgen' // Audio Generator
+  | 'general'; // Platform-agnostic
 
 export type CodePlatform =
-  | 'claude'    // AI Assistant
-  | 'gpt'       // AI Chat
-  | 'copilot'   // Code Assistant
-  | 'general';  // Platform-agnostic
+  | 'claude' // AI Assistant
+  | 'gpt' // AI Chat
+  | 'copilot' // Code Assistant
+  | 'general'; // Platform-agnostic
 
 export type TextPlatform =
-  | 'claude'    // AI Assistant
-  | 'gpt'       // AI Chat
-  | 'gemini'    // AI Search
-  | 'general';  // Platform-agnostic
+  | 'claude' // AI Assistant
+  | 'gpt' // AI Chat
+  | 'gemini' // AI Search
+  | 'general'; // Platform-agnostic
 
 export type ThreeDPlatform =
-  | 'meshy'     // 3D Generator
-  | 'tripo3d'   // 3D Creator
-  | 'general';  // Platform-agnostic
+  | 'meshy' // 3D Generator
+  | 'tripo3d' // 3D Creator
+  | 'general'; // Platform-agnostic
 
 export type TargetPlatform =
   | ImagePlatform

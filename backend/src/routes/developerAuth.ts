@@ -14,7 +14,10 @@ import {
   updateDeveloperProfile,
   changeDeveloperPassword,
 } from '../services/developerAuthService.js';
-import { authenticateDeveloper, type DeveloperAuthenticatedRequest } from '../middleware/developerAuth.js';
+import {
+  authenticateDeveloper,
+  type DeveloperAuthenticatedRequest,
+} from '../middleware/developerAuth.js';
 import { logger } from '../utils/logger.js';
 
 export const developerAuthRouter = Router();
@@ -58,12 +61,7 @@ developerAuthRouter.post('/signup', async (req: Request, res: Response): Promise
   try {
     const data = signupSchema.parse(req.body);
 
-    const result = await registerDeveloper(
-      data.email,
-      data.password,
-      data.name,
-      data.company
-    );
+    const result = await registerDeveloper(data.email, data.password, data.name, data.company);
 
     res.status(201).json({
       developer: result.developer,
@@ -73,7 +71,7 @@ developerAuthRouter.post('/signup', async (req: Request, res: Response): Promise
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -107,7 +105,7 @@ developerAuthRouter.post('/login', async (req: Request, res: Response): Promise<
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -142,7 +140,7 @@ developerAuthRouter.post('/refresh', async (req: Request, res: Response): Promis
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     if (error instanceof Error) {
@@ -175,7 +173,7 @@ developerAuthRouter.post(
       logger.error({ error }, 'Developer logout error');
       res.status(500).json({ error: 'Logout failed' });
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -225,7 +223,7 @@ developerAuthRouter.get(
       logger.error({ error }, 'Get developer profile error');
       res.status(500).json({ error: 'Failed to get profile' });
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -258,13 +256,13 @@ developerAuthRouter.patch(
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
       logger.error({ error }, 'Update developer profile error');
       res.status(500).json({ error: 'Failed to update profile' });
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -283,16 +281,12 @@ developerAuthRouter.post(
 
       const data = changePasswordSchema.parse(req.body);
 
-      await changeDeveloperPassword(
-        req.developer.id,
-        data.currentPassword,
-        data.newPassword
-      );
+      await changeDeveloperPassword(req.developer.id, data.currentPassword, data.newPassword);
 
       res.json({ success: true, message: 'Password changed successfully. Please login again.' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid request data', details: error.errors });
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
         return;
       }
       if (error instanceof Error && error.message === 'Current password is incorrect') {
@@ -302,5 +296,5 @@ developerAuthRouter.post(
       logger.error({ error }, 'Change developer password error');
       res.status(500).json({ error: 'Failed to change password' });
     }
-  }
+  },
 );

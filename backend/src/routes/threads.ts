@@ -2,10 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
-import {
-  enforceQuota,
-  type RequestWithSubscription,
-} from '../middleware/quotaEnforcement.js';
+import { enforceQuota, type RequestWithSubscription } from '../middleware/quotaEnforcement.js';
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
 import { recordUsage, getSubscriptionInfo } from '../services/subscriptionService.js';
@@ -40,7 +37,7 @@ const imageAttachmentSchema = z.object({
 
 function validatePromptOrImage(
   value: { prompt?: string; imageAttachment?: unknown },
-  ctx: z.RefinementCtx
+  ctx: z.RefinementCtx,
 ) {
   if ((value.prompt?.trim().length ?? 0) > 0 || value.imageAttachment) {
     return;
@@ -53,15 +50,13 @@ function validatePromptOrImage(
   });
 }
 
-function toImageAttachmentJson(
-  attachment?: {
-    dataUrl: string;
-    mimeType: string;
-    width: number;
-    height: number;
-    analysis?: string | null;
-  }
-): Prisma.InputJsonValue | undefined {
+function toImageAttachmentJson(attachment?: {
+  dataUrl: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  analysis?: string | null;
+}): Prisma.InputJsonValue | undefined {
   if (!attachment) {
     return undefined;
   }
@@ -75,7 +70,9 @@ function toImageAttachmentJson(
   } as Prisma.InputJsonValue;
 }
 
-function fromImageAttachmentJson(value: Prisma.JsonValue | null): PromptImageAttachment | undefined {
+function fromImageAttachmentJson(
+  value: Prisma.JsonValue | null,
+): PromptImageAttachment | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined;
   }
@@ -108,35 +105,42 @@ threadRouter.use(authenticate);
 // VALIDATION SCHEMAS
 // ============================================================================
 
-const createThreadSchema = z.object({
-  prompt: z.string().max(100000).default(''),
-  title: z.string().max(200).optional(),
-  modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
-  subModality: z.string().max(50).optional(),
-  mode: z.enum(['standard', 'max']).default('standard'),
-  conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
-  customInstructions: z.string().max(2000).optional(),
-  imageAttachment: imageAttachmentSchema.optional(),
-  previousTurns: z.array(
-    z.object({
-      originalPrompt: z.string().max(100000).default(''),
-      enhancedPrompt: z.string().min(1).max(500000),
-      model: z.string().max(100).optional(),
-      totalTokens: z.number().int().min(0).optional(),
-      processingMs: z.number().int().min(0).optional(),
-      imageAttachment: imageAttachmentSchema.optional(),
-    })
-  ).max(20).default([]),
-}).superRefine(validatePromptOrImage);
+const createThreadSchema = z
+  .object({
+    prompt: z.string().max(100000).default(''),
+    title: z.string().max(200).optional(),
+    modality: z.enum(['text', 'image', 'video', 'audio', 'code', '3d']).default('text'),
+    subModality: z.string().max(50).optional(),
+    mode: z.enum(['standard', 'max']).default('standard'),
+    conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
+    customInstructions: z.string().max(2000).optional(),
+    imageAttachment: imageAttachmentSchema.optional(),
+    previousTurns: z
+      .array(
+        z.object({
+          originalPrompt: z.string().max(100000).default(''),
+          enhancedPrompt: z.string().min(1).max(500000),
+          model: z.string().max(100).optional(),
+          totalTokens: z.number().int().min(0).optional(),
+          processingMs: z.number().int().min(0).optional(),
+          imageAttachment: imageAttachmentSchema.optional(),
+        }),
+      )
+      .max(20)
+      .default([]),
+  })
+  .superRefine(validatePromptOrImage);
 
-const addTurnSchema = z.object({
-  prompt: z.string().max(100000).default(''),
-  subModality: z.string().max(50).optional(),
-  mode: z.enum(['standard', 'max']).default('standard'),
-  conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
-  customInstructions: z.string().max(2000).optional(),
-  imageAttachment: imageAttachmentSchema.optional(),
-}).superRefine(validatePromptOrImage);
+const addTurnSchema = z
+  .object({
+    prompt: z.string().max(100000).default(''),
+    subModality: z.string().max(50).optional(),
+    mode: z.enum(['standard', 'max']).default('standard'),
+    conversationMode: z.enum(['optimize', 'chat']).default('optimize'),
+    customInstructions: z.string().max(2000).optional(),
+    imageAttachment: imageAttachmentSchema.optional(),
+  })
+  .superRefine(validatePromptOrImage);
 
 const updateThreadSchema = z.object({
   title: z.string().max(200).optional(),
@@ -151,7 +155,7 @@ const listQuerySchema = z.object({
 
 function buildSubscriptionPayload(
   subscription: RequestWithSubscription['subscription'] | undefined,
-  maxModeQuota: Awaited<ReturnType<typeof getMaxModeQuota>>
+  maxModeQuota: Awaited<ReturnType<typeof getMaxModeQuota>>,
 ) {
   if (!subscription) return undefined;
 
@@ -197,13 +201,15 @@ threadRouter.post(
 
       // Enforce subscription gates: MAX mode and non-text modalities require a subscription
       ensureModalityAvailable(data.modality, subscriptionInfo.tier);
-      const maxModeQuotaBeforeUse = data.mode === 'max'
-        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
-        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
+      const maxModeQuotaBeforeUse =
+        data.mode === 'max'
+          ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+          : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       // Auto-generate title from first prompt (truncated)
-      const autoTitle = data.title
-        || (data.prompt.trim()
+      const autoTitle =
+        data.title ||
+        (data.prompt.trim()
           ? data.prompt.substring(0, 80) + (data.prompt.length > 80 ? '...' : '')
           : 'Image to Video Prompt');
 
@@ -219,14 +225,16 @@ threadRouter.post(
       if (data.previousTurns.length > 0) {
         await prisma.threadTurn.createMany({
           data: data.previousTurns.map((turn, index) => ({
-              threadId: thread.id,
-              turnIndex: index,
-              originalPrompt: turn.originalPrompt,
-              enhancedPrompt: turn.enhancedPrompt,
-              ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(turn.imageAttachment) } : {}),
-              model: turn.model ?? 'guest-preview',
-              inputTokens: 0,
-              outputTokens: 0,
+            threadId: thread.id,
+            turnIndex: index,
+            originalPrompt: turn.originalPrompt,
+            enhancedPrompt: turn.enhancedPrompt,
+            ...(supportsImageAttachment
+              ? { imageAttachment: toImageAttachmentJson(turn.imageAttachment) }
+              : {}),
+            model: turn.model ?? 'guest-preview',
+            inputTokens: 0,
+            outputTokens: 0,
             totalTokens: turn.totalTokens ?? 0,
             processingMs: turn.processingMs ?? 0,
           })),
@@ -262,7 +270,10 @@ threadRouter.post(
             try {
               await recordUsage(req.user!.id);
             } catch (usageError) {
-              logger.error({ err: usageError, userId: req.user!.id }, 'Failed to record daily usage for thread turn');
+              logger.error(
+                { err: usageError, userId: req.user!.id },
+                'Failed to record daily usage for thread turn',
+              );
             }
 
             let turnId: string | null = null;
@@ -285,7 +296,9 @@ threadRouter.post(
                 turn = await prisma.threadTurn.create({
                   data: {
                     ...baseData,
-                    ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
+                    ...(supportsImageAttachment
+                      ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
+                      : {}),
                   },
                   select: { id: true },
                 });
@@ -294,7 +307,7 @@ threadRouter.post(
                   resetSchemaCompatibilityCache();
                   logger.warn(
                     { err: createError, threadId: thread.id },
-                    'ThreadTurn imageAttachment column missing; retrying persist without it'
+                    'ThreadTurn imageAttachment column missing; retrying persist without it',
                   );
                   turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
                 } else {
@@ -331,13 +344,14 @@ threadRouter.post(
                   },
                 }),
               ]);
-              maxModeQuota = data.mode === 'max'
-                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-                : maxModeQuotaBeforeUse;
+              maxModeQuota =
+                data.mode === 'max'
+                  ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                  : maxModeQuotaBeforeUse;
             } catch (persistError) {
               logger.error(
                 { err: persistError, threadId: thread.id },
-                'Failed to persist thread turn; returning result to client without saving'
+                'Failed to persist thread turn; returning result to client without saving',
               );
               // The thread row was created up-front for this first turn. If no
               // turn persisted, it is a blank orphan that would show up as an
@@ -345,7 +359,10 @@ threadRouter.post(
               // the response so the client holds no dangling reference.
               if (turnId === null) {
                 await prisma.thread.delete({ where: { id: thread.id } }).catch((cleanupError) => {
-                  logger.error({ err: cleanupError, threadId: thread.id }, 'Failed to clean up orphan thread');
+                  logger.error(
+                    { err: cleanupError, threadId: thread.id },
+                    'Failed to clean up orphan thread',
+                  );
                 });
               }
             }
@@ -365,7 +382,7 @@ threadRouter.post(
                 },
                 subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
                 imageAttachment: result.imageAttachment,
-              })}\n\n`
+              })}\n\n`,
             );
             res.write('data: [DONE]\n\n');
             res.end();
@@ -377,22 +394,30 @@ threadRouter.post(
             res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
             res.end();
           },
-        }
+        },
       );
     } catch (error) {
       logger.error({ err: error }, 'Create thread error');
       if (error instanceof z.ZodError) {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`,
+        );
       } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
-        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`,
+        );
       } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`,
+        );
       } else {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to create thread' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'Failed to create thread' })}\n\n`,
+        );
       }
       res.end();
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -447,15 +472,19 @@ threadRouter.post(
 
       // Enforce subscription gates: MAX mode and non-text modalities require a subscription
       ensureModalityAvailable(thread.modality ?? undefined, subscriptionInfo.tier);
-      const maxModeQuotaBeforeUse = data.mode === 'max'
-        ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
-        : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
+      const maxModeQuotaBeforeUse =
+        data.mode === 'max'
+          ? await ensureMaxModeAvailable(req.user.id, subscriptionInfo.tier)
+          : await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
 
       // Build conversation history from previous turns
       const previousTurns: ThreadTurnContext[] = thread.turns.map((t) => ({
         originalPrompt: t.originalPrompt,
         enhancedPrompt: t.enhancedPrompt,
-        imageAttachment: 'imageAttachment' in t ? fromImageAttachmentJson(t.imageAttachment as Prisma.JsonValue | null) : undefined,
+        imageAttachment:
+          'imageAttachment' in t
+            ? fromImageAttachmentJson(t.imageAttachment as Prisma.JsonValue | null)
+            : undefined,
       }));
 
       const nextTurnIndex = thread.turns.length;
@@ -489,7 +518,10 @@ threadRouter.post(
             try {
               await recordUsage(req.user!.id);
             } catch (usageError) {
-              logger.error({ err: usageError, userId: req.user!.id }, 'Failed to record daily usage for thread turn');
+              logger.error(
+                { err: usageError, userId: req.user!.id },
+                'Failed to record daily usage for thread turn',
+              );
             }
 
             let turnId: string | null = null;
@@ -512,7 +544,9 @@ threadRouter.post(
                 turn = await prisma.threadTurn.create({
                   data: {
                     ...baseData,
-                    ...(supportsImageAttachment ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) } : {}),
+                    ...(supportsImageAttachment
+                      ? { imageAttachment: toImageAttachmentJson(result.imageAttachment) }
+                      : {}),
                   },
                   select: { id: true },
                 });
@@ -521,7 +555,7 @@ threadRouter.post(
                   resetSchemaCompatibilityCache();
                   logger.warn(
                     { err: createError, threadId: thread.id },
-                    'ThreadTurn imageAttachment column missing; retrying persist without it'
+                    'ThreadTurn imageAttachment column missing; retrying persist without it',
                   );
                   turn = await prisma.threadTurn.create({ data: baseData, select: { id: true } });
                 } else {
@@ -562,13 +596,14 @@ threadRouter.post(
                   },
                 }),
               ]);
-              maxModeQuota = data.mode === 'max'
-                ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
-                : maxModeQuotaBeforeUse;
+              maxModeQuota =
+                data.mode === 'max'
+                  ? await recordMaxModeUsage(req.user!.id, subscriptionInfo.tier)
+                  : maxModeQuotaBeforeUse;
             } catch (persistError) {
               logger.error(
                 { err: persistError, threadId: thread.id },
-                'Failed to persist thread turn; returning result to client without saving'
+                'Failed to persist thread turn; returning result to client without saving',
               );
             }
 
@@ -587,7 +622,7 @@ threadRouter.post(
                 },
                 subscription: buildSubscriptionPayload(req.subscription, maxModeQuota),
                 imageAttachment: result.imageAttachment,
-              })}\n\n`
+              })}\n\n`,
             );
             res.write('data: [DONE]\n\n');
             res.end();
@@ -597,22 +632,28 @@ threadRouter.post(
             res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
             res.end();
           },
-        }
+        },
       );
     } catch (error) {
       logger.error({ err: error }, 'Add turn error');
       if (error instanceof z.ZodError) {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'Invalid request data' })}\n\n`,
+        );
       } else if (error instanceof Error && error.message === 'MODALITY_REQUIRES_SUBSCRIPTION') {
-        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', code: 'MODALITY_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use image, video, audio, code, and 3D modalities.' })}\n\n`,
+        );
       } else if (error instanceof Error && error.message === 'FREE_MAX_MODE_LIMIT_REACHED') {
-        res.write(`data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', code: 'MAX_MODE_REQUIRES_SUBSCRIPTION', message: 'Upgrade to Pro or Premium to use MAX mode.' })}\n\n`,
+        );
       } else {
         res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to add turn' })}\n\n`);
       }
       res.end();
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -686,7 +727,7 @@ threadRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<
   } catch (error) {
     logger.error({ err: error }, 'List threads error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      res.status(400).json({ error: 'Invalid query parameters', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to list threads' });
@@ -736,7 +777,7 @@ threadRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Promi
         updatedAt: thread.updatedAt,
         turns: thread.turns.map((turn) => ({
           ...turn,
-          imageAttachment: 'imageAttachment' in turn ? turn.imageAttachment ?? null : null,
+          imageAttachment: 'imageAttachment' in turn ? (turn.imageAttachment ?? null) : null,
         })),
       },
     });
@@ -808,7 +849,7 @@ threadRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response): Pro
   } catch (error) {
     logger.error({ err: error }, 'Update thread error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to update thread' });

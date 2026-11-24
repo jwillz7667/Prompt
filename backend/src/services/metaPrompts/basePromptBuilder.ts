@@ -67,7 +67,16 @@ export class MetaPromptBuilder {
    * Build the complete user message with examples and constraints
    */
   buildUserMessage(): string {
-    const { prompt, tier, modality, tone, length, customInstructions, subModality, targetPlatform } = this.options;
+    const {
+      prompt,
+      tier,
+      modality,
+      tone,
+      length,
+      customInstructions,
+      subModality,
+      targetPlatform,
+    } = this.options;
 
     let message = `<enhancement_request>
 <original_prompt>
@@ -133,8 +142,9 @@ ${lengthConstraint}
 Do NOT exceed this limit. Count carefully. This overrides any default output length guidance.
 </length_constraint>`;
     }
-    
-    message += '\n\nTransform the original prompt into an optimized version. Return ONLY the enhanced prompt.';
+
+    message +=
+      '\n\nTransform the original prompt into an optimized version. Return ONLY the enhanced prompt.';
 
     return message;
   }
@@ -172,27 +182,37 @@ Do NOT exceed this limit. Count carefully. This overrides any default output len
   private formatFewShotExamples(examples: FewShotExample[]): string {
     if (examples.length === 0) return '';
 
-    const formattedExamples = examples.map((ex, i) => `<example id="${i + 1}">
+    const formattedExamples = examples
+      .map(
+        (ex, i) => `<example id="${i + 1}">
 <input>${ex.input}</input>
 <output>
 ${ex.output}
 </output>
-</example>`).join('\n\n');
+</example>`,
+      )
+      .join('\n\n');
 
     return `<few_shot_examples>
 ${formattedExamples}
 </few_shot_examples>`;
   }
 
-  private formatNegativeExamples(examples: { badInput: string; badOutput: string; goodOutput: string; explanation: string }[]): string {
+  private formatNegativeExamples(
+    examples: { badInput: string; badOutput: string; goodOutput: string; explanation: string }[],
+  ): string {
     if (examples.length === 0) return '';
 
-    const formattedExamples = examples.map((ex, i) => `<negative_example id="${i + 1}">
+    const formattedExamples = examples
+      .map(
+        (ex, i) => `<negative_example id="${i + 1}">
 <bad_input>${ex.badInput}</bad_input>
 <bad_output>${ex.badOutput}</bad_output>
 <good_output>${ex.goodOutput}</good_output>
 <explanation>${ex.explanation}</explanation>
-</negative_example>`).join('\n\n');
+</negative_example>`,
+      )
+      .join('\n\n');
 
     return `<negative_examples>
 These examples show common mistakes to avoid:
@@ -228,7 +248,9 @@ ${formattedExamples}
     if (outputRulesIndex !== -1) {
       return (
         systemPrompt.slice(0, outputRulesIndex) +
-        '\n' + platformGuidance + '\n\n' +
+        '\n' +
+        platformGuidance +
+        '\n\n' +
         systemPrompt.slice(outputRulesIndex)
       );
     }
@@ -237,7 +259,9 @@ ${formattedExamples}
     if (systemEndIndex !== -1) {
       return (
         systemPrompt.slice(0, systemEndIndex) +
-        '\n' + platformGuidance + '\n\n' +
+        '\n' +
+        platformGuidance +
+        '\n\n' +
         systemPrompt.slice(systemEndIndex)
       );
     }
@@ -279,10 +303,7 @@ export function getTierConfig(tier: EnhancementTier): TierConfig {
 /**
  * Determine if tier supports a feature
  */
-export function tierSupportsFeature(
-  tier: EnhancementTier,
-  feature: keyof TierConfig
-): boolean {
+export function tierSupportsFeature(tier: EnhancementTier, feature: keyof TierConfig): boolean {
   const config = TIER_CONFIGS[tier];
   const value = config[feature];
 

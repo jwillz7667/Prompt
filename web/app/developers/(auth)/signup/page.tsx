@@ -10,7 +10,8 @@ import { Eye, EyeOff, Check } from 'lucide-react'
 
 export default function DeveloperSignupPage() {
   const router = useRouter()
-  const { signup, isAuthenticated, isLoading, error, clearError, checkAuth } = useDeveloperAuthStore()
+  const { signup, isAuthenticated, isLoading, error, clearError, checkAuth } =
+    useDeveloperAuthStore()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -64,7 +65,7 @@ export default function DeveloperSignupPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-indigo" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-indigo" />
       </div>
     )
   }
@@ -89,7 +90,7 @@ export default function DeveloperSignupPage() {
           'Monitor usage and billing',
         ].map((benefit, i) => (
           <div key={i} className="flex items-center gap-2 text-[var(--text-secondary)]">
-            <Check className="h-4 w-4 text-brand-cyan flex-shrink-0" />
+            <Check className="h-4 w-4 flex-shrink-0 text-brand-cyan" />
             <span>{benefit}</span>
           </div>
         ))}
@@ -99,13 +100,13 @@ export default function DeveloperSignupPage() {
         <CardContent className="p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {displayError && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-sm text-red-500">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500">
                 {displayError}
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-2">
+              <label htmlFor="email" className="mb-2 block text-sm font-medium">
                 Email <span className="text-red-500">*</span>
               </label>
               <input
@@ -122,7 +123,7 @@ export default function DeveloperSignupPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium mb-2">
+                <label htmlFor="name" className="mb-2 block text-sm font-medium">
                   Name
                 </label>
                 <input
@@ -136,7 +137,7 @@ export default function DeveloperSignupPage() {
                 />
               </div>
               <div>
-                <label htmlFor="company" className="block text-sm font-medium mb-2">
+                <label htmlFor="company" className="mb-2 block text-sm font-medium">
                   Company
                 </label>
                 <input
@@ -152,7 +153,7 @@ export default function DeveloperSignupPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2">
+              <label htmlFor="password" className="mb-2 block text-sm font-medium">
                 Password <span className="text-red-500">*</span>
               </label>
               <div className="relative">
@@ -178,7 +179,7 @@ export default function DeveloperSignupPage() {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
+              <label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium">
                 Confirm Password <span className="text-red-500">*</span>
               </label>
               <input
@@ -204,7 +205,7 @@ export default function DeveloperSignupPage() {
               Create Account
             </Button>
 
-            <p className="text-xs text-center text-[var(--text-tertiary)]">
+            <p className="text-center text-xs text-[var(--text-tertiary)]">
               By signing up, you agree to our{' '}
               <Link href="/terms" className="text-brand-indigo hover:underline">
                 Terms of Service
@@ -221,7 +222,7 @@ export default function DeveloperSignupPage() {
       <div className="text-center text-sm">
         <p className="text-[var(--text-secondary)]">
           Already have a developer account?{' '}
-          <Link href="/developers/login" className="text-brand-indigo hover:underline font-medium">
+          <Link href="/developers/login" className="font-medium text-brand-indigo hover:underline">
             Sign in
           </Link>
         </p>

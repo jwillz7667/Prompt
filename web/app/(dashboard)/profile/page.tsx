@@ -73,7 +73,7 @@ export default function ProfilePage() {
         toast.error('Failed to terminate session')
       }
     },
-    [refetchSessions]
+    [refetchSessions],
   )
 
   const handleDeleteAccount = useCallback(async () => {
@@ -92,20 +92,18 @@ export default function ProfilePage() {
   }, [deleteInput, logout, router])
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">Profile</h1>
-        <p className="mt-1 text-[var(--text-secondary)]">
-          Manage your account and preferences
-        </p>
+        <p className="mt-1 text-[var(--text-secondary)]">Manage your account and preferences</p>
       </div>
 
       {/* User Info */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden bg-brand-indigo dark:bg-brand-cyan flex-shrink-0">
+            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-brand-indigo dark:bg-brand-cyan">
               {user?.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
@@ -119,7 +117,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               {editingName ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -151,27 +149,25 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 mt-1 text-[var(--text-secondary)]">
+              <div className="mt-1 flex items-center gap-2 text-[var(--text-secondary)]">
                 <Mail className="h-4 w-4" />
                 <span>{user?.email}</span>
               </div>
 
-              <div className="flex items-center gap-3 mt-3">
+              <div className="mt-3 flex items-center gap-3">
                 <Badge
                   variant={
                     subscription.tier === 'PREMIUM'
                       ? 'premium'
                       : subscription.tier === 'PRO'
-                      ? 'pro'
-                      : 'outline'
+                        ? 'pro'
+                        : 'outline'
                   }
                 >
-                  {subscription.tier === 'PREMIUM' && <Crown className="h-3 w-3 mr-1" />}
+                  {subscription.tier === 'PREMIUM' && <Crown className="mr-1 h-3 w-3" />}
                   {subscription.tier}
                 </Badge>
-                {subscription.isTrialing && (
-                  <Badge variant="cyan">Trial</Badge>
-                )}
+                {subscription.isTrialing && <Badge variant="cyan">Trial</Badge>}
               </div>
             </div>
           </div>
@@ -188,16 +184,16 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent>
           {statsLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[...Array(4)].map((_, i) => (
                 <div key={i}>
-                  <Skeleton className="h-4 w-20 mb-2" />
+                  <Skeleton className="mb-2 h-4 w-20" />
                   <Skeleton className="h-6 w-16" />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
               <div>
                 <p className="text-sm text-[var(--text-secondary)]">Total Prompts</p>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">
@@ -257,33 +253,40 @@ export default function ProfilePage() {
           {sessionsLoading ? (
             <div className="space-y-3">
               {[...Array(2)].map((_, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--bg-tertiary)]">
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-xl bg-[var(--bg-tertiary)] p-3"
+                >
                   <Skeleton className="h-10 w-10 rounded-xl" />
                   <div className="flex-1">
-                    <Skeleton className="h-4 w-32 mb-2" />
+                    <Skeleton className="mb-2 h-4 w-32" />
                     <Skeleton className="h-3 w-24" />
                   </div>
                 </div>
               ))}
             </div>
           ) : sessions.length === 0 ? (
-            <p className="text-[var(--text-tertiary)] text-center py-4">No active sessions</p>
+            <p className="py-4 text-center text-[var(--text-tertiary)]">No active sessions</p>
           ) : (
             <div className="space-y-3">
               {sessions.map((session) => (
                 <div
                   key={session.id}
                   className={cn(
-                    'flex items-center gap-3 p-3 rounded-xl',
-                    session.isCurrent ? 'bg-brand-indigo/5 border border-brand-indigo/20' : 'bg-[var(--bg-tertiary)]'
+                    'flex items-center gap-3 rounded-xl p-3',
+                    session.isCurrent
+                      ? 'border border-brand-indigo/20 bg-brand-indigo/5'
+                      : 'bg-[var(--bg-tertiary)]',
                   )}
                 >
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--bg-secondary)] text-[var(--text-tertiary)]">
-                    {deviceIcons[session.deviceType || 'desktop'] || <Monitor className="h-5 w-5" />}
+                    {deviceIcons[session.deviceType || 'desktop'] || (
+                      <Monitor className="h-5 w-5" />
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-[var(--text-primary)] truncate">
+                      <p className="truncate font-medium text-[var(--text-primary)]">
                         {session.deviceName || 'Unknown Device'}
                       </p>
                       {session.isCurrent && (
@@ -322,7 +325,7 @@ export default function ProfilePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-[var(--text-secondary)] mb-4">
+          <p className="mb-4 text-sm text-[var(--text-secondary)]">
             Once you delete your account, there is no going back. Please be certain.
           </p>
           <Button variant="danger" onClick={() => setDeleteConfirmOpen(true)}>
@@ -342,7 +345,7 @@ export default function ProfilePage() {
         size="sm"
       >
         <div className="space-y-4">
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
             <p className="text-sm text-red-500">
               This action cannot be undone. This will permanently delete your account and remove all
               your data from our servers.

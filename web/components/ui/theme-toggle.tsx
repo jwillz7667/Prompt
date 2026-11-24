@@ -32,7 +32,7 @@ export function ThemeToggle() {
   if (!mounted) {
     return (
       <button
-        className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+        className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
         aria-label="Toggle theme"
       >
         <Moon className="h-5 w-5" />
@@ -48,7 +48,7 @@ export function ThemeToggle() {
       onClick={cycleTheme}
       className={cn(
         'flex h-10 w-10 items-center justify-center rounded-xl transition-colors',
-        'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+        'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]',
       )}
       aria-label={`Current theme: ${currentMode.label}. Click to change.`}
       title={`Theme: ${currentMode.label}`}

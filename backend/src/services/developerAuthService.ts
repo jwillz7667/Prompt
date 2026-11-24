@@ -30,7 +30,7 @@ export async function registerDeveloper(
   email: string,
   password: string,
   name?: string,
-  company?: string
+  company?: string,
 ): Promise<DeveloperAuthResult> {
   // Check if email already exists
   const existing = await prisma.developer.findUnique({
@@ -116,7 +116,7 @@ export async function registerDeveloper(
 
 export async function loginDeveloper(
   email: string,
-  password: string
+  password: string,
 ): Promise<DeveloperAuthResult> {
   const developer = await prisma.developer.findUnique({
     where: { email: email.toLowerCase() },
@@ -259,7 +259,7 @@ export async function getDeveloperById(developerId: string) {
 
 export async function updateDeveloperProfile(
   developerId: string,
-  data: { name?: string; company?: string; website?: string }
+  data: { name?: string; company?: string; website?: string },
 ) {
   return prisma.developer.update({
     where: { id: developerId },
@@ -274,7 +274,7 @@ export async function updateDeveloperProfile(
 export async function changeDeveloperPassword(
   developerId: string,
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<void> {
   const developer = await prisma.developer.findUnique({
     where: { id: developerId },

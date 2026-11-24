@@ -94,32 +94,40 @@ const allowedOrigins = [
 // Add any custom origins from env
 const envOrigin = process.env['CORS_ORIGIN'];
 if (envOrigin && envOrigin !== '*') {
-  envOrigin.split(',').forEach(origin => {
+  envOrigin.split(',').forEach((origin) => {
     if (!allowedOrigins.includes(origin.trim())) {
       allowedOrigins.push(origin.trim());
     }
   });
 }
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) {
-      return callback(null, true);
-    }
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    // In development, allow any origin
-    if (process.env['NODE_ENV'] !== 'production') {
-      return callback(null, true);
-    }
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-ID', 'X-Admin-API-Key', 'X-API-Key'],
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      // In development, allow any origin
+      if (process.env['NODE_ENV'] !== 'production') {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Device-ID',
+      'X-Admin-API-Key',
+      'X-API-Key',
+    ],
+  }),
+);
 
 // Health endpoints must never be rate limited: under a traffic spike a 429 on
 // /health would make Railway consider the deploy unhealthy and restart it,
@@ -138,20 +146,26 @@ app.use(limiter);
 
 // Body parsing & compression
 app.use(compression());
-app.use(express.json({
-  limit: '10mb',
-  verify: (req, _res, buf) => {
-    const request = req as express.Request & { rawBody?: Buffer; originalUrl?: string; url?: string };
-    const requestPath = request.originalUrl || request.url || '';
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+      const request = req as express.Request & {
+        rawBody?: Buffer;
+        originalUrl?: string;
+        url?: string;
+      };
+      const requestPath = request.originalUrl || request.url || '';
 
-    if (
-      requestPath.startsWith('/api/v1/webhooks/api-stripe') ||
-      requestPath.startsWith('/api/v1/webhooks/resend/inbound')
-    ) {
-      request.rawBody = Buffer.from(buf);
-    }
-  },
-}));
+      if (
+        requestPath.startsWith('/api/v1/webhooks/api-stripe') ||
+        requestPath.startsWith('/api/v1/webhooks/resend/inbound')
+      ) {
+        request.rawBody = Buffer.from(buf);
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true }));
 
 // Structured request logging
@@ -238,30 +252,30 @@ initializeSocket(httpServer, allowedOrigins);
 
 // Start server immediately without blocking on database
 httpServer.listen(port, '0.0.0.0', () => {
-  logger.info({
-    port,
-    env: process.env['NODE_ENV'] || 'development',
-    database: process.env['DATABASE_URL'] ? 'configured' : 'NOT SET',
-  }, 'Server started with Socket.IO');
+  logger.info(
+    {
+      port,
+      env: process.env['NODE_ENV'] || 'development',
+      database: process.env['DATABASE_URL'] ? 'configured' : 'NOT SET',
+    },
+    'Server started with Socket.IO',
+  );
 
-  void resumePendingVariationGenerations()
-    .catch((error) => {
-      logger.error({ error }, 'Failed to resume pending variation generations');
-    });
+  void resumePendingVariationGenerations().catch((error) => {
+    logger.error({ error }, 'Failed to resume pending variation generations');
+  });
 
   // Probe optional columns once at boot so the first user request does not pay
   // the latency and so schema drift surfaces in startup logs immediately.
-  void warmSchemaCompatibilityCache()
-    .catch((error) => {
-      logger.error({ error }, 'Failed to warm schema compatibility cache');
-    });
+  void warmSchemaCompatibilityCache().catch((error) => {
+    logger.error({ error }, 'Failed to warm schema compatibility cache');
+  });
 
   // Assert the full drift-prone object set once at boot; any missing column or
   // table is error-logged with the complete list and captured in Sentry.
-  void assertExpectedSchemaAtBoot()
-    .catch((error) => {
-      logger.error({ error }, 'Failed to run boot-time schema assertion');
-    });
+  void assertExpectedSchemaAtBoot().catch((error) => {
+    logger.error({ error }, 'Failed to run boot-time schema assertion');
+  });
 });
 
 export default app;

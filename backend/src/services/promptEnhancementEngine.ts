@@ -18,23 +18,21 @@
  * - Leading AI model optimization guides
  */
 
-import { promptLogger } from '../utils/logger.js';
-import {
-  DEEPSEEK_THINKING_DISABLED,
-  getDeepseekModel,
-  type DeepSeekThinkingConfig,
-} from './deepseekModels.js';
-import {
-  MetaPromptBuilder,
-  type SubModality,
-  type TargetPlatform,
-} from './metaPrompts/index.js';
+import { requestCompletion, streamCompletion, type DeepSeekRequest } from './deepseekService.js';
+import { DEEPSEEK_THINKING_DISABLED, getDeepseekModel } from './deepseekModels.js';
+import { MetaPromptBuilder, type SubModality, type TargetPlatform } from './metaPrompts/index.js';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type PromptTone = 'professional' | 'casual' | 'academic' | 'creative' | 'technical' | 'friendly';
+export type PromptTone =
+  | 'professional'
+  | 'casual'
+  | 'academic'
+  | 'creative'
+  | 'technical'
+  | 'friendly';
 export type OutputLength = 'concise' | 'standard' | 'detailed';
 export type PromptModality = 'text' | 'image' | 'video' | 'audio' | 'code' | '3d';
 export type EnhancementTier = 'basic' | 'standard' | 'advanced';
@@ -71,7 +69,7 @@ export interface EnhancementResult {
 function buildEnhancementSystemPrompt(
   tier: EnhancementTier,
   modality: PromptModality,
-  request?: EnhancementRequest
+  request?: EnhancementRequest,
 ): string {
   // Always use V3 meta-prompt builder for all requests
   // V3 system has modality-aware, research-backed prompts that work well
@@ -547,7 +545,17 @@ NEVER:
 // ============================================================================
 
 function buildUserMessage(request: EnhancementRequest): string {
-  const { prompt, tier, modality = 'text', tone, length, customInstructions, subModality, targetPlatform, includeNegativeExamples } = request;
+  const {
+    prompt,
+    tier,
+    modality = 'text',
+    tone,
+    length,
+    customInstructions,
+    subModality,
+    targetPlatform,
+    includeNegativeExamples,
+  } = request;
 
   // Always use V3 meta-prompt builder for all requests
   // V3 system provides better modality-aware examples and constraints
@@ -604,37 +612,6 @@ Transform the original prompt into an optimized version. Return ONLY the enhance
 // ============================================================================
 // API CONFIGURATION
 // ============================================================================
-
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
-interface DeepSeekMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-interface DeepSeekRequest {
-  model: string;
-  messages: DeepSeekMessage[];
-  temperature: number;
-  max_tokens: number;
-  stream: boolean;
-  // Required on every request: V4 Flash defaults thinking ON and bills the
-  // chain-of-thought as output tokens, so it must be set explicitly.
-  thinking: DeepSeekThinkingConfig;
-}
-
-interface DeepSeekResponse {
-  id: string;
-  choices: Array<{
-    message: { role: string; content: string };
-    finish_reason: string;
-  }>;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
 
 // ============================================================================
 // MESSAGE BUILDING (shared with multi-provider compare)
@@ -701,54 +678,10 @@ export async function enhancePromptV2(request: EnhancementRequest): Promise<Enha
     thinking: DEEPSEEK_THINKING_DISABLED,
   };
 
-  const startTime = Date.now();
-
-  promptLogger.info({
-    tier,
-    modality,
-    promptLength: request.prompt.length,
-  }, 'Enhancing prompt with v2 engine');
-
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(deepseekRequest),
-  });
-
-  const processingMs = Date.now() - startTime;
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    promptLogger.error({ status: response.status, body: errorBody }, 'DeepSeek API error');
-    throw new Error(`DeepSeek API error: ${response.status} - ${errorBody}`);
-  }
-
-  const data = (await response.json()) as DeepSeekResponse;
-
-  const enhancedContent = data.choices[0]?.message?.content;
-  if (!enhancedContent) {
-    throw new Error('Empty response from DeepSeek API');
-  }
-
-  // Clean up any potential preamble the model might add
-  const cleanedContent = cleanEnhancedPrompt(enhancedContent);
-
-  promptLogger.info({
-    processingMs,
-    inputTokens: data.usage?.prompt_tokens,
-    outputTokens: data.usage?.completion_tokens,
-  }, 'Prompt enhanced successfully');
-
+  const result = await requestCompletion(deepseekRequest, apiKey, 'chat');
   return {
-    enhancedPrompt: cleanedContent,
-    model,
-    inputTokens: data.usage?.prompt_tokens || 0,
-    outputTokens: data.usage?.completion_tokens || 0,
-    totalTokens: data.usage?.total_tokens || 0,
-    processingMs,
+    ...result,
+    enhancedPrompt: cleanEnhancedPrompt(result.enhancedPrompt),
     techniqueApplied: `v2-${tier}-${modality}`,
   };
 }
@@ -758,18 +691,18 @@ export async function enhancePromptV2(request: EnhancementRequest): Promise<Enha
 // ============================================================================
 
 export interface StreamCallbacks {
-  onToken: (token: string) => void;
-  onComplete: (result: EnhancementResult) => void;
-  onError: (error: Error) => void;
+  onToken: (token: string) => void | Promise<void>;
+  onComplete: (result: EnhancementResult) => void | Promise<void>;
+  onError: (error: Error) => void | Promise<void>;
 }
 
 export async function enhancePromptV2Stream(
   request: EnhancementRequest,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<void> {
   const apiKey = process.env['DEEPSEEK_API_KEY'];
   if (!apiKey) {
-    callbacks.onError(new Error('DEEPSEEK_API_KEY environment variable not configured'));
+    await callbacks.onError(new Error('DEEPSEEK_API_KEY environment variable not configured'));
     return;
   }
 
@@ -796,83 +729,15 @@ export async function enhancePromptV2Stream(
     thinking: DEEPSEEK_THINKING_DISABLED,
   };
 
-  const startTime = Date.now();
-  let fullContent = '';
-  let inputTokens = 0;
-  let outputTokens = 0;
-
-  try {
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(deepseekRequest),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      promptLogger.error({ status: response.status, body: errorBody }, 'DeepSeek API streaming error');
-      callbacks.onError(new Error(`DeepSeek API error: ${response.status}`));
-      return;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      callbacks.onError(new Error('No response body'));
-      return;
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullContent += delta;
-              callbacks.onToken(delta);
-            }
-            if (parsed.usage) {
-              inputTokens = parsed.usage.prompt_tokens || 0;
-              outputTokens = parsed.usage.completion_tokens || 0;
-            }
-          } catch {
-            // Skip malformed JSON
-          }
-        }
-      }
-    }
-
-    const processingMs = Date.now() - startTime;
-    const cleanedContent = cleanEnhancedPrompt(fullContent);
-
-    callbacks.onComplete({
-      enhancedPrompt: cleanedContent,
-      model,
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      processingMs,
-      techniqueApplied: `v2-${tier}-${modality}`,
-    });
-  } catch (error) {
-    callbacks.onError(error instanceof Error ? error : new Error(String(error)));
-  }
+  await streamCompletion(deepseekRequest, apiKey, 'chat', {
+    ...callbacks,
+    onComplete: (result) =>
+      callbacks.onComplete({
+        ...result,
+        enhancedPrompt: cleanEnhancedPrompt(result.enhancedPrompt),
+        techniqueApplied: `v2-${tier}-${modality}`,
+      }),
+  });
 }
 
 // ============================================================================
@@ -938,7 +803,11 @@ export function detectModality(prompt: string): PromptModality {
   const lower = prompt.toLowerCase();
 
   // Image indicators
-  if (/\b(image|photo|picture|illustration|render|portrait|landscape|draw|paint|art|visual)\b/.test(lower)) {
+  if (
+    /\b(image|photo|picture|illustration|render|portrait|landscape|draw|paint|art|visual)\b/.test(
+      lower,
+    )
+  ) {
     return 'image';
   }
 

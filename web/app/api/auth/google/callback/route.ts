@@ -3,7 +3,8 @@ import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
 
@@ -73,7 +74,9 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Authentication failed' }))
       console.error('Google auth error:', error)
-      return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message || 'auth_failed')}`, request.url))
+      return NextResponse.redirect(
+        new URL(`/login?error=${encodeURIComponent(error.message || 'auth_failed')}`, request.url),
+      )
     }
 
     const data = await response.json()

@@ -24,7 +24,10 @@ interface SelectProps {
 }
 
 const Select = forwardRef<HTMLDivElement, SelectProps>(
-  ({ options, value, onChange, placeholder = 'Select...', label, error, disabled, className }, ref) => {
+  (
+    { options, value, onChange, placeholder = 'Select...', label, error, disabled, className },
+    ref,
+  ) => {
     const [isOpen, setIsOpen] = useState(false)
     const selectRef = useRef<HTMLDivElement>(null)
 
@@ -72,7 +75,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
               'focus:border-brand-indigo focus:outline-none focus:ring-2 focus:ring-brand-indigo/20',
               'disabled:cursor-not-allowed disabled:opacity-50',
               isOpen && 'border-brand-indigo ring-2 ring-brand-indigo/20',
-              error && 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+              error && 'border-red-500 focus:border-red-500 focus:ring-red-500/20',
             )}
             aria-haspopup="listbox"
             aria-expanded={isOpen}
@@ -90,7 +93,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
             <ChevronDown
               className={cn(
                 'h-4 w-4 text-[var(--text-tertiary)] transition-transform duration-200',
-                isOpen && 'rotate-180'
+                isOpen && 'rotate-180',
               )}
             />
           </button>
@@ -99,7 +102,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
             <div
               className={cn(
                 'absolute z-50 mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] py-1 shadow-lg',
-                'animate-in fade-in-0 zoom-in-95 duration-150'
+                'animate-in fade-in-0 zoom-in-95 duration-150',
               )}
               role="listbox"
             >
@@ -118,24 +121,24 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
                     'flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors',
                     'hover:bg-[var(--bg-tertiary)]',
                     option.disabled && 'cursor-not-allowed opacity-50',
-                    option.value === value && 'bg-brand-indigo/5'
+                    option.value === value && 'bg-brand-indigo/5',
                   )}
                   role="option"
                   aria-selected={option.value === value}
                 >
                   {option.icon}
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-[var(--text-primary)]">
                       {option.label}
                     </div>
                     {option.description && (
-                      <div className="text-xs text-[var(--text-tertiary)] truncate">
+                      <div className="truncate text-xs text-[var(--text-tertiary)]">
                         {option.description}
                       </div>
                     )}
                   </div>
                   {option.value === value && (
-                    <Check className="h-4 w-4 text-brand-indigo flex-shrink-0" />
+                    <Check className="h-4 w-4 flex-shrink-0 text-brand-indigo" />
                   )}
                 </button>
               ))}
@@ -145,7 +148,7 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
         {error && <p className="mt-1.5 text-sm text-red-500">{error}</p>}
       </div>
     )
-  }
+  },
 )
 Select.displayName = 'Select'
 

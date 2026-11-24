@@ -26,7 +26,7 @@ export interface AuthResponse {
 
 export interface RefreshResponse {
   accessToken: string
-  refreshToken: string
+  refreshToken?: string
   expiresIn: number
 }
 
@@ -40,6 +40,8 @@ export interface EnhanceRequest {
   temperature?: number
   customInstructions?: string
   deepThink?: boolean
+  mode?: 'standard' | 'max'
+  maxTokens?: number
   targetCharacterLength?: number
 }
 
@@ -56,14 +58,28 @@ export interface EnhanceResponse {
   }
 }
 
-export interface StreamEvent {
-  type: 'token' | 'complete' | 'error'
-  content?: string
-  prompt?: Prompt
-  usage?: PromptUsage
-  subscription?: EnhanceResponse['subscription']
-  error?: string
+/** A generated result may be usable even if history persistence failed. */
+export interface EnhancementResult {
+  id: string | null
+  originalPrompt: string
+  enhancedPrompt: string
+  modality: PromptModality
+  inputTokens: number | null
+  outputTokens: number | null
+  processingMs: number | null
+  isSaved: boolean
 }
+
+export type StreamEvent =
+  | { type: 'token'; content: string }
+  | {
+      type: 'complete'
+      prompt: EnhancementResult
+      warning?: string
+      usage?: PromptUsage
+      subscription?: EnhanceResponse['subscription']
+    }
+  | { type: 'error'; message: string }
 
 export interface PromptsListResponse {
   prompts: Prompt[]
@@ -104,7 +120,9 @@ export interface AddToCollectionRequest {
 }
 
 // Subscription
-export interface SubscriptionStatusResponse extends SubscriptionInfo {}
+export interface SubscriptionStatusResponse extends SubscriptionInfo {
+  autoRenewEnabled?: boolean
+}
 
 export interface TrialEligibilityResponse {
   eligible: boolean

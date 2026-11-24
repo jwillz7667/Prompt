@@ -26,17 +26,17 @@ export default function DevelopersOverviewPage() {
     <div className="space-y-8">
       {/* Quick Start Guide */}
       <div>
-        <h2 className="text-xl font-semibold text-primary mb-4">Quick Start</h2>
+        <h2 className="text-primary mb-4 text-xl font-semibold">Quick Start</h2>
         <Card className="overflow-hidden">
           <CardContent className="p-6">
             <ol className="space-y-6">
               <li className="flex gap-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent font-bold">
+                <span className="bg-accent/10 text-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-bold">
                   1
                 </span>
                 <div className="flex-1">
-                  <h3 className="font-medium text-primary">Get your API key</h3>
-                  <p className="text-sm text-muted mt-1">
+                  <h3 className="text-primary font-medium">Get your API key</h3>
+                  <p className="text-muted mt-1 text-sm">
                     Create an API key to authenticate your requests.
                   </p>
                   <Link href="/developers/keys">
@@ -48,19 +48,19 @@ export default function DevelopersOverviewPage() {
               </li>
 
               <li className="flex gap-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent font-bold">
+                <span className="bg-accent/10 text-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-bold">
                   2
                 </span>
                 <div className="flex-1">
-                  <h3 className="font-medium text-primary">Make your first request</h3>
-                  <p className="text-sm text-muted mt-1">
+                  <h3 className="text-primary font-medium">Make your first request</h3>
+                  <p className="text-muted mt-1 text-sm">
                     Use the /enhance endpoint to optimize prompts.
                   </p>
-                  <div className="mt-3 rounded-lg bg-secondary p-4 font-mono text-xs overflow-x-auto relative">
+                  <div className="bg-secondary relative mt-3 overflow-x-auto rounded-lg p-4 font-mono text-xs">
                     <pre className="text-primary">{curlExample}</pre>
                     <button
                       onClick={copyExample}
-                      className="absolute top-2 right-2 text-xs bg-tertiary hover:bg-border px-2 py-1 rounded"
+                      className="bg-tertiary hover:bg-border absolute right-2 top-2 rounded px-2 py-1 text-xs"
                     >
                       {copied ? 'Copied!' : 'Copy'}
                     </button>
@@ -69,12 +69,12 @@ export default function DevelopersOverviewPage() {
               </li>
 
               <li className="flex gap-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent font-bold">
+                <span className="bg-accent/10 text-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-bold">
                   3
                 </span>
                 <div className="flex-1">
-                  <h3 className="font-medium text-primary">Try the playground</h3>
-                  <p className="text-sm text-muted mt-1">
+                  <h3 className="text-primary font-medium">Try the playground</h3>
+                  <p className="text-muted mt-1 text-sm">
                     Test the API interactively and see example responses.
                   </p>
                   <Link href="/developers/playground">
@@ -91,39 +91,39 @@ export default function DevelopersOverviewPage() {
 
       {/* Stats Overview */}
       <div>
-        <h2 className="text-xl font-semibold text-primary mb-4">Overview</h2>
+        <h2 className="text-primary mb-4 text-xl font-semibold">Overview</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardContent className="p-6">
-              <div className="text-sm text-muted">Current Plan</div>
-              <div className="mt-2 text-2xl font-bold text-primary">
+              <div className="text-muted text-sm">Current Plan</div>
+              <div className="text-primary mt-2 text-2xl font-bold">
                 {subLoading ? '...' : subscription?.tier?.replace('API_', '') || 'FREE'}
               </div>
               <Link href="/developers/billing">
-                <span className="text-xs text-accent hover:underline">Upgrade</span>
+                <span className="text-accent text-xs hover:underline">Upgrade</span>
               </Link>
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-6">
-              <div className="text-sm text-muted">API Keys</div>
-              <div className="mt-2 text-2xl font-bold text-primary">
-                {keysLoading ? '...' : apiKeys?.filter(k => k.isActive).length || 0}
+              <div className="text-muted text-sm">API Keys</div>
+              <div className="text-primary mt-2 text-2xl font-bold">
+                {keysLoading ? '...' : apiKeys?.filter((k) => k.isActive).length || 0}
               </div>
               <Link href="/developers/keys">
-                <span className="text-xs text-accent hover:underline">Manage</span>
+                <span className="text-accent text-xs hover:underline">Manage</span>
               </Link>
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-6">
-              <div className="text-sm text-muted">Requests This Month</div>
-              <div className="mt-2 text-2xl font-bold text-primary">
+              <div className="text-muted text-sm">Requests This Month</div>
+              <div className="text-primary mt-2 text-2xl font-bold">
                 {subLoading ? '...' : subscription?.usage?.totalRequests?.toLocaleString() || 0}
               </div>
-              <span className="text-xs text-muted">
+              <span className="text-muted text-xs">
                 of{' '}
                 {subscription?.quota?.limit === 'unlimited'
                   ? '∞'
@@ -134,23 +134,25 @@ export default function DevelopersOverviewPage() {
 
           <Card>
             <CardContent className="p-6">
-              <div className="text-sm text-muted">Prepaid Credits</div>
-              <div className="mt-2 text-2xl font-bold text-primary">
-                {subLoading ? '...' : subscription?.credits?.purchasedRemaining?.toLocaleString() || 0}
+              <div className="text-muted text-sm">Prepaid Credits</div>
+              <div className="text-primary mt-2 text-2xl font-bold">
+                {subLoading
+                  ? '...'
+                  : subscription?.credits?.purchasedRemaining?.toLocaleString() || 0}
               </div>
               <Link href="/developers/billing">
-                <span className="text-xs text-accent hover:underline">Buy more</span>
+                <span className="text-accent text-xs hover:underline">Buy more</span>
               </Link>
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-6">
-              <div className="text-sm text-muted">Rate Limit</div>
-              <div className="mt-2 text-2xl font-bold text-primary">
+              <div className="text-muted text-sm">Rate Limit</div>
+              <div className="text-primary mt-2 text-2xl font-bold">
                 {subLoading ? '...' : subscription?.rateLimit?.requestsPerMinute || 10}
               </div>
-              <span className="text-xs text-muted">requests/minute</span>
+              <span className="text-muted text-xs">requests/minute</span>
             </CardContent>
           </Card>
         </div>
@@ -158,24 +160,26 @@ export default function DevelopersOverviewPage() {
 
       {/* Resources */}
       <div>
-        <h2 className="text-xl font-semibold text-primary mb-4">Resources</h2>
+        <h2 className="text-primary mb-4 text-xl font-semibold">Resources</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="hover:border-accent transition-colors">
             <a href="/api/v1/docs/openapi.json" target="_blank" rel="noopener">
               <CardContent className="p-6">
-                <div className="text-2xl mb-2">📄</div>
-                <h3 className="font-medium text-primary">API Reference</h3>
-                <p className="text-sm text-muted mt-1">OpenAPI specification and endpoint details</p>
+                <div className="mb-2 text-2xl">📄</div>
+                <h3 className="text-primary font-medium">API Reference</h3>
+                <p className="text-muted mt-1 text-sm">
+                  OpenAPI specification and endpoint details
+                </p>
               </CardContent>
             </a>
           </Card>
 
           <Link href="/docs">
-            <Card className="hover:border-accent transition-colors h-full">
+            <Card className="hover:border-accent h-full transition-colors">
               <CardContent className="p-6">
-                <div className="text-2xl mb-2">📚</div>
-                <h3 className="font-medium text-primary">Documentation</h3>
-                <p className="text-sm text-muted mt-1">Guides, tutorials, and best practices</p>
+                <div className="mb-2 text-2xl">📚</div>
+                <h3 className="text-primary font-medium">Documentation</h3>
+                <p className="text-muted mt-1 text-sm">Guides, tutorials, and best practices</p>
               </CardContent>
             </Card>
           </Link>
@@ -183,9 +187,9 @@ export default function DevelopersOverviewPage() {
           <Card className="hover:border-accent transition-colors">
             <a href="https://github.com/promptomize/api-examples" target="_blank" rel="noopener">
               <CardContent className="p-6">
-                <div className="text-2xl mb-2">💻</div>
-                <h3 className="font-medium text-primary">Code Examples</h3>
-                <p className="text-sm text-muted mt-1">Sample integrations in popular languages</p>
+                <div className="mb-2 text-2xl">💻</div>
+                <h3 className="text-primary font-medium">Code Examples</h3>
+                <p className="text-muted mt-1 text-sm">Sample integrations in popular languages</p>
               </CardContent>
             </a>
           </Card>

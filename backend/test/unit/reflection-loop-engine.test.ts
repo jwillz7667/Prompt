@@ -258,7 +258,7 @@ describe('reflection loop engine', () => {
     await engine.optimize({ rawPrompt: ORIGINAL_PROMPT });
 
     for (const call of mock.calls) {
-      expect(call.model).toBe('deepseek-v4-flash');
+      expect(call.model).toBe('deepseek-flash');
     }
 
     const intake = mock.callsFor('intake')[0];

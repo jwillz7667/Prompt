@@ -32,11 +32,21 @@ final class SwiftDataManager {
             LocalPromptRecord.self,
         ])
 
+        // ModelConfiguration traps before throwing when an App Group is absent
+        // (for example an unsigned simulator or a mismatched provisioning profile).
+        let appGroupID = "group.com.res.promptomizer"
+        #if targetEnvironment(simulator)
+        let hasSharedContainer = false
+        #else
+        let hasSharedContainer = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupID
+        ) != nil
+        #endif
         let primaryConfig = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
             allowsSave: true,
-            groupContainer: .identifier("group.com.res.promptomizer"),
+            groupContainer: hasSharedContainer ? .identifier(appGroupID) : .none,
             cloudKitDatabase: .none  // Disable CloudKit - use local storage only
         )
 
@@ -59,7 +69,9 @@ final class SwiftDataManager {
             let fallbackConfig = ModelConfiguration(
                 schema: schema,
                 isStoredInMemoryOnly: true,
-                allowsSave: true
+                allowsSave: true,
+                groupContainer: .none,
+                cloudKitDatabase: .none
             )
 
             do {

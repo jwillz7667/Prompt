@@ -4,17 +4,14 @@ import {
   SignedDataVerifier,
   VerificationException,
   VerificationStatus,
-  JWSTransactionDecodedPayload,
-  JWSRenewalInfoDecodedPayload,
+  type JWSTransactionDecodedPayload,
   NotificationTypeV2,
   Subtype,
-  DecodedSignedData,
   Order,
 } from '@apple/app-store-server-library';
 import { prisma } from '../utils/prisma.js';
 import {
   updateSubscription,
-  cancelSubscription,
   handleGracePeriod,
   getTierFromProductId,
   invalidateSubscriptionCaches,
@@ -34,9 +31,7 @@ const APPLE_BUNDLE_ID = process.env['APPLE_BUNDLE_ID'] || 'com.res.promptomizer'
 const APPLE_APP_ID = process.env['APPLE_APP_ID'] || '';
 
 const environment =
-  process.env['NODE_ENV'] === 'production'
-    ? Environment.PRODUCTION
-    : Environment.SANDBOX;
+  process.env['NODE_ENV'] === 'production' ? Environment.PRODUCTION : Environment.SANDBOX;
 
 // TestFlight builds always produce Sandbox-signed transactions, so a
 // production-pinned verifier rejects every TestFlight purchase. Sandbox JWS
@@ -45,8 +40,7 @@ const environment =
 // TestFlight testers get entitlements without being charged (IAP is always
 // free in TestFlight). The transaction's environment is persisted on
 // AppStoreTransaction for auditability. Set to 'false' to opt out.
-const ACCEPT_SANDBOX_TRANSACTIONS =
-  process.env['APPLE_ACCEPT_SANDBOX_TRANSACTIONS'] !== 'false';
+const ACCEPT_SANDBOX_TRANSACTIONS = process.env['APPLE_ACCEPT_SANDBOX_TRANSACTIONS'] !== 'false';
 
 // Root CA certificates for App Store (embedded for reliability)
 const APPLE_ROOT_CA_G3 = `-----BEGIN CERTIFICATE-----
@@ -83,7 +77,7 @@ function getApiClient(): AppStoreServerAPIClient {
       APPLE_KEY_ID,
       APPLE_ISSUER_ID,
       APPLE_BUNDLE_ID,
-      environment
+      environment,
     );
   }
   return apiClient;
@@ -102,7 +96,7 @@ function getSignedDataVerifier(targetEnvironment: Environment = environment): Si
         ? undefined
         : APPLE_APP_ID
           ? parseInt(APPLE_APP_ID, 10)
-          : undefined
+          : undefined,
     );
     verifiersByEnvironment.set(targetEnvironment, verifier);
   }
@@ -129,7 +123,7 @@ function isSandboxPayloadRejection(error: unknown): boolean {
  * actually verified so nested payloads can be decoded consistently.
  */
 async function verifyWithEnvironmentFallback<T>(
-  verify: (verifier: SignedDataVerifier) => Promise<T>
+  verify: (verifier: SignedDataVerifier) => Promise<T>,
 ): Promise<{ payload: T; verifiedEnvironment: Environment }> {
   try {
     return { payload: await verify(getSignedDataVerifier()), verifiedEnvironment: environment };
@@ -140,7 +134,7 @@ async function verifyWithEnvironmentFallback<T>(
       isSandboxPayloadRejection(error)
     ) {
       storeLogger.info(
-        'Payload rejected by production verifier - retrying with sandbox verifier (TestFlight purchase)'
+        'Payload rejected by production verifier - retrying with sandbox verifier (TestFlight purchase)',
       );
       try {
         return {
@@ -174,12 +168,12 @@ export interface VerifiedTransaction {
 }
 
 export async function verifySignedTransaction(
-  signedTransaction: string
+  signedTransaction: string,
 ): Promise<VerifiedTransaction> {
   // Verify and decode the signed transaction (production first, sandbox
   // fallback for TestFlight purchases)
-  const { payload: decodedTransaction } = await verifyWithEnvironmentFallback(
-    (verifier) => verifier.verifyAndDecodeTransaction(signedTransaction)
+  const { payload: decodedTransaction } = await verifyWithEnvironmentFallback((verifier) =>
+    verifier.verifyAndDecodeTransaction(signedTransaction),
   );
 
   return {
@@ -205,57 +199,130 @@ export async function verifySignedTransaction(
 // RECEIPT PROCESSING
 // ============================================================================
 
+export class PurchaseValidationError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'TRANSACTION_INVALID' | 'TRANSACTION_OWNED_BY_ANOTHER_USER',
+    readonly statusCode: number = 400,
+  ) {
+    super(message);
+    this.name = 'PurchaseValidationError';
+  }
+}
+
+export function validateSubscriptionTransaction(
+  transaction: VerifiedTransaction,
+): asserts transaction is VerifiedTransaction & { expirationDate: Date } {
+  if (
+    !transaction.transactionId ||
+    !transaction.originalTransactionId ||
+    getTierFromProductId(transaction.productId) === SubscriptionTier.FREE ||
+    transaction.type !== 'Auto-Renewable Subscription' ||
+    !transaction.expirationDate ||
+    !Number.isFinite(transaction.expirationDate.getTime()) ||
+    !Number.isFinite(transaction.purchaseDate.getTime())
+  ) {
+    throw new PurchaseValidationError('Invalid subscription transaction', 'TRANSACTION_INVALID');
+  }
+}
+
 export async function processVerifiedTransaction(
   userId: string,
-  transaction: VerifiedTransaction
+  transaction: VerifiedTransaction,
 ): Promise<void> {
-  // Store the transaction record
-  await prisma.appStoreTransaction.upsert({
-    where: { transactionId: transaction.transactionId },
-    update: {
-      expirationDate: transaction.expirationDate,
-      revocationDate: transaction.revocationDate,
-    },
-    create: {
-      userId,
-      transactionId: transaction.transactionId,
-      originalTransactionId: transaction.originalTransactionId,
-      productId: transaction.productId,
-      type: transaction.type,
-      purchaseDate: transaction.purchaseDate,
-      expirationDate: transaction.expirationDate,
-      environment: transaction.environment,
-    },
-  });
+  validateSubscriptionTransaction(transaction);
 
-  // Update subscription based on transaction
-  const tier = getTierFromProductId(transaction.productId);
+  await prisma.$transaction(async (tx) => {
+    // Serialize claims across devices/users. Ownership checks and entitlement writes
+    // must commit together so a replay cannot grant the same purchase twice.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`appstore:${transaction.originalTransactionId}`}, 0))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`subscription:${userId}`}, 0))`;
+    const [owner, subscriptionOwner, current, latestTransaction, existingTransaction] =
+      await Promise.all([
+        tx.appStoreTransaction.findFirst({
+          where: {
+            OR: [
+              { transactionId: transaction.transactionId },
+              { originalTransactionId: transaction.originalTransactionId },
+            ],
+            userId: { not: userId },
+          },
+        }),
+        tx.subscription.findUnique({
+          where: { originalTransactionId: transaction.originalTransactionId },
+        }),
+        tx.subscription.findUnique({ where: { userId } }),
+        tx.appStoreTransaction.findFirst({ where: { userId }, orderBy: { purchaseDate: 'desc' } }),
+        tx.appStoreTransaction.findUnique({ where: { transactionId: transaction.transactionId } }),
+      ]);
+    if (owner || (subscriptionOwner && subscriptionOwner.userId !== userId)) {
+      throw new PurchaseValidationError(
+        'This purchase is linked to another account',
+        'TRANSACTION_OWNED_BY_ANOTHER_USER',
+        409,
+      );
+    }
 
-  // If transaction was revoked, downgrade to free
-  if (transaction.revocationDate) {
-    await updateSubscription(userId, {
-      tier: SubscriptionTier.FREE,
-      status: SubscriptionStatus.CANCELED,
-      productId: transaction.productId,
-      originalTransactionId: transaction.originalTransactionId,
-      expiresAt: null,
-      autoRenewEnabled: false,
+    // A replay of a pre-refund JWS must not undo a verified revocation.
+    const revocationDate =
+      transaction.revocationDate || existingTransaction?.revocationDate || null;
+    await tx.appStoreTransaction.upsert({
+      where: { transactionId: transaction.transactionId },
+      update: { expirationDate: transaction.expirationDate, revocationDate },
+      create: {
+        userId,
+        transactionId: transaction.transactionId,
+        originalTransactionId: transaction.originalTransactionId,
+        productId: transaction.productId,
+        type: transaction.type,
+        purchaseDate: transaction.purchaseDate,
+        expirationDate: transaction.expirationDate,
+        revocationDate: transaction.revocationDate,
+        environment: transaction.environment,
+      },
     });
-    return;
-  }
 
-  // If transaction is active and not expired
-  const now = new Date();
-  const isActive = !transaction.expirationDate || transaction.expirationDate > now;
-
-  await updateSubscription(userId, {
-    tier: isActive ? tier : SubscriptionTier.FREE,
-    status: isActive ? SubscriptionStatus.ACTIVE : SubscriptionStatus.EXPIRED,
-    productId: transaction.productId,
-    originalTransactionId: transaction.originalTransactionId,
-    expiresAt: transaction.expirationDate,
-    autoRenewEnabled: isActive,
+    // An old restore/notification must not replace a newer renewal or an upgrade.
+    if (
+      transaction.isUpgraded ||
+      (latestTransaction && latestTransaction.purchaseDate > transaction.purchaseDate) ||
+      (current?.stripeSubscriptionId &&
+        !current.originalTransactionId &&
+        current.tier !== SubscriptionTier.FREE &&
+        current.expiresAt &&
+        current.expiresAt > new Date())
+    ) {
+      return;
+    }
+    const active = !revocationDate && transaction.expirationDate > new Date();
+    const tier = active ? getTierFromProductId(transaction.productId) : SubscriptionTier.FREE;
+    const data = {
+      tier,
+      status: revocationDate
+        ? SubscriptionStatus.CANCELED
+        : active
+          ? SubscriptionStatus.ACTIVE
+          : SubscriptionStatus.EXPIRED,
+      productId: transaction.productId,
+      originalTransactionId: transaction.originalTransactionId,
+      stripeSubscriptionId: null,
+      stripePriceId: null,
+      cancelAtPeriodEnd: false,
+      expiresAt: transaction.expirationDate,
+      // A transaction doesn't describe renewal intent. Preserve the last verified
+      // renewal state until a renewal-status notification arrives.
+      autoRenewEnabled: active && (current?.autoRenewEnabled ?? true),
+      isTrialing: false,
+      trialEndDate: null,
+      gracePeriodEndDate: null,
+    };
+    await tx.subscription.upsert({ where: { userId }, update: data, create: { userId, ...data } });
+    await tx.user.update({
+      where: { id: userId },
+      data: { subscriptionTier: tier, isPremium: active },
+    });
   });
+  await invalidateSubscriptionCaches(userId);
 }
 
 // ============================================================================
@@ -272,21 +339,25 @@ export interface NotificationPayload {
 }
 
 export async function processAppStoreNotification(
-  signedPayload: string
+  signedPayload: string,
 ): Promise<{ success: boolean; message: string }> {
   try {
     // Verify and decode the notification (production first, sandbox fallback
     // — Apple sends Sandbox-signed notifications for TestFlight purchases).
     // Nested payloads below must be decoded with the same environment.
-    const { payload: notification, verifiedEnvironment } =
-      await verifyWithEnvironmentFallback((v) => v.verifyAndDecodeNotification(signedPayload));
+    const { payload: notification, verifiedEnvironment } = await verifyWithEnvironmentFallback(
+      (v) => v.verifyAndDecodeNotification(signedPayload),
+    );
     const verifier = getSignedDataVerifier(verifiedEnvironment);
 
     const notificationType = notification.notificationType;
     const subtype = notification.subtype;
     const data = notification.data;
 
-    storeLogger.info({ notificationType, subtype: subtype || 'none' }, 'Processing App Store notification');
+    storeLogger.info(
+      { notificationType, subtype: subtype || 'none' },
+      'Processing App Store notification',
+    );
 
     // Extract transaction info
     let transaction: VerifiedTransaction | null = null;
@@ -314,11 +385,30 @@ export async function processAppStoreNotification(
     }
 
     if (!userId) {
-      storeLogger.warn({
-        notificationType,
-        originalTransactionId: transaction?.originalTransactionId,
-      }, 'Could not find user for notification');
+      storeLogger.warn(
+        {
+          notificationType,
+          originalTransactionId: transaction?.originalTransactionId,
+        },
+        'Could not find user for notification',
+      );
       return { success: true, message: 'User not found, notification acknowledged' };
+    }
+
+    if (transaction) {
+      const current = await prisma.subscription.findUnique({ where: { userId } });
+      const latest = await prisma.appStoreTransaction.findFirst({
+        where: { userId },
+        orderBy: { purchaseDate: 'desc' },
+      });
+      if (
+        (current?.originalTransactionId &&
+          current.originalTransactionId !== transaction.originalTransactionId) ||
+        (current?.stripeSubscriptionId && !current.originalTransactionId) ||
+        (latest && latest.purchaseDate > transaction.purchaseDate)
+      ) {
+        return { success: true, message: 'Ignored superseded subscription notification' };
+      }
     }
 
     // Handle different notification types
@@ -374,23 +464,22 @@ export async function processAppStoreNotification(
         break;
 
       case NotificationTypeV2.DID_FAIL_TO_RENEW:
-        if (subtype === Subtype.GRACE_PERIOD && transaction?.expirationDate) {
-          const gracePeriodEndDate = new Date(transaction.expirationDate);
-          gracePeriodEndDate.setDate(gracePeriodEndDate.getDate() + 16); // 16-day grace period
-          await handleGracePeriod(userId, gracePeriodEndDate);
+        if (subtype === Subtype.GRACE_PERIOD && data?.signedRenewalInfo) {
+          const renewalInfo = await verifier.verifyAndDecodeRenewalInfo(data.signedRenewalInfo);
+          if (renewalInfo.gracePeriodExpiresDate) {
+            await handleGracePeriod(userId, new Date(renewalInfo.gracePeriodExpiresDate));
+          }
         }
         break;
 
       case NotificationTypeV2.REFUND:
       case NotificationTypeV2.REVOKE:
-        await updateSubscription(userId, {
-          tier: SubscriptionTier.FREE,
-          status: SubscriptionStatus.CANCELED,
-          productId: transaction?.productId || '',
-          originalTransactionId: transaction?.originalTransactionId || '',
-          expiresAt: null,
-          autoRenewEnabled: false,
-        });
+        if (transaction) {
+          await processVerifiedTransaction(userId, {
+            ...transaction,
+            revocationDate: transaction.revocationDate || new Date(),
+          });
+        }
         break;
 
       case NotificationTypeV2.DID_CHANGE_RENEWAL_PREF:
@@ -424,7 +513,7 @@ export async function processAppStoreNotification(
 // ============================================================================
 
 export async function getTransactionHistory(
-  originalTransactionId: string
+  originalTransactionId: string,
 ): Promise<JWSTransactionDecodedPayload[]> {
   const client = getApiClient();
   const verifier = getSignedDataVerifier();
@@ -433,19 +522,21 @@ export async function getTransactionHistory(
   let revision: string | undefined;
 
   do {
-    const response = await client.getTransactionHistory(
-      originalTransactionId,
-      revision ?? null,
-      { sort: Order.DESCENDING }
-    );
+    const response = await client.getTransactionHistory(originalTransactionId, revision ?? null, {
+      sort: Order.DESCENDING,
+    });
 
     for (const signedTransaction of response.signedTransactions || []) {
       const decoded = await verifier.verifyAndDecodeTransaction(signedTransaction);
       transactions.push(decoded);
     }
 
+    if (!response.hasMore) break;
+    if (!response.revision || response.revision === revision) {
+      throw new Error('App Store transaction history did not advance');
+    }
     revision = response.revision;
-  } while (revision);
+  } while (true);
 
   return transactions;
 }
@@ -454,9 +545,7 @@ export async function getTransactionHistory(
 // SUBSCRIPTION STATUS
 // ============================================================================
 
-export async function getSubscriptionStatus(
-  originalTransactionId: string
-): Promise<{
+export async function getSubscriptionStatus(originalTransactionId: string): Promise<{
   status: 'active' | 'expired' | 'billing_retry' | 'billing_grace_period' | 'revoked';
   expiresDate: Date | null;
   autoRenewEnabled: boolean;
@@ -472,7 +561,8 @@ export async function getSubscriptionStatus(
       if (item.originalTransactionId === originalTransactionId) {
         const decoded = await verifier.verifyAndDecodeTransaction(item.signedTransactionInfo || '');
 
-        let status: 'active' | 'expired' | 'billing_retry' | 'billing_grace_period' | 'revoked' = 'expired';
+        let status: 'active' | 'expired' | 'billing_retry' | 'billing_grace_period' | 'revoked' =
+          'expired';
 
         switch (item.status) {
           case 1:
@@ -495,7 +585,10 @@ export async function getSubscriptionStatus(
         return {
           status,
           expiresDate: decoded.expiresDate ? new Date(decoded.expiresDate) : null,
-          autoRenewEnabled: Boolean(decoded.isUpgraded), // Note: This would need renewal info
+          autoRenewEnabled: item.signedRenewalInfo
+            ? (await verifier.verifyAndDecodeRenewalInfo(item.signedRenewalInfo))
+                .autoRenewStatus === 1
+            : false,
         };
       }
     }

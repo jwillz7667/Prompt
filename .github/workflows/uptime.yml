@@ -24,7 +24,7 @@ jobs:
       # backend is genuinely unhealthy.
       - name: Probe /health
         run: |
-          URL="https://backend-production-d538.up.railway.app/health"
+          URL="https://backend-production-d7487.up.railway.app/health"
           for attempt in 1 2 3; do
             code=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 15 "$URL" || echo "000")
             echo "Attempt ${attempt}/3: HTTP ${code}"

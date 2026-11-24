@@ -1,7 +1,14 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useSubscriptionStore, useIsPremium, useIsPro, useCanCreatePrompt, useDailyUsage, useCanExport } from '@/lib/stores/subscriptionStore'
+import {
+  useSubscriptionStore,
+  useIsPremium,
+  useIsPro,
+  useCanCreatePrompt,
+  useDailyUsage,
+  useCanExport,
+} from '@/lib/stores/subscriptionStore'
 import { useAuthStore } from '@/lib/stores/authStore'
 
 export function useSubscription() {
@@ -10,6 +17,7 @@ export function useSubscription() {
     subscription,
     usage,
     features,
+    billingProvider,
     isLoading,
     error,
     trialEligible,
@@ -30,6 +38,7 @@ export function useSubscription() {
     subscription,
     usage,
     features,
+    billingProvider,
     isLoading,
     error,
     trialEligible,

@@ -5,7 +5,12 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { validateApiKey, hasPermission, type ValidatedApiKey, type ApiKeyPermission } from '../services/apiKeyService.js';
+import {
+  validateApiKey,
+  hasPermission,
+  type ValidatedApiKey,
+  type ApiKeyPermission,
+} from '../services/apiKeyService.js';
 import { logger } from '../utils/logger.js';
 import { prisma } from '../utils/prisma.js';
 
@@ -28,7 +33,7 @@ export interface ApiKeyRequest extends Request {
 export const apiKeyAuth = async (
   req: ApiKeyRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const apiKey = req.headers['x-api-key'];
@@ -60,7 +65,10 @@ export const apiKeyAuth = async (
     });
 
     if (!developer?.isActive || !developer.emailVerified) {
-      logger.warn({ developerId: validated.developerId }, 'Blocked API key for inactive or unverified developer');
+      logger.warn(
+        { developerId: validated.developerId },
+        'Blocked API key for inactive or unverified developer',
+      );
       res.status(403).json({
         error: 'Developer account is not verified',
         code: 'DEVELOPER_NOT_VERIFIED',
@@ -99,7 +107,7 @@ export const requirePermission = (permission: ApiKeyPermission) => {
     if (!hasPermission(req.apiKey, permission)) {
       logger.warn(
         { keyId: req.apiKey.id, permission, permissions: req.apiKey.permissions },
-        'Permission denied'
+        'Permission denied',
       );
       res.status(403).json({
         error: 'Permission denied',
@@ -122,7 +130,7 @@ export const requirePermission = (permission: ApiKeyPermission) => {
 export const optionalApiKeyAuth = async (
   req: ApiKeyRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const apiKey = req.headers['x-api-key'];

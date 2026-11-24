@@ -64,13 +64,15 @@ export async function supportsThreadTurnImageAttachmentColumn(): Promise<boolean
     return threadTurnImageAttachmentSupport;
   }
 
-  threadTurnProbeInFlight ??= probeColumn('ThreadTurn', 'imageAttachment').then(({ known, exists }) => {
-    if (known) {
-      threadTurnImageAttachmentSupport = exists;
-    }
-    threadTurnProbeInFlight = null;
-    return exists;
-  });
+  threadTurnProbeInFlight ??= probeColumn('ThreadTurn', 'imageAttachment').then(
+    ({ known, exists }) => {
+      if (known) {
+        threadTurnImageAttachmentSupport = exists;
+      }
+      threadTurnProbeInFlight = null;
+      return exists;
+    },
+  );
 
   return threadTurnProbeInFlight;
 }
@@ -176,11 +178,11 @@ export async function assertExpectedSchemaAtBoot(): Promise<SchemaAssertionResul
     const presentTables = new Set(tableRows.map((row) => row.table_name));
 
     const missing = [
-      ...EXPECTED_COLUMNS.filter(({ table, column }) => !presentColumns.has(`${table}.${column}`)).map(
-        ({ table, column }) => `${table}.${column}`
-      ),
+      ...EXPECTED_COLUMNS.filter(
+        ({ table, column }) => !presentColumns.has(`${table}.${column}`),
+      ).map(({ table, column }) => `${table}.${column}`),
       ...EXPECTED_TABLES.filter((table) => !presentTables.has(table)).map(
-        (table) => `${table} (table)`
+        (table) => `${table} (table)`,
       ),
     ];
 
@@ -188,7 +190,7 @@ export async function assertExpectedSchemaAtBoot(): Promise<SchemaAssertionResul
       logError('SCHEMA_DRIFT: live database is missing expected objects', undefined, { missing });
       captureError(
         new Error(`SCHEMA_DRIFT: live database is missing expected objects: ${missing.join(', ')}`),
-        { missing }
+        { missing },
       );
     } else {
       logInfo('Boot-time schema assertion passed', {

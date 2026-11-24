@@ -2,30 +2,32 @@ export default function ModelsEndpointPage() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <span className="bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded text-xs font-medium">
+        <div className="mb-2 flex items-center gap-3">
+          <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600">
             GET
           </span>
-          <code className="text-lg text-primary">/public/models</code>
+          <code className="text-primary text-lg">/public/models</code>
         </div>
-        <p className="text-lg text-muted">List available modalities, tones, and configuration options.</p>
+        <p className="text-muted text-lg">
+          List available modalities, tones, and configuration options.
+        </p>
       </div>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Example Request</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`curl https://api.promptomize.app/api/v1/public/models \\
+        <h2 className="text-primary text-2xl font-semibold">Example Request</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`curl https://api.promptomize.app/api/v1/public/models \\
   -H "X-API-Key: pk_live_your_api_key"`}
           </pre>
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Response</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`{
+        <h2 className="text-primary text-2xl font-semibold">Response</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`{
   "modalities": [
     { "id": "text", "name": "Text", "description": "General text and writing" },
     { "id": "image", "name": "Image", "description": "Image generation prompts" },
@@ -58,7 +60,7 @@ export default function ModelsEndpointPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Modalities</h2>
+        <h2 className="text-primary text-2xl font-semibold">Modalities</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[
             { id: 'text', name: 'Text', desc: 'General writing, emails, articles' },
@@ -68,10 +70,10 @@ export default function ModelsEndpointPage() {
             { id: 'code', name: 'Code', desc: 'Programming and development' },
             { id: '3d', name: '3D', desc: '3D model generation' },
           ].map((m) => (
-            <div key={m.id} className="rounded-lg border border-border p-4">
-              <code className="text-sm text-accent">{m.id}</code>
-              <h3 className="font-medium text-primary mt-1">{m.name}</h3>
-              <p className="text-sm text-muted mt-1">{m.desc}</p>
+            <div key={m.id} className="border-border rounded-lg border p-4">
+              <code className="text-accent text-sm">{m.id}</code>
+              <h3 className="text-primary mt-1 font-medium">{m.name}</h3>
+              <p className="text-muted mt-1 text-sm">{m.desc}</p>
             </div>
           ))}
         </div>

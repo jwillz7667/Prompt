@@ -2,7 +2,8 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
 const ACCESS_SECRET = process.env['JWT_ACCESS_SECRET'] || 'dev-access-secret-change-in-production';
-const REFRESH_SECRET = process.env['JWT_REFRESH_SECRET'] || 'dev-refresh-secret-change-in-production';
+const REFRESH_SECRET =
+  process.env['JWT_REFRESH_SECRET'] || 'dev-refresh-secret-change-in-production';
 
 if (process.env['NODE_ENV'] === 'production') {
   if (!process.env['JWT_ACCESS_SECRET'] || !process.env['JWT_REFRESH_SECRET']) {
@@ -27,11 +28,19 @@ export interface DecodedToken extends TokenPayload {
 }
 
 export const generateAccessToken = (payload: TokenPayload): string => {
-  return jwt.sign(payload, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRY });
+  return jwt.sign(payload, ACCESS_SECRET, {
+    expiresIn: ACCESS_EXPIRY,
+    jwtid: uuidv4(),
+    algorithm: 'HS256',
+  });
 };
 
 export const generateRefreshToken = (payload: TokenPayload): string => {
-  return jwt.sign(payload, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRY });
+  return jwt.sign(payload, REFRESH_SECRET, {
+    expiresIn: REFRESH_EXPIRY,
+    jwtid: uuidv4(),
+    algorithm: 'HS256',
+  });
 };
 
 export const verifyAccessToken = (token: string): DecodedToken => {
@@ -42,8 +51,10 @@ export const verifyRefreshToken = (token: string): DecodedToken => {
   return jwt.verify(token, REFRESH_SECRET) as DecodedToken;
 };
 
-export const generateTokenPair = (payload: Omit<TokenPayload, 'sessionId'>) => {
-  const sessionId = uuidv4();
+export const generateTokenPair = (
+  payload: Omit<TokenPayload, 'sessionId'> & { sessionId?: string },
+) => {
+  const sessionId = payload.sessionId ?? uuidv4();
   const tokenPayload: TokenPayload = { ...payload, sessionId };
 
   return {

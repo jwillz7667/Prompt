@@ -1,6 +1,7 @@
 import type { RefreshResponse, APIError } from '@/lib/types/api'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d538.up.railway.app/api/v1'
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-d7487.up.railway.app/api/v1'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -9,6 +10,7 @@ interface RequestOptions {
   body?: unknown
   headers?: Record<string, string>
   skipAuth?: boolean
+  local?: boolean
 }
 
 interface TokenStore {
@@ -24,9 +26,23 @@ let tokenStore: TokenStore = {
 }
 
 let refreshPromise: Promise<string | null> | null = null
+let sessionGeneration = 0
 
 // Token management
-export function setTokens(accessToken: string, refreshToken: string | undefined, expiresIn: number) {
+export function getSessionGeneration(): number {
+  return sessionGeneration
+}
+
+export function setTokens(
+  accessToken: string,
+  refreshToken: string | undefined,
+  expiresIn: number,
+) {
+  sessionGeneration++
+  storeTokens(accessToken, refreshToken, expiresIn)
+}
+
+function storeTokens(accessToken: string, refreshToken: string | undefined, expiresIn: number) {
   tokenStore = {
     accessToken,
     refreshToken: refreshToken || null,
@@ -53,6 +69,7 @@ export function getAccessToken(): string | null {
 }
 
 export function clearTokens() {
+  sessionGeneration++
   tokenStore = { accessToken: null, refreshToken: null, expiresAt: null }
   if (typeof window !== 'undefined') {
     sessionStorage.removeItem('accessToken')
@@ -65,31 +82,33 @@ export function isTokenExpired(): boolean {
   return Date.now() > tokenStore.expiresAt - 30000
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   // Prevent concurrent refresh attempts
   if (refreshPromise) {
     return refreshPromise
   }
 
   refreshPromise = (async () => {
+    const generation = sessionGeneration
     try {
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include', // Include HTTP-only cookies
+        signal: AbortSignal.timeout(15_000),
       })
 
       if (!response.ok) {
         if ([400, 401, 403].includes(response.status)) {
-          clearTokens()
+          if (generation === sessionGeneration) clearTokens()
+          return null
         }
-        return null
+        throw new Error('Sign-in is temporarily unavailable. Please try again.')
       }
 
       const data: RefreshResponse = await response.json()
-      setTokens(data.accessToken, data.refreshToken, data.expiresIn)
+      if (generation !== sessionGeneration) return null
+      storeTokens(data.accessToken, data.refreshToken, data.expiresIn)
       return data.accessToken
-    } catch {
-      return null
     } finally {
       refreshPromise = null
     }
@@ -99,13 +118,10 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 // Main API client
-export async function apiClient<T>(
-  endpoint: string,
-  options: RequestOptions = {}
-): Promise<T> {
-  const { method = 'GET', body, headers = {}, skipAuth = false } = options
+export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, headers = {}, skipAuth = false, local = false } = options
 
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`
+  const url = local ? endpoint : `${API_BASE_URL}${endpoint}`
 
   const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -136,17 +152,24 @@ export async function apiClient<T>(
     config.body = JSON.stringify(body)
   }
 
+  const requestGeneration = sessionGeneration
   const response = await fetch(url, config)
+  if (!skipAuth && requestGeneration !== sessionGeneration)
+    throw new Error('Your session changed. Please try again.')
 
   // Handle 401 - try refresh once
   if (response.status === 401 && !skipAuth) {
     const newToken = await refreshAccessToken()
     if (newToken) {
+      if (getAccessToken() !== newToken) throw new Error('Your session changed. Please try again.')
+      const retryGeneration = sessionGeneration
       requestHeaders['Authorization'] = `Bearer ${newToken}`
       const retryResponse = await fetch(url, {
         ...config,
         headers: requestHeaders,
       })
+      if (retryGeneration !== sessionGeneration)
+        throw new Error('Your session changed. Please try again.')
 
       if (!retryResponse.ok) {
         const error = await retryResponse.json().catch(() => ({
@@ -165,7 +188,7 @@ export async function apiClient<T>(
     }
 
     // Refresh failed, clear tokens and throw
-    clearTokens()
+    if (requestGeneration === sessionGeneration) clearTokens()
     throw {
       error: 'Unauthorized',
       message: 'Session expired. Please sign in again.',
@@ -192,7 +215,8 @@ export async function apiClient<T>(
 // Streaming API client for SSE
 export async function* streamClient(
   endpoint: string,
-  body: unknown
+  body: unknown,
+  signal?: AbortSignal,
 ): AsyncGenerator<string, void, unknown> {
   const url = `${API_BASE_URL}${endpoint}`
 
@@ -209,12 +233,28 @@ export async function* streamClient(
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch(url, {
+  const config: RequestInit = {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
     credentials: 'include',
-  })
+    signal,
+  }
+  let requestGeneration = sessionGeneration
+  let response = await fetch(url, config)
+  if (requestGeneration !== sessionGeneration)
+    throw new Error('Your session changed. Please try again.')
+  if (response.status === 401) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      if (getAccessToken() !== refreshed) throw new Error('Your session changed. Please try again.')
+      requestGeneration = sessionGeneration
+      headers.Authorization = `Bearer ${refreshed}`
+      response = await fetch(url, config)
+      if (requestGeneration !== sessionGeneration)
+        throw new Error('Your session changed. Please try again.')
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({
@@ -236,6 +276,8 @@ export async function* streamClient(
   try {
     while (true) {
       const { done, value } = await reader.read()
+      if (requestGeneration !== sessionGeneration)
+        throw new Error('Your session changed. Please try again.')
 
       if (done) break
 
@@ -262,6 +304,7 @@ export async function* streamClient(
       }
     }
   } finally {
+    await reader.cancel().catch(() => undefined)
     reader.releaseLock()
   }
 }
@@ -283,5 +326,6 @@ export const api = {
   delete: <T>(endpoint: string, options?: Omit<RequestOptions, 'method'>) =>
     apiClient<T>(endpoint, { ...options, method: 'DELETE' }),
 
-  stream: (endpoint: string, body: unknown) => streamClient(endpoint, body),
+  stream: (endpoint: string, body: unknown, signal?: AbortSignal) =>
+    streamClient(endpoint, body, signal),
 }

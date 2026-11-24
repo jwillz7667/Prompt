@@ -9,6 +9,25 @@ Sections used: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 
 ## [Unreleased]
 
+### Fixed
+- iOS Apple identity verification, secure session persistence, refresh rotation,
+  expired-session recovery, and backend endpoint configuration.
+- StoreKit transaction ownership, expiry/revocation verification, restoration, and
+  retryable purchase activation failures.
+- Duplicate prompt quota and analytics charges when iOS saves generated thread
+  output to history.
+- AI stream timeout/completion handling and image context in follow-up requests.
+- Web subscription customer ownership, duplicate checkout prevention, and webhook
+  fulfillment idempotency.
+- Backend formatting checks and a CI condition that silently skipped backend linting.
+
+### Changed
+- Default prompt and native image generation to efficient DeepSeek Flash, with
+  reasoning disabled for standard requests.
+- Connect the repaired Railway production service to GitHub with automatic migrations
+  and database/cache readiness checks.
+- Prepare the signed iOS 2.1.0 build `2026.11.10` and refreshed App Store listing.
+
 ### Added
 - Production-grade repository documentation: root `README.md`, `ARCHITECTURE.md`,
   `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, and per-package

@@ -32,14 +32,20 @@ collectionRouter.use(authenticate);
 const createCollectionSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#007AFF'),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .default('#007AFF'),
   icon: z.string().max(50).default('folder.fill'),
 });
 
 const updateCollectionSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional(),
   icon: z.string().max(50).optional(),
 });
 
@@ -136,7 +142,7 @@ collectionRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): P
       },
       prompts: prompts.map((prompt) => ({
         ...prompt,
-        imageAttachment: 'imageAttachment' in prompt ? prompt.imageAttachment ?? null : null,
+        imageAttachment: 'imageAttachment' in prompt ? (prompt.imageAttachment ?? null) : null,
       })),
     });
   } catch (error) {
@@ -169,7 +175,7 @@ collectionRouter.post('/', async (req: AuthenticatedRequest, res: Response): Pro
   } catch (error) {
     logger.error({ err: error }, 'Create collection error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to create collection' });
@@ -211,7 +217,7 @@ collectionRouter.patch('/:id', async (req: AuthenticatedRequest, res: Response):
   } catch (error) {
     logger.error({ err: error }, 'Update collection error');
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      res.status(400).json({ error: 'Invalid request data', details: error.issues });
       return;
     }
     res.status(500).json({ error: 'Failed to update collection' });
@@ -254,120 +260,126 @@ collectionRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response)
 // ADD PROMPTS TO COLLECTION
 // ============================================================================
 
-collectionRouter.post('/:id/prompts', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
+collectionRouter.post(
+  '/:id/prompts',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
 
-    const { promptIds } = addPromptsSchema.parse(req.body);
-    const collectionId = req.params.id as string;
+      const { promptIds } = addPromptsSchema.parse(req.body);
+      const collectionId = req.params.id as string;
 
-    // Verify collection ownership
-    const collection = await prisma.collection.findFirst({
-      where: {
-        id: collectionId,
-        userId: req.user.id,
-      },
-    });
-
-    if (!collection) {
-      res.status(404).json({ error: 'Collection not found' });
-      return;
-    }
-
-    // Verify prompts belong to user
-    const userPrompts = await prisma.prompt.findMany({
-      where: {
-        id: { in: promptIds },
-        userId: req.user.id,
-      },
-      select: { id: true },
-    });
-
-    const validPromptIds = userPrompts.map((p) => p.id);
-
-    // Create prompt-collection associations and update count atomically
-    await prisma.$transaction(async (tx) => {
-      await tx.promptCollection.createMany({
-        data: validPromptIds.map((promptId) => ({
-          promptId,
-          collectionId,
-        })),
-        skipDuplicates: true,
+      // Verify collection ownership
+      const collection = await prisma.collection.findFirst({
+        where: {
+          id: collectionId,
+          userId: req.user.id,
+        },
       });
 
-      const newCount = await tx.promptCollection.count({
-        where: { collectionId },
+      if (!collection) {
+        res.status(404).json({ error: 'Collection not found' });
+        return;
+      }
+
+      // Verify prompts belong to user
+      const userPrompts = await prisma.prompt.findMany({
+        where: {
+          id: { in: promptIds },
+          userId: req.user.id,
+        },
+        select: { id: true },
       });
 
-      await tx.collection.update({
-        where: { id: collectionId },
-        data: { promptCount: newCount },
-      });
-    });
+      const validPromptIds = userPrompts.map((p) => p.id);
 
-    res.json({ success: true, addedCount: validPromptIds.length });
-  } catch (error) {
-    logger.error({ err: error }, 'Add prompts to collection error');
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request data', details: error.errors });
-      return;
+      // Create prompt-collection associations and update count atomically
+      await prisma.$transaction(async (tx) => {
+        await tx.promptCollection.createMany({
+          data: validPromptIds.map((promptId) => ({
+            promptId,
+            collectionId,
+          })),
+          skipDuplicates: true,
+        });
+
+        const newCount = await tx.promptCollection.count({
+          where: { collectionId },
+        });
+
+        await tx.collection.update({
+          where: { id: collectionId },
+          data: { promptCount: newCount },
+        });
+      });
+
+      res.json({ success: true, addedCount: validPromptIds.length });
+    } catch (error) {
+      logger.error({ err: error }, 'Add prompts to collection error');
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request data', details: error.issues });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to add prompts to collection' });
     }
-    res.status(500).json({ error: 'Failed to add prompts to collection' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // REMOVE PROMPT FROM COLLECTION
 // ============================================================================
 
-collectionRouter.delete('/:id/prompts/:promptId', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
+collectionRouter.delete(
+  '/:id/prompts/:promptId',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
 
-    const collectionId = req.params.id as string;
-    const promptId = req.params.promptId as string;
+      const collectionId = req.params.id as string;
+      const promptId = req.params.promptId as string;
 
-    // Verify collection ownership
-    const collection = await prisma.collection.findFirst({
-      where: {
-        id: collectionId,
-        userId: req.user.id,
-      },
-    });
-
-    if (!collection) {
-      res.status(404).json({ error: 'Collection not found' });
-      return;
-    }
-
-    // Remove association and update count atomically
-    await prisma.$transaction(async (tx) => {
-      await tx.promptCollection.deleteMany({
+      // Verify collection ownership
+      const collection = await prisma.collection.findFirst({
         where: {
-          promptId,
-          collectionId,
+          id: collectionId,
+          userId: req.user.id,
         },
       });
 
-      const newCount = await tx.promptCollection.count({
-        where: { collectionId },
+      if (!collection) {
+        res.status(404).json({ error: 'Collection not found' });
+        return;
+      }
+
+      // Remove association and update count atomically
+      await prisma.$transaction(async (tx) => {
+        await tx.promptCollection.deleteMany({
+          where: {
+            promptId,
+            collectionId,
+          },
+        });
+
+        const newCount = await tx.promptCollection.count({
+          where: { collectionId },
+        });
+
+        await tx.collection.update({
+          where: { id: collectionId },
+          data: { promptCount: newCount },
+        });
       });
 
-      await tx.collection.update({
-        where: { id: collectionId },
-        data: { promptCount: newCount },
-      });
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({ err: error }, 'Remove prompt from collection error');
-    res.status(500).json({ error: 'Failed to remove prompt from collection' });
-  }
-});
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error }, 'Remove prompt from collection error');
+      res.status(500).json({ error: 'Failed to remove prompt from collection' });
+    }
+  },
+);

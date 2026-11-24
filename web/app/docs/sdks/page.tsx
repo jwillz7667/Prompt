@@ -2,18 +2,16 @@ export default function SDKsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-primary mb-2">SDKs & Examples</h1>
-        <p className="text-lg text-muted">
-          Code examples in popular programming languages.
-        </p>
+        <h1 className="text-primary mb-2 text-3xl font-bold">SDKs & Examples</h1>
+        <p className="text-muted text-lg">Code examples in popular programming languages.</p>
       </div>
 
       {/* Python */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Python</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`import os
+        <h2 className="text-primary text-2xl font-semibold">Python</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`import os
 import requests
 
 API_KEY = os.environ.get("PROMPTOMIZE_API_KEY")
@@ -47,10 +45,10 @@ print(result["enhancedPrompt"])`}
 
       {/* JavaScript/TypeScript */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">JavaScript / TypeScript</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`const API_KEY = process.env.PROMPTOMIZE_API_KEY;
+        <h2 className="text-primary text-2xl font-semibold">JavaScript / TypeScript</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`const API_KEY = process.env.PROMPTOMIZE_API_KEY;
 const BASE_URL = "https://api.promptomize.app/api/v1";
 
 interface EnhanceOptions {
@@ -91,10 +89,10 @@ console.log(result.enhancedPrompt);`}
 
       {/* cURL */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">cURL</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`# Basic request
+        <h2 className="text-primary text-2xl font-semibold">cURL</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`# Basic request
 curl -X POST https://api.promptomize.app/api/v1/public/enhance \\
   -H "X-API-Key: $PROMPTOMIZE_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -121,10 +119,10 @@ curl https://api.promptomize.app/api/v1/public/usage \\
 
       {/* Go */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Go</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`package main
+        <h2 className="text-primary text-2xl font-semibold">Go</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`package main
 
 import (
     "bytes"
@@ -169,10 +167,10 @@ func enhancePrompt(req EnhanceRequest) (*EnhanceResponse, error) {
 
       {/* PHP */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">PHP</h2>
-        <div className="rounded-lg bg-secondary overflow-hidden">
-          <pre className="p-4 text-sm text-primary overflow-x-auto">
-{`<?php
+        <h2 className="text-primary text-2xl font-semibold">PHP</h2>
+        <div className="bg-secondary overflow-hidden rounded-lg">
+          <pre className="text-primary overflow-x-auto p-4 text-sm">
+            {`<?php
 $apiKey = getenv('PROMPTOMIZE_API_KEY');
 $baseUrl = 'https://api.promptomize.app/api/v1';
 
@@ -211,25 +209,25 @@ echo $result['enhancedPrompt'];`}
 
       {/* Next Steps */}
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-primary">Resources</h2>
+        <h2 className="text-primary text-2xl font-semibold">Resources</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <a
             href="https://github.com/promptomize/api-examples"
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg border border-border p-4 hover:border-accent transition-colors"
+            className="border-border hover:border-accent rounded-lg border p-4 transition-colors"
           >
-            <h3 className="font-medium text-primary">GitHub Examples</h3>
-            <p className="text-sm text-muted mt-1">Full example projects</p>
+            <h3 className="text-primary font-medium">GitHub Examples</h3>
+            <p className="text-muted mt-1 text-sm">Full example projects</p>
           </a>
           <a
             href="/api/v1/docs/openapi.json"
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg border border-border p-4 hover:border-accent transition-colors"
+            className="border-border hover:border-accent rounded-lg border p-4 transition-colors"
           >
-            <h3 className="font-medium text-primary">OpenAPI Spec</h3>
-            <p className="text-sm text-muted mt-1">Generate your own SDK</p>
+            <h3 className="text-primary font-medium">OpenAPI Spec</h3>
+            <p className="text-muted mt-1 text-sm">Generate your own SDK</p>
           </a>
         </div>
       </section>

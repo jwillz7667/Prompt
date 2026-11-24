@@ -4,66 +4,59 @@ import Link from 'next/link'
 import { Zap, Twitter, Github } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 
-export default function MarketingLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      <nav className="glass fixed left-0 right-0 top-0 z-50">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-indigo dark:bg-brand-cyan">
                 <Zap className="h-5 w-5 text-white dark:text-black" />
               </div>
-              <span className="text-lg font-bold gradient-text">Promptomize</span>
+              <span className="gradient-text text-lg font-bold">Promptomize</span>
             </Link>
 
             <div className="flex items-center gap-4">
               <Link
                 href="/demo"
-                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] sm:block"
               >
                 Demo
               </Link>
               <Link
                 href="/pricing"
-                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] sm:block"
               >
                 Pricing
               </Link>
               <Link
                 href="/docs"
-                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] sm:block"
               >
                 API Docs
               </Link>
               <Link
                 href="/developers"
-                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] sm:block"
               >
                 Developers
               </Link>
               <Link
                 href="/support"
-                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] sm:block"
               >
                 Support
               </Link>
               <Link
                 href="/login"
-                className="hidden sm:block text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="hidden text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)] sm:block"
               >
                 Sign In
               </Link>
               <ThemeToggle />
-              <Link
-                href="/login"
-                className="btn-cyan px-4 py-2 rounded-xl text-sm font-medium"
-              >
+              <Link href="/login" className="btn-cyan rounded-xl px-4 py-2 text-sm font-medium">
                 Get Started
               </Link>
             </div>
@@ -76,15 +69,15 @@ export default function MarketingLayout({
 
       {/* Footer */}
       <footer className="border-t border-[var(--border)] bg-[var(--bg-secondary)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
             {/* Brand */}
             <div className="col-span-1">
               <Link href="/" className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-indigo dark:bg-brand-cyan">
                   <Zap className="h-5 w-5 text-white dark:text-black" />
                 </div>
-                <span className="text-lg font-bold gradient-text">Promptomize</span>
+                <span className="gradient-text text-lg font-bold">Promptomize</span>
               </Link>
               <p className="mt-4 text-sm text-[var(--text-secondary)]">
                 Transform your AI prompts into powerful, optimized instructions.
@@ -93,7 +86,7 @@ export default function MarketingLayout({
 
             {/* Product */}
             <div>
-              <h4 className="font-semibold text-[var(--text-primary)] mb-4">Product</h4>
+              <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Product</h4>
               <ul className="space-y-2">
                 <li>
                   <Link
@@ -132,7 +125,7 @@ export default function MarketingLayout({
 
             {/* Developers */}
             <div>
-              <h4 className="font-semibold text-[var(--text-primary)] mb-4">Developers</h4>
+              <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Developers</h4>
               <ul className="space-y-2">
                 <li>
                   <Link
@@ -163,7 +156,7 @@ export default function MarketingLayout({
 
             {/* Legal */}
             <div>
-              <h4 className="font-semibold text-[var(--text-primary)] mb-4">Legal</h4>
+              <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Legal</h4>
               <ul className="space-y-2">
                 <li>
                   <Link
@@ -186,7 +179,7 @@ export default function MarketingLayout({
 
             {/* Support */}
             <div>
-              <h4 className="font-semibold text-[var(--text-primary)] mb-4">Support</h4>
+              <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Support</h4>
               <ul className="space-y-2">
                 <li>
                   <Link
@@ -208,7 +201,7 @@ export default function MarketingLayout({
             </div>
           </div>
 
-          <div className="mt-12 pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[var(--border)] pt-8 sm:flex-row">
             <p className="text-sm text-[var(--text-tertiary)]">
               &copy; {new Date().getFullYear()} Promptomize. All rights reserved.
             </p>

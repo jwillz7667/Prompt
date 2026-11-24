@@ -55,7 +55,7 @@ export default function HistoryPage() {
 
   // Deduplicate prompts by ID to prevent duplicate entries
   const prompts = (data?.prompts || []).filter(
-    (prompt, index, self) => index === self.findIndex((p) => p.id === prompt.id)
+    (prompt, index, self) => index === self.findIndex((p) => p.id === prompt.id),
   )
   const pagination = data?.pagination
 
@@ -64,16 +64,19 @@ export default function HistoryPage() {
     toast.success('Copied to clipboard')
   }, [])
 
-  const handleReenhance = useCallback((originalPrompt: string, modality?: Prompt['modality']) => {
-    setSelectedPrompt(null)
-    const params = new URLSearchParams({
-      prompt: originalPrompt,
-    })
-    if (modality) {
-      params.set('modality', modality)
-    }
-    router.push(`/dashboard?${params.toString()}`)
-  }, [router])
+  const handleReenhance = useCallback(
+    (originalPrompt: string, modality?: Prompt['modality']) => {
+      setSelectedPrompt(null)
+      const params = new URLSearchParams({
+        prompt: originalPrompt,
+      })
+      if (modality) {
+        params.set('modality', modality)
+      }
+      router.push(`/dashboard?${params.toString()}`)
+    },
+    [router],
+  )
 
   const handleDelete = useCallback(async () => {
     if (!deleteConfirm) return
@@ -92,23 +95,31 @@ export default function HistoryPage() {
           downloadFile(exportToText(prompts), `promptomize-export-${timestamp}.txt`, 'text/plain')
           break
         case 'md':
-          downloadFile(exportToMarkdown(prompts), `promptomize-export-${timestamp}.md`, 'text/markdown')
+          downloadFile(
+            exportToMarkdown(prompts),
+            `promptomize-export-${timestamp}.md`,
+            'text/markdown',
+          )
           break
         case 'pdf':
-          downloadFile(exportToPDF(prompts), `promptomize-export-${timestamp}.pdf`, 'application/pdf')
+          downloadFile(
+            exportToPDF(prompts),
+            `promptomize-export-${timestamp}.pdf`,
+            'application/pdf',
+          )
           break
       }
 
       setExportModalOpen(false)
       toast.success('Export complete')
     },
-    [prompts]
+    [prompts],
   )
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Prompt History</h1>
           <p className="mt-1 text-[var(--text-secondary)]">
@@ -135,7 +146,7 @@ export default function HistoryPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex-1">
           <Input
             placeholder="Search prompts..."
@@ -164,7 +175,7 @@ export default function HistoryPage() {
         <div className="space-y-4">
           {[...Array(5)].map((_, i) => (
             <Card key={i} className="p-4">
-              <Skeleton className="h-4 w-1/4 mb-3" />
+              <Skeleton className="mb-3 h-4 w-1/4" />
               <Skeleton className="h-20 w-full" />
             </Card>
           ))}
@@ -189,12 +200,12 @@ export default function HistoryPage() {
               <Card
                 key={prompt.id}
                 hover
-                className="p-4 cursor-pointer"
+                className="cursor-pointer p-4"
                 onClick={() => setSelectedPrompt(prompt)}
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-center gap-2">
                       <span className="text-xs text-[var(--text-tertiary)]">
                         {formatDate(prompt.createdAt)}
                       </span>
@@ -204,10 +215,10 @@ export default function HistoryPage() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
+                    <p className="line-clamp-2 text-sm text-[var(--text-secondary)]">
                       {truncateText(prompt.originalPrompt, 150)}
                     </p>
-                    <p className="mt-2 text-sm text-[var(--text-primary)] line-clamp-2">
+                    <p className="mt-2 line-clamp-2 text-sm text-[var(--text-primary)]">
                       {truncateText(prompt.enhancedPrompt, 200)}
                     </p>
                   </div>
@@ -291,13 +302,13 @@ export default function HistoryPage() {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-[var(--text-secondary)]">Original</label>
-              <div className="mt-1 p-3 rounded-lg bg-[var(--bg-tertiary)] text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
+              <div className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-[var(--bg-tertiary)] p-3 text-sm">
                 {selectedPrompt.originalPrompt}
               </div>
             </div>
             <div>
               <label className="text-sm font-medium text-[var(--text-secondary)]">Enhanced</label>
-              <div className="mt-1 p-3 rounded-lg bg-brand-indigo/5 dark:bg-brand-cyan/5 border border-brand-indigo/20 dark:border-brand-cyan/20 text-sm whitespace-pre-wrap max-h-64 overflow-y-auto">
+              <div className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-indigo/20 bg-brand-indigo/5 p-3 text-sm dark:border-brand-cyan/20 dark:bg-brand-cyan/5">
                 {selectedPrompt.enhancedPrompt}
               </div>
             </div>
@@ -312,9 +323,7 @@ export default function HistoryPage() {
                   {selectedPrompt.outputLength}
                 </Badge>
               )}
-              {selectedPrompt.model && (
-                <Badge variant="outline">{selectedPrompt.model}</Badge>
-              )}
+              {selectedPrompt.model && <Badge variant="outline">{selectedPrompt.model}</Badge>}
             </div>
             <ModalFooter>
               <Button variant="secondary" onClick={() => setSelectedPrompt(null)}>
@@ -322,7 +331,9 @@ export default function HistoryPage() {
               </Button>
               <Button
                 variant="secondary"
-                onClick={() => handleReenhance(selectedPrompt.originalPrompt, selectedPrompt.modality)}
+                onClick={() =>
+                  handleReenhance(selectedPrompt.originalPrompt, selectedPrompt.modality)
+                }
                 leftIcon={<RefreshCw className="h-4 w-4" />}
               >
                 Enhance Again
@@ -350,11 +361,7 @@ export default function HistoryPage() {
           <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
             Cancel
           </Button>
-          <Button
-            variant="danger"
-            onClick={handleDelete}
-            isLoading={deletePrompt.isPending}
-          >
+          <Button variant="danger" onClick={handleDelete} isLoading={deletePrompt.isPending}>
             Delete
           </Button>
         </ModalFooter>
@@ -371,7 +378,7 @@ export default function HistoryPage() {
         <div className="space-y-3">
           <button
             onClick={() => handleExport('txt')}
-            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
+            className="flex w-full items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--bg-tertiary)]"
           >
             <File className="h-5 w-5 text-[var(--text-tertiary)]" />
             <div className="text-left">
@@ -381,7 +388,7 @@ export default function HistoryPage() {
           </button>
           <button
             onClick={() => handleExport('md')}
-            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
+            className="flex w-full items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--bg-tertiary)]"
           >
             <FileText className="h-5 w-5 text-[var(--text-tertiary)]" />
             <div className="text-left">
@@ -391,7 +398,7 @@ export default function HistoryPage() {
           </button>
           <button
             onClick={() => handleExport('pdf')}
-            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
+            className="flex w-full items-center gap-3 rounded-xl p-3 transition-colors hover:bg-[var(--bg-tertiary)]"
           >
             <Download className="h-5 w-5 text-[var(--text-tertiary)]" />
             <div className="text-left">

@@ -70,7 +70,7 @@ export function getDefaultSubModality(modality: PromptModality): SubModality {
 export function getModalitySystemPrompt(
   modality: PromptModality,
   tier: EnhancementTier,
-  subModality?: SubModality
+  subModality?: SubModality,
 ): string {
   const config = modalityRegistry[modality];
   if (!config) {
@@ -95,8 +95,8 @@ export function getModalityExamples(
     subModality?: SubModality;
     platform?: string;
     maxExamples?: number;
-  }
-): typeof modalityRegistry[PromptModality]['fewShotExamples'] {
+  },
+): (typeof modalityRegistry)[PromptModality]['fewShotExamples'] {
   const config = modalityRegistry[modality];
   if (!config) {
     return [];
@@ -116,7 +116,7 @@ export function getModalityExamples(
   // Filter by platform if specified
   if (options?.platform) {
     const platformExamples = examples.filter(
-      (ex) => ex.platform === options.platform || ex.platform === 'general' || !ex.platform
+      (ex) => ex.platform === options.platform || ex.platform === 'general' || !ex.platform,
     );
     if (platformExamples.length > 0) {
       examples = platformExamples;
@@ -144,8 +144,8 @@ export function getModalityExamples(
  */
 export function getModalityNegativeExamples(
   modality: PromptModality,
-  tier: EnhancementTier
-): typeof modalityRegistry[PromptModality]['negativeExamples'] {
+  tier: EnhancementTier,
+): (typeof modalityRegistry)[PromptModality]['negativeExamples'] {
   if (tier !== 'advanced') {
     return [];
   }
@@ -159,7 +159,7 @@ export function getModalityNegativeExamples(
  */
 export function getModalityConstraints(
   modality: PromptModality,
-  tier: EnhancementTier
+  tier: EnhancementTier,
 ): { always: string[]; never: string[] } {
   const config = modalityRegistry[modality];
   if (!config) {

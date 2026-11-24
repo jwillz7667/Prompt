@@ -1,6 +1,6 @@
 /**
  * Platform Presets Service
- * 
+ *
  * Handles platform-specific optimizations, syntax validation,
  * and format conversions for various AI platforms.
  */
@@ -85,9 +85,7 @@ const PLATFORM_CONFIGS: Record<PlatformType, PlatformOptimization> = {
       fewShotExamples: true,
       temperature: { min: 0, max: 2, recommended: 0.7 },
     },
-    examplePrompts: [
-      'You are an expert [role]. [context]. Please [task] in [format].',
-    ],
+    examplePrompts: ['You are an expert [role]. [context]. Please [task] in [format].'],
   },
 
   CLAUDE: {
@@ -229,9 +227,7 @@ const PLATFORM_CONFIGS: Record<PlatformType, PlatformOptimization> = {
       keywordEmphasis: ['masterpiece', 'best quality', 'highly detailed'],
       negativePrompting: true,
     },
-    examplePrompts: [
-      '(masterpiece:1.2), best quality, highly detailed, subject, style',
-    ],
+    examplePrompts: ['(masterpiece:1.2), best quality, highly detailed, subject, style'],
   },
 
   SORA: {
@@ -559,7 +555,7 @@ export async function getPlatformPreset(platform: PlatformType) {
  */
 export function validatePromptForPlatform(
   prompt: string,
-  platform: PlatformType
+  platform: PlatformType,
 ): { isValid: boolean; warnings: string[]; errors: string[] } {
   const config = PLATFORM_CONFIGS[platform];
   const warnings: string[] = [];
@@ -629,7 +625,7 @@ export function optimizePromptForPlatform(
     tone?: string;
     style?: string;
     quality?: 'draft' | 'standard' | 'high';
-  }
+  },
 ): string {
   const config = PLATFORM_CONFIGS[platform];
   let optimizedPrompt = prompt;
@@ -651,8 +647,8 @@ export function optimizePromptForPlatform(
     case 'STABLE_DIFFUSION':
       // Add quality keywords if missing
       const qualityKeywords = ['masterpiece', 'best quality', 'highly detailed'];
-      const hasQualityKeywords = qualityKeywords.some(kw => 
-        optimizedPrompt.toLowerCase().includes(kw)
+      const hasQualityKeywords = qualityKeywords.some((kw) =>
+        optimizedPrompt.toLowerCase().includes(kw),
       );
       if (!hasQualityKeywords && options?.quality !== 'draft') {
         optimizedPrompt = `(masterpiece:1.2), best quality, ${optimizedPrompt}`;
@@ -688,9 +684,7 @@ export function optimizePromptForPlatform(
   if (config.syntaxRules.caseConventions === 'lower') {
     // Only lowercase the descriptive parts, not the whole prompt
     const parts = optimizedPrompt.split(/(\-\-\w+|\[\w+:|\:\:)/);
-    optimizedPrompt = parts.map((part, i) => 
-      i % 2 === 0 ? part.toLowerCase() : part
-    ).join('');
+    optimizedPrompt = parts.map((part, i) => (i % 2 === 0 ? part.toLowerCase() : part)).join('');
   }
 
   return optimizedPrompt.trim();
@@ -701,10 +695,10 @@ export function optimizePromptForPlatform(
  */
 export function estimatePlatformCost(
   prompt: string,
-  platform: PlatformType
+  platform: PlatformType,
 ): { tokens: number; estimatedCost: number } {
   const config = PLATFORM_CONFIGS[platform];
-  
+
   // Rough estimation: 4 characters per token
   const tokens = Math.ceil(prompt.length / 4);
   const estimatedCost = tokens * (config.limitations.costPerToken || 0);
@@ -743,7 +737,7 @@ export async function saveUserPlatformSettings(
   settings: {
     customSettings?: any;
     isDefault?: boolean;
-  }
+  },
 ) {
   return prisma.userPlatformSettings.upsert({
     where: {

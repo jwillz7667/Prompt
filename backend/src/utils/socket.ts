@@ -45,15 +45,18 @@ async function authorizeTicketJoin(
   socket: Socket,
   ticketId: string,
   requestedRole: SocketRole,
-  apiKey?: string
-): Promise<{ authorized: true; role: SocketRole; userId?: string } | { authorized: false; reason: string }> {
+  apiKey?: string,
+): Promise<
+  { authorized: true; role: SocketRole; userId?: string } | { authorized: false; reason: string }
+> {
   if (!ticketId || typeof ticketId !== 'string' || ticketId.length > 128) {
     return { authorized: false, reason: 'Invalid ticket id' };
   }
 
   if (requestedRole === 'agent') {
     const handshakeAdminKey = socket.handshake.auth?.['apiKey'];
-    const candidateApiKey = apiKey || (typeof handshakeAdminKey === 'string' ? handshakeAdminKey : undefined);
+    const candidateApiKey =
+      apiKey || (typeof handshakeAdminKey === 'string' ? handshakeAdminKey : undefined);
 
     if (!ADMIN_API_KEY || candidateApiKey !== ADMIN_API_KEY) {
       return { authorized: false, reason: 'Unauthorized' };
@@ -104,10 +107,10 @@ export function initializeSocket(httpServer: HttpServer, allowedOrigins: string[
       },
       credentials: true,
     },
-    transports: ['polling', 'websocket'],  // Allow polling first for mobile compatibility
-    pingTimeout: 60000,      // 60 seconds before considering connection dead
-    pingInterval: 25000,     // Send ping every 25 seconds
-    upgradeTimeout: 30000,   // 30 seconds to upgrade from polling to websocket
+    transports: ['polling', 'websocket'], // Allow polling first for mobile compatibility
+    pingTimeout: 60000, // 60 seconds before considering connection dead
+    pingInterval: 25000, // Send ping every 25 seconds
+    upgradeTimeout: 30000, // 30 seconds to upgrade from polling to websocket
     allowUpgrades: true,
   });
 
@@ -115,31 +118,37 @@ export function initializeSocket(httpServer: HttpServer, allowedOrigins: string[
     logger.info({ socketId: socket.id }, 'Socket connected');
 
     // Join ticket room for real-time updates
-    socket.on('join:ticket', async (data: { ticketId: string; role: SocketRole; apiKey?: string }) => {
-      const { ticketId, role, apiKey } = data;
-      const authorization = await authorizeTicketJoin(socket, ticketId, role, apiKey);
+    socket.on(
+      'join:ticket',
+      async (data: { ticketId: string; role: SocketRole; apiKey?: string }) => {
+        const { ticketId, role, apiKey } = data;
+        const authorization = await authorizeTicketJoin(socket, ticketId, role, apiKey);
 
-      if (!authorization.authorized) {
-        socket.emit('ticket:error', { message: authorization.reason });
-        return;
-      }
+        if (!authorization.authorized) {
+          socket.emit('ticket:error', { message: authorization.reason });
+          return;
+        }
 
-      const previousTicketId = socket.data.ticketId as string | undefined;
-      if (previousTicketId && previousTicketId !== ticketId) {
-        socket.leave(`ticket:${previousTicketId}`);
-      }
+        const previousTicketId = socket.data.ticketId as string | undefined;
+        if (previousTicketId && previousTicketId !== ticketId) {
+          socket.leave(`ticket:${previousTicketId}`);
+        }
 
-      const room = `ticket:${ticketId}`;
-      socket.join(room);
-      socket.data.ticketId = ticketId;
-      socket.data.role = authorization.role;
-      socket.data.userId = authorization.userId;
+        const room = `ticket:${ticketId}`;
+        socket.join(room);
+        socket.data.ticketId = ticketId;
+        socket.data.role = authorization.role;
+        socket.data.userId = authorization.userId;
 
-      logger.info({ socketId: socket.id, ticketId, role: authorization.role }, 'Joined ticket room');
+        logger.info(
+          { socketId: socket.id, ticketId, role: authorization.role },
+          'Joined ticket room',
+        );
 
-      // Notify others in the room
-      socket.to(room).emit('participant:joined', { role: authorization.role });
-    });
+        // Notify others in the room
+        socket.to(room).emit('participant:joined', { role: authorization.role });
+      },
+    );
 
     // Leave ticket room
     socket.on('leave:ticket', (data: { ticketId: string }) => {

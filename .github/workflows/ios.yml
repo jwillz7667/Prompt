@@ -5,61 +5,64 @@ on:
     branches: [main]
     paths:
       - 'Prompt/**'
+      - 'Prompt.xcodeproj/**'
+      - 'PromptKeyboard/**'
+      - 'PromptWidgetExtension/**'
+      - 'tests/ios/**'
       - '.github/workflows/ios.yml'
   pull_request:
     branches: [main]
     paths:
       - 'Prompt/**'
+      - 'Prompt.xcodeproj/**'
+      - 'PromptKeyboard/**'
+      - 'PromptWidgetExtension/**'
+      - 'tests/ios/**'
       - '.github/workflows/ios.yml'
 
 jobs:
   build:
-    name: Build & Test
-    runs-on: macos-14
+    name: Build and Subscription Checks
+    timeout-minutes: 30
+    runs-on: macos-26
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.2.app
 
       - name: Show Xcode version
         run: xcodebuild -version
 
       - name: Build for Simulator
         run: |
+          set -o pipefail
           xcodebuild build \
-            -project Prompt/Prompt.xcodeproj \
+            -project Prompt.xcodeproj \
             -scheme Prompt \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.2' \
+            -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty
+            | xcbeautify
 
-      - name: Run Tests
+      - name: Check configuration and subscription responses
         run: |
-          xcodebuild test \
-            -project Prompt/Prompt.xcodeproj \
-            -scheme Prompt \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.2' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcpretty
-        continue-on-error: true
+          swiftc -parse-as-library \
+            Prompt/Configuration/APIConfiguration.swift \
+            Prompt/Models/SubscriptionModels.swift \
+            tests/ios/SubscriptionRegressionChecks.swift \
+            -o "$RUNNER_TEMP/subscription-checks"
+          "$RUNNER_TEMP/subscription-checks"
 
   archive:
     name: Archive for App Store
-    runs-on: macos-14
+    timeout-minutes: 30
+    runs-on: macos-26
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.2.app
 
       - name: Install Apple Certificate
         env:
@@ -96,21 +99,23 @@ jobs:
 
       - name: Build Archive
         run: |
+          set -o pipefail
           xcodebuild archive \
-            -project Prompt/Prompt.xcodeproj \
+            -project Prompt.xcodeproj \
             -scheme Prompt \
             -archivePath $RUNNER_TEMP/Prompt.xcarchive \
             -destination 'generic/platform=iOS' \
             -configuration Release \
-            | xcpretty
+            | xcbeautify
 
       - name: Export IPA
         run: |
+          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/Prompt.xcarchive \
             -exportPath $RUNNER_TEMP/export \
             -exportOptionsPlist Prompt/ExportOptions.plist \
-            | xcpretty
+            | xcbeautify
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4

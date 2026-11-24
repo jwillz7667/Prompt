@@ -34,6 +34,9 @@ export interface UsageInfo {
   dailyPromptsUsed: number
   dailyPromptsLimit: number
   canCreatePrompt: boolean
+  maxModeUsedToday?: number
+  maxModeDailyLimit?: number
+  maxModeRemaining?: number
 }
 
 export interface FeatureFlags {
@@ -46,6 +49,8 @@ export interface SubscriptionInfo {
   subscription: Subscription
   usage: UsageInfo
   features: FeatureFlags
+  billingProvider?: 'stripe' | 'appstore' | null
+  stripeCustomerId?: string | null
 }
 
 // Prompts

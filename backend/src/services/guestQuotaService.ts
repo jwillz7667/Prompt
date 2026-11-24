@@ -72,7 +72,10 @@ export async function getGuestQuota(deviceId: string): Promise<GuestQuotaSnapsho
   return buildSnapshot(await loadRecord(deviceId));
 }
 
-export async function ensureGuestQuotaAvailable(deviceId: string, mode: GuestPromptMode): Promise<GuestQuotaSnapshot> {
+export async function ensureGuestQuotaAvailable(
+  deviceId: string,
+  mode: GuestPromptMode,
+): Promise<GuestQuotaSnapshot> {
   const quota = await getGuestQuota(deviceId);
 
   if (mode === 'standard' && quota.standardRemaining <= 0) {
@@ -86,7 +89,10 @@ export async function ensureGuestQuotaAvailable(deviceId: string, mode: GuestPro
   return quota;
 }
 
-export async function recordGuestPromptUsage(deviceId: string, mode: GuestPromptMode): Promise<GuestQuotaSnapshot> {
+export async function recordGuestPromptUsage(
+  deviceId: string,
+  mode: GuestPromptMode,
+): Promise<GuestQuotaSnapshot> {
   const record = await loadRecord(deviceId);
 
   if (mode === 'standard') {

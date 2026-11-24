@@ -19,7 +19,7 @@ export interface DeveloperAuthenticatedRequest extends Request {
 export const authenticateDeveloper = async (
   req: DeveloperAuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
@@ -79,7 +79,7 @@ export const authenticateDeveloper = async (
 export const optionalDeveloperAuth = async (
   req: DeveloperAuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;

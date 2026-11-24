@@ -35,13 +35,13 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             type={type}
             id={inputId}
             className={cn(
-              'flex h-11 w-full rounded-xl border bg-[var(--bg-secondary)] px-4 py-2 text-base text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] transition-colors',
+              'flex h-11 w-full rounded-xl border bg-[var(--bg-secondary)] px-4 py-2 text-base text-[var(--text-primary)] transition-colors placeholder:text-[var(--text-tertiary)]',
               'border-[var(--border)] focus:border-brand-indigo focus:outline-none focus:ring-2 focus:ring-brand-indigo/20',
               'disabled:cursor-not-allowed disabled:opacity-50',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
               error && 'border-red-500 focus:border-red-500 focus:ring-red-500/20',
-              className
+              className,
             )}
             ref={ref}
             {...props}
@@ -53,12 +53,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
         {error && <p className="mt-1.5 text-sm text-red-500">{error}</p>}
-        {hint && !error && (
-          <p className="mt-1.5 text-sm text-[var(--text-tertiary)]">{hint}</p>
-        )}
+        {hint && !error && <p className="mt-1.5 text-sm text-[var(--text-tertiary)]">{hint}</p>}
       </div>
     )
-  }
+  },
 )
 Input.displayName = 'Input'
 

@@ -65,10 +65,10 @@ const plans = [
 export default function PricingPage() {
   return (
     <div className="py-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-[var(--text-primary)] mb-4">
+        <div className="mx-auto mb-16 max-w-3xl text-center">
+          <h1 className="mb-4 text-4xl font-bold text-[var(--text-primary)] md:text-5xl">
             Simple, transparent pricing
           </h1>
           <p className="text-xl text-[var(--text-secondary)]">
@@ -77,32 +77,32 @@ export default function PricingPage() {
         </div>
 
         {/* Plans */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 md:grid-cols-3">
           {plans.map((plan) => (
             <Card
               key={plan.name}
               className={cn(
                 'relative overflow-hidden',
-                plan.popular && 'border-brand-indigo ring-2 ring-brand-indigo/20'
+                plan.popular && 'border-brand-indigo ring-2 ring-brand-indigo/20',
               )}
             >
               {plan.popular && (
-                <div className="absolute top-0 right-0">
-                  <div className="bg-brand-indigo text-white text-xs font-medium px-3 py-1 rounded-bl-lg">
+                <div className="absolute right-0 top-0">
+                  <div className="rounded-bl-lg bg-brand-indigo px-3 py-1 text-xs font-medium text-white">
                     Most Popular
                   </div>
                 </div>
               )}
 
               <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-4">
+                <div className="mb-4 flex items-center gap-2">
                   {plan.icon && (
                     <div
                       className={cn(
                         'flex h-10 w-10 items-center justify-center rounded-xl',
                         plan.name === 'Premium'
-                          ? 'bg-brand-indigo dark:bg-brand-cyan text-white dark:text-black'
-                          : 'bg-brand-indigo/10 text-brand-indigo dark:bg-brand-cyan/10 dark:text-brand-cyan'
+                          ? 'bg-brand-indigo text-white dark:bg-brand-cyan dark:text-black'
+                          : 'bg-brand-indigo/10 text-brand-indigo dark:bg-brand-cyan/10 dark:text-brand-cyan',
                       )}
                     >
                       {plan.icon}
@@ -111,18 +111,16 @@ export default function PricingPage() {
                   <h3 className="text-xl font-bold text-[var(--text-primary)]">{plan.name}</h3>
                 </div>
 
-                <p className="text-sm text-[var(--text-secondary)] mb-4">{plan.description}</p>
+                <p className="mb-4 text-sm text-[var(--text-secondary)]">{plan.description}</p>
 
                 <div className="mb-6">
                   <span className="text-4xl font-bold text-[var(--text-primary)]">
                     ${plan.price}
                   </span>
-                  {plan.price > 0 && (
-                    <span className="text-[var(--text-secondary)]">/month</span>
-                  )}
+                  {plan.price > 0 && <span className="text-[var(--text-secondary)]">/month</span>}
                 </div>
 
-                <ul className="space-y-3 mb-6">
+                <ul className="mb-6 space-y-3">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-center gap-3">
                       <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500/20 text-green-500">
@@ -134,10 +132,7 @@ export default function PricingPage() {
                 </ul>
 
                 <Link href={plan.href}>
-                  <Button
-                    variant={plan.variant}
-                    className="w-full"
-                  >
+                  <Button variant={plan.variant} className="w-full">
                     {plan.cta}
                   </Button>
                 </Link>
@@ -147,14 +142,14 @@ export default function PricingPage() {
         </div>
 
         {/* FAQ Section */}
-        <div className="mt-24 max-w-3xl mx-auto">
-          <h2 className="text-2xl font-bold text-[var(--text-primary)] text-center mb-12">
+        <div className="mx-auto mt-24 max-w-3xl">
+          <h2 className="mb-12 text-center text-2xl font-bold text-[var(--text-primary)]">
             Frequently Asked Questions
           </h2>
 
           <div className="space-y-8">
             <div>
-              <h3 className="font-semibold text-[var(--text-primary)] mb-2">
+              <h3 className="mb-2 font-semibold text-[var(--text-primary)]">
                 What happens when I reach my daily limit?
               </h3>
               <p className="text-[var(--text-secondary)]">
@@ -164,32 +159,32 @@ export default function PricingPage() {
             </div>
 
             <div>
-              <h3 className="font-semibold text-[var(--text-primary)] mb-2">
+              <h3 className="mb-2 font-semibold text-[var(--text-primary)]">
                 Can I cancel my subscription anytime?
               </h3>
               <p className="text-[var(--text-secondary)]">
-                Yes, you can cancel your subscription at any time. You'll continue to have access
-                to paid features until the end of your billing period.
+                Yes, you can cancel your subscription at any time. You'll continue to have access to
+                paid features until the end of your billing period.
               </p>
             </div>
 
             <div>
-              <h3 className="font-semibold text-[var(--text-primary)] mb-2">
+              <h3 className="mb-2 font-semibold text-[var(--text-primary)]">
                 Do you offer refunds?
               </h3>
               <p className="text-[var(--text-secondary)]">
-                We offer a 7-day free trial on paid plans. If you're not satisfied within the
-                first 30 days of your paid subscription, contact us for a refund.
+                We offer a 7-day free trial on paid plans. If you're not satisfied within the first
+                30 days of your paid subscription, contact us for a refund.
               </p>
             </div>
 
             <div>
-              <h3 className="font-semibold text-[var(--text-primary)] mb-2">
+              <h3 className="mb-2 font-semibold text-[var(--text-primary)]">
                 Is my subscription shared between iOS and web?
               </h3>
               <p className="text-[var(--text-secondary)]">
-                Your account and subscription are shared across all platforms. Sign in with the
-                same account on iOS and web to access your prompts everywhere.
+                Your account and subscription are shared across all platforms. Sign in with the same
+                account on iOS and web to access your prompts everywhere.
               </p>
             </div>
           </div>

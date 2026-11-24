@@ -80,7 +80,10 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       return false;
     }
 
-    logger.info({ emailId: data?.id, to: options.to, subject: options.subject }, 'Email sent successfully');
+    logger.info(
+      { emailId: data?.id, to: options.to, subject: options.subject },
+      'Email sent successfully',
+    );
     return true;
   } catch (error) {
     logger.error({ error, to: options.to }, 'Email send error');
@@ -235,7 +238,7 @@ export async function sendSubscriptionConfirmation(
   to: string,
   name: string | null,
   tier: string,
-  expiresAt: Date | null
+  expiresAt: Date | null,
 ): Promise<boolean> {
   const displayName = name || 'there';
   const tierDisplay = tier.charAt(0) + tier.slice(1).toLowerCase();
@@ -243,9 +246,21 @@ export async function sendSubscriptionConfirmation(
     ? `Your subscription renews on ${expiresAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
     : '';
 
-  const features = tier === 'PREMIUM'
-    ? ['Unlimited daily prompts', 'Up to 64,000 tokens per prompt', 'Advanced prompt quality', 'Priority support', 'MAX mode']
-    : ['100 daily prompts', 'Up to 8,000 tokens per prompt', 'Standard prompt quality', 'Email support'];
+  const features =
+    tier === 'PREMIUM'
+      ? [
+          'Unlimited daily prompts',
+          'Up to 64,000 tokens per prompt',
+          'Advanced prompt quality',
+          'Priority support',
+          'MAX mode',
+        ]
+      : [
+          '100 daily prompts',
+          'Up to 8,000 tokens per prompt',
+          'Standard prompt quality',
+          'Email support',
+        ];
 
   const content = `
     <h2>Welcome to ${APP_NAME} ${tierDisplay}!</h2>
@@ -254,7 +269,7 @@ export async function sendSubscriptionConfirmation(
     <div class="info-box">
       <p style="margin: 0 0 12px 0; font-weight: 600;">Your ${tierDisplay} benefits:</p>
       <ul style="margin: 0; padding-left: 20px; color: #424245;">
-        ${features.map(f => `<li>${f}</li>`).join('')}
+        ${features.map((f) => `<li>${f}</li>`).join('')}
       </ul>
     </div>
     <p>${expirationText}</p>
@@ -275,11 +290,15 @@ export async function sendSubscriptionRenewalReminder(
   to: string,
   name: string | null,
   tier: string,
-  renewalDate: Date
+  renewalDate: Date,
 ): Promise<boolean> {
   const displayName = name || 'there';
   const tierDisplay = tier.charAt(0) + tier.slice(1).toLowerCase();
-  const dateStr = renewalDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const dateStr = renewalDate.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   const content = `
     <h2>Subscription Renewal Reminder</h2>
@@ -306,11 +325,15 @@ export async function sendSubscriptionCancelled(
   to: string,
   name: string | null,
   tier: string,
-  accessUntil: Date
+  accessUntil: Date,
 ): Promise<boolean> {
   const displayName = name || 'there';
   const tierDisplay = tier.charAt(0) + tier.slice(1).toLowerCase();
-  const dateStr = accessUntil.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const dateStr = accessUntil.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   const content = `
     <h2>Subscription Cancelled</h2>
@@ -330,7 +353,10 @@ export async function sendSubscriptionCancelled(
   return sendEmail({
     to,
     subject: `Your ${APP_NAME} subscription has been cancelled`,
-    html: baseTemplate(content, `Your subscription has been cancelled. Access continues until ${dateStr}.`),
+    html: baseTemplate(
+      content,
+      `Your subscription has been cancelled. Access continues until ${dateStr}.`,
+    ),
     replyTo: SUPPORT_EMAIL,
   });
 }
@@ -338,7 +364,7 @@ export async function sendSubscriptionCancelled(
 export async function sendSubscriptionExpired(
   to: string,
   name: string | null,
-  tier: string
+  tier: string,
 ): Promise<boolean> {
   const displayName = name || 'there';
   const tierDisplay = tier.charAt(0) + tier.slice(1).toLowerCase();
@@ -365,7 +391,10 @@ export async function sendSubscriptionExpired(
   return sendEmail({
     to,
     subject: `Your ${APP_NAME} subscription has expired`,
-    html: baseTemplate(content, `Your subscription has expired. Resubscribe to unlock premium features.`),
+    html: baseTemplate(
+      content,
+      `Your subscription has expired. Resubscribe to unlock premium features.`,
+    ),
   });
 }
 
@@ -377,27 +406,38 @@ export async function sendSubscriptionExpired(
 export async function sendTicketNotificationToSupport(
   userEmail: string,
   userName: string | null,
-  ticket: TicketDetails
+  ticket: TicketDetails,
 ): Promise<boolean> {
   const ticketId = ticket.id.slice(0, 8).toUpperCase();
   const dateStr = ticket.createdAt.toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 
-  const messagesHtml = ticket.messages.map(msg => {
-    const roleClass = msg.role === 'user' ? 'message-user' : 'message-assistant';
-    const roleLabel = msg.role === 'user' ? userName || userEmail : 'Prompt Bot';
-    return `
+  const messagesHtml = ticket.messages
+    .map((msg) => {
+      const roleClass = msg.role === 'user' ? 'message-user' : 'message-assistant';
+      const roleLabel = msg.role === 'user' ? userName || userEmail : 'Prompt Bot';
+      return `
       <div class="message-bubble ${roleClass}">
         <div>${msg.content.replace(/\n/g, '<br>')}</div>
         <div class="message-meta">${roleLabel}</div>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 
-  const priorityColor = ticket.priority === 'URGENT' ? '#dc2626' :
-                        ticket.priority === 'HIGH' ? '#ea580c' :
-                        ticket.priority === 'MEDIUM' ? '#ca8a04' : '#16a34a';
+  const priorityColor =
+    ticket.priority === 'URGENT'
+      ? '#dc2626'
+      : ticket.priority === 'HIGH'
+        ? '#ea580c'
+        : ticket.priority === 'MEDIUM'
+          ? '#ca8a04'
+          : '#16a34a';
 
   const content = `
     <h2>🎫 New Support Ticket</h2>
@@ -447,26 +487,36 @@ export async function sendTicketNotificationToSupport(
 export async function sendTicketCreated(
   to: string,
   name: string | null,
-  ticket: TicketDetails
+  ticket: TicketDetails,
 ): Promise<boolean> {
   const displayName = name || 'there';
   const ticketId = ticket.id.slice(0, 8).toUpperCase();
   const dateStr = ticket.createdAt.toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 
-  const messagesHtml = ticket.messages.map(msg => {
-    const roleClass = msg.role === 'user' ? 'message-user' :
-                      msg.role === 'agent' ? 'message-agent' : 'message-assistant';
-    const roleLabel = msg.role === 'user' ? 'You' :
-                      msg.role === 'agent' ? 'Support Agent' : 'AI Assistant';
-    return `
+  const messagesHtml = ticket.messages
+    .map((msg) => {
+      const roleClass =
+        msg.role === 'user'
+          ? 'message-user'
+          : msg.role === 'agent'
+            ? 'message-agent'
+            : 'message-assistant';
+      const roleLabel =
+        msg.role === 'user' ? 'You' : msg.role === 'agent' ? 'Support Agent' : 'AI Assistant';
+      return `
       <div class="message-bubble ${roleClass}">
         <div>${msg.content.replace(/\n/g, '<br>')}</div>
         <div class="message-meta">${roleLabel}</div>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 
   const content = `
     <h2>Support Ticket Created</h2>
@@ -511,24 +561,33 @@ export async function sendTicketResponse(
   to: string,
   name: string | null,
   ticket: TicketDetails,
-  newMessage: string
+  newMessage: string,
 ): Promise<boolean> {
   const displayName = name || 'there';
   const ticketId = ticket.id.slice(0, 8).toUpperCase();
 
-  const messagesHtml = ticket.messages.map(msg => {
-    const roleClass = msg.role === 'user' ? 'message-user' :
-                      msg.role === 'agent' ? 'message-agent' : 'message-assistant';
-    const roleLabel = msg.role === 'user' ? 'You' :
-                      msg.role === 'agent' ? 'Support Agent' : 'AI Assistant';
-    const timeStr = msg.createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    return `
+  const messagesHtml = ticket.messages
+    .map((msg) => {
+      const roleClass =
+        msg.role === 'user'
+          ? 'message-user'
+          : msg.role === 'agent'
+            ? 'message-agent'
+            : 'message-assistant';
+      const roleLabel =
+        msg.role === 'user' ? 'You' : msg.role === 'agent' ? 'Support Agent' : 'AI Assistant';
+      const timeStr = msg.createdAt.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      return `
       <div class="message-bubble ${roleClass}">
         <div>${msg.content.replace(/\n/g, '<br>')}</div>
         <div class="message-meta">${roleLabel} &bull; ${timeStr}</div>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 
   const content = `
     <h2>New Response on Your Ticket</h2>
@@ -574,23 +633,29 @@ export async function sendTicketResponse(
 export async function sendTicketResolved(
   to: string,
   name: string | null,
-  ticket: TicketDetails
+  ticket: TicketDetails,
 ): Promise<boolean> {
   const displayName = name || 'there';
   const ticketId = ticket.id.slice(0, 8).toUpperCase();
 
-  const messagesHtml = ticket.messages.map(msg => {
-    const roleClass = msg.role === 'user' ? 'message-user' :
-                      msg.role === 'agent' ? 'message-agent' : 'message-assistant';
-    const roleLabel = msg.role === 'user' ? 'You' :
-                      msg.role === 'agent' ? 'Support Agent' : 'AI Assistant';
-    return `
+  const messagesHtml = ticket.messages
+    .map((msg) => {
+      const roleClass =
+        msg.role === 'user'
+          ? 'message-user'
+          : msg.role === 'agent'
+            ? 'message-agent'
+            : 'message-assistant';
+      const roleLabel =
+        msg.role === 'user' ? 'You' : msg.role === 'agent' ? 'Support Agent' : 'AI Assistant';
+      return `
       <div class="message-bubble ${roleClass}">
         <div>${msg.content.replace(/\n/g, '<br>')}</div>
         <div class="message-meta">${roleLabel}</div>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 
   const content = `
     <h2>Ticket Resolved</h2>
@@ -635,7 +700,7 @@ export async function sendDailyLimitReached(
   to: string,
   name: string | null,
   tier: string,
-  limit: number
+  limit: number,
 ): Promise<boolean> {
   const displayName = name || 'there';
 
@@ -643,7 +708,9 @@ export async function sendDailyLimitReached(
     <h2>Daily Prompt Limit Reached</h2>
     <p>Hi ${displayName},</p>
     <p>You've used all ${limit} of your daily prompts. Your limit will reset at midnight UTC.</p>
-    ${tier === 'FREE' ? `
+    ${
+      tier === 'FREE'
+        ? `
     <div class="info-box">
       <p style="margin: 0; font-weight: 600;">Want more prompts?</p>
       <p style="margin: 8px 0 0 0;">Upgrade to Pro for 100 daily prompts, or Premium for unlimited prompts!</p>
@@ -651,7 +718,9 @@ export async function sendDailyLimitReached(
     <p style="text-align: center;">
       <a href="${APP_URL}/upgrade" class="button">Upgrade Now</a>
     </p>
-    ` : ''}
+    `
+        : ''
+    }
     <p>Keep creating amazing prompts!<br>The ${APP_NAME} Team</p>
   `;
 
@@ -688,7 +757,7 @@ export async function sendAccountDeleted(to: string, name: string | null): Promi
 export async function sendApiPaymentFailed(
   to: string,
   name: string | null,
-  tier: string
+  tier: string,
 ): Promise<boolean> {
   const displayName = name || 'there';
 

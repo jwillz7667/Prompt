@@ -88,13 +88,15 @@ const negativeExamples: NegativeExample[] = [
     badInput: 'a dog',
     badOutput: 'An image of a dog, high quality, detailed',
     goodOutput: `Golden Retriever puppy mid-leap catching a red frisbee in a sunlit park, ears flopping, tongue out in pure joy. Lush green grass with scattered autumn leaves, warm afternoon golden hour lighting. Shallow depth of field with creamy bokeh background of oak trees. Action photography style, Canon EOS R5, 70-200mm f/2.8 at 200mm, 1/2000s freeze motion. Vibrant colors, sharp focus on dog's eyes --ar 3:2 --v 6.1`,
-    explanation: 'Vague subjects produce generic results. Specify breed, action, environment, lighting, camera settings, and style for impactful images.',
+    explanation:
+      'Vague subjects produce generic results. Specify breed, action, environment, lighting, camera settings, and style for impactful images.',
   },
   {
     badInput: 'beautiful sunset',
     badOutput: 'A beautiful sunset with pretty colors, amazing, stunning view, 4k',
     goodOutput: `Dramatic sunset over Santorini, Greece, white-washed buildings with blue domes silhouetted against sky ablaze in gradients of coral, tangerine, and deep magenta. Calm Aegean Sea reflecting the colors below. A few scattered cirrus clouds catching the last golden rays. Shot from Oia viewpoint, wide angle 16mm lens, f/11 for maximum sharpness. Long exposure 2 seconds for silky water. National Geographic travel photography style --ar 16:9 --v 6.1`,
-    explanation: 'Adjectives like "beautiful" and "stunning" are meaningless to AI. Specify location, color palette, cloud types, camera settings, and reference style.',
+    explanation:
+      'Adjectives like "beautiful" and "stunning" are meaningless to AI. Specify location, color palette, cloud types, camera settings, and reference style.',
   },
 ];
 

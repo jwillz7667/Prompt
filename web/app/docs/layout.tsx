@@ -35,13 +35,13 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname()
 
   return (
-    <div className="min-h-screen bg-primary">
+    <div className="bg-primary min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-primary/95 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="border-border bg-primary/95 sticky top-0 z-50 border-b backdrop-blur">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-6">
-              <Link href="/" className="text-xl font-bold text-primary">
+              <Link href="/" className="text-primary text-xl font-bold">
                 Promptomize
               </Link>
               <span className="text-muted">|</span>
@@ -50,7 +50,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             <div className="flex items-center gap-4">
               <Link
                 href="/developers"
-                className="text-sm text-muted hover:text-primary transition-colors"
+                className="text-muted hover:text-primary text-sm transition-colors"
               >
                 Developer Portal
               </Link>
@@ -58,7 +58,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                 href="/api/v1/docs/openapi.json"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-muted hover:text-primary transition-colors"
+                className="text-muted hover:text-primary text-sm transition-colors"
               >
                 OpenAPI Spec
               </a>
@@ -67,14 +67,14 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex gap-8">
           {/* Sidebar */}
-          <aside className="hidden lg:block w-64 shrink-0">
+          <aside className="hidden w-64 shrink-0 lg:block">
             <nav className="sticky top-24 space-y-6">
               {docsSections.map((section) => (
                 <div key={section.title}>
-                  <h3 className="font-semibold text-primary text-sm mb-2">{section.title}</h3>
+                  <h3 className="text-primary mb-2 text-sm font-semibold">{section.title}</h3>
                   <ul className="space-y-1">
                     {section.items.map((item) => {
                       const isActive = pathname === item.href
@@ -83,10 +83,10 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                           <Link
                             href={item.href}
                             className={cn(
-                              'block px-3 py-1.5 text-sm rounded transition-colors',
+                              'block rounded px-3 py-1.5 text-sm transition-colors',
                               isActive
                                 ? 'bg-accent/10 text-accent font-medium'
-                                : 'text-muted hover:text-primary hover:bg-secondary'
+                                : 'text-muted hover:text-primary hover:bg-secondary',
                             )}
                           >
                             {item.label}
@@ -101,7 +101,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 min-w-0">
+          <main className="min-w-0 flex-1">
             <article className="prose prose-invert max-w-none">{children}</article>
           </main>
         </div>

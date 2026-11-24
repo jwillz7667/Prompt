@@ -44,9 +44,7 @@ export function useToggleFavorite() {
         const data = old as { prompts: { id: string; isFavorite: boolean }[] }
         return {
           ...data,
-          prompts: data.prompts?.map((p) =>
-            p.id === id ? { ...p, isFavorite } : p
-          ),
+          prompts: data.prompts?.map((p) => (p.id === id ? { ...p, isFavorite } : p)),
         }
       })
 

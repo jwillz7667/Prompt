@@ -242,7 +242,7 @@ Table: Status Code | Error Code | Description | Resolution
 const negativeExamples: NegativeExample[] = [
   {
     badInput: 'write something interesting',
-    badOutput: 'Write something interesting and engaging that captures the reader\'s attention.',
+    badOutput: "Write something interesting and engaging that captures the reader's attention.",
     goodOutput: `<task>
 Write a 500-word article about [specific topic] for [specific audience].
 </task>
@@ -253,11 +253,13 @@ Write a 500-word article about [specific topic] for [specific audience].
 - Tone: [Specific tone]
 - End with: Actionable takeaway
 </requirements>`,
-    explanation: 'Vague requests produce vague prompts. The bad output merely restates the request. The good output forces specificity by requiring concrete parameters and structure.',
+    explanation:
+      'Vague requests produce vague prompts. The bad output merely restates the request. The good output forces specificity by requiring concrete parameters and structure.',
   },
   {
     badInput: 'help me write better',
-    badOutput: 'You are a writing assistant. Help the user write better content that is clear and engaging.',
+    badOutput:
+      'You are a writing assistant. Help the user write better content that is clear and engaging.',
     goodOutput: `<task>
 Review my writing and provide specific, actionable feedback on:
 1. Clarity and conciseness
@@ -277,7 +279,8 @@ For each point:
 <context>
 Focus on [genre/type] writing. Provide actionable feedback that can be immediately applied.
 </context>`,
-    explanation: 'The bad output is generic and provides no framework for improvement. The good output creates a structured feedback session with specific mechanisms.',
+    explanation:
+      'The bad output is generic and provides no framework for improvement. The good output creates a structured feedback session with specific mechanisms.',
   },
 ];
 

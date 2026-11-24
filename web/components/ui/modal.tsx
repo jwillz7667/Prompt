@@ -63,15 +63,15 @@ export function Modal({
       />
 
       {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
         <div
           className={cn(
             'relative w-full rounded-2xl bg-[var(--bg-secondary)] shadow-2xl',
             'border border-[var(--border)]',
             'animate-in fade-in-0 zoom-in-95 duration-200',
-            'max-h-[90vh] flex flex-col',
+            'flex max-h-[90vh] flex-col',
             sizeClasses[size],
-            className
+            className,
           )}
           role="dialog"
           aria-modal="true"
@@ -81,7 +81,7 @@ export function Modal({
         >
           {/* Header */}
           {(title || showClose) && (
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4 shrink-0">
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-6 py-4">
               <div>
                 {title && (
                   <h2 id="modal-title" className="text-lg font-semibold text-[var(--text-primary)]">
@@ -103,7 +103,7 @@ export function Modal({
           )}
 
           {/* Content */}
-          <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>
         </div>
       </div>
     </Fragment>
@@ -119,9 +119,9 @@ export function ModalFooter({ children, className }: ModalFooterProps) {
   return (
     <div
       className={cn(
-        'flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4 -mx-6 -mb-4 mt-4',
+        '-mx-6 -mb-4 mt-4 flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4',
         'sticky bottom-0 bg-[var(--bg-secondary)]',
-        className
+        className,
       )}
     >
       {children}

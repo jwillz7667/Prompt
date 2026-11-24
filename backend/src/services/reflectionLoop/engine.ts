@@ -257,7 +257,7 @@ const VARIABLE_SLOT_PATTERN = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
  */
 export function fillVariableSlots(
   promptText: string,
-  values: Record<string, string> | undefined
+  values: Record<string, string> | undefined,
 ): string {
   return promptText.replace(VARIABLE_SLOT_PATTERN, (_match, name: string) => {
     const provided = values?.[name];
@@ -281,7 +281,7 @@ function estimatePromptTokens(text: string): number {
  */
 export function resolveTargetModelFamily(
   requested: TargetModelFamily | undefined,
-  inferred: TargetModelFamily
+  inferred: TargetModelFamily,
 ): TargetModelFamily {
   return requested !== undefined && requested !== 'unknown' ? requested : inferred;
 }
@@ -296,7 +296,9 @@ export function computeWeightedTotal(critique: Critique, rubric: Rubric): number
     return critique.weighted_total;
   }
 
-  const weightByName = new Map(rubric.criteria.map((criterion) => [criterion.name, criterion.weight]));
+  const weightByName = new Map(
+    rubric.criteria.map((criterion) => [criterion.name, criterion.weight]),
+  );
   let total = 0;
   for (const entry of critique.scores) {
     const weight = weightByName.get(entry.criterion);
@@ -338,7 +340,7 @@ export function selectTopCandidate(pool: readonly ScoredCandidate[]): ScoredCand
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
-  fn: (item: T, index: number) => Promise<R>
+  fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
   const results: R[] = new Array<R>(items.length);
   let cursor = 0;
@@ -427,7 +429,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
 
   const trackUsage = async (
     usage: ReflectionUsage,
-    request: ReflectionLlmRequest
+    request: ReflectionLlmRequest,
   ): Promise<ReflectionLlmResponse> => {
     const response = await deps.llm(request);
     usage.llmCalls += 1;
@@ -446,7 +448,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
     stage: Exclude<ReflectionStage, 'rollout'>,
     schema: Schema,
     systemPrompt: string,
-    userMessage: string
+    userMessage: string,
   ): Promise<z.output<Schema>> => {
     const config = STAGE_CONFIGS[stage];
     let lastFailure = 'unknown failure';
@@ -477,7 +479,10 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         parsed = extractJsonObject(content);
       } catch (error) {
         lastFailure = error instanceof Error ? error.message : String(error);
-        promptLogger.warn({ stage, attempt, error: lastFailure }, 'Reflection stage returned unparseable JSON');
+        promptLogger.warn(
+          { stage, attempt, error: lastFailure },
+          'Reflection stage returned unparseable JSON',
+        );
         continue;
       }
 
@@ -486,7 +491,10 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         lastFailure = validated.error.issues
           .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
           .join('; ');
-        promptLogger.warn({ stage, attempt, error: lastFailure }, 'Reflection stage output failed schema validation');
+        promptLogger.warn(
+          { stage, attempt, error: lastFailure },
+          'Reflection stage output failed schema validation',
+        );
         continue;
       }
 
@@ -505,7 +513,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
     usage: ReflectionUsage,
     spec: CandidateSpec,
     intake: Intake,
-    job: OptimizeJobInput
+    job: OptimizeJobInput,
   ): Promise<RolloutResult> => {
     const filledPrompt = fillVariableSlots(spec.promptText, job.variableValues);
     let lastFailure = 'unknown failure';
@@ -523,7 +531,10 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         });
         if (response.content.trim() === '') {
           lastFailure = 'empty rollout output';
-          promptLogger.warn({ stage: 'rollout', attempt, candidateId: spec.id }, 'Reflection rollout returned empty output');
+          promptLogger.warn(
+            { stage: 'rollout', attempt, candidateId: spec.id },
+            'Reflection rollout returned empty output',
+          );
           continue;
         }
         return {
@@ -533,7 +544,10 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         };
       } catch (error) {
         lastFailure = error instanceof Error ? error.message : String(error);
-        promptLogger.warn({ stage: 'rollout', attempt, candidateId: spec.id, error: lastFailure }, 'Reflection rollout call failed');
+        promptLogger.warn(
+          { stage: 'rollout', attempt, candidateId: spec.id, error: lastFailure },
+          'Reflection rollout call failed',
+        );
       }
     }
 
@@ -546,7 +560,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
     spec: CandidateSpec,
     rollout: RolloutResult,
     rubric: Rubric,
-    intake: Intake
+    intake: Intake,
   ): Promise<ScoredCandidate> => {
     const critique = await callJsonStage(
       usage,
@@ -558,7 +572,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         inferredGoal: intake.inferred_goal,
         promptUnderTest: spec.promptText,
         rolloutOutput: rollout.output,
-      })
+      }),
     );
 
     return {
@@ -577,16 +591,16 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
     rubric: Rubric,
     intake: Intake,
     job: OptimizeJobInput,
-    rolloutsUsedSoFar: number
+    rolloutsUsedSoFar: number,
   ): Promise<ScoredCandidate[]> => {
     emitProgress('testing_candidates', rolloutsUsedSoFar);
     const rollouts = await mapWithConcurrency(specs, PARALLEL_LLM_CONCURRENCY, (spec) =>
-      runRollout(usage, spec, intake, job)
+      runRollout(usage, spec, intake, job),
     );
 
     emitProgress('reflecting', rolloutsUsedSoFar + specs.length);
     return mapWithConcurrency(specs, PARALLEL_LLM_CONCURRENCY, (spec, index) =>
-      runCritic(usage, spec, requireAt(rollouts, index), rubric, intake)
+      runCritic(usage, spec, requireAt(rollouts, index), rubric, intake),
     );
   };
 
@@ -596,7 +610,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
     best: ScoredCandidate,
     pool: readonly ScoredCandidate[],
     rubric: Rubric,
-    revisionRound: number
+    revisionRound: number,
   ): Promise<CandidateSpec> => {
     // Lesson pool = diagnoses from every candidate EXCEPT the best one (its
     // full critique travels separately as <best_critique>). Strategy and score
@@ -620,7 +634,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         bestCritiqueJson: JSON.stringify(best.critique),
         lessonPoolJson: JSON.stringify(lessonPool),
         rubricJson: JSON.stringify(rubric),
-      })
+      }),
     );
 
     return {
@@ -635,7 +649,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
     job: OptimizeJobInput,
     usage: ReflectionUsage,
     reason: ReflectionFastPathOutcome['reason'],
-    degradedStage?: ReflectionStage
+    degradedStage?: ReflectionStage,
   ): Promise<ReflectionFastPathOutcome> => {
     const result = await deps.singlePass({ rawPrompt: job.rawPrompt, userGoal: job.userGoal });
     return {
@@ -650,7 +664,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
 
   const runLoop = async (
     job: OptimizeJobInput,
-    usage: ReflectionUsage
+    usage: ReflectionUsage,
   ): Promise<ReflectionOutcome> => {
     emitProgress('classifying', 0);
     const intake = await callJsonStage(
@@ -658,7 +672,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
       'intake',
       intakeSchema,
       INTAKE_SYSTEM_PROMPT,
-      buildIntakeUserMessage({ rawPrompt: job.rawPrompt, userGoal: job.userGoal })
+      buildIntakeUserMessage({ rawPrompt: job.rawPrompt, userGoal: job.userGoal }),
     );
 
     if (intake.safety.flag) {
@@ -684,7 +698,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         taskType: intake.task_type,
         inferredGoal: intake.inferred_goal,
         rawPrompt: job.rawPrompt,
-      })
+      }),
     );
 
     emitProgress('generating_candidates', 0);
@@ -697,12 +711,15 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         taskType: intake.task_type,
         // Explicit user choice beats P0's inference; intake itself stays
         // untouched so the outcome reports what P0 actually saw.
-        targetModelFamily: resolveTargetModelFamily(job.targetModelFamily, intake.target_model_family),
+        targetModelFamily: resolveTargetModelFamily(
+          job.targetModelFamily,
+          intake.target_model_family,
+        ),
         inferredGoal: intake.inferred_goal,
         missingIngredients: intake.missing_ingredients,
         language: intake.language,
         rawPrompt: job.rawPrompt,
-      })
+      }),
     );
 
     const initialSpecs: CandidateSpec[] = [
@@ -735,7 +752,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
 
       const revisedScored = requireAt(
         await rollAndCritique(usage, [revisedSpec], rubric, intake, job, rolloutsUsed),
-        0
+        0,
       );
       rolloutsUsed += 1;
       pool = [...pool, revisedScored];
@@ -767,7 +784,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         winnerPromptText: best.promptText,
         winnerScoresJson: JSON.stringify(best.critique.scores),
         originalScoresJson: JSON.stringify(original.critique.scores),
-      })
+      }),
     );
 
     return {
@@ -794,7 +811,7 @@ export function createReflectionEngine(deps: ReflectionEngineDeps): ReflectionEn
         // error never escapes for a stage that merely mis-formatted JSON.
         promptLogger.warn(
           { stage: error.stage, err: error },
-          'Reflection loop degraded to single-pass fast path'
+          'Reflection loop degraded to single-pass fast path',
         );
         return runFastPath(job, usage, 'stage_degraded', error.stage);
       }

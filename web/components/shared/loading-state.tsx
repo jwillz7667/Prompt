@@ -9,7 +9,11 @@ interface LoadingStateProps {
   fullScreen?: boolean
 }
 
-export function LoadingState({ message = 'Loading...', className, fullScreen = false }: LoadingStateProps) {
+export function LoadingState({
+  message = 'Loading...',
+  className,
+  fullScreen = false,
+}: LoadingStateProps) {
   const content = (
     <div className={cn('flex flex-col items-center justify-center gap-4', className)}>
       <div className="relative">

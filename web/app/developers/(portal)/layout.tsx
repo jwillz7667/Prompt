@@ -39,9 +39,9 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
   // Show loading state while checking auth
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-indigo mx-auto mb-4" />
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-brand-indigo" />
           <p className="text-[var(--text-secondary)]">Loading developer portal...</p>
         </div>
       </div>
@@ -51,8 +51,8 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       {/* Top Navigation Bar */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-[var(--border)] bg-[var(--bg-secondary)]/90 backdrop-blur-lg">
-        <div className="h-full px-4 lg:px-6 flex items-center justify-between">
+      <header className="bg-[var(--bg-secondary)]/90 fixed left-0 right-0 top-0 z-50 h-16 border-b border-[var(--border)] backdrop-blur-lg">
+        <div className="flex h-full items-center justify-between px-4 lg:px-6">
           {/* Left side - Logo and Nav */}
           <div className="flex items-center gap-6">
             <Link href="/developers" className="flex items-center gap-2">
@@ -60,13 +60,13 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
                 <Code2 className="h-5 w-5 text-white" />
               </div>
               <div className="hidden sm:block">
-                <span className="text-sm font-bold gradient-text">Promptomize</span>
-                <span className="text-xs text-[var(--text-tertiary)] block">Developer Portal</span>
+                <span className="gradient-text text-sm font-bold">Promptomize</span>
+                <span className="block text-xs text-[var(--text-tertiary)]">Developer Portal</span>
               </div>
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center gap-1">
+            <nav className="hidden items-center gap-1 lg:flex">
               {developerNavItems.map((item) => {
                 const isActive =
                   item.href === '/developers'
@@ -78,10 +78,10 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                       isActive
                         ? 'bg-brand-indigo/10 text-brand-indigo'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]',
                     )}
                   >
                     <span>{item.icon}</span>
@@ -96,7 +96,7 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             {/* Subscription badge */}
             {subscription && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--bg-tertiary)]">
+              <div className="hidden items-center gap-2 rounded-lg bg-[var(--bg-tertiary)] px-3 py-1.5 sm:flex">
                 <span className="text-xs text-[var(--text-secondary)]">
                   {subscription.currentPeriodUsage}/{subscription.includedRequests} requests
                 </span>
@@ -107,7 +107,7 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
 
             {/* User menu */}
             <div className="flex items-center gap-2">
-              <div className="hidden sm:block text-right">
+              <div className="hidden text-right sm:block">
                 <p className="text-sm font-medium text-[var(--text-primary)]">
                   {developer?.name || developer?.email}
                 </p>
@@ -127,7 +127,7 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] lg:hidden"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -136,7 +136,7 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="lg:hidden border-t border-[var(--border)] bg-[var(--bg-secondary)]">
+          <div className="border-t border-[var(--border)] bg-[var(--bg-secondary)] lg:hidden">
             <nav className="flex flex-col p-2">
               {developerNavItems.map((item) => {
                 const isActive =
@@ -150,10 +150,10 @@ function DeveloperPortalContent({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
+                      'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors',
                       isActive
                         ? 'bg-brand-indigo/10 text-brand-indigo'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]',
                     )}
                   >
                     <span className="text-lg">{item.icon}</span>
@@ -178,8 +178,8 @@ export default function DevelopersPortalLayout({ children }: { children: React.R
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-indigo" />
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-indigo" />
         </div>
       }
     >

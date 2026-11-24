@@ -80,7 +80,7 @@ templatesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid query', details: error.errors });
+      res.status(400).json({ error: 'Invalid query', details: error.issues });
       return;
     }
     logger.error({ err: error }, 'Failed to list templates');
@@ -109,23 +109,27 @@ templatesRouter.get('/categories', async (_req: Request, res: Response): Promise
 // Declared before /:id so the literal path wins the match.
 // ============================================================================
 
-templatesRouter.get('/mine', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+templatesRouter.get(
+  '/mine',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+      const templates = await prisma.template.findMany({
+        where: { userId: req.user.id },
+        select: templateSelect,
+        orderBy: { createdAt: 'desc' },
+      });
+      res.json({ templates });
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to list own templates');
+      res.status(500).json({ error: 'Failed to list templates' });
     }
-    const templates = await prisma.template.findMany({
-      where: { userId: req.user.id },
-      select: templateSelect,
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json({ templates });
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to list own templates');
-    res.status(500).json({ error: 'Failed to list templates' });
-  }
-});
+  },
+);
 
 // GET /api/v1/templates/:id — public template detail
 templatesRouter.get('/:id', async (req: Request, res: Response): Promise<void> => {
@@ -185,80 +189,92 @@ const createTemplateSchema = z.object({
   icon: z.string().max(50).optional(),
 });
 
-templatesRouter.post('/', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+templatesRouter.post(
+  '/',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+      const data = createTemplateSchema.parse(req.body);
+      const template = await prisma.template.create({
+        data: { ...data, userId: req.user.id },
+        select: templateSelect,
+      });
+      res.status(201).json({ template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid template', details: error.issues });
+        return;
+      }
+      logger.error({ err: error }, 'Failed to create template');
+      res.status(500).json({ error: 'Failed to create template' });
     }
-    const data = createTemplateSchema.parse(req.body);
-    const template = await prisma.template.create({
-      data: { ...data, userId: req.user.id },
-      select: templateSelect,
-    });
-    res.status(201).json({ template });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid template', details: error.errors });
-      return;
-    }
-    logger.error({ err: error }, 'Failed to create template');
-    res.status(500).json({ error: 'Failed to create template' });
-  }
-});
+  },
+);
 
 const updateTemplateSchema = createTemplateSchema.partial();
 
-templatesRouter.patch('/:id', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-    const data = updateTemplateSchema.parse(req.body);
+templatesRouter.patch(
+  '/:id',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+      const data = updateTemplateSchema.parse(req.body);
 
-    // Ownership is enforced in the WHERE, not checked-then-updated, so a
-    // concurrent delete cannot race the guard. Editing a moderated-public
-    // template pulls it back to private pending re-review.
-    const result = await prisma.template.updateMany({
-      where: { id: req.params['id'] as string, userId: req.user.id },
-      data: { ...data, isPublic: false },
-    });
-    if (result.count === 0) {
-      res.status(404).json({ error: 'Template not found' });
-      return;
+      // Ownership is enforced in the WHERE, not checked-then-updated, so a
+      // concurrent delete cannot race the guard. Editing a moderated-public
+      // template pulls it back to private pending re-review.
+      const result = await prisma.template.updateMany({
+        where: { id: req.params['id'] as string, userId: req.user.id },
+        data: { ...data, isPublic: false },
+      });
+      if (result.count === 0) {
+        res.status(404).json({ error: 'Template not found' });
+        return;
+      }
+      const template = await prisma.template.findUnique({
+        where: { id: req.params['id'] as string },
+        select: templateSelect,
+      });
+      res.json({ template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid template', details: error.issues });
+        return;
+      }
+      logger.error({ err: error }, 'Failed to update template');
+      res.status(500).json({ error: 'Failed to update template' });
     }
-    const template = await prisma.template.findUnique({
-      where: { id: req.params['id'] as string },
-      select: templateSelect,
-    });
-    res.json({ template });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid template', details: error.errors });
-      return;
-    }
-    logger.error({ err: error }, 'Failed to update template');
-    res.status(500).json({ error: 'Failed to update template' });
-  }
-});
+  },
+);
 
-templatesRouter.delete('/:id', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+templatesRouter.delete(
+  '/:id',
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+      const result = await prisma.template.deleteMany({
+        where: { id: req.params['id'] as string, userId: req.user.id },
+      });
+      if (result.count === 0) {
+        res.status(404).json({ error: 'Template not found' });
+        return;
+      }
+      res.status(204).send();
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to delete template');
+      res.status(500).json({ error: 'Failed to delete template' });
     }
-    const result = await prisma.template.deleteMany({
-      where: { id: req.params['id'] as string, userId: req.user.id },
-    });
-    if (result.count === 0) {
-      res.status(404).json({ error: 'Template not found' });
-      return;
-    }
-    res.status(204).send();
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to delete template');
-    res.status(500).json({ error: 'Failed to delete template' });
-  }
-});
+  },
+);

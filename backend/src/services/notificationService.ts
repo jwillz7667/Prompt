@@ -84,12 +84,11 @@ function getAPNsToken(): string {
 async function sendToDevice(
   deviceToken: string,
   payload: APNsPayload,
-  environment: string = 'production'
+  environment: string = 'production',
 ): Promise<boolean> {
   try {
     const token = getAPNsToken();
-    const url =
-      environment === 'sandbox' ? APNS_SANDBOX_URL : APNS_PRODUCTION_URL;
+    const url = environment === 'sandbox' ? APNS_SANDBOX_URL : APNS_PRODUCTION_URL;
 
     const response = await fetch(`${url}/3/device/${deviceToken}`, {
       method: 'POST',
@@ -105,14 +104,17 @@ async function sendToDevice(
     });
 
     if (response.ok) {
-      logger.info({ deviceToken: deviceToken.slice(0, 8) + '...' }, 'Push notification sent successfully');
+      logger.info(
+        { deviceToken: deviceToken.slice(0, 8) + '...' },
+        'Push notification sent successfully',
+      );
       return true;
     }
 
     const errorBody = await response.text();
     logger.error(
       { status: response.status, error: errorBody, deviceToken: deviceToken.slice(0, 8) + '...' },
-      'Failed to send push notification'
+      'Failed to send push notification',
     );
 
     // Handle invalid tokens
@@ -126,7 +128,10 @@ async function sendToDevice(
 
     return false;
   } catch (error) {
-    logger.error({ error, deviceToken: deviceToken.slice(0, 8) + '...' }, 'Error sending push notification');
+    logger.error(
+      { error, deviceToken: deviceToken.slice(0, 8) + '...' },
+      'Error sending push notification',
+    );
     return false;
   }
 }
@@ -134,10 +139,7 @@ async function sendToDevice(
 /**
  * Send push notification to all devices for a user
  */
-export async function sendToUser(
-  userId: string,
-  payload: APNsPayload
-): Promise<number> {
+export async function sendToUser(userId: string, payload: APNsPayload): Promise<number> {
   const devices = await prisma.deviceToken.findMany({
     where: { userId, isActive: true },
   });
@@ -149,11 +151,7 @@ export async function sendToUser(
 
   let successCount = 0;
   for (const device of devices) {
-    const success = await sendToDevice(
-      device.deviceToken,
-      payload,
-      device.environment
-    );
+    const success = await sendToDevice(device.deviceToken, payload, device.environment);
     if (success) {
       successCount++;
       // Update last used timestamp
@@ -174,16 +172,15 @@ export async function sendSupportMessageNotification(
   userId: string,
   ticketId: string,
   agentName: string,
-  messagePreview: string
+  messagePreview: string,
 ): Promise<void> {
   const payload: APNsPayload = {
     aps: {
       alert: {
         title: 'New Support Message',
         subtitle: agentName || 'Support Agent',
-        body: messagePreview.length > 100
-          ? messagePreview.substring(0, 100) + '...'
-          : messagePreview,
+        body:
+          messagePreview.length > 100 ? messagePreview.substring(0, 100) + '...' : messagePreview,
       },
       sound: 'default',
       'mutable-content': 1,
@@ -204,15 +201,17 @@ export async function sendSupportMessageNotification(
 export async function sendEnhancementCompletedNotification(
   userId: string,
   promptId: string,
-  originalPromptPreview: string
+  originalPromptPreview: string,
 ): Promise<void> {
   const payload: APNsPayload = {
     aps: {
       alert: {
         title: 'Enhancement Complete',
-        body: `Your prompt "${originalPromptPreview.length > 50
-          ? originalPromptPreview.substring(0, 50) + '...'
-          : originalPromptPreview}" has been enhanced`,
+        body: `Your prompt "${
+          originalPromptPreview.length > 50
+            ? originalPromptPreview.substring(0, 50) + '...'
+            : originalPromptPreview
+        }" has been enhanced`,
       },
       sound: 'default',
       'mutable-content': 1,
@@ -233,7 +232,7 @@ export async function registerDeviceToken(
   userId: string,
   deviceToken: string,
   deviceId?: string,
-  environment: string = 'production'
+  environment: string = 'production',
 ): Promise<void> {
   await prisma.deviceToken.upsert({
     where: { deviceToken },
@@ -254,10 +253,7 @@ export async function registerDeviceToken(
     },
   });
 
-  logger.info(
-    { userId, deviceToken: deviceToken.slice(0, 8) + '...' },
-    'Device token registered'
-  );
+  logger.info({ userId, deviceToken: deviceToken.slice(0, 8) + '...' }, 'Device token registered');
 }
 
 /**
@@ -269,10 +265,7 @@ export async function unregisterDeviceToken(deviceToken: string): Promise<void> 
     data: { isActive: false },
   });
 
-  logger.info(
-    { deviceToken: deviceToken.slice(0, 8) + '...' },
-    'Device token unregistered'
-  );
+  logger.info({ deviceToken: deviceToken.slice(0, 8) + '...' }, 'Device token unregistered');
 }
 
 /**
@@ -284,10 +277,7 @@ export async function cleanupInactiveTokens(olderThanDays: number = 90): Promise
 
   const result = await prisma.deviceToken.deleteMany({
     where: {
-      OR: [
-        { isActive: false, updatedAt: { lt: cutoffDate } },
-        { lastUsedAt: { lt: cutoffDate } },
-      ],
+      OR: [{ isActive: false, updatedAt: { lt: cutoffDate } }, { lastUsedAt: { lt: cutoffDate } }],
     },
   });
 

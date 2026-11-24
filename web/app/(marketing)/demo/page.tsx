@@ -79,15 +79,12 @@ export default function DemoPage() {
               Watch Promptomize turn a rough idea into a stronger AI prompt.
             </h1>
             <p className="mb-8 text-lg leading-8 text-gray-300 sm:text-xl">
-              This short demo shows the same product flow users get on iPhone and the web:
-              fast enhancement, clear formatting, and a workflow built for prompt iteration.
+              This short demo shows the same product flow users get on iPhone and the web: fast
+              enhancement, clear formatting, and a workflow built for prompt iteration.
             </p>
 
             <div className="mb-8 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/login"
-                className={`${primaryButtonClass} w-full sm:w-auto`}
-              >
+              <Link href="/login" className={`${primaryButtonClass} w-full sm:w-auto`}>
                 Try the Web App
                 <ArrowRight className="h-5 w-5" aria-hidden="true" />
               </Link>
@@ -185,10 +182,7 @@ export default function DemoPage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/login"
-                  className={`${primaryButtonClass} justify-center`}
-                >
+                <Link href="/login" className={`${primaryButtonClass} justify-center`}>
                   Open Web App
                 </Link>
                 <a

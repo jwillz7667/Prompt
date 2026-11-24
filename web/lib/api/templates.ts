@@ -9,7 +9,9 @@ export interface TemplatesQueryParams {
   userOnly?: boolean
 }
 
-export async function getTemplates(params: TemplatesQueryParams = {}): Promise<TemplatesListResponse> {
+export async function getTemplates(
+  params: TemplatesQueryParams = {},
+): Promise<TemplatesListResponse> {
   const searchParams = new URLSearchParams()
   if (params.category) searchParams.set('category', params.category)
   if (params.search) searchParams.set('search', params.search)
@@ -30,7 +32,7 @@ export async function createTemplate(data: CreateTemplateRequest): Promise<Templ
 
 export async function updateTemplate(
   id: string,
-  data: Partial<CreateTemplateRequest>
+  data: Partial<CreateTemplateRequest>,
 ): Promise<Template> {
   return api.patch<Template>(`/templates/${id}`, data)
 }

@@ -54,6 +54,9 @@ struct PromptApp: App {
     @State private var guestSessionManager = GuestSessionManager.shared
 
     init() {
+        UserDefaults(suiteName: SharedDataManager.appGroupIdentifier)?
+            .set(APIConfiguration.origin.absoluteString, forKey: "apiBaseURL")
+
         // Configure Firebase Analytics and Crashlytics
         AnalyticsService.shared.configure()
     }

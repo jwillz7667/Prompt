@@ -1,5 +1,5 @@
-import { api, setTokens, clearTokens } from './client'
-import type { AuthResponse, RefreshResponse } from '@/lib/types/api'
+import { api, setTokens, clearTokens, refreshAccessToken, getSessionGeneration } from './client'
+import type { AuthResponse } from '@/lib/types/api'
 import type { User } from '@/lib/types/models'
 
 export interface AppleAuthRequest {
@@ -27,38 +27,35 @@ export async function signInWithGoogle(request: GoogleAuthRequest): Promise<Auth
   return response
 }
 
-export async function refreshTokens(): Promise<RefreshResponse> {
-  // Call our Next.js API route which reads the HTTP-only refresh token cookie
-  const response = await fetch('/api/auth/refresh', {
-    method: 'POST',
-    credentials: 'include', // Include cookies
-  })
-
-  if (!response.ok) {
-    throw new Error('Refresh failed')
-  }
-
-  const data: RefreshResponse = await response.json()
-  setTokens(data.accessToken, data.refreshToken, data.expiresIn)
-  return data
+export async function refreshTokens(): Promise<{ accessToken: string }> {
+  const accessToken = await refreshAccessToken()
+  if (!accessToken) throw new Error('Please sign in again.')
+  return { accessToken }
 }
 
 export async function getCurrentUser(): Promise<User> {
-  return api.get<User>('/auth/me')
+  const { user } = await api.get<{ user: User }>('/auth/me')
+  return user
 }
 
 export async function logout(): Promise<void> {
+  const generation = getSessionGeneration()
   try {
     await api.post<void>('/auth/logout')
   } finally {
+    if (generation !== getSessionGeneration()) return
     clearTokens()
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
   }
 }
 
 export async function logoutAllDevices(): Promise<void> {
+  const generation = getSessionGeneration()
   try {
     await api.post<void>('/auth/logout-all')
   } finally {
+    if (generation !== getSessionGeneration()) return
     clearTokens()
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
   }
 }

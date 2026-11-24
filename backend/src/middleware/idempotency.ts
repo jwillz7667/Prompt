@@ -1,8 +1,8 @@
-import { Request, Response, NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../utils/prisma.js';
 import { webhookLogger } from '../utils/logger.js';
-import { IdempotencyStatus, Prisma } from '@prisma/client';
+import { IdempotencyStatus, type Prisma } from '@prisma/client';
 
 // ============================================================================
 // TYPES
@@ -56,7 +56,7 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
       }
     } catch (error) {
       webhookLogger.error({ err: error, endpoint }, 'Failed to extract idempotency key');
-      next();
+      res.status(400).json({ error: 'Invalid webhook payload' });
       return;
     }
 
@@ -64,10 +64,16 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
 
     try {
       // Check for existing record
-      const existing = await prisma.webhookIdempotencyKey.findUnique({
+      let existing = await prisma.webhookIdempotencyKey.findUnique({
         where: { idempotencyKey },
       });
 
+      if (existing && existing.expiresAt <= new Date()) {
+        await prisma.webhookIdempotencyKey.deleteMany({
+          where: { id: existing.id, expiresAt: { lte: new Date() } },
+        });
+        existing = null;
+      }
       if (existing) {
         // Handle based on status
         switch (existing.status) {
@@ -75,7 +81,7 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
             // Return cached response
             webhookLogger.info(
               { idempotencyKey, endpoint, requestId, cachedAt: existing.completedAt },
-              'Returning cached idempotent response'
+              'Returning cached idempotent response',
             );
 
             const cachedResponse = existing.responseBody as Record<string, unknown> | null;
@@ -86,7 +92,7 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
             // Another request is currently processing this
             webhookLogger.warn(
               { idempotencyKey, endpoint, requestId, startedAt: existing.createdAt },
-              'Duplicate request while processing'
+              'Duplicate request while processing',
             );
 
             res.status(409).json({
@@ -99,7 +105,7 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
             // Previous attempt failed, allow retry
             webhookLogger.info(
               { idempotencyKey, endpoint, requestId },
-              'Retrying failed idempotent request'
+              'Retrying failed idempotent request',
             );
 
             // Delete failed record and proceed
@@ -111,13 +117,14 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
       }
 
       // Create new processing record
-      const expiresAt = new Date(Date.now() + ttlMs);
+      // Recover a worker that crashed before replying; completed records retain
+      // the requested deduplication TTL when the response is persisted.
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
       await prisma.webhookIdempotencyKey.create({
         data: {
           idempotencyKey,
           endpoint,
-          payload: req.body as Prisma.InputJsonValue,
           status: IdempotencyStatus.PROCESSING,
           expiresAt,
         },
@@ -127,7 +134,7 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
       const originalJson = res.json.bind(res);
       res.json = function (body: unknown) {
         // Update the idempotency record with the response
-        updateIdempotencyRecord(idempotencyKey, res.statusCode, body).catch((err) => {
+        updateIdempotencyRecord(idempotencyKey, res.statusCode, body, ttlMs).catch((err) => {
           webhookLogger.error({ err, idempotencyKey }, 'Failed to update idempotency record');
         });
 
@@ -143,9 +150,14 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
 
       next();
     } catch (error) {
-      webhookLogger.error({ err: error, idempotencyKey, endpoint, requestId }, 'Idempotency check failed');
-      // On error, proceed without idempotency protection
-      next();
+      webhookLogger.error(
+        { err: error, idempotencyKey, endpoint, requestId },
+        'Idempotency check failed',
+      );
+      // A lost race or database outage must never bypass billing deduplication.
+      res
+        .status(503)
+        .json({ error: 'Webhook processing is temporarily unavailable. Please retry.' });
     }
   };
 }
@@ -157,15 +169,20 @@ export function idempotencyGuard(options: IdempotencyOptions = {}) {
 async function updateIdempotencyRecord(
   idempotencyKey: string,
   statusCode: number,
-  responseBody: unknown
+  responseBody: unknown,
+  ttlMs: number,
 ): Promise<void> {
   await prisma.webhookIdempotencyKey.update({
     where: { idempotencyKey },
     data: {
-      status: statusCode >= 200 && statusCode < 500 ? IdempotencyStatus.COMPLETED : IdempotencyStatus.FAILED,
+      status:
+        statusCode >= 200 && statusCode < 500
+          ? IdempotencyStatus.COMPLETED
+          : IdempotencyStatus.FAILED,
       statusCode,
       responseBody: responseBody as Prisma.InputJsonValue,
       completedAt: new Date(),
+      expiresAt: new Date(Date.now() + ttlMs),
     },
   });
 }

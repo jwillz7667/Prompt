@@ -21,9 +21,9 @@ export function Header() {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 z-30 h-16 border-b border-[var(--border)] bg-[var(--bg-secondary)]/80 backdrop-blur-lg transition-all duration-300',
+        'bg-[var(--bg-secondary)]/80 fixed right-0 top-0 z-30 h-16 border-b border-[var(--border)] backdrop-blur-lg transition-all duration-300',
         sidebarCollapsed ? 'left-20' : 'left-64',
-        'max-lg:left-0'
+        'max-lg:left-0',
       )}
       role="banner"
     >
@@ -31,7 +31,7 @@ export function Header() {
         {/* Mobile menu button */}
         <button
           onClick={toggleMobileMenu}
-          className="lg:hidden flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+          className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] lg:hidden"
           aria-label="Open navigation menu"
           aria-expanded="false"
         >
@@ -41,7 +41,7 @@ export function Header() {
         {/* Mobile Logo */}
         <Link
           href="/dashboard"
-          className="lg:hidden flex items-center gap-2"
+          className="flex items-center gap-2 lg:hidden"
           aria-label="Promptomize Dashboard"
         >
           <Logo size={32} className="rounded-lg" />
@@ -54,12 +54,12 @@ export function Header() {
         <div className="flex items-center gap-3">
           {/* Usage indicator */}
           <div
-            className="hidden sm:flex items-center gap-2 rounded-xl bg-[var(--bg-tertiary)] px-3 py-1.5"
+            className="hidden items-center gap-2 rounded-xl bg-[var(--bg-tertiary)] px-3 py-1.5 sm:flex"
             role="status"
             aria-label={`${remaining} of ${usage.dailyPromptsLimit} prompts remaining`}
           >
             <div
-              className="relative h-2 w-16 rounded-full bg-[var(--border)] overflow-hidden"
+              className="relative h-2 w-16 overflow-hidden rounded-full bg-[var(--border)]"
               role="progressbar"
               aria-valuenow={usage.dailyPromptsUsed}
               aria-valuemin={0}
@@ -68,7 +68,11 @@ export function Header() {
               <div
                 className={cn(
                   'absolute left-0 top-0 h-full rounded-full transition-all',
-                  remaining <= 0 ? 'bg-red-500' : remaining <= 3 ? 'bg-yellow-500' : 'bg-brand-cyan'
+                  remaining <= 0
+                    ? 'bg-red-500'
+                    : remaining <= 3
+                      ? 'bg-yellow-500'
+                      : 'bg-brand-cyan',
                 )}
                 style={{
                   width: `${Math.min((usage.dailyPromptsUsed / usage.dailyPromptsLimit) * 100, 100)}%`,
@@ -85,7 +89,7 @@ export function Header() {
             variant={tier === 'PREMIUM' ? 'premium' : tier === 'PRO' ? 'pro' : 'outline'}
             aria-label={`Current subscription tier: ${tier}`}
           >
-            {tier === 'PREMIUM' && <Crown className="h-3 w-3 mr-1" aria-hidden="true" />}
+            {tier === 'PREMIUM' && <Crown className="mr-1 h-3 w-3" aria-hidden="true" />}
             {tier}
           </Badge>
 
@@ -107,7 +111,7 @@ export function Header() {
           {/* Profile */}
           <Link
             href="/profile"
-            className="flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden bg-brand-indigo dark:bg-brand-cyan"
+            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-brand-indigo dark:bg-brand-cyan"
             aria-label={`Profile for ${user?.name || user?.email || 'User'}`}
           >
             {user?.avatarUrl ? (

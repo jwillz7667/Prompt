@@ -3,7 +3,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 
 import { promptLogger } from '../utils/logger.js';
-import { resolveDeepseekModel } from './deepseekModels.js';
+import { DEEPSEEK_THINKING_DISABLED, resolveDeepseekModel } from './deepseekModels.js';
+import { requestCompletion } from './deepseekService.js';
 
 /**
  * Uniform non-streaming completion across AI providers, used by the
@@ -55,32 +56,16 @@ export function getAvailableProviders(): CompareProvider[] {
   return COMPARE_PROVIDERS.filter((provider) => apiKeyFor(provider) !== undefined);
 }
 
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
-interface OpenAICompatibleResponse {
-  choices: Array<{ message: { content: string | null } }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
-  model?: string;
-}
-
 async function completeDeepseek(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   // Compare is a non-thinking surface; a legacy id in DEEPSEEK_COMPARE_MODEL
   // is remapped, and thinking is always sent explicitly (V4 Flash defaults it
   // ON and bills the CoT as output tokens).
-  const { model, thinking } = resolveDeepseekModel(
-    process.env['DEEPSEEK_COMPARE_MODEL'] || undefined,
-    false
-  );
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const { model } = resolveDeepseekModel(process.env['DEEPSEEK_COMPARE_MODEL'] || undefined, false);
+  const result = await requestCompletion(
+    {
       model,
       messages: [
         { role: 'system', content: request.systemPrompt },
@@ -89,34 +74,25 @@ async function completeDeepseek(
       temperature: request.temperature,
       max_tokens: request.maxTokens,
       stream: false,
-      thinking,
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`DeepSeek API error ${response.status}: ${body.slice(0, 300)}`);
-  }
-
-  const data = (await response.json()) as OpenAICompatibleResponse;
-  const content = data.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error('Empty response from DeepSeek');
-  }
+      thinking: DEEPSEEK_THINKING_DISABLED,
+    },
+    apiKey,
+    'chat',
+  );
   return {
-    content,
-    model: data.model || model,
-    inputTokens: data.usage?.prompt_tokens ?? 0,
-    outputTokens: data.usage?.completion_tokens ?? 0,
+    content: result.enhancedPrompt,
+    model: result.model,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
   };
 }
 
 async function completeAnthropic(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   const model = process.env['ANTHROPIC_COMPARE_MODEL'] || 'claude-sonnet-5';
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   const message = await client.messages.create({
     model,
     max_tokens: request.maxTokens,
@@ -142,10 +118,10 @@ async function completeAnthropic(
 
 async function completeOpenai(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   const model = process.env['OPENAI_COMPARE_MODEL'] || 'gpt-4.1';
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
   const completion = await client.chat.completions.create({
     model,
     max_tokens: request.maxTokens,
@@ -170,7 +146,7 @@ async function completeOpenai(
 
 async function completeGemini(
   apiKey: string,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<Omit<ProviderCompletionResult, 'processingMs'>> {
   const model = process.env['GEMINI_COMPARE_MODEL'] || 'gemini-2.5-flash';
   const client = new GoogleGenerativeAI(apiKey);
@@ -183,7 +159,7 @@ async function completeGemini(
     },
   });
 
-  const result = await generativeModel.generateContent(request.userMessage);
+  const result = await generativeModel.generateContent(request.userMessage, { timeout: 60_000 });
   const content = result.response.text();
   if (!content) {
     throw new Error('Empty response from Gemini');
@@ -199,7 +175,7 @@ async function completeGemini(
 
 export async function completeWithProvider(
   provider: CompareProvider,
-  request: ProviderCompletionRequest
+  request: ProviderCompletionRequest,
 ): Promise<ProviderCompletionResult> {
   const apiKey = apiKeyFor(provider);
   if (!apiKey) {
@@ -226,7 +202,7 @@ export async function completeWithProvider(
   const processingMs = Date.now() - startTime;
   promptLogger.info(
     { provider, model: result.model, processingMs, outputTokens: result.outputTokens },
-    'Provider completion finished'
+    'Provider completion finished',
   );
   return { ...result, processingMs };
 }
