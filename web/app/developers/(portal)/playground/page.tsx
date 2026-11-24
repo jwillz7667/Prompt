@@ -1,11 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { useApiKeys } from '@/lib/hooks/useApiKeys'
+import Link from 'next/link'
+import { useApiKeys, useApiSubscriptionStatus } from '@/lib/hooks/useApiKeys'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { toast } from '@/lib/stores/uiStore'
 import { cn } from '@/lib/utils/cn'
+import {
+  DEVELOPER_BILLING_PATH,
+  describeEnhanceFailure,
+  getDeveloperPlanAccess,
+  toPlaygroundRequestBody,
+} from '@/lib/developer/plan-access'
+import { PaidPlanNotice } from '../_components/PaidPlanNotice'
 
 const MODALITIES = [
   { id: 'text', name: 'Text', description: 'General text and writing' },
@@ -25,9 +33,13 @@ const API_BASE_URL =
 
 export default function PlaygroundPage() {
   const { data: apiKeys } = useApiKeys()
+  const { data: subscription, isLoading: subLoading } = useApiSubscriptionStatus()
   const activeKeys = apiKeys?.filter((k) => k.isActive) || []
+  const planAccess = getDeveloperPlanAccess(subscription)
 
-  const [selectedKeyId, setSelectedKeyId] = useState<string>('')
+  // Only a key's prefix is stored server-side, so the full key has to be
+  // pasted. It stays in component state and is never persisted.
+  const [apiKey, setApiKey] = useState<string>('')
   const [prompt, setPrompt] = useState('Write a professional email to schedule a meeting')
   const [modality, setModality] = useState<string>('text')
   const [tone, setTone] = useState<string>('')
@@ -38,13 +50,14 @@ export default function PlaygroundPage() {
     enhancedPrompt?: string
     usage?: { inputTokens: number; outputTokens: number; totalTokens: number; processingMs: number }
     error?: string
+    isUpgradeRequired?: boolean
   } | null>(null)
 
-  const selectedKey = activeKeys.find((k) => k.id === selectedKeyId)
+  const requestBody = toPlaygroundRequestBody({ prompt, modality, tone, length })
 
   const handleSubmit = async () => {
-    if (!selectedKeyId) {
-      toast.error('Select an API key', 'Choose an API key to use for testing')
+    if (!apiKey.trim()) {
+      toast.error('Enter an API key', 'Paste the full API key you want to test with')
       return
     }
 
@@ -57,27 +70,20 @@ export default function PlaygroundPage() {
     setResponse(null)
 
     try {
-      // We need to make the request directly since we're using the API key
-      const body: Record<string, unknown> = {
-        prompt: prompt.trim(),
-        modality,
-      }
-      if (tone) body.tone = tone
-      if (length) body.length = length
-
       const res = await fetch(`${API_BASE_URL}/public/enhance`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': `pk_live_${selectedKey?.keyPrefix.replace('pk_live_', '')}...`,
+          'X-API-Key': apiKey.trim(),
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(requestBody),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        setResponse({ error: data.message || data.error || 'Request failed' })
+        const failure = describeEnhanceFailure(res.status, data)
+        setResponse({ error: failure.message, isUpgradeRequired: failure.isUpgradeRequired })
       } else {
         setResponse({
           enhancedPrompt: data.enhancedPrompt,
@@ -93,9 +99,7 @@ export default function PlaygroundPage() {
 
   // Generate code examples
   const generateCurlExample = () => {
-    const body: Record<string, unknown> = { prompt: prompt.trim(), modality }
-    if (tone) body.tone = tone
-    if (length) body.length = length
+    const body = requestBody
 
     return `curl -X POST ${API_BASE_URL}/public/enhance \\
   -H "X-API-Key: YOUR_API_KEY" \\
@@ -104,9 +108,7 @@ export default function PlaygroundPage() {
   }
 
   const generatePythonExample = () => {
-    const body: Record<string, unknown> = { prompt: prompt.trim(), modality }
-    if (tone) body.tone = tone
-    if (length) body.length = length
+    const body = requestBody
 
     return `import requests
 
@@ -119,9 +121,7 @@ print(response.json()["enhancedPrompt"])`
   }
 
   const generateJsExample = () => {
-    const body: Record<string, unknown> = { prompt: prompt.trim(), modality }
-    if (tone) body.tone = tone
-    if (length) body.length = length
+    const body = requestBody
 
     return `const response = await fetch("${API_BASE_URL}/public/enhance", {
   method: "POST",
@@ -155,36 +155,48 @@ console.log(enhancedPrompt);`
         <p className="text-muted text-sm">Test the API interactively and generate code examples.</p>
       </div>
 
+      {!subLoading && planAccess.isUpgradeRequired && <PaidPlanNotice />}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Request Builder */}
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-4 p-6">
-              {/* API Key Selection */}
+              {/* API Key */}
               <div>
-                <label className="text-primary mb-1 block text-sm font-medium">API Key</label>
-                {activeKeys.length > 0 ? (
-                  <select
-                    value={selectedKeyId}
-                    onChange={(e) => setSelectedKeyId(e.target.value)}
-                    className="border-border bg-secondary text-primary w-full rounded-lg border px-3 py-2 text-sm"
-                  >
-                    <option value="">Select an API key</option>
-                    {activeKeys.map((key) => (
-                      <option key={key.id} value={key.id}>
-                        {key.name} ({key.keyPrefix}...)
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <p className="text-muted text-sm">
-                    No API keys found.{' '}
-                    <a href="/developers/keys" className="text-accent hover:underline">
-                      Create one
-                    </a>{' '}
-                    to test the API.
-                  </p>
-                )}
+                <label
+                  htmlFor="playground-api-key"
+                  className="text-primary mb-1 block text-sm font-medium"
+                >
+                  API Key
+                </label>
+                <input
+                  id="playground-api-key"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="pk_live_..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="border-border bg-secondary text-primary placeholder:text-muted focus:ring-accent w-full rounded-lg border px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2"
+                />
+                <p className="text-muted mt-1 text-xs">
+                  {activeKeys.length > 0 ? (
+                    <>
+                      Paste the full key shown when you created it (
+                      {activeKeys.map((key) => `${key.keyPrefix}...`).join(', ')}). Requests count
+                      toward your plan&apos;s quota.
+                    </>
+                  ) : (
+                    <>
+                      No API keys found.{' '}
+                      <a href="/developers/keys" className="text-accent hover:underline">
+                        Create one
+                      </a>{' '}
+                      to test the API.
+                    </>
+                  )}
+                </p>
               </div>
 
               {/* Prompt */}
@@ -291,7 +303,7 @@ console.log(enhancedPrompt);`
               {/* Submit */}
               <Button
                 onClick={handleSubmit}
-                disabled={isLoading || !selectedKeyId || !prompt.trim()}
+                disabled={isLoading || !apiKey.trim() || !prompt.trim()}
                 className="w-full"
               >
                 {isLoading ? 'Enhancing...' : 'Enhance Prompt'}
@@ -356,6 +368,11 @@ console.log(enhancedPrompt);`
               <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4">
                 <div className="mb-1 font-medium text-red-600">Error</div>
                 <div className="text-sm text-red-500">{response.error}</div>
+                {response.isUpgradeRequired && (
+                  <Link href={DEVELOPER_BILLING_PATH} className="mt-3 inline-block">
+                    <Button size="sm">Choose a plan</Button>
+                  </Link>
+                )}
               </div>
             )}
 
