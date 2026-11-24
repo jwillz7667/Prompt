@@ -3,8 +3,8 @@
 //  Prompt
 //
 //  App Intent for enhancing prompts via Siri, Spotlight, and the Shortcuts app.
-//  Enhancement runs through the backend (same path as the app) so Siri results
-//  stay consistent with the in-app experience and quota accounting.
+//  Enhancement runs through the backend (same path as the app), so the same
+//  subscription requirement and fair-use limit apply.
 //
 
 import AppIntents
@@ -82,12 +82,12 @@ struct EnhancePromptIntent: AppIntent {
 
 // MARK: - Request / Response
 
-private struct EnhancePromptIntentRequest: Encodable, Sendable {
+private nonisolated struct EnhancePromptIntentRequest: Encodable, Sendable {
     let prompt: String
     let modality: String
 }
 
-private struct EnhancePromptIntentResponse: Decodable, Sendable {
+private nonisolated struct EnhancePromptIntentResponse: Decodable, Sendable {
     let enhancedPrompt: String
 }
 
@@ -96,17 +96,20 @@ private struct EnhancePromptIntentResponse: Decodable, Sendable {
 enum EnhanceIntentError: Swift.Error, CustomLocalizedStringResourceConvertible {
     case emptyPrompt
     case notAuthenticated
-    case quotaExceeded
+    case subscriptionRequired
+    case fairUseLimit(resetAt: Date?)
     case enhancementFailed(String)
 
     init(apiError: APIError) {
         switch apiError {
         case .notAuthenticated, .unauthorized:
             self = .notAuthenticated
-        case .quotaExceeded:
-            self = .quotaExceeded
+        case .subscriptionRequired, .quotaExceeded, .featureLocked:
+            self = .subscriptionRequired
+        case .fairUseLimit(let resetAt):
+            self = .fairUseLimit(resetAt: resetAt)
         default:
-            self = .enhancementFailed(apiError.errorDescription ?? "Something went wrong.")
+            self = .enhancementFailed(apiError.errorDescription ?? ServiceErrorCode.internalError.userMessage)
         }
     }
 
@@ -116,10 +119,12 @@ enum EnhanceIntentError: Swift.Error, CustomLocalizedStringResourceConvertible {
             return "Enter a prompt to enhance."
         case .notAuthenticated:
             return "Open Promptomize and sign in to enhance prompts with Siri."
-        case .quotaExceeded:
-            return "You've reached your daily prompt limit. Upgrade for more prompts."
+        case .subscriptionRequired:
+            return "Subscription required — open Promptomize to start Premium."
+        case .fairUseLimit(let resetAt):
+            return "\(ServiceMessages.fairUseLimit(resetAt: resetAt))"
         case .enhancementFailed(let message):
-            return "Enhancement failed: \(message)"
+            return "\(message)"
         }
     }
 }

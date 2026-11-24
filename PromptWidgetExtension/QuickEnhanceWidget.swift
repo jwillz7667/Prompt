@@ -18,9 +18,7 @@ struct QuickEnhanceProvider: TimelineProvider {
             recentPrompts: [
                 .init(id: "1", original: "Sample prompt...", enhanced: "Enhanced version...", date: Date())
             ],
-            quotaRemaining: 7,
-            quotaLimit: 10,
-            tier: "FREE",
+            access: .active,
             userName: nil,
             userEmail: nil
         )
@@ -43,10 +41,7 @@ struct QuickEnhanceProvider: TimelineProvider {
     private func loadEntry() -> QuickEnhanceEntry {
         let defaults = UserDefaults(suiteName: "group.com.res.promptomizer")
 
-        // Load quota info
-        let used = defaults?.integer(forKey: "dailyPromptsUsed") ?? 0
-        let limit = defaults?.integer(forKey: "dailyPromptsLimit") ?? 10
-        let tier = defaults?.string(forKey: "subscriptionTier") ?? "FREE"
+        let access = WidgetAccessState.load(from: defaults)
         let userName = defaults?.string(forKey: "userName")
         let userEmail = defaults?.string(forKey: "userEmail")
 
@@ -60,9 +55,7 @@ struct QuickEnhanceProvider: TimelineProvider {
         return QuickEnhanceEntry(
             date: Date(),
             recentPrompts: recentPrompts,
-            quotaRemaining: limit == -1 ? Int.max : max(0, limit - used),
-            quotaLimit: limit,
-            tier: tier,
+            access: access,
             userName: userName,
             userEmail: userEmail
         )
@@ -83,15 +76,9 @@ struct RecentPromptData: Codable, Identifiable {
 struct QuickEnhanceEntry: TimelineEntry {
     let date: Date
     let recentPrompts: [RecentPromptData]
-    let quotaRemaining: Int
-    let quotaLimit: Int
-    let tier: String
+    let access: WidgetAccessState
     let userName: String?
     let userEmail: String?
-
-    var isUnlimited: Bool {
-        quotaLimit == -1
-    }
 }
 
 // MARK: - Brand Colors
@@ -154,7 +141,7 @@ struct MediumView: View {
                         .font(.system(.headline, design: .rounded, weight: .bold))
                 }
                 Spacer()
-                QuotaBadge(remaining: entry.quotaRemaining, limit: entry.quotaLimit, tier: entry.tier)
+                AccessBadge(access: entry.access)
             }
 
             // Recent prompt or empty state
@@ -165,11 +152,13 @@ struct MediumView: View {
             }
 
             // Quick action button
-            Link(destination: URL(string: "promptomize://enhance")!) {
+            Link(destination: entry.access.destination) {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: entry.access == .active ? "plus.circle.fill" : "lock.fill")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Enhance New Prompt")
+                    Text(entry.access.callToAction)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .font(.system(.subheadline, design: .rounded, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
@@ -213,7 +202,7 @@ struct LargeView: View {
                         .font(.system(.headline, design: .rounded, weight: .bold))
                 }
                 Spacer()
-                QuotaBadge(remaining: entry.quotaRemaining, limit: entry.quotaLimit, tier: entry.tier)
+                AccessBadge(access: entry.access)
             }
 
             // User info row
@@ -234,9 +223,6 @@ struct LargeView: View {
                         .foregroundStyle(textSecondary)
                         .lineLimit(1)
                     Spacer()
-                    Text(entry.tier)
-                        .font(.system(.caption2, design: .rounded, weight: .semibold))
-                        .foregroundStyle(tierColor(entry.tier))
                 }
             }
 
@@ -265,11 +251,13 @@ struct LargeView: View {
             Spacer()
 
             // Quick action button
-            Link(destination: URL(string: "promptomize://enhance")!) {
+            Link(destination: entry.access.destination) {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: entry.access == .active ? "plus.circle.fill" : "lock.fill")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Enhance New Prompt")
+                    Text(entry.access.callToAction)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .font(.system(.subheadline, design: .rounded, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
@@ -283,52 +271,35 @@ struct LargeView: View {
         }
         .padding()
     }
-
-    private func tierColor(_ tier: String) -> Color {
-        switch tier {
-        case "PREMIUM": return .orange
-        case "PRO": return accentColor
-        default: return textSecondary
-        }
-    }
 }
 
 // MARK: - Supporting Views
 
-struct QuotaBadge: View {
-    @Environment(\.colorScheme) var colorScheme
-    let remaining: Int
-    let limit: Int
-    let tier: String
-
-    private var accentColor: Color {
-        colorScheme == .dark ? .brandCyan : .brandPurple
-    }
+struct AccessBadge: View {
+    let access: WidgetAccessState
 
     var body: some View {
-        HStack(spacing: 4) {
-            if limit == -1 {
-                Image(systemName: "infinity")
-                    .font(.system(.caption2, design: .rounded, weight: .bold))
-            } else {
-                Text("\(remaining)")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(badgeColor.opacity(0.15))
-        )
-        .foregroundStyle(badgeColor)
+        Text(label)
+            .font(.system(.caption2, design: .rounded, weight: .bold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(color.opacity(0.15))
+            )
+            .foregroundStyle(color)
     }
 
-    var badgeColor: Color {
-        if limit == -1 { return .orange }
-        if remaining == 0 { return .red }
-        if remaining <= 3 { return .orange }
-        return .green
+    private var label: String {
+        switch access {
+        case .active: return "Premium"
+        case .subscriptionRequired: return "Locked"
+        case .signedOut: return "Signed out"
+        }
+    }
+
+    private var color: Color {
+        access == .active ? .orange : .secondary
     }
 }
 
@@ -419,7 +390,7 @@ struct QuickEnhanceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: QuickEnhanceProvider()) { entry in
             QuickEnhanceWidgetEntryView(entry: entry)
-                .widgetURL(URL(string: "promptomize://enhance"))
+                .widgetURL(entry.access.destination)
         }
         .configurationDisplayName("Quick Enhance")
         .description("Recent prompts and quick access to enhancement")
@@ -437,9 +408,7 @@ struct QuickEnhanceWidget: Widget {
         recentPrompts: [
             RecentPromptData(id: "1", original: "Write a blog post about AI", enhanced: "You are an expert tech writer...", date: Date())
         ],
-        quotaRemaining: 7,
-        quotaLimit: 10,
-        tier: "FREE",
+        access: .subscriptionRequired,
         userName: nil,
         userEmail: nil
     )
@@ -455,9 +424,7 @@ struct QuickEnhanceWidget: Widget {
             RecentPromptData(id: "2", original: "Help me debug this code", enhanced: "You are a senior software engineer...", date: Date().addingTimeInterval(-3600)),
             RecentPromptData(id: "3", original: "Create a marketing email", enhanced: "You are a marketing specialist...", date: Date().addingTimeInterval(-7200))
         ],
-        quotaRemaining: 5,
-        quotaLimit: 10,
-        tier: "PRO",
+        access: .active,
         userName: "Will",
         userEmail: "will@example.com"
     )

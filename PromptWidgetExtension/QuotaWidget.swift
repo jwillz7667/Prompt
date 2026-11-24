@@ -2,7 +2,9 @@
 //  QuotaWidget.swift
 //  PromptWidgetExtension
 //
-//  Lock screen and home screen widget showing daily prompt quota
+//  Lock screen and home screen widget showing Promptomize Premium status.
+//  The type and kind keep their original "Quota" names so widgets users
+//  already placed keep working after the update.
 //
 
 import WidgetKit
@@ -19,34 +21,24 @@ private extension Color {
 
 struct QuotaProvider: TimelineProvider {
     func placeholder(in context: Context) -> QuotaEntry {
-        QuotaEntry(date: Date(), used: 5, limit: 10, tier: "FREE")
+        QuotaEntry(date: Date(), access: .active)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (QuotaEntry) -> Void) {
-        let entry = loadEntry()
-        completion(entry)
+        completion(loadEntry())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<QuotaEntry>) -> Void) {
-        let entry = loadEntry()
-
-        // Refresh every 15 minutes
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date())!
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
-        completion(timeline)
+        // The app reloads timelines whenever entitlement changes; the hourly
+        // refresh only catches changes made while the app was not running.
+        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
+        completion(Timeline(entries: [loadEntry()], policy: .after(nextUpdate)))
     }
 
     private func loadEntry() -> QuotaEntry {
-        let defaults = UserDefaults(suiteName: "group.com.res.promptomizer")
-        let used = defaults?.integer(forKey: "dailyPromptsUsed") ?? 0
-        let limit = defaults?.integer(forKey: "dailyPromptsLimit") ?? 10
-        let tier = defaults?.string(forKey: "subscriptionTier") ?? "FREE"
-
-        return QuotaEntry(
+        QuotaEntry(
             date: Date(),
-            used: used,
-            limit: limit == 0 ? 10 : limit,
-            tier: tier
+            access: WidgetAccessState.load(from: UserDefaults(suiteName: "group.com.res.promptomizer"))
         )
     }
 }
@@ -55,23 +47,25 @@ struct QuotaProvider: TimelineProvider {
 
 struct QuotaEntry: TimelineEntry {
     let date: Date
-    let used: Int
-    let limit: Int
-    let tier: String
+    let access: WidgetAccessState
 
-    var remaining: Int {
-        if limit == -1 { return Int.max }
-        return max(0, limit - used)
+    var headline: String {
+        switch access {
+        case .active: return "Premium active"
+        case .subscriptionRequired: return "Subscription required"
+        case .signedOut: return "Sign in required"
+        }
     }
 
-    var isUnlimited: Bool {
-        limit == -1
+    var detail: String {
+        switch access {
+        case .active: return "Tap to optimize a prompt"
+        case .subscriptionRequired, .signedOut: return "Open Promptomize"
+        }
     }
 
-    var progress: Double {
-        if isUnlimited { return 0 }
-        guard limit > 0 else { return 1.0 }
-        return Double(used) / Double(limit)
+    var symbol: String {
+        access == .active ? "sparkles" : "lock.fill"
     }
 }
 
@@ -91,8 +85,6 @@ struct QuotaWidgetEntryView: View {
                 RectangularView(entry: entry)
             case .accessoryInline:
                 InlineView(entry: entry)
-            case .systemSmall:
-                SmallView(entry: entry)
             default:
                 SmallView(entry: entry)
             }
@@ -117,26 +109,12 @@ struct CircularView: View {
     let entry: QuotaEntry
 
     var body: some View {
-        if entry.isUnlimited {
-            ZStack {
-                AccessoryWidgetBackground()
-                VStack(spacing: 0) {
-                    Image(systemName: "infinity")
-                        .font(.system(.title2, design: .rounded))
-                    Text("PRO")
-                        .font(.system(.caption2, design: .rounded, weight: .bold))
-                }
-            }
-        } else {
-            Gauge(value: 1 - entry.progress) {
-                Image(systemName: "sparkles")
-            } currentValueLabel: {
-                Text("\(entry.remaining)")
-                    .font(.system(.title3, design: .rounded))
-                    .fontWeight(.bold)
-            }
-            .gaugeStyle(.accessoryCircularCapacity)
+        ZStack {
+            AccessoryWidgetBackground()
+            Image(systemName: entry.symbol)
+                .font(.system(.title2, design: .rounded, weight: .semibold))
         }
+        .accessibilityLabel(entry.headline)
     }
 }
 
@@ -147,24 +125,16 @@ struct RectangularView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "sparkles")
+            Image(systemName: entry.symbol)
                 .font(.system(.title2, design: .rounded))
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
-                if entry.isUnlimited {
-                    Text("Unlimited")
-                        .font(.system(.headline, design: .rounded))
-                    Text("Premium Active")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("\(entry.remaining) left")
-                        .font(.system(.headline, design: .rounded))
-                    Text("\(entry.used)/\(entry.limit) prompts today")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
+                Text(entry.headline)
+                    .font(.system(.headline, design: .rounded))
+                Text(entry.detail)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -178,11 +148,7 @@ struct InlineView: View {
     let entry: QuotaEntry
 
     var body: some View {
-        if entry.isUnlimited {
-            Label("Unlimited Prompts", systemImage: "infinity")
-        } else {
-            Label("\(entry.remaining) prompts left", systemImage: "sparkles")
-        }
+        Label(entry.headline, systemImage: entry.symbol)
     }
 }
 
@@ -196,88 +162,26 @@ struct SmallView: View {
         colorScheme == .dark ? .brandCyan : .brandPurple
     }
 
-    /// Deeplink destination based on quota status
-    private var destination: URL {
-        if entry.remaining == 0 && !entry.isUnlimited {
-            return URL(string: "promptomize://paywall")!
-        } else {
-            return URL(string: "promptomize://enhance")!
-        }
-    }
-
     var body: some View {
-        Link(destination: destination) {
+        Link(destination: entry.access.destination) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
-                        .foregroundStyle(accentColor)
-                    Spacer()
-                    Text(entry.tier)
-                        .font(.system(.caption2, design: .rounded, weight: .bold))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(tierColor.opacity(0.15))
-                        )
-                        .foregroundStyle(tierColor)
-                }
+                Image(systemName: entry.symbol)
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundStyle(entry.access == .active ? accentColor : .secondary)
 
                 Spacer()
 
-                if entry.isUnlimited {
-                    Text("Unlimited")
-                        .font(.system(.title, design: .rounded, weight: .bold))
-                    Text("prompts available")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("\(entry.remaining)")
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                        .foregroundStyle(entry.remaining == 0 ? .red : .primary)
-                    Text(entry.remaining == 0 ? "Tap to upgrade" : "prompts left today")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
-
-                    // Progress bar
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(colorScheme == .dark
-                                    ? Color.white.opacity(0.1)
-                                    : Color.brandPurple.opacity(0.1))
-                                .frame(height: 4)
-
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(progressColor)
-                                .frame(width: geo.size.width * (1 - entry.progress), height: 4)
-                        }
-                    }
-                    .frame(height: 4)
-                }
+                Text(entry.headline)
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                Text(entry.access == .active ? entry.detail : entry.access.callToAction)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
-        }
-    }
-
-    var tierColor: Color {
-        switch entry.tier {
-        case "PREMIUM": return .orange
-        case "PRO": return accentColor
-        default: return colorScheme == .dark
-            ? Color(red: 142/255, green: 142/255, blue: 147/255)
-            : Color(red: 92/255, green: 82/255, blue: 150/255)
-        }
-    }
-
-    var progressColor: Color {
-        if entry.progress > 0.9 {
-            return .red
-        } else if entry.progress > 0.7 {
-            return .orange
-        } else {
-            return accentColor
         }
     }
 }
@@ -290,10 +194,10 @@ struct QuotaWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: QuotaProvider()) { entry in
             QuotaWidgetEntryView(entry: entry)
-                .widgetURL(URL(string: "promptomize://enhance"))
+                .widgetURL(entry.access.destination)
         }
-        .configurationDisplayName("Prompt Quota")
-        .description("Track your daily prompt usage")
+        .configurationDisplayName("Premium Status")
+        .description("See whether Promptomize Premium is active")
         .supportedFamilies([
             .accessoryCircular,
             .accessoryRectangular,
@@ -305,16 +209,16 @@ struct QuotaWidget: Widget {
 
 // MARK: - Preview
 
-#Preview(as: .accessoryCircular) {
+#Preview(as: .accessoryRectangular) {
     QuotaWidget()
 } timeline: {
-    QuotaEntry(date: .now, used: 3, limit: 10, tier: "FREE")
-    QuotaEntry(date: .now, used: 8, limit: 10, tier: "FREE")
+    QuotaEntry(date: .now, access: .active)
+    QuotaEntry(date: .now, access: .subscriptionRequired)
 }
 
 #Preview(as: .systemSmall) {
     QuotaWidget()
 } timeline: {
-    QuotaEntry(date: .now, used: 5, limit: 10, tier: "FREE")
-    QuotaEntry(date: .now, used: 0, limit: -1, tier: "PREMIUM")
+    QuotaEntry(date: .now, access: .active)
+    QuotaEntry(date: .now, access: .subscriptionRequired)
 }

@@ -53,13 +53,13 @@ struct QuotaStatusControlWidget: ControlWidget {
         StaticControlConfiguration(kind: Self.kind) {
             ControlWidgetButton(action: OpenAppControlIntent()) {
                 Label {
-                    Text("Prompts")
+                    Text("Promptomize")
                 } icon: {
                     Image(systemName: "sparkles")
                 }
             }
         }
-        .displayName("Prompt Quota")
+        .displayName("Open Promptomize")
         .description("Opens Promptomize")
     }
 }

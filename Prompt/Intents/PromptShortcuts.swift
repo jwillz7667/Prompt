@@ -25,13 +25,12 @@ struct PromptShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: GetQuotaIntent(),
             phrases: [
-                "How many prompts left in \(.applicationName)",
-                "Check \(.applicationName) quota",
-                "\(.applicationName) prompts remaining",
-                "What's my \(.applicationName) limit"
+                "Check my \(.applicationName) subscription",
+                "Is \(.applicationName) Premium active",
+                "\(.applicationName) subscription status"
             ],
-            shortTitle: "Check Quota",
-            systemImageName: "chart.bar"
+            shortTitle: "Check Subscription",
+            systemImageName: "crown"
         )
 
         AppShortcut(
