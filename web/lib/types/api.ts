@@ -124,16 +124,6 @@ export interface SubscriptionStatusResponse extends SubscriptionInfo {
   autoRenewEnabled?: boolean
 }
 
-export interface TrialEligibilityResponse {
-  eligible: boolean
-  reason?: string
-}
-
-export interface StartTrialResponse {
-  success: boolean
-  trialEndsAt: string
-}
-
 // Stripe
 export interface StripeCheckoutRequest {
   priceId: string

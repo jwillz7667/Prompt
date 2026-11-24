@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const api = vi.hoisted(() => ({
   getSubscriptionStatus: vi.fn(),
-  getTrialEligibility: vi.fn(),
-  startFreeTrial: vi.fn(),
 }))
 vi.mock('@/lib/api/subscriptions', () => api)
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
@@ -53,10 +51,4 @@ it('discards a paid response received after account reset', async () => {
   finish(paid)
   await pending
   expect(useSubscriptionStore.getState().subscription.tier).toBe('FREE')
-})
-it('clears the trial spinner on an unsuccessful trial response', async () => {
-  api.startFreeTrial.mockResolvedValue({ success: false })
-  expect(await useSubscriptionStore.getState().isLoading).toBe(false)
-  expect(await useSubscriptionStore.getState().startTrial()).toBe(false)
-  expect(useSubscriptionStore.getState().isLoading).toBe(false)
 })

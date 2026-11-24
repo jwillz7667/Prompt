@@ -20,19 +20,15 @@ export function useSubscription() {
     billingProvider,
     isLoading,
     error,
-    trialEligible,
     fetchSubscription,
-    checkTrialEligibility,
-    startTrial,
     refreshAfterPurchase,
   } = useSubscriptionStore()
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchSubscription()
-      checkTrialEligibility()
     }
-  }, [isAuthenticated, fetchSubscription, checkTrialEligibility])
+  }, [isAuthenticated, fetchSubscription])
 
   return {
     subscription,
@@ -41,8 +37,6 @@ export function useSubscription() {
     billingProvider,
     isLoading,
     error,
-    trialEligible,
-    startTrial,
     refreshAfterPurchase,
     refetch: fetchSubscription,
   }

@@ -1,8 +1,6 @@
 import { api } from './client'
 import type {
   SubscriptionStatusResponse,
-  TrialEligibilityResponse,
-  StartTrialResponse,
   StripeCheckoutRequest,
   StripeCheckoutResponse,
   StripePortalResponse,
@@ -11,14 +9,6 @@ import type { StripeProduct } from '@/lib/types/models'
 
 export async function getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
   return api.get<SubscriptionStatusResponse>('/subscriptions/status')
-}
-
-export async function getTrialEligibility(): Promise<TrialEligibilityResponse> {
-  return api.get<TrialEligibilityResponse>('/subscriptions/trial/eligibility')
-}
-
-export async function startFreeTrial(): Promise<StartTrialResponse> {
-  return api.post<StartTrialResponse>('/subscriptions/trial')
 }
 
 export async function getProducts(): Promise<{ products: StripeProduct[] }> {

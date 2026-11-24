@@ -1,20 +1,13 @@
 import { create } from 'zustand'
 import type { SubscriptionInfo } from '@/lib/types/models'
-import {
-  getSubscriptionStatus,
-  getTrialEligibility,
-  startFreeTrial as apiStartTrial,
-} from '@/lib/api/subscriptions'
+import { getSubscriptionStatus } from '@/lib/api/subscriptions'
 
 interface SubscriptionState extends SubscriptionInfo {
   isLoading: boolean
   error: string | null
-  trialEligible: boolean | null
 
   // Actions
   fetchSubscription: () => Promise<void>
-  checkTrialEligibility: () => Promise<boolean>
-  startTrial: () => Promise<boolean>
   setError: (error: string | null) => void
   refreshAfterPurchase: () => Promise<boolean>
   reset: () => void
@@ -47,7 +40,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   ...defaultSubscription,
   isLoading: false,
   error: null,
-  trialEligible: null,
 
   reset: () => {
     subscriptionGeneration++
@@ -57,7 +49,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       stripeCustomerId: null,
       error: null,
       isLoading: false,
-      trialEligible: null,
     })
   },
 
@@ -82,42 +73,6 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       if (generation !== subscriptionGeneration) return
       const message = err instanceof Error ? err.message : 'Failed to fetch subscription'
       set({ error: message, isLoading: false })
-    }
-  },
-
-  checkTrialEligibility: async () => {
-    const generation = subscriptionGeneration
-    try {
-      const { eligible } = await getTrialEligibility()
-      if (generation !== subscriptionGeneration) return false
-      set({ trialEligible: eligible })
-      return eligible
-    } catch {
-      if (generation !== subscriptionGeneration) return false
-      set({ trialEligible: false })
-      return false
-    }
-  },
-
-  startTrial: async () => {
-    const generation = subscriptionGeneration
-    try {
-      set({ isLoading: true, error: null })
-      const result = await apiStartTrial()
-      if (generation !== subscriptionGeneration) return false
-      if (result.success) {
-        await get().fetchSubscription()
-        if (generation !== subscriptionGeneration) return false
-        set({ trialEligible: false })
-        return true
-      }
-      set({ isLoading: false })
-      return false
-    } catch (err) {
-      if (generation !== subscriptionGeneration) return false
-      const message = err instanceof Error ? err.message : 'Failed to start trial'
-      set({ error: message, isLoading: false })
-      return false
     }
   },
 

@@ -16,7 +16,6 @@ import {
   Shield,
   Download,
   Layers,
-  Rocket,
   ExternalLink,
 } from 'lucide-react'
 
@@ -90,26 +89,10 @@ export default function UpgradePage() {
   const [interval, setInterval] = useState<BillingInterval>('annual')
   const [loading, setLoading] = useState<string | null>(null)
 
-  const { subscription, billingProvider, trialEligible, startTrial } = useSubscription()
+  const { subscription, billingProvider } = useSubscription()
 
   const currentTier = subscription.tier
   const isTrialing = subscription.isTrialing
-
-  const handleStartTrial = useCallback(async () => {
-    setLoading('trial')
-    try {
-      const success = await startTrial()
-      if (success) {
-        toast.success('Trial started!', 'Enjoy 7 days of Premium features')
-      } else {
-        toast.error('Failed to start trial')
-      }
-    } catch {
-      toast.error('Failed to start trial')
-    } finally {
-      setLoading(null)
-    }
-  }, [startTrial])
 
   const handleSubscribe = useCallback(
     async (plan: Plan) => {
@@ -166,30 +149,6 @@ export default function UpgradePage() {
           advanced features.
         </p>
       </div>
-
-      {/* Trial banner */}
-      {trialEligible && currentTier === 'FREE' && !isTrialing && (
-        <Card className="border-brand-indigo/20 bg-brand-indigo/10 dark:border-brand-cyan/20 dark:bg-brand-cyan/10">
-          <CardContent className="flex flex-col items-center justify-between gap-4 p-6 sm:flex-row">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-indigo/20 dark:bg-brand-cyan/20">
-                <Rocket className="h-6 w-6 text-brand-indigo dark:text-brand-cyan" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-[var(--text-primary)]">
-                  Try Premium Free for 7 Days
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  No credit card required. Experience all Premium features.
-                </p>
-              </div>
-            </div>
-            <Button variant="cyan" onClick={handleStartTrial} isLoading={loading === 'trial'}>
-              Start Free Trial
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Current subscription */}
       {currentTier !== 'FREE' && (
