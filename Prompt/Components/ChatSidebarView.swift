@@ -11,7 +11,6 @@ import SwiftUI
 struct ChatSidebarView<ChatList: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthManager.self) private var authManager
-    @Environment(GuestSessionManager.self) private var guestSession
     @Environment(StoreKitManager.self) private var storeKit
 
     @Bindable var threadViewModel: ThreadViewModel
@@ -122,7 +121,9 @@ struct ChatSidebarView<ChatList: View>: View {
                 message: "Your chats are still saved. Sign in again to see them.",
                 actionTitle: "Sign In Again"
             ) {
-                guestSession.presentAuthenticationGate()
+                // RootView shows the sign-in screen once the session is
+                // marked expired; cached history stays on the account.
+                authManager.handleSessionExpiration()
                 onDismiss()
             }
         } else if case .failed(let message) = threadViewModel.threadListState, threadViewModel.threads.isEmpty {
@@ -133,16 +134,6 @@ struct ChatSidebarView<ChatList: View>: View {
                 actionTitle: "Retry"
             ) {
                 Task { await threadViewModel.fetchThreads(refresh: true) }
-            }
-        } else if threadViewModel.threadListState == .idle, !authManager.isAuthenticated {
-            statusState(
-                icon: "person.crop.circle",
-                title: "Sign in to see your chats",
-                message: "Chats sync to your account once you sign in.",
-                actionTitle: "Sign In"
-            ) {
-                guestSession.presentAuthenticationGate()
-                onDismiss()
             }
         } else if filteredThreads.isEmpty {
             Spacer()
@@ -304,15 +295,18 @@ struct ChatSidebarView<ChatList: View>: View {
     }
 
     private var subscriptionLabel: String {
-        storeKit.currentTier.displayName
+        switch storeKit.entitlementState {
+        case .entitled(_, let isTrialing):
+            return isTrialing ? String(localized: "Free trial") : String(localized: "Premium")
+        case .notEntitled:
+            return String(localized: "Not subscribed")
+        case .unknown:
+            return String(localized: "Checking…")
+        }
     }
 
     private var subscriptionColor: Color {
-        switch storeKit.currentTier {
-        case .premium: return .orange
-        case .pro: return accentColor
-        case .free: return textTertiary
-        }
+        storeKit.isEntitled ? .orange : textTertiary
     }
 
     private var userAvatar: some View {

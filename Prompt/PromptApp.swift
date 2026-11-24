@@ -51,7 +51,6 @@ struct PromptApp: App {
     @State private var syncManager = SyncManager.shared
     @State private var deeplinkManager = DeeplinkManager.shared
     @State private var complianceManager = AppStoreComplianceManager.shared
-    @State private var guestSessionManager = GuestSessionManager.shared
 
     init() {
         UserDefaults(suiteName: SharedDataManager.appGroupIdentifier)?
@@ -90,7 +89,6 @@ struct PromptApp: App {
             .environment(storeKitManager)
             .environment(syncManager)
             .environment(complianceManager)
-            .environment(guestSessionManager)
             .preferredColorScheme(settingsManager.appearanceMode.colorScheme)
     }
 }

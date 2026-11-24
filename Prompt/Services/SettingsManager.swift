@@ -48,6 +48,9 @@ enum PromptGenerationMode: String, Codable, Sendable {
     case max = "max"
 }
 
+/// How an optimizer turn was answered. New turns are always `.optimize`;
+/// `.chat` remains only so turns created by older builds still decode and
+/// render. General conversation lives on the Chat surface.
 enum ThreadConversationMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case optimize = "optimize"
     case chat = "chat"
@@ -309,9 +312,14 @@ final class SettingsManager {
             selectedModality = modality
         }
 
+        // The optimizer no longer offers its own chat mode (the moderated
+        // Chat surface replaces it), so a stored "chat" choice migrates back.
         if let conversationModeRaw = defaults.string(forKey: Keys.conversationMode),
            let mode = ThreadConversationMode(rawValue: conversationModeRaw) {
-            conversationMode = mode
+            conversationMode = .optimize
+            if mode != .optimize {
+                defaults.set(ThreadConversationMode.optimize.rawValue, forKey: Keys.conversationMode)
+            }
         }
 
         // Load audio sub-modality preference

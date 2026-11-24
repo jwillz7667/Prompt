@@ -157,7 +157,7 @@ struct ContentView: View {
                     onOpenThreads: { openSidebar() },
                     onOpenProfile: { showProfile = true },
                     onOpenHistory: { openSidebar() },
-                    onOpenPaywall: { showSubscription = true },
+                    onOpenSubscription: { showSubscription = true },
                     onStartNewConversation: newConversation
                 )
                 .transition(.opacity)
@@ -461,7 +461,6 @@ struct ContentView: View {
         .environment(AuthManager.shared)
         .environment(PromptHistoryManager.shared)
         .environment(StoreKitManager.shared)
-        .environment(GuestSessionManager.shared)
 }
 
 struct SyncStatusIndicator: View {
