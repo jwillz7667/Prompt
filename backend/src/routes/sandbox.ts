@@ -9,11 +9,18 @@ import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/erro
 
 const router = Router();
 
+// Duplicates are dropped so one request runs each platform at most once.
+const platformsSchema = z
+  .array(z.nativeEnum(PlatformType))
+  .min(1)
+  .max(Object.keys(PlatformType).length)
+  .transform((platforms) => [...new Set(platforms)]);
+
 // Validation schemas
 const createTestSchema = z.object({
   promptId: z.string().optional(),
   testPrompt: z.string().min(1).max(10000),
-  platforms: z.array(z.nativeEnum(PlatformType)).min(1),
+  platforms: platformsSchema,
   parameters: z
     .object({
       temperature: z.number().min(0).max(2).optional(),
@@ -266,7 +273,7 @@ router.post('/batch', authenticate, requireEntitlement, async (req, res, next) =
   try {
     const schema = z.object({
       prompts: z.array(z.string().min(1).max(10000)).min(1).max(10),
-      platforms: z.array(z.nativeEnum(PlatformType)).min(1),
+      platforms: platformsSchema,
       parameters: z
         .object({
           temperature: z.number().min(0).max(2).optional(),

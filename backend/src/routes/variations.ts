@@ -16,6 +16,7 @@ import {
   rateVariation,
   selectVariationWinner,
   getUserVariations,
+  MAX_VARIATIONS,
   type VariationConfig,
 } from '../services/variationsService.js';
 
@@ -53,9 +54,10 @@ const generateVariationsSchema = z.object({
             subModality: z.string().optional(),
           }),
         )
+        .max(MAX_VARIATIONS)
         .optional(),
       includeOriginal: z.boolean().optional(),
-      maxVariations: z.number().min(1).max(20).optional(),
+      maxVariations: z.number().int().min(1).max(MAX_VARIATIONS).optional(),
     })
     .optional(),
 });

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import pLimit from 'p-limit';
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
+import { reserveGenerationsForUser } from './subscriptionService.js';
 import {
   detectModality,
   enhancePrompt,
@@ -61,6 +62,9 @@ export interface VariationListItem {
   updatedAt: Date;
   results?: VariationResultData[];
 }
+
+/** Upper bound on provider calls one variation request may trigger. */
+export const MAX_VARIATIONS = 20;
 
 const variationGenerationLimit = pLimit(4);
 const variationJobProcessingLimit = pLimit(2);
@@ -460,15 +464,24 @@ async function buildVariationResults(
     index += 1;
   }
 
-  const variants = variationConfig.maxVariations
-    ? variationConfig.variants.slice(0, variationConfig.maxVariations)
-    : variationConfig.variants;
+  const variants = variationConfig.variants.slice(
+    0,
+    Math.min(variationConfig.maxVariations ?? MAX_VARIATIONS, MAX_VARIATIONS),
+  );
 
   const baseIndex = index;
   const generatedResults = await Promise.all(
     variants.map((variant, variantOffset) =>
       variationGenerationLimit(async () => {
         const resultIndex = baseIndex + variantOffset;
+
+        // Each variant is a provider call: reserved against the owner's daily
+        // allowance first, returned if the call fails.
+        const usage = await reserveGenerationsForUser(userId, 1);
+        if (!usage.isAllowed) {
+          generationErrors.push(`${variant.label}: Daily fair-use limit reached`);
+          return null;
+        }
 
         try {
           const enhanced = await enhancePrompt({
@@ -478,6 +491,9 @@ async function buildVariationResults(
             modality,
             subModality: variant.subModality,
             customInstructions: variant.customInstructions,
+          }).catch(async (error: unknown) => {
+            await usage.reservation.release();
+            throw error;
           });
 
           const result: VariationResultData = {

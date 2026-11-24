@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { requireEntitlement } from '../middleware/requireEntitlement.js';
-import { workflowService } from '../services/workflowService.js';
+import { MAX_WORKFLOW_STEPS, workflowService } from '../services/workflowService.js';
 import { WorkflowStatus } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
@@ -30,14 +30,14 @@ const workflowStepSchema = z.object({
 const createWorkflowSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
-  steps: z.array(workflowStepSchema).min(1),
+  steps: z.array(workflowStepSchema).min(1).max(MAX_WORKFLOW_STEPS),
   metadata: z.any().optional(),
 });
 
 const updateWorkflowSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().optional(),
-  steps: z.array(workflowStepSchema).min(1).optional(),
+  steps: z.array(workflowStepSchema).min(1).max(MAX_WORKFLOW_STEPS).optional(),
   metadata: z.any().optional(),
 });
 

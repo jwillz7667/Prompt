@@ -5,6 +5,15 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import pLimit from 'p-limit';
+import { reserveGenerationsForUser } from './subscriptionService.js';
+
+/** Platforms answered by a real third-party model call (the rest are simulated). */
+const BILLABLE_PLATFORMS: ReadonlySet<PlatformType> = new Set([
+  PlatformType.CHATGPT,
+  PlatformType.CLAUDE,
+  PlatformType.GEMINI,
+  PlatformType.PERPLEXITY,
+]);
 
 interface PlatformConfig {
   apiKey?: string;
@@ -138,7 +147,9 @@ class SandboxService {
 
       // Execute tests on all platforms in parallel with concurrency limit
       const testPromises = test.platforms.map((platform) =>
-        this.concurrencyLimit(() => this.testOnPlatform(platform, test.testPrompt, parameters)),
+        this.concurrencyLimit(() =>
+          this.testOnPlatformWithinAllowance(test.userId, platform, test.testPrompt, parameters),
+        ),
       );
 
       const results = await Promise.allSettled(testPromises);
@@ -190,6 +201,28 @@ class SandboxService {
 
       throw error;
     }
+  }
+
+  /**
+   * Each billable platform call is reserved against the owner's daily
+   * generation allowance before it runs and returned if it failed.
+   */
+  private async testOnPlatformWithinAllowance(
+    userId: string,
+    platform: PlatformType,
+    prompt: string,
+    parameters: TestParameters,
+  ): Promise<TestResult> {
+    if (!BILLABLE_PLATFORMS.has(platform)) {
+      return this.testOnPlatform(platform, prompt, parameters);
+    }
+    const usage = await reserveGenerationsForUser(userId, 1);
+    if (!usage.isAllowed) {
+      return { platform, error: 'Daily fair-use limit reached', latencyMs: 0 };
+    }
+    const result = await this.testOnPlatform(platform, prompt, parameters);
+    if (result.error !== undefined) await usage.reservation.release();
+    return result;
   }
 
   /**
