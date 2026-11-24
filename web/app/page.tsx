@@ -103,11 +103,6 @@ export default function Home() {
                 priceValidUntil: '2027-12-31',
               },
             ],
-            aggregateRating: {
-              '@type': 'AggregateRating',
-              ratingValue: '4.8',
-              ratingCount: '1250',
-            },
           }),
         }}
       />
