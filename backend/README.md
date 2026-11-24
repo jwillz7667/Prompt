@@ -103,10 +103,11 @@ The full inventory lives in [`.env.example`](./.env.example). Required variables
 | `DATABASE_URL`                                                             | Postgres connection string (with `connection_limit` for production) |
 | `DATABASE_DIRECT_URL`                                                      | Bypasses pooler for migrations                                      |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`                                 | 64-char base64 secrets (`openssl rand -base64 64`)                  |
-| `APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In + ASSN verification                                   |
-| `APPLE_BUNDLE_ID` / `APPLE_APP_ID` / `APPLE_ISSUER_ID`                     | App Store Server API                                                |
+| `APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In audience, APNs key                                    |
+| `APPLE_IAP_ISSUER_ID` / `APPLE_IAP_KEY_ID` / `APPLE_IAP_PRIVATE_KEY`       | App Store Server API (status reconciliation, history)               |
+| `APPLE_BUNDLE_ID` / `APPLE_APP_ID`                                         | Signed transaction / notification verification                      |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                                | Google OAuth                                                        |
-| `LLM_DEEPSEEK_API_KEY` (or legacy `DEEPSEEK_API_KEY`)                      | Primary AI provider in the LLM gateway chain                        |
+| One provider key in `LLM_PROVIDER_CHAIN` (e.g. `LLM_DEEPSEEK_API_KEY`)     | `/health` reports a config error only when no provider is usable    |
 | `BACKEND_WEBHOOK_SECRET`                                                   | HMAC for Next.js → Express webhook forwarding                       |
 
 Optional / scaling variables:
@@ -141,6 +142,49 @@ credentials only skip that provider. Runbook, home-GPU setup and cost table:
 | `LLM_LAST_PROVIDER_RETRIES`                                                   | `1`                                                                 | Retries on the last provider for transient failures                                |
 | `PROMPT_VISION_PROVIDER`                                                      | `deepseek`                                                          | `deepseek` = gateway vision; `openai` = dedicated vision model                     |
 
+### Subscriptions, paywall and daily usage
+
+Every app route that can reach a model runs `requireEntitlement` (403
+`{code:'QUOTA_EXCEEDED', reason:'SUBSCRIPTION_REQUIRED'}` for non-subscribers).
+The gate only reads today's count. Each provider call is then **reserved**
+on the user's `DailyUsage` row with one atomic upsert-increment before the
+call, and returned only if nothing was delivered. Streams count as charged
+once a token reaches the client. Workflows, sandbox tests and variations
+reserve per provider call.
+
+| Variable                             | Default | Purpose                                                                                     |
+| ------------------------------------ | ------- | ------------------------------------------------------------------------------------------- |
+| `HARD_PAYWALL_ENABLED`               | `true`  | Rollback switch (see below)                                                                 |
+| `FREE_DAILY_PROMPT_LIMIT`            | `10`    | Legacy free generations per UTC day, only while the paywall is off                          |
+| `PREMIUM_DAILY_GENERATION_SOFT_CAP`  | `300`   | Subscriber fair-use ceiling per UTC day (`429 FAIR_USE_LIMIT`)                              |
+| `SUPPORT_AI_DAILY_LIMIT`             | `20`    | Support-assistant replies per UTC day; support needs no subscription                        |
+| `APPLE_ACCEPT_SANDBOX_TRANSACTIONS`  | `true`  | Accept App Review / TestFlight (Sandbox) purchases at all                                   |
+| `APPLE_SANDBOX_ACCOUNT_MAX_AGE_DAYS` | `14`    | Sandbox purchases unlock only accounts younger than this (App Review uses a fresh Apple ID) |
+| `APPLE_SANDBOX_ALLOWED_USER_IDS`     | empty   | Comma-separated internal testers whose Sandbox purchases always unlock                      |
+
+**`HARD_PAYWALL_ENABLED` rollout and cleanup.** It ships `true` together with
+the iOS hard-paywall build. If conversion or App Review forces a rollback,
+set it to `false` in Railway and restart: non-subscribers get
+`FREE_DAILY_PROMPT_LIMIT` generations a day again, with no deploy. Once the
+paywall build has been live for one full release with the flag untouched,
+remove the flag, the legacy-allowance branch in `requireEntitlement` /
+`generationDailyLimit`, and `FREE_DAILY_PROMPT_LIMIT`, and drop the `PRO`
+enum value in the same release.
+
+**Sign in with Apple revocation.** `APPLE_SIWA_KEY_ID`,
+`APPLE_SIWA_PRIVATE_KEY` (a key with Sign in with Apple enabled) and
+`APPLE_SIWA_TOKEN_ENCRYPTION_KEY` (32 bytes, base64) let the backend exchange
+the sign-in authorization code for a refresh token and store it encrypted
+(AES-256-GCM). It is revoked when the account is deleted, as guideline
+5.1.1(v) requires. A failed revoke is queued in `AppleTokenRevocation` and
+retried every 15 minutes, so deletion never blocks. Set all three keys or
+none: a partial set fails boot, and none logs that revocation is disabled.
+
+**Developer API.** `/api/v1/public/*` is a separately billed product
+outside the app paywall ([ADR 0001](../docs/adr/0001-developer-api-free-tier.md)).
+`API_FREE_MONTHLY_REQUESTS` (default `25`) sets the free allowance.
+`DEVELOPER_SIGNUPS_PER_IP_PER_HOUR` (default `5`) throttles signups.
+
 ### Chat
 
 `src/features/chat` serves the general-purpose chatbot at `/api/v1/chat`
@@ -148,20 +192,40 @@ credentials only skip that provider. Runbook, home-GPU setup and cost table:
 require an active subscription (`requireEntitlement`); reading, renaming,
 deleting and reporting need only sign-in. Replies stream through the LLM
 gateway with the client-disconnect signal, so a stopped reply aborts upstream
-and is saved as `stopped`. A reply that fails before any output deletes the
-turn and refunds the daily slot, so the client can resend with the same
-`clientMessageId`. Before the model is called, user messages go through
-moderation. Sexual content involving minors gets a fixed refusal. Self-harm
-intent gets a fixed supportive reply with crisis resources (988,
-findahelpline.com). `CHAT_*` values are Zod-parsed when the router is built at
-boot.
+and is saved as `stopped`.
+
+What happens when a reply fails:
+
+- **Before `start`:** nothing is stored and the daily slot is refunded.
+- **After `start` but before any output:** the user's message is kept and the
+  empty reply is saved as `failed`. The client retries it with regenerate.
+  A failed regenerate keeps the reply it was replacing.
+- **Regenerate:** only allowed on the newest visible message. Otherwise the
+  route returns `409 {error, code:'NOT_LATEST_MESSAGE'}`. A reused
+  `clientMessageId` returns `409 {error, code:'DUPLICATE_MESSAGE'}`.
+- **Saving:** a reply, the removal of the reply it replaces, and the
+  conversation bump commit in one transaction.
+
+Moderation runs at two points: on user messages before the model is called,
+and on finished replies before they are saved. Flagged text gets a fixed
+response:
+
+- Sexual content involving minors gets a refusal.
+- Self-harm intent gets supportive copy with crisis resources (988,
+  findahelpline.com).
+- Explicit sexual content, threatening hate or harassment, graphic violence
+  and violent wrongdoing get a refusal.
+
+A replaced reply is sent in `complete.content`. Reports keep a snapshot of
+the reported text, so they outlive the message. The conversation list cursor
+is opaque. `CHAT_*` values are Zod-parsed when the router is built at boot.
 
 | Variable                    | Default | Purpose                                                              |
 | --------------------------- | ------- | -------------------------------------------------------------------- |
 | `CHAT_MAX_OUTPUT_TOKENS`    | `2048`  | Output cap per reply (`length` finish → status `truncated`)          |
-| `CHAT_CONTEXT_TOKEN_BUDGET` | `12000` | History budget per turn, estimated as `ceil(chars / 3.5)`            |
+| `CHAT_CONTEXT_TOKEN_BUDGET` | `12000` | History budget per turn (Latin ~4 chars/token, CJK 1 token/char)     |
 | `CHAT_DAILY_MESSAGE_LIMIT`  | `150`   | Replies per user per UTC day (`429 FAIR_USE_LIMIT`)                  |
-| `CHAT_MODERATION_ENABLED`   | `true`  | Pre-model moderation; active only when `OPENAI_API_KEY` is set       |
+| `CHAT_MODERATION_ENABLED`   | `true`  | Input + output moderation; needs `OPENAI_API_KEY` (boot log if off)  |
 | `OPENAI_API_KEY`            | unset   | Also used for the free moderation endpoint (2 s timeout, fails open) |
 
 Env vars are read with bracket notation (`process.env['NAME']`) because of
