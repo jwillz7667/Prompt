@@ -34,7 +34,7 @@ enum SubscriptionStatus {
 // ============================================================================
 
 enum ApiTier {
-  API_FREE // 100 requests/month, free
+  API_FREE // No enhancement requests; account, keys and docs only
   API_STARTER // 1,000 requests/month, $29/month
   API_PRO // 10,000 requests/month, $99/month
   API_ENTERPRISE // Unlimited, custom pricing
@@ -368,7 +368,7 @@ model ApiSubscription {
   stripePriceId        String?
 
   // Quota Configuration
-  includedRequests Int @default(100) // Requests included in plan
+  includedRequests Int @default(0) // Plan requests plus purchased credits; the free tier includes none
   overageRateCents Int @default(1) // Cost per 100 overage requests
 
   // Current Billing Period
