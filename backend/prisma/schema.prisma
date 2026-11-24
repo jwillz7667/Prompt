@@ -527,8 +527,11 @@ model DailyUsage {
   id     String @id @default(cuid())
   userId String
 
-  date        DateTime @db.Date
-  promptCount Int      @default(0)
+  date              DateTime @db.Date
+  /// Provider generations reserved today (fair-use cap / legacy allowance).
+  promptCount       Int      @default(0)
+  /// Support-assistant replies reserved today (SUPPORT_AI_DAILY_LIMIT).
+  supportReplyCount Int      @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

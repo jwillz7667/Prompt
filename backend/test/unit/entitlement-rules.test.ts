@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
 
 import {
-  dailyCounterKey,
   getTierFromProductId,
   isEntitled,
   parseEntitlementConfig,
@@ -96,8 +95,3 @@ describe('parseEntitlementConfig', () => {
   });
 });
 
-describe('dailyCounterKey', () => {
-  it('versions and scopes the key by user and UTC day', () => {
-    expect(dailyCounterKey('gen', 'user_1', NOW)).toBe('usage:gen:v1:user_1:2026-11-24');
-  });
-});

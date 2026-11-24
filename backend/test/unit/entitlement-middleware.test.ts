@@ -2,9 +2,8 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { subscriptionInfo, generationCount, config } = vi.hoisted(() => ({
+const { subscriptionInfo, config } = vi.hoisted(() => ({
   subscriptionInfo: vi.fn(),
-  generationCount: vi.fn(),
   config: {
     isHardPaywallEnabled: true,
     freeDailyPromptLimit: 10,
@@ -16,7 +15,8 @@ const { subscriptionInfo, generationCount, config } = vi.hoisted(() => ({
 vi.mock('../../src/services/subscriptionService.js', () => ({
   entitlementConfig: config,
   getSubscriptionInfo: subscriptionInfo,
-  getGenerationCountToday: generationCount,
+  generationDailyLimit: (value: { isEntitled: boolean }) =>
+    value.isEntitled ? config.premiumDailyGenerationSoftCap : config.freeDailyPromptLimit,
 }));
 vi.mock('../../src/services/emailService.js', () => ({
   sendDailyLimitReached: vi.fn().mockResolvedValue(undefined),
@@ -53,7 +53,6 @@ app.post('/gated', requireEntitlement, (req, res) => {
 
 beforeEach(() => {
   subscriptionInfo.mockReset();
-  generationCount.mockReset().mockResolvedValue(0);
   config.isHardPaywallEnabled = true;
 });
 
@@ -105,8 +104,7 @@ describe('requireEntitlement', () => {
   });
 
   it('returns 429 FAIR_USE_LIMIT at the soft cap', async () => {
-    subscriptionInfo.mockResolvedValue(info({ tier: 'PREMIUM', isEntitled: true }));
-    generationCount.mockResolvedValue(300);
+    subscriptionInfo.mockResolvedValue(info({ tier: 'PREMIUM', isEntitled: true, dailyPromptsUsed: 300 }));
 
     const response = await request(app).post('/gated').set('x-user', '1');
 

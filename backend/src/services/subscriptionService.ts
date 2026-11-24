@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { SubscriptionTier, SubscriptionStatus, type Subscription } from '@prisma/client';
 import { prisma } from '../utils/prisma.js';
-import { cache, getRedis, isRedisAvailable } from '../utils/redis.js';
+import { cache } from '../utils/redis.js';
 import { logger, subscriptionLogger } from '../utils/logger.js';
 import { sendSubscriptionExpired } from './emailService.js';
 
@@ -351,103 +351,191 @@ function buildSubscriptionInfo(
 }
 
 // ============================================================================
-// DAILY COUNTERS (fair use + support replies)
+// DAILY USAGE LEDGER (fair use, legacy allowance, support replies)
 // ============================================================================
 
-export type DailyCounterScope = 'gen' | 'support';
+/**
+ * Per-user UTC-day counters on the DailyUsage row. A unit is reserved
+ * atomically before a provider call (one upsert-increment, compared with the
+ * limit afterwards) and returned only when the call produced nothing, so
+ * concurrent requests cannot all pass a stale read, a client that drops the
+ * connection after receiving output is still charged, and an outage never
+ * consumes allowance. Postgres is the single source of truth: there is no
+ * fail-open path when Redis is unavailable.
+ */
+export type DailyUsageCounter = 'generation' | 'supportReply';
 
-// Keys: usage:<scope>:v1:<userId>:<yyyy-mm-dd UTC>. One key per UTC day, so
-// no explicit invalidation is needed; the 48h TTL only garbage-collects.
-const DAILY_COUNTER_TTL_SECONDS = 48 * 60 * 60;
-
-interface CounterClient {
-  incr(key: string): Promise<number>;
-  expire(key: string, seconds: number): Promise<unknown>;
-  get(key: string): Promise<string | null>;
+export interface UsageReservation {
+  /** Units this reservation still holds. */
+  readonly heldUnits: number;
+  /** Returns `units` (default: everything still held). Safe to call repeatedly. */
+  release(units?: number): Promise<void>;
 }
 
-function isCounterClient(value: unknown): value is CounterClient {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'incr' in value &&
-    typeof value.incr === 'function' &&
-    'expire' in value &&
-    typeof value.expire === 'function' &&
-    'get' in value &&
-    typeof value.get === 'function'
-  );
+export type UsageReservationResult =
+  | { isAllowed: true; reservation: UsageReservation }
+  | { isAllowed: false; resetAt: Date };
+
+function nextUtcMidnight(now: Date = new Date()): Date {
+  return new Date(utcMidnight(now).getTime() + 86_400_000);
 }
 
-function counterClient(): CounterClient | null {
-  if (!isRedisAvailable()) return null;
-  const client = getRedis();
-  return isCounterClient(client) ? client : null;
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && Reflect.get(error, 'code') === 'P2002';
 }
 
-export function dailyCounterKey(
-  scope: DailyCounterScope,
+async function incrementDailyUsage(
+  counter: DailyUsageCounter,
   userId: string,
-  now: Date = new Date(),
-): string {
-  return `usage:${scope}:v1:${userId}:${utcDateKey(now)}`;
-}
-
-/** Today's count, or null when Redis is unavailable (callers choose their fallback). */
-export async function getDailyCounter(
-  scope: DailyCounterScope,
-  userId: string,
-): Promise<number | null> {
-  const client = counterClient();
-  if (!client) return null;
+  date: Date,
+  units: number,
+): Promise<number> {
+  const upsert = () =>
+    prisma.dailyUsage.upsert({
+      where: { userId_date: { userId, date } },
+      update:
+        counter === 'generation'
+          ? { promptCount: { increment: units } }
+          : { supportReplyCount: { increment: units } },
+      create:
+        counter === 'generation'
+          ? { userId, date, promptCount: units }
+          : { userId, date, supportReplyCount: units },
+      select: { promptCount: true, supportReplyCount: true },
+    });
+  let row: { promptCount: number; supportReplyCount: number };
   try {
-    const value = await client.get(dailyCounterKey(scope, userId));
-    return value ? Number.parseInt(value, 10) || 0 : 0;
+    row = await upsert();
   } catch (error) {
-    logger.warn({ err: error, scope, userId }, 'Failed to read daily usage counter');
-    return null;
+    // Two first-of-the-day requests can both try the INSERT; the loser's
+    // retry takes the UPDATE path, which increments atomically.
+    if (!isUniqueViolation(error)) throw error;
+    row = await upsert();
   }
+  return counter === 'generation' ? row.promptCount : row.supportReplyCount;
 }
 
-export async function incrementDailyCounter(
-  scope: DailyCounterScope,
+async function decrementDailyUsage(
+  counter: DailyUsageCounter,
   userId: string,
+  date: Date,
+  units: number,
 ): Promise<void> {
-  const client = counterClient();
-  if (!client) return;
-  const key = dailyCounterKey(scope, userId);
-  try {
-    await client.incr(key);
-    await client.expire(key, DAILY_COUNTER_TTL_SECONDS);
-  } catch (error) {
-    logger.warn({ err: error, scope, userId }, 'Failed to increment daily usage counter');
+  // The gte guard keeps a late release from driving the counter negative.
+  await (counter === 'generation'
+    ? prisma.dailyUsage.updateMany({
+        where: { userId, date, promptCount: { gte: units } },
+        data: { promptCount: { decrement: units } },
+      })
+    : prisma.dailyUsage.updateMany({
+        where: { userId, date, supportReplyCount: { gte: units } },
+        data: { supportReplyCount: { decrement: units } },
+      }));
+}
+
+async function invalidateUsageCache(userId: string, date: Date): Promise<void> {
+  await cache.invalidateDailyUsage(userId, utcDateKey(date));
+}
+
+export async function reserveDailyUsage(
+  counter: DailyUsageCounter,
+  userId: string,
+  units: number,
+  dailyLimit: number,
+  now: Date = new Date(),
+): Promise<UsageReservationResult> {
+  if (!Number.isInteger(units) || units < 1) {
+    throw new RangeError(`usage reservations need a positive whole number of units, got ${units}`);
   }
+  const date = utcMidnight(now);
+  const used = await incrementDailyUsage(counter, userId, date, units);
+  if (used > dailyLimit) {
+    await decrementDailyUsage(counter, userId, date, units);
+    await invalidateUsageCache(userId, date);
+    return { isAllowed: false, resetAt: nextUtcMidnight(now) };
+  }
+  await invalidateUsageCache(userId, date);
+
+  let heldUnits = units;
+  return {
+    isAllowed: true,
+    reservation: {
+      get heldUnits() {
+        return heldUnits;
+      },
+      async release(requested = heldUnits) {
+        const returned = Math.min(Math.max(0, Math.floor(requested)), heldUnits);
+        if (returned === 0) return;
+        heldUnits -= returned;
+        try {
+          await decrementDailyUsage(counter, userId, date, returned);
+          await invalidateUsageCache(userId, date);
+        } catch (error) {
+          // The user keeps a slightly lower allowance for the rest of the day;
+          // never surface a refund failure as a request failure.
+          logger.warn({ err: error, userId, counter, returned }, 'Failed to release daily usage');
+        }
+      },
+    },
+  };
+}
+
+/** Today's generation allowance for a resolved subscription. */
+export function generationDailyLimit(info: Pick<SubscriptionInfo, 'isEntitled'>): number {
+  if (info.isEntitled) return entitlementConfig.premiumDailyGenerationSoftCap;
+  return entitlementConfig.isHardPaywallEnabled ? 0 : entitlementConfig.freeDailyPromptLimit;
+}
+
+/** Reserves `units` provider generations for a request whose subscription is already resolved. */
+export function reserveGenerations(
+  userId: string,
+  units: number,
+  info: Pick<SubscriptionInfo, 'isEntitled'>,
+): Promise<UsageReservationResult> {
+  return reserveDailyUsage('generation', userId, units, generationDailyLimit(info));
+}
+
+/** For background work (workflows, sandbox, variations) that runs outside a request. */
+export async function reserveGenerationsForUser(
+  userId: string,
+  units: number,
+): Promise<UsageReservationResult> {
+  return reserveGenerations(userId, units, await getSubscriptionInfo(userId));
+}
+
+export interface StreamedGenerationCharge {
+  /** Call whenever output is written to the client. */
+  markDelivered(): void;
+  /** For every non-success exit: returns the unit unless output already reached the client. */
+  settleWithoutCompletion(): Promise<void>;
 }
 
 /**
- * Today's successful generations for fair-use purposes. Redis holds the
- * atomic counter; without Redis the Postgres daily usage row (charged by the
- * same recordUsage call) is the fallback source.
+ * Streams are charged when output is delivered, not when they complete
+ * cleanly: a client that reads the tokens and drops the connection before the
+ * final event still received the answer.
  */
-export async function getGenerationCountToday(
-  userId: string,
-  dailyPromptsUsed: number,
-): Promise<number> {
-  return (await getDailyCounter('gen', userId)) ?? dailyPromptsUsed;
+export function trackStreamedGeneration(reservation: UsageReservation): StreamedGenerationCharge {
+  let hasDeliveredOutput = false;
+  return {
+    markDelivered() {
+      hasDeliveredOutput = true;
+    },
+    async settleWithoutCompletion() {
+      if (!hasDeliveredOutput) await reservation.release();
+    },
+  };
 }
 
-/** Charges one successful generation. Call only after the provider succeeded. */
+/**
+ * Charges one finished generation unconditionally. Only for work whose cost
+ * is already incurred when it is counted (reflection jobs); request paths
+ * reserve up front with reserveGenerations instead.
+ */
 export async function recordUsage(userId: string): Promise<void> {
-  const today = utcMidnight();
-  await prisma.dailyUsage.upsert({
-    where: { userId_date: { userId, date: today } },
-    update: { promptCount: { increment: 1 } },
-    create: { userId, date: today, promptCount: 1 },
-  });
-  await Promise.all([
-    cache.invalidateDailyUsage(userId, utcDateKey(today)),
-    incrementDailyCounter('gen', userId),
-  ]);
+  const date = utcMidnight();
+  await incrementDailyUsage('generation', userId, date, 1);
+  await invalidateUsageCache(userId, date);
 }
 
 // ============================================================================

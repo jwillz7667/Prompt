@@ -5,11 +5,17 @@ import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
   getEntitlement,
   requireEntitlement,
+  sendUsageLimitResponse,
   type EntitledRequest,
 } from '../middleware/requireEntitlement.js';
 import { prisma } from '../utils/prisma.js';
 import { logger } from '../utils/logger.js';
-import { recordUsage, type SubscriptionInfo } from '../services/subscriptionService.js';
+import {
+  reserveGenerations,
+  trackStreamedGeneration,
+  type StreamedGenerationCharge,
+  type SubscriptionInfo,
+} from '../services/subscriptionService.js';
 import {
   enhancePromptInThreadStream,
   getPromptTierFromSubscription,
@@ -233,6 +239,7 @@ threadRouter.post(
   '/',
   requireEntitlement,
   async (req: EntitledRequest, res: Response): Promise<void> => {
+    let charge: StreamedGenerationCharge | undefined;
     try {
       const subscriptionInfo = getEntitlement(req);
       if (!req.user || !subscriptionInfo) {
@@ -242,6 +249,15 @@ threadRouter.post(
 
       const data = createThreadSchema.parse(req.body);
       const supportsImageAttachment = await supportsThreadTurnImageAttachmentColumn();
+
+      // Reserved before any SSE byte so a spent allowance is a real HTTP status.
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      const generation = trackStreamedGeneration(usage.reservation);
+      charge = generation;
 
       // Set up SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
@@ -319,30 +335,20 @@ threadRouter.post(
         onToken: (token) => {
           if (abortController.signal.aborted) return;
           res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+          generation.markDelivered();
         },
         onComplete: async (result) => {
-          // Client disconnected: nothing was delivered, so nothing is
-          // charged or persisted, and the up-front thread row is dropped.
+          // Client disconnected: nothing is persisted and the up-front thread
+          // row is dropped. Tokens it already received keep the charge.
           if (abortController.signal.aborted) {
             discardThread();
+            await generation.settleWithoutCompletion();
             return;
           }
-          // The model already produced a billable answer. Persistence is
-          // best-effort: a DB failure must never turn a successful
-          // enhancement into a client error or a lost token stream.
-
-          // Charge the daily quota first and on its own. The model call has
-          // already happened, so the quota is owed even if the turn row fails
-          // to persist below — otherwise a persistence error would silently
-          // hand the user a free enhancement (fail-open).
-          try {
-            await recordUsage(req.user!.id);
-          } catch (usageError) {
-            logger.error(
-              { err: usageError, userId: req.user!.id },
-              'Failed to record daily usage for thread turn',
-            );
-          }
+          // The model already produced a billable answer (its generation was
+          // reserved up front). Persistence is best-effort: a DB failure must
+          // never turn a successful enhancement into a client error or a lost
+          // token stream.
 
           let turnId: string | null = null;
           let maxModeQuota = maxModeQuotaBeforeUse;
@@ -455,14 +461,16 @@ threadRouter.post(
           res.write('data: [DONE]\n\n');
           res.end();
         },
-        onError: (error) => {
+        onError: async (error) => {
           discardThread();
+          await generation.settleWithoutCompletion();
           if (abortController.signal.aborted) return;
           logger.error({ err: error }, 'Thread create stream error');
           writeThreadFailure(res, error);
         },
       });
     } catch (error) {
+      await charge?.settleWithoutCompletion();
       logger.error({ err: error }, 'Create thread error');
       writeThreadFailure(res, error);
     }
@@ -477,6 +485,7 @@ threadRouter.post(
   '/:id/turns/stream',
   requireEntitlement,
   async (req: EntitledRequest, res: Response): Promise<void> => {
+    let charge: StreamedGenerationCharge | undefined;
     try {
       const subscriptionInfo = getEntitlement(req);
       if (!req.user || !subscriptionInfo) {
@@ -507,6 +516,15 @@ threadRouter.post(
         res.status(404).json({ error: 'Thread not found' });
         return;
       }
+
+      // Reserved before any SSE byte so a spent allowance is a real HTTP status.
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      const generation = trackStreamedGeneration(usage.reservation);
+      charge = generation;
 
       // Set up SSE headers
       res.setHeader('Content-Type', 'text/event-stream');
@@ -556,27 +574,19 @@ threadRouter.post(
         onToken: (token) => {
           if (abortController.signal.aborted) return;
           res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+          generation.markDelivered();
         },
         onComplete: async (result) => {
-          // Client disconnected: nothing was delivered, so nothing is
-          // charged or persisted.
-          if (abortController.signal.aborted) return;
-          // The model already produced a billable answer. Persistence is
-          // best-effort: a DB failure must never turn a successful
-          // enhancement into a client error or a lost token stream.
-
-          // Charge the daily quota first and on its own. The model call has
-          // already happened, so the quota is owed even if the turn row fails
-          // to persist below — otherwise a persistence error would silently
-          // hand the user a free enhancement (fail-open).
-          try {
-            await recordUsage(req.user!.id);
-          } catch (usageError) {
-            logger.error(
-              { err: usageError, userId: req.user!.id },
-              'Failed to record daily usage for thread turn',
-            );
+          // Client disconnected: nothing is persisted. Tokens it already
+          // received keep the charge.
+          if (abortController.signal.aborted) {
+            await generation.settleWithoutCompletion();
+            return;
           }
+          // The model already produced a billable answer (its generation was
+          // reserved up front). Persistence is best-effort: a DB failure must
+          // never turn a successful enhancement into a client error or a lost
+          // token stream.
 
           let turnId: string | null = null;
           let maxModeQuota = maxModeQuotaBeforeUse;
@@ -681,13 +691,15 @@ threadRouter.post(
           res.write('data: [DONE]\n\n');
           res.end();
         },
-        onError: (error) => {
+        onError: async (error) => {
+          await generation.settleWithoutCompletion();
           if (abortController.signal.aborted) return;
           logger.error({ err: error }, 'Thread turn stream error');
           writeThreadFailure(res, error);
         },
       });
     } catch (error) {
+      await charge?.settleWithoutCompletion();
       logger.error({ err: error }, 'Add turn error');
       writeThreadFailure(res, error);
     }

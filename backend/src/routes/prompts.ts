@@ -13,14 +13,18 @@ import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
   getEntitlement,
   requireEntitlement,
+  sendUsageLimitResponse,
   type EntitledRequest,
 } from '../middleware/requireEntitlement.js';
 import { prisma } from '../utils/prisma.js';
 import { promptLogger } from '../utils/logger.js';
 import {
   getSubscriptionInfo,
-  recordUsage,
+  reserveGenerations,
+  trackStreamedGeneration,
+  type StreamedGenerationCharge,
   type SubscriptionInfo,
+  type UsageReservation,
 } from '../services/subscriptionService.js';
 import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 import {
@@ -247,6 +251,8 @@ promptRouter.post(
   '/enhance',
   requireEntitlement,
   async (req: EntitledRequest, res: Response): Promise<void> => {
+    // Held until the provider returns; released on any failure before that.
+    let pendingGeneration: UsageReservation | undefined;
     try {
       const subscriptionInfo = getEntitlement(req);
       if (!req.user || !subscriptionInfo) {
@@ -255,6 +261,12 @@ promptRouter.post(
       }
 
       const data = enhancePromptSchema.parse(req.body);
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      pendingGeneration = usage.reservation;
       const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
@@ -285,6 +297,8 @@ promptRouter.post(
         subModality: data.subModality,
         imageAttachment: data.imageAttachment,
       });
+      // The answer exists: the reserved generation is owed from here on.
+      pendingGeneration = undefined;
 
       // Save the prompt to the database.
       // `select` constrains the RETURNING clause; without it Prisma asks the DB
@@ -344,8 +358,6 @@ promptRouter.post(
         },
       });
 
-      // Record usage for quota tracking
-      await recordUsage(req.user.id);
       const maxModeQuota =
         data.mode === 'max'
           ? await recordMaxModeUsage(req.user.id, subscriptionInfo.tier)
@@ -369,6 +381,7 @@ promptRouter.post(
         subscription: buildSubscriptionPayload(subscriptionInfo, maxModeQuota, true),
       });
     } catch (error) {
+      await pendingGeneration?.release();
       promptLogger.error({ err: error }, 'Enhance prompt error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.issues });
@@ -415,6 +428,7 @@ promptRouter.post(
   '/enhance/stream',
   requireEntitlement,
   async (req: EntitledRequest, res: Response): Promise<void> => {
+    let charge: StreamedGenerationCharge | undefined;
     try {
       const subscriptionInfo = getEntitlement(req);
       if (!req.user || !subscriptionInfo) {
@@ -423,6 +437,14 @@ promptRouter.post(
       }
 
       const data = enhancePromptSchema.parse(req.body);
+      // Reserved before any SSE byte so a spent allowance is a real HTTP status.
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      const generation = trackStreamedGeneration(usage.reservation);
+      charge = generation;
       const supportsImageAttachment = await supportsPromptImageAttachmentColumn();
 
       // Set up SSE headers
@@ -473,28 +495,21 @@ promptRouter.post(
           onToken: (token) => {
             if (abortController.signal.aborted) return;
             res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+            generation.markDelivered();
           },
           onComplete: async (result) => {
-            // Client disconnected: nothing was delivered, so nothing is
-            // charged or persisted.
-            if (abortController.signal.aborted) return;
-            // The model already produced a billable answer. Persistence is
-            // best-effort from here: a DB failure (schema drift, transient
-            // outage) must never turn a successful enhancement into a client
-            // error or a lost token stream. We log loudly and still deliver
-            // the result; the client treats a null promptId as "not saved".
-            // Charge the daily quota first and on its own. The model call has
-            // already happened, so the quota is owed even if persistence fails
-            // below — otherwise a DB error would silently hand the user a free
-            // enhancement (fail-open).
-            try {
-              await recordUsage(req.user!.id);
-            } catch (usageError) {
-              promptLogger.error(
-                { err: usageError, userId: req.user!.id },
-                'Failed to record daily usage for prompt',
-              );
+            // Client disconnected: nothing is persisted. Tokens it already
+            // received keep the reserved generation charged.
+            if (abortController.signal.aborted) {
+              await generation.settleWithoutCompletion();
+              return;
             }
+            // The model already produced a billable answer and the generation
+            // was reserved up front. Persistence is best-effort from here: a
+            // DB failure (schema drift, transient outage) must never turn a
+            // successful enhancement into a client error or a lost token
+            // stream. We log loudly and still deliver the result; the client
+            // treats a null promptId as "not saved".
 
             let maxModeQuota = maxModeQuotaBeforeUse;
             try {
@@ -611,7 +626,8 @@ promptRouter.post(
             res.write('data: [DONE]\n\n');
             res.end();
           },
-          onError: (error) => {
+          onError: async (error) => {
+            await generation.settleWithoutCompletion();
             if (abortController.signal.aborted) return;
             promptLogger.error({ err: error }, 'Stream error');
             res.write(`data: ${JSON.stringify(toClientStreamError(error))}\n\n`);
@@ -620,6 +636,7 @@ promptRouter.post(
         },
       );
     } catch (error) {
+      await charge?.settleWithoutCompletion();
       promptLogger.error({ err: error }, 'Stream enhance error');
       if (error instanceof z.ZodError && !res.headersSent) {
         res.status(400).json({ error: 'Invalid request data', details: error.issues });
@@ -1197,6 +1214,7 @@ promptRouter.post(
   '/compare',
   requireEntitlement,
   async (req: EntitledRequest, res: Response): Promise<void> => {
+    let pendingGeneration: UsageReservation | undefined;
     try {
       const subscriptionInfo = getEntitlement(req);
       if (!req.user || !subscriptionInfo) {
@@ -1206,6 +1224,12 @@ promptRouter.post(
 
       const data = compareSchema.parse(req.body);
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
+      const usage = await reserveGenerations(req.user.id, 1, subscriptionInfo);
+      if (!usage.isAllowed) {
+        sendUsageLimitResponse(res, subscriptionInfo, usage.resetAt);
+        return;
+      }
+      pendingGeneration = usage.reservation;
 
       const results = await compareEnhancements({
         prompt: data.prompt,
@@ -1223,17 +1247,19 @@ promptRouter.post(
         0,
       );
       if (results.some((result) => result.status === 'ok')) {
-        await Promise.all([
-          recordUsage(req.user.id),
-          prisma.user.update({
-            where: { id: req.user.id },
-            data: { tokenUsage: { increment: BigInt(totalTokens) } },
-          }),
-        ]);
+        pendingGeneration = undefined;
+        await prisma.user.update({
+          where: { id: req.user.id },
+          data: { tokenUsage: { increment: BigInt(totalTokens) } },
+        });
+      } else {
+        await pendingGeneration.release();
+        pendingGeneration = undefined;
       }
 
       res.json({ results });
     } catch (error) {
+      await pendingGeneration?.release();
       promptLogger.error({ err: error }, 'Compare providers error');
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: 'Invalid request data', details: error.issues });

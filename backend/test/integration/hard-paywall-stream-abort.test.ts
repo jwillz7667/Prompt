@@ -5,10 +5,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { StreamCallbacks } from '../../src/services/deepseekService.js';
 
-const { upstreamSignals } = vi.hoisted(() => ({ upstreamSignals: [] as AbortSignal[] }));
+const { upstreamSignals, scenario } = vi.hoisted(() => ({
+  upstreamSignals: [] as AbortSignal[],
+  scenario: { failsBeforeFirstToken: false },
+}));
 
-// The upstream generation finishes only after the caller aborts, which is the
-// race that must neither charge the user nor persist a turn.
+// The upstream generation finishes only after the caller aborts: the race
+// must not persist a turn, but the tokens already delivered stay charged.
 vi.mock('../../src/services/deepseekService.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/services/deepseekService.js')>();
   return {
@@ -17,6 +20,10 @@ vi.mock('../../src/services/deepseekService.js', async (importOriginal) => {
       const signal = callbacks.signal;
       if (!signal) throw new Error('thread stream called without an AbortSignal');
       upstreamSignals.push(signal);
+      if (scenario.failsBeforeFirstToken) {
+        await callbacks.onError(new Error('provider unavailable'));
+        return;
+      }
       await callbacks.onToken('partial');
       await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
       await callbacks.onComplete({
@@ -94,19 +101,39 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void
   }
 }
 
+async function generationsToday(): Promise<number> {
+  const rows = await prisma.dailyUsage.findMany({ where: { userId: subscriber.id } });
+  return rows.reduce((sum, row) => sum + row.promptCount, 0);
+}
+
 describe('thread stream client disconnect', () => {
-  it('aborts the upstream generation and neither charges nor persists the turn', async () => {
+  it('aborts the upstream generation, persists nothing, and charges the delivered output', async () => {
     await openStreamAndDisconnect('/api/v1/threads', { prompt: 'write a haiku' });
 
     await waitFor(() => upstreamSignals[0]?.aborted === true);
     // Give the post-abort onComplete a chance to (wrongly) write.
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    const [threads, usage] = await Promise.all([
+    const [threads, generations] = await Promise.all([
       prisma.thread.count({ where: { userId: subscriber.id } }),
-      prisma.dailyUsage.count({ where: { userId: subscriber.id } }),
+      generationsToday(),
     ]);
     expect(threads).toBe(0);
-    expect(usage).toBe(0);
+    expect(generations).toBe(1);
+  });
+
+  it('returns the reserved generation when the provider fails before any output', async () => {
+    await prisma.dailyUsage.deleteMany({ where: { userId: subscriber.id } });
+    scenario.failsBeforeFirstToken = true;
+
+    const { port } = server.address() as AddressInfo;
+    const response = await fetch(`http://localhost:${port}/api/v1/threads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${subscriber.accessToken}` },
+      body: JSON.stringify({ prompt: 'write a haiku' }),
+    });
+    await response.text();
+
+    expect(await generationsToday()).toBe(0);
   });
 });

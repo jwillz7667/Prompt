@@ -23,7 +23,10 @@ export interface ChatRequest {
   userId: string;
   ticketId?: string;
   message: string;
+  /** Turns the model may see; must come from a trusted source (persisted or caller-only). */
   conversationHistory?: SupportMessage[];
+  /** Full client transcript stored on a created ticket for human review only. */
+  ticketTranscript?: SupportMessage[];
 }
 
 export interface ChatResponse {
@@ -250,7 +253,7 @@ export async function chatWithSupport(request: ChatRequest): Promise<ChatRespons
         priority: determinePriority(category),
         initialMessage: request.message,
         aiSummary: cleanedReply,
-        conversationHistory: request.conversationHistory,
+        conversationHistory: request.ticketTranscript ?? request.conversationHistory,
       });
 
       return {

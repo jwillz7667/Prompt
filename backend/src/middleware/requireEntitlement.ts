@@ -10,8 +10,13 @@
  *   - entitled but over the daily fair-use ceiling: 429 {code:'FAIR_USE_LIMIT', resetAt}.
  * getSubscriptionInfo runs exactly once; its result is attached as
  * req.subscription (legacy flat shape declared in types/express.d.ts) and the
- * full SubscriptionInfo is available to handlers through getEntitlement(req). Usage is charged by the handler via
- * recordUsage only after the provider succeeded, never here.
+ * full SubscriptionInfo is available to handlers through getEntitlement(req).
+ *
+ * This gate only reads today's count (an early, cheap rejection). Generating
+ * handlers then reserve each provider call atomically with reserveGenerations
+ * before the call and release the unit only when nothing was delivered, which
+ * closes the read-then-charge race and charges clients that disconnect after
+ * receiving output. Routes that do not reach a provider never reserve.
  *
  * Feature flag HARD_PAYWALL_ENABLED (default true, validated at boot in
  * subscriptionService):
@@ -27,7 +32,7 @@ import type { NextFunction, Request, Response } from 'express';
 import type { AuthenticatedRequest } from './auth.js';
 import {
   entitlementConfig,
-  getGenerationCountToday,
+  generationDailyLimit,
   getSubscriptionInfo,
   type SubscriptionInfo,
 } from '../services/subscriptionService.js';
@@ -64,6 +69,36 @@ function nextUtcMidnight(now: Date = new Date()): Date {
   const reset = new Date(now);
   reset.setUTCHours(24, 0, 0, 0);
   return reset;
+}
+
+/**
+ * The response for a request whose daily allowance is spent: 429 FAIR_USE_LIMIT
+ * for subscribers, the legacy 403 QUOTA_EXCEEDED body while the hard paywall
+ * is disabled. Must be sent before any SSE header.
+ */
+export function sendUsageLimitResponse(
+  res: Response,
+  info: Pick<SubscriptionInfo, 'isEntitled'>,
+  resetAt: Date = nextUtcMidnight(),
+): void {
+  if (!info.isEntitled) {
+    res.status(403).json(
+      entitlementConfig.isHardPaywallEnabled
+        ? SUBSCRIPTION_REQUIRED_BODY
+        : {
+            error: 'Quota exceeded',
+            code: 'QUOTA_EXCEEDED',
+            reason: 'DAILY_LIMIT_REACHED',
+            remainingQuota: 0,
+          },
+    );
+    return;
+  }
+  res.status(429).json({
+    error: 'Daily fair-use limit reached',
+    code: 'FAIR_USE_LIMIT',
+    resetAt: resetAt.toISOString(),
+  });
 }
 
 function toRequestSubscription(info: SubscriptionInfo): RequestSubscription {
@@ -121,25 +156,16 @@ export async function requireEntitlement(
     }
     if (!info.canPerformAction) {
       notifyLegacyLimitReached(userId, info);
-      res.status(403).json({
-        error: 'Quota exceeded',
-        code: 'QUOTA_EXCEEDED',
-        reason: 'DAILY_LIMIT_REACHED',
-        remainingQuota: 0,
-      });
+      sendUsageLimitResponse(res, info);
       return;
     }
-  } else {
-    const generationsToday = await getGenerationCountToday(userId, info.dailyPromptsUsed);
-    if (generationsToday >= entitlementConfig.premiumDailyGenerationSoftCap) {
-      subscriptionLogger.warn({ userId, generationsToday }, 'Fair-use ceiling reached');
-      res.status(429).json({
-        error: 'Daily fair-use limit reached',
-        code: 'FAIR_USE_LIMIT',
-        resetAt: nextUtcMidnight().toISOString(),
-      });
-      return;
-    }
+  } else if (info.dailyPromptsUsed >= generationDailyLimit(info)) {
+    subscriptionLogger.warn(
+      { userId, generationsToday: info.dailyPromptsUsed },
+      'Fair-use ceiling reached',
+    );
+    sendUsageLimitResponse(res, info);
+    return;
   }
 
   entitlementsByRequest.set(req, info);
