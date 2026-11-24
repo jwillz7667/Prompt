@@ -298,6 +298,11 @@ final class StoreKitManager {
             guard billingProvider != "stripe" || !isEntitled else {
                 throw StoreError.managedOnWeb
             }
+            // Already subscribed (e.g. purchased on another device): never
+            // charge twice.
+            if isEntitled {
+                return .activated
+            }
             guard await APIClient.shared.sessionVersion == purchaseSessionVersion else {
                 throw StoreError.signInRequired
             }

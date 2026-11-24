@@ -97,12 +97,6 @@ struct PaywallView: View {
         .task {
             await loadOffer()
         }
-        .onChange(of: storeKit.isEntitled) { _, isEntitled in
-            // Hard mode is replaced by RootView once entitled.
-            if isEntitled, mode == .manage, !showsManagement {
-                dismiss()
-            }
-        }
         .alert(
             "Promptomize Premium",
             isPresented: Binding(
@@ -496,9 +490,9 @@ struct PaywallView: View {
         defer { isRestoring = false }
         do {
             try await storeKit.restorePurchases()
-            if storeKit.isEntitled {
-                if mode == .manage, !showsManagement { dismiss() }
-            } else {
+            // When entitled, hard mode is replaced by RootView and manage
+            // mode switches to the subscription status view.
+            if !storeKit.isEntitled {
                 alertMessage = StoreError.noActivePurchases.localizedDescription
             }
         } catch {
