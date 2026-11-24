@@ -214,11 +214,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
               applicationCategory: 'ProductivityApplication',
               operatingSystem: 'iOS, Web',
               offers: {
-                '@type': 'AggregateOffer',
-                lowPrice: '0',
-                highPrice: '9.99',
+                '@type': 'Offer',
+                name: 'Promptomize Premium',
+                price: '9.99',
                 priceCurrency: 'USD',
-                offerCount: '3',
               },
               aggregateRating: {
                 '@type': 'AggregateRating',

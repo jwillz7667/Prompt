@@ -37,19 +37,19 @@ const faqs = [
       'Promptomize uses advanced prompt engineering techniques to transform your simple ideas into detailed, structured prompts. It applies methods like chain-of-thought reasoning, role assignment, and constraint engineering to help you get better results from AI systems.',
   },
   {
-    question: 'What is the difference between prompt quality tiers?',
+    question: 'What does Promptomize Premium include?',
     answer:
-      'Basic prompts (Free tier) include essential structuring and clarity improvements. Standard prompts (Pro tier) add techniques like RISEN framework and few-shot examples. Advanced prompts (Premium tier) include all techniques including tree-of-thought, meta-cognitive triggers, and instruction hierarchy.',
+      'Premium is the only plan: the full prompt optimizer with every technique (including tree-of-thought, meta-cognitive triggers and instruction hierarchy), MAX mode and Deep Think, the AI chat assistant, and sync between the web and iOS apps. New subscribers get a 3-day free trial, then it is $9.99/month and you can cancel anytime.',
   },
   {
     question: 'How do I cancel my subscription?',
     answer:
-      'You can cancel your subscription through your Apple ID settings: Go to Settings > [Your Name] > Subscriptions > Promptomize > Cancel Subscription. Your subscription will remain active until the end of the current billing period.',
+      'If you subscribed in the iOS app, go to Settings > Apple Account > Subscriptions > Promptomize > Cancel Subscription. If you subscribed on promptomize.app, open the upgrade page and choose Manage subscription. Either way, your subscription remains active until the end of the current billing period.',
   },
   {
     question: 'Can I get a refund?',
     answer:
-      'Refunds are handled by Apple. To request a refund, visit reportaproblem.apple.com, sign in with your Apple ID, and select the purchase you want to request a refund for.',
+      'App Store purchases are refunded by Apple: visit reportaproblem.apple.com, sign in with your Apple ID, and select the purchase. For subscriptions purchased on promptomize.app, contact us within 30 days of your first paid charge.',
   },
   {
     question: 'How do I restore my purchases on a new device?',
@@ -62,9 +62,9 @@ const faqs = [
       'Yes, we take security seriously. All data is encrypted in transit and at rest. We never share your prompts with third parties for advertising purposes, and you can delete your data at any time through the app settings.',
   },
   {
-    question: 'What happens when I reach my daily prompt limit?',
+    question: 'Is there a free plan?',
     answer:
-      'When you reach your daily limit, you will see a message indicating that you have used all your prompts for the day. Your limit resets at midnight UTC. You can upgrade your plan for higher limits or wait until the next day.',
+      'No. Generating prompts and chatting require Promptomize Premium, which starts with a 3-day free trial for new subscribers. Without a subscription you can still sign in, view and delete your saved history, and contact support.',
   },
   {
     question: 'Can I use Promptomize offline?',

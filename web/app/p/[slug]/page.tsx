@@ -85,8 +85,8 @@ export default async function SharedPromptPage({ params }: PageProps) {
             </div>
             <span className="gradient-text text-lg font-bold">Promptomize</span>
           </Link>
-          <Link href="/" className="btn-cyan rounded-xl px-4 py-2 text-sm font-medium">
-            Try it free
+          <Link href="/pricing" className="btn-cyan rounded-xl px-4 py-2 text-sm font-medium">
+            Start free trial
           </Link>
         </div>
       </header>

@@ -56,7 +56,7 @@ export default function TermsOfService() {
       <article className="px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="prose prose-lg dark:prose-invert mx-auto max-w-3xl">
           <h1 className="mb-2 text-4xl font-bold">Terms of Service</h1>
-          <p className="mb-8 text-[var(--text-secondary)]">Last updated: January 20, 2025</p>
+          <p className="mb-8 text-[var(--text-secondary)]">Last updated: November 24, 2026</p>
 
           <section className="mb-8">
             <h2 className="mb-4 text-2xl font-semibold">1. Acceptance of Terms</h2>
@@ -97,42 +97,40 @@ export default function TermsOfService() {
           <section className="mb-8">
             <h2 className="mb-4 text-2xl font-semibold">4. Subscriptions and Payments</h2>
 
-            <h3 className="mb-3 text-xl font-medium">4.1 Subscription Plans</h3>
+            <h3 className="mb-3 text-xl font-medium">4.1 Subscription Plan</h3>
             <p className="mb-4 text-[var(--text-secondary)]">
-              Promptomize offers the following subscription tiers:
+              Promptomize is offered as a single subscription, <strong>Promptomize Premium</strong>,
+              at $9.99 per month (or the local equivalent shown at purchase). Premium includes the
+              prompt optimizer, the AI chat assistant and sync between the web and iOS apps, subject
+              to fair-use limits that prevent abuse. There is no free plan; generating content
+              requires an active subscription.
             </p>
-            <ul className="mb-4 list-inside list-disc space-y-2 text-[var(--text-secondary)]">
-              <li>
-                <strong>Free:</strong> 10 prompts per day, basic quality
-              </li>
-              <li>
-                <strong>Pro ($4.99/month or $49.99/year):</strong> 100 prompts per day, standard
-                quality
-              </li>
-              <li>
-                <strong>Premium ($9.99/month or $99.99/year):</strong> Unlimited prompts, advanced
-                quality
-              </li>
-            </ul>
 
             <h3 className="mb-3 text-xl font-medium">4.2 Free Trial</h3>
             <p className="mb-4 text-[var(--text-secondary)]">
-              Premium subscriptions include a 7-day free trial. You will not be charged during the
-              trial period. If you do not cancel before the trial ends, your subscription will
-              automatically convert to a paid subscription.
+              New subscribers receive a 3-day free trial, limited to one trial per account across
+              the web and the App Store. A payment method is required to start the trial. You will
+              not be charged during the trial period. If you do not cancel before the trial ends,
+              your subscription automatically converts to a paid subscription at $9.99 per month.
             </p>
 
-            <h3 className="mb-3 text-xl font-medium">4.3 Billing</h3>
+            <h3 className="mb-3 text-xl font-medium">4.3 Billing and Renewal</h3>
             <p className="mb-4 text-[var(--text-secondary)]">
-              All payments are processed through Apple&apos;s App Store. By subscribing, you agree
-              to Apple&apos;s terms of service for in-app purchases. Subscriptions automatically
-              renew unless canceled at least 24 hours before the end of the current period.
+              Subscriptions purchased in the iOS app are billed by Apple through the App Store, and
+              Apple&apos;s terms for in-app purchases apply; they renew automatically unless
+              canceled at least 24 hours before the end of the current period, in Settings &gt;
+              Apple Account &gt; Subscriptions. Subscriptions purchased on promptomize.app are
+              billed by our payment processor, Stripe; they renew automatically each month until
+              canceled, and you can cancel at any time from Manage subscription on the upgrade page.
+              In both cases you keep access until the end of the period you have paid for.
             </p>
 
             <h3 className="mb-3 text-xl font-medium">4.4 Refunds</h3>
             <p className="text-[var(--text-secondary)]">
-              Refunds are handled by Apple according to their refund policy. To request a refund,
-              contact Apple Support directly.
+              Refunds for App Store purchases are handled by Apple according to its refund policy;
+              request one at reportaproblem.apple.com. For subscriptions purchased on
+              promptomize.app, contact us within 30 days of your first paid charge to request a
+              refund.
             </p>
           </section>
 
