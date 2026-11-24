@@ -238,7 +238,7 @@ nonisolated enum MarkdownParser {
 
                 // Indented continuation of the previous item ("lazy" lines).
                 let isIndented = line.first == " " || line.first == "\t"
-                if isIndented, let last = items.popLast(), Self.fenceOpening(trimmed) == nil {
+                if isIndented, Self.fenceOpening(trimmed) == nil, let last = items.popLast() {
                     items.append(.init(depth: last.depth, marker: last.marker, text: last.text + "\n" + trimmed))
                     index += 1
                     continue
