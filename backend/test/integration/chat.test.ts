@@ -659,6 +659,34 @@ describe('chat moderation', () => {
     expect(providerCalls(PRIMARY)).toHaveLength(0);
   });
 
+  it('refuses graphic violence before calling the model', async () => {
+    const id = await createConversation(alice);
+    routeFetch({ moderation: () => flagged('violence/graphic'), primary: completion(['never']) });
+
+    const res = await sendMessage(alice, id, 'flagged text').expect(200);
+
+    const token = parseSse(res.text).events.find((event) => event.type === 'token');
+    expect(String(token?.['content'])).toContain("I can't help with that");
+    expect(providerCalls(PRIMARY)).toHaveLength(0);
+  });
+
+  it('replaces a flagged reply with the refusal before saving it', async () => {
+    const id = await createConversation(alice);
+    let moderationCalls = 0;
+    routeFetch({
+      moderation: () => (moderationCalls++ === 0 ? unflagged() : flagged('hate/threatening')),
+      primary: completion(['Offending reply text']),
+    });
+
+    const res = await sendMessage(alice, id, 'innocent question').expect(200);
+
+    const complete = parseSse(res.text).events.find((event) => event.type === 'complete');
+    expect(String(complete?.['content'])).toContain("I can't help with that");
+    const assistant = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: id, role: 'ASSISTANT' } });
+    expect(assistant.content).toBe(complete?.['content']);
+    expect(assistant.content).not.toContain('Offending reply text');
+  });
+
   it('lets the message through when moderation is down', async () => {
     const id = await createConversation(alice);
     routeFetch({

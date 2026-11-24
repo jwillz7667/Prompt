@@ -21,7 +21,14 @@ describe('verdictFromCategories', () => {
     expect(verdictFromCategories({ 'self-harm/instructions': true })).toBe('self_harm_support');
   });
 
-  it('passes every other category through to the model', () => {
+  it.each(['sexual', 'hate/threatening', 'harassment/threatening', 'violence/graphic', 'illicit/violent'])(
+    'refuses %s content with the harmful-content response',
+    (category) => {
+      expect(verdictFromCategories({ [category]: true })).toBe('refuse_harmful');
+    },
+  );
+
+  it('passes lower-severity categories through to the model', () => {
     expect(verdictFromCategories({ violence: true, harassment: true, 'self-harm': true })).toBe(
       'allow',
     );

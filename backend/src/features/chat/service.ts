@@ -15,12 +15,7 @@ import {
 } from './context-builder.js';
 import { ChatError } from './errors.js';
 import type { FairUseLimiter, FairUseReservation } from './fair-use.js';
-import {
-  MINORS_REFUSAL_MESSAGE,
-  SELF_HARM_SUPPORT_MESSAGE,
-  type ModerateMessage,
-  type ModerationVerdict,
-} from './moderation.js';
+import { fixedResponseFor, type ModerateMessage, type ModerationVerdict } from './moderation.js';
 import {
   DuplicateClientMessageError,
   decodeConversationCursor,
@@ -77,6 +72,11 @@ export type ChatStreamEvent =
       status: 'complete' | 'truncated';
       usage: { inputTokens: number; outputTokens: number };
       conversation: { id: string; title: string; updatedAt: string };
+      /**
+       * Present only when output moderation replaced the streamed reply: the
+       * client must show this text instead of the tokens it received.
+       */
+      content?: string;
     }
   | ClientStreamError;
 
@@ -151,11 +151,6 @@ const REPORT_REASON = {
   inappropriate: 'INAPPROPRIATE',
   other: 'OTHER',
 } as const;
-
-const FIXED_RESPONSES: Record<Exclude<ModerationVerdict, 'allow'>, string> = {
-  refuse_minors: MINORS_REFUSAL_MESSAGE,
-  self_harm_support: SELF_HARM_SUPPORT_MESSAGE,
-};
 
 interface TurnPlan {
   userId: string;
@@ -252,6 +247,7 @@ export function createChatService(deps: ChatServiceDeps) {
     status: 'complete' | 'truncated',
     usage: { inputTokens: number; outputTokens: number },
     conversation: { id: string; title: string; updatedAt: Date },
+    replacedContent?: string,
   ): void => {
     sink.send({
       type: 'complete',
@@ -263,6 +259,7 @@ export function createChatService(deps: ChatServiceDeps) {
         title: conversation.title,
         updatedAt: conversation.updatedAt.toISOString(),
       },
+      ...(replacedContent !== undefined ? { content: replacedContent } : {}),
     });
   };
 
@@ -271,7 +268,7 @@ export function createChatService(deps: ChatServiceDeps) {
     verdict: Exclude<ModerationVerdict, 'allow'>,
     sink: ChatStreamSink,
   ): Promise<void> => {
-    const content = FIXED_RESPONSES[verdict];
+    const content = fixedResponseFor(verdict);
     logger.warn(
       { userId: plan.userId, conversationId: plan.conversation.id, verdict },
       'Chat message answered by moderation without calling the model',
@@ -348,6 +345,32 @@ export function createChatService(deps: ChatServiceDeps) {
       );
       await failTurnWithoutOutput(plan);
       sink.send(toClientStreamError(error));
+      return;
+    }
+
+    // The reply is checked before it is saved: a flagged answer is stored
+    // (and shown, via `complete.content`) as the fixed response instead.
+    const outputVerdict = await deps.moderate(result.content, sink.signal);
+    if (outputVerdict !== 'allow') {
+      logger.warn(
+        { userId: plan.userId, conversationId: plan.conversation.id, verdict: outputVerdict },
+        'Chat reply replaced by output moderation',
+      );
+      const replacement = fixedResponseFor(outputVerdict);
+      const conversation = await persistReply(plan, {
+        content: replacement,
+        status: 'COMPLETE',
+        result,
+        shouldAutoTitle: false,
+      });
+      sendComplete(
+        sink,
+        plan,
+        'complete',
+        { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
+        conversation,
+        replacement,
+      );
       return;
     }
 

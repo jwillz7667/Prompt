@@ -1,11 +1,18 @@
 import { z } from 'zod';
 
 /**
- * Pre-model filter for user chat messages (App Store guideline 1.2 "method for
- * filtering objectionable material"). Only two categories are acted on here;
- * everything else is passed to the model, whose own safety training applies.
+ * Filter for chat messages and replies (App Store guideline 1.2 "method for
+ * filtering objectionable material"). User messages are checked before the
+ * model is called and finished replies before they are saved; flagged text
+ * is answered or replaced with a fixed response. Lower-severity categories
+ * (for example non-threatening harassment) are left to the model's own
+ * safety training, which the system prompt reinforces.
  */
-export type ModerationVerdict = 'allow' | 'refuse_minors' | 'self_harm_support';
+export type ModerationVerdict =
+  | 'allow'
+  | 'refuse_minors'
+  | 'refuse_harmful'
+  | 'self_harm_support';
 
 export type ModerateMessage = (text: string, signal?: AbortSignal) => Promise<ModerationVerdict>;
 
@@ -27,6 +34,9 @@ const MODERATION_MODEL = 'omni-moderation-latest';
 
 export const MINORS_REFUSAL_MESSAGE =
   "I can't help with that. I won't create or engage with any content that sexualizes minors.";
+
+export const HARMFUL_CONTENT_REFUSAL_MESSAGE =
+  "I can't help with that. I don't create sexually explicit, graphically violent, threatening or hateful content, or help with violent wrongdoing. I'm happy to help with something else.";
 
 export const SELF_HARM_SUPPORT_MESSAGE = [
   "I'm really sorry you're going through this, and I'm glad you reached out. You don't have to handle it alone.",
@@ -53,6 +63,14 @@ const moderationResponseSchema = z.object({
 
 const SELF_HARM_CATEGORIES = ['self-harm/intent', 'self-harm/instructions'] as const;
 
+const HARMFUL_CATEGORIES = [
+  'sexual',
+  'hate/threatening',
+  'harassment/threatening',
+  'violence/graphic',
+  'illicit/violent',
+] as const;
+
 export function verdictFromCategories(
   categories: Readonly<Record<string, boolean | null>>,
 ): ModerationVerdict {
@@ -60,8 +78,26 @@ export function verdictFromCategories(
   if (SELF_HARM_CATEGORIES.some((category) => categories[category] === true)) {
     return 'self_harm_support';
   }
+  if (HARMFUL_CATEGORIES.some((category) => categories[category] === true)) {
+    return 'refuse_harmful';
+  }
   return 'allow';
 }
+
+/** The fixed text that answers, or replaces, flagged content. */
+export function fixedResponseFor(verdict: Exclude<ModerationVerdict, 'allow'>): string {
+  switch (verdict) {
+    case 'refuse_minors':
+      return MINORS_REFUSAL_MESSAGE;
+    case 'refuse_harmful':
+      return HARMFUL_CONTENT_REFUSAL_MESSAGE;
+    case 'self_harm_support':
+      return SELF_HARM_SUPPORT_MESSAGE;
+  }
+}
+
+// The moderation endpoint bounds its input; replies are capped well below it.
+const MAX_MODERATED_CHARS = 20_000;
 
 /**
  * Fails open: an outage, timeout or malformed reply allows the message with a
@@ -82,7 +118,7 @@ export function createModerator(deps: ModeratorDeps): ModerateMessage {
       const response = await doFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: MODERATION_MODEL, input: text }),
+        body: JSON.stringify({ model: MODERATION_MODEL, input: text.slice(0, MAX_MODERATED_CHARS) }),
         signal: combined,
       });
       if (!response.ok) {

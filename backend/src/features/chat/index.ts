@@ -21,9 +21,11 @@ export {
   estimateTokens,
 } from './context-builder.js';
 export {
+  HARMFUL_CONTENT_REFUSAL_MESSAGE,
   MINORS_REFUSAL_MESSAGE,
   SELF_HARM_SUPPORT_MESSAGE,
   createModerator,
+  fixedResponseFor,
   verdictFromCategories,
   type ModerateMessage,
   type ModerationVerdict,
@@ -49,6 +51,21 @@ export function buildChatRouter(
   overrides: Partial<Omit<ChatServiceDeps, 'config'>> & { config?: ChatConfig } = {},
 ): Router {
   const config = overrides.config ?? loadChatConfig(process.env);
+  if (!overrides.moderate && !config.moderation.isEnabled) {
+    // Fail loud, not fatal (see utils/env): App Review requires a content
+    // filter on AI chat, so a deploy without one must be impossible to miss.
+    const fields = {
+      reason:
+        config.moderation.apiKey === undefined
+          ? 'OPENAI_API_KEY is not set'
+          : 'CHAT_MODERATION_ENABLED=false',
+    };
+    if (process.env['NODE_ENV'] === 'production') {
+      chatLogger.error(fields, 'BOOT: chat content moderation is DISABLED');
+    } else {
+      chatLogger.warn(fields, 'BOOT: chat content moderation is disabled');
+    }
+  }
   const repo = overrides.repo ?? createChatRepo(prisma);
   const moderate: ModerateMessage =
     overrides.moderate ??
