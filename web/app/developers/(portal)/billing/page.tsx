@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { toast } from '@/lib/stores/uiStore'
 import { cn } from '@/lib/utils/cn'
+import { getDeveloperPlanAccess } from '@/lib/developer/plan-access'
+import { PaidPlanNotice } from '../_components/PaidPlanNotice'
 
 export default function BillingPage() {
   const searchParams = useSearchParams()
@@ -36,6 +38,9 @@ export default function BillingPage() {
   const currentTier = subscription?.tier || 'API_FREE'
   const isFreeTier = currentTier === 'API_FREE'
   const hasBillingAccount = Boolean(subscription?.hasBillingAccount)
+  const planAccess = getDeveloperPlanAccess(subscription)
+  // Credit packs top up a paid plan; the API refuses them without one.
+  const canBuyCredits = Boolean(subscription) && !planAccess.isUpgradeRequired
 
   useEffect(() => {
     const checkout = searchParams.get('checkout')
@@ -108,6 +113,8 @@ export default function BillingPage() {
         <p className="text-muted text-sm">Manage your API subscription and billing.</p>
       </div>
 
+      {!subLoading && planAccess.isUpgradeRequired && <PaidPlanNotice showAction={false} />}
+
       {/* Current Plan */}
       <Card>
         <CardContent className="p-6">
@@ -115,10 +122,12 @@ export default function BillingPage() {
             <div>
               <div className="text-muted text-sm">Current Plan</div>
               <div className="text-primary mt-1 text-2xl font-bold">
-                {subLoading ? '...' : currentTier.replace('API_', '')}
+                {subLoading ? '...' : isFreeTier ? 'No plan' : currentTier.replace('API_', '')}
               </div>
               <div className="text-muted mt-1 text-sm">
-                {subscription?.features?.slice(0, 2).join(' • ')}
+                {isFreeTier
+                  ? 'No enhancement requests included. Choose a plan below to start.'
+                  : subscription?.features?.slice(0, 2).join(' • ')}
               </div>
             </div>
             {!isFreeTier && (
@@ -164,6 +173,8 @@ export default function BillingPage() {
               <h3 className="text-primary font-medium">Prepaid API Credits</h3>
               <p className="text-muted mt-1 text-sm">
                 Purchased credits are used after your plan&apos;s included monthly requests.
+                {!canBuyCredits &&
+                  ' Any balance you already hold becomes usable once a paid plan is active.'}
               </p>
             </div>
             <div className="text-right">
@@ -221,7 +232,12 @@ export default function BillingPage() {
 
       {/* Credit Packs */}
       <div>
-        <h3 className="text-primary mb-4 text-lg font-semibold">Buy API Credits</h3>
+        <h3 className="text-primary mb-1 text-lg font-semibold">Buy API Credits</h3>
+        <p className="text-muted mb-4 text-sm">
+          {canBuyCredits
+            ? 'Top up your plan when you need more than its monthly requests.'
+            : 'Credit packs top up a paid plan. Choose a plan first.'}
+        </p>
         <div className="grid gap-4 md:grid-cols-3">
           {creditPacks?.map((pack) => (
             <Card key={pack.id} className={cn(pack.featured && 'border-accent/50')}>
@@ -249,9 +265,13 @@ export default function BillingPage() {
                   className="mt-6 w-full"
                   variant={pack.featured ? 'primary' : 'secondary'}
                   onClick={() => handleBuyCredits(pack.id)}
-                  disabled={creditCheckoutMutation.isPending}
+                  disabled={!canBuyCredits || creditCheckoutMutation.isPending}
                 >
-                  {creditCheckoutMutation.isPending ? 'Loading...' : 'Buy Credits'}
+                  {!canBuyCredits
+                    ? 'Requires a paid plan'
+                    : creditCheckoutMutation.isPending
+                      ? 'Loading...'
+                      : 'Buy Credits'}
                 </Button>
               </CardContent>
             </Card>
@@ -262,80 +282,89 @@ export default function BillingPage() {
       {/* Plans */}
       <div>
         <h3 className="text-primary mb-4 text-lg font-semibold">Available Plans</h3>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {plans?.map((plan) => {
-            const isCurrent = plan.id === currentTier
-            const isUpgrade =
-              (currentTier === 'API_FREE' && plan.id !== 'API_FREE') ||
-              (currentTier === 'API_STARTER' && plan.id === 'API_PRO')
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {plans
+            ?.filter((plan) => plan.id !== 'API_FREE')
+            .map((plan) => {
+              const isCurrent = plan.id === currentTier
+              const isUpgrade =
+                (currentTier === 'API_FREE' && plan.id !== 'API_FREE') ||
+                (currentTier === 'API_STARTER' && plan.id === 'API_PRO')
 
-            return (
-              <Card
-                key={plan.id}
-                className={cn(isCurrent && 'border-accent', plan.recommended && 'border-accent/50')}
-              >
-                <CardContent className="p-6">
-                  {plan.recommended && (
-                    <span className="bg-accent mb-2 inline-block rounded px-2 py-0.5 text-xs text-white">
-                      Recommended
-                    </span>
+              return (
+                <Card
+                  key={plan.id}
+                  className={cn(
+                    isCurrent && 'border-accent',
+                    plan.recommended && 'border-accent/50',
                   )}
-                  <h4 className="text-primary text-lg font-semibold">{plan.name}</h4>
-                  <div className="mt-2">
-                    <span className="text-primary text-3xl font-bold">${plan.priceMonthly}</span>
-                    <span className="text-muted">/month</span>
-                  </div>
-                  <p className="text-muted mt-2 text-sm">{plan.description}</p>
-
-                  <ul className="mt-4 space-y-2">
-                    <li className="text-primary flex items-center gap-2 text-sm">
-                      <span className="text-accent">✓</span>
-                      {plan.monthlyRequests === 'unlimited'
-                        ? 'Unlimited requests'
-                        : `${plan.monthlyRequests.toLocaleString()} requests/month`}
-                    </li>
-                    <li className="text-primary flex items-center gap-2 text-sm">
-                      <span className="text-accent">✓</span>
-                      {plan.requestsPerMinute} requests/minute
-                    </li>
-                    {plan.features.slice(2, 4).map((feature, i) => (
-                      <li key={i} className="text-primary flex items-center gap-2 text-sm">
-                        <span className="text-accent">✓</span>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="mt-6">
-                    {isCurrent ? (
-                      <Button variant="secondary" className="w-full" disabled>
-                        Current Plan
-                      </Button>
-                    ) : plan.id === 'API_ENTERPRISE' ? (
-                      <a
-                        href="mailto:sales@promptomize.app"
-                        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] px-5 text-base font-medium text-[var(--text-primary)] transition-all duration-200 hover:bg-[var(--bg-tertiary)]"
-                      >
-                        Contact Sales
-                      </a>
-                    ) : isUpgrade ? (
-                      <Button
-                        className="w-full"
-                        onClick={() => handleUpgrade(plan.id as 'API_STARTER' | 'API_PRO')}
-                        disabled={checkoutMutation.isPending}
-                      >
-                        {checkoutMutation.isPending ? 'Loading...' : 'Upgrade'}
-                      </Button>
-                    ) : (
-                      <Button variant="secondary" className="w-full" disabled>
-                        {plan.priceMonthly === 0 ? 'Free' : 'Downgrade'}
-                      </Button>
+                >
+                  <CardContent className="p-6">
+                    {plan.recommended && (
+                      <span className="bg-accent mb-2 inline-block rounded px-2 py-0.5 text-xs text-white">
+                        Recommended
+                      </span>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                    <h4 className="text-primary text-lg font-semibold">{plan.name}</h4>
+                    <div className="mt-2">
+                      <span className="text-primary text-3xl font-bold">${plan.priceMonthly}</span>
+                      <span className="text-muted">/month</span>
+                    </div>
+                    <p className="text-muted mt-2 text-sm">{plan.description}</p>
+
+                    <ul className="mt-4 space-y-2">
+                      <li className="text-primary flex items-center gap-2 text-sm">
+                        <span className="text-accent">✓</span>
+                        {plan.monthlyRequests === 'unlimited'
+                          ? 'Unlimited requests'
+                          : `${plan.monthlyRequests.toLocaleString()} requests/month`}
+                      </li>
+                      <li className="text-primary flex items-center gap-2 text-sm">
+                        <span className="text-accent">✓</span>
+                        {plan.requestsPerMinute} requests/minute
+                      </li>
+                      {plan.features.slice(2, 4).map((feature, i) => (
+                        <li key={i} className="text-primary flex items-center gap-2 text-sm">
+                          <span className="text-accent">✓</span>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="mt-6">
+                      {isCurrent ? (
+                        <Button variant="secondary" className="w-full" disabled>
+                          Current Plan
+                        </Button>
+                      ) : plan.id === 'API_ENTERPRISE' ? (
+                        <a
+                          href="mailto:sales@promptomize.app"
+                          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] px-5 text-base font-medium text-[var(--text-primary)] transition-all duration-200 hover:bg-[var(--bg-tertiary)]"
+                        >
+                          Contact Sales
+                        </a>
+                      ) : isUpgrade ? (
+                        <Button
+                          className="w-full"
+                          onClick={() => handleUpgrade(plan.id as 'API_STARTER' | 'API_PRO')}
+                          disabled={checkoutMutation.isPending}
+                        >
+                          {checkoutMutation.isPending
+                            ? 'Loading...'
+                            : isFreeTier
+                              ? 'Choose plan'
+                              : 'Upgrade'}
+                        </Button>
+                      ) : (
+                        <Button variant="secondary" className="w-full" disabled>
+                          Downgrade
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
         </div>
       </div>
 

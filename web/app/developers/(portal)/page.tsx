@@ -5,11 +5,14 @@ import Link from 'next/link'
 import { useApiSubscriptionStatus, useApiKeys } from '@/lib/hooks/useApiKeys'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { getDeveloperPlanAccess } from '@/lib/developer/plan-access'
+import { PaidPlanNotice } from './_components/PaidPlanNotice'
 
 export default function DevelopersOverviewPage() {
   const { data: subscription, isLoading: subLoading } = useApiSubscriptionStatus()
   const { data: apiKeys, isLoading: keysLoading } = useApiKeys()
   const [copied, setCopied] = useState(false)
+  const planAccess = getDeveloperPlanAccess(subscription)
 
   const curlExample = `curl -X POST https://api.promptomize.app/api/v1/public/enhance \\
   -H "X-API-Key: YOUR_API_KEY" \\
@@ -24,6 +27,8 @@ export default function DevelopersOverviewPage() {
 
   return (
     <div className="space-y-8">
+      {!subLoading && planAccess.isUpgradeRequired && <PaidPlanNotice />}
+
       {/* Quick Start Guide */}
       <div>
         <h2 className="text-primary mb-4 text-xl font-semibold">Quick Start</h2>
@@ -54,7 +59,8 @@ export default function DevelopersOverviewPage() {
                 <div className="flex-1">
                   <h3 className="text-primary font-medium">Make your first request</h3>
                   <p className="text-muted mt-1 text-sm">
-                    Use the /enhance endpoint to optimize prompts.
+                    Use the /enhance endpoint to optimize prompts. It needs an active paid API plan;
+                    without one it returns 402 API_PLAN_REQUIRED.
                   </p>
                   <div className="bg-secondary relative mt-3 overflow-x-auto rounded-lg p-4 font-mono text-xs">
                     <pre className="text-primary">{curlExample}</pre>
@@ -97,7 +103,11 @@ export default function DevelopersOverviewPage() {
             <CardContent className="p-6">
               <div className="text-muted text-sm">Current Plan</div>
               <div className="text-primary mt-2 text-2xl font-bold">
-                {subLoading ? '...' : subscription?.tier?.replace('API_', '') || 'FREE'}
+                {subLoading
+                  ? '...'
+                  : subscription?.tier === 'API_FREE'
+                    ? 'No plan'
+                    : subscription?.tier?.replace('API_', '') || 'No plan'}
               </div>
               <Link href="/developers/billing">
                 <span className="text-accent text-xs hover:underline">Upgrade</span>
@@ -127,7 +137,7 @@ export default function DevelopersOverviewPage() {
                 of{' '}
                 {subscription?.quota?.limit === 'unlimited'
                   ? '∞'
-                  : subscription?.quota?.limit?.toLocaleString() || 100}
+                  : (subscription?.quota?.limit ?? 0).toLocaleString()}
               </span>
             </CardContent>
           </Card>

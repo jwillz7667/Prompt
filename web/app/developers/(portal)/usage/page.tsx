@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useApiSubscriptionStatus, useApiKeys, useApiKeyUsage } from '@/lib/hooks/useApiKeys'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils/cn'
+import { getDeveloperPlanAccess, getQuotaUsedPercent } from '@/lib/developer/plan-access'
+import { PaidPlanNotice } from '../_components/PaidPlanNotice'
 
 export default function UsagePage() {
   const { data: subscription, isLoading: subLoading } = useApiSubscriptionStatus()
@@ -15,8 +17,8 @@ export default function UsagePage() {
   const { data: usage, isLoading: usageLoading } = useApiKeyUsage(activeKeyId)
 
   const quota = subscription?.quota
-  const quotaUsedPercent =
-    quota && typeof quota.limit === 'number' ? Math.min((quota.used / quota.limit) * 100, 100) : 0
+  const quotaUsedPercent = getQuotaUsedPercent(quota)
+  const planAccess = getDeveloperPlanAccess(subscription)
 
   return (
     <div className="space-y-6">
@@ -25,6 +27,8 @@ export default function UsagePage() {
         <h2 className="text-primary text-xl font-semibold">Usage Analytics</h2>
         <p className="text-muted text-sm">Monitor your API usage and quota.</p>
       </div>
+
+      {!subLoading && planAccess.isUpgradeRequired && <PaidPlanNotice />}
 
       {/* Quota Overview */}
       <div className="grid gap-4 md:grid-cols-3">

@@ -84,9 +84,9 @@ export default function DeveloperSignupPage() {
       {/* Benefits */}
       <div className="grid grid-cols-1 gap-2 text-sm">
         {[
-          '100 free API requests per month',
           'Create and manage API keys',
-          'Test in the interactive playground',
+          'Full API reference and code examples',
+          'Prompt enhancement on a paid monthly plan',
           'Monitor usage and billing',
         ].map((benefit, i) => (
           <div key={i} className="flex items-center gap-2 text-[var(--text-secondary)]">
