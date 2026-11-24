@@ -106,7 +106,7 @@ The full inventory lives in [`.env.example`](./.env.example). Required variables
 | `APPLE_CLIENT_ID` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Apple Sign-In + ASSN verification                                   |
 | `APPLE_BUNDLE_ID` / `APPLE_APP_ID` / `APPLE_ISSUER_ID`                     | App Store Server API                                                |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                                | Google OAuth                                                        |
-| `DEEPSEEK_API_KEY`                                                         | Primary AI provider                                                 |
+| `LLM_DEEPSEEK_API_KEY` (or legacy `DEEPSEEK_API_KEY`)                      | Primary AI provider in the LLM gateway chain                        |
 | `BACKEND_WEBHOOK_SECRET`                                                   | HMAC for Next.js → Express webhook forwarding                       |
 
 Optional / scaling variables:
@@ -118,6 +118,28 @@ Optional / scaling variables:
 | `SENTRY_DSN`                                                  | Error reporting                                              |
 | `CORS_ORIGIN`                                                 | Comma-separated origin allowlist additions                   |
 | `RATE_LIMIT_*`                                                | Tier-specific rate limit overrides                           |
+
+### LLM gateway
+
+All AI text and vision calls go through `src/features/llm` (provider chain,
+first-token failover, Redis-shared circuit breaker). Config is Zod-parsed once
+at boot by `validateLlmConfig()`; malformed values stop the boot, missing
+credentials only skip that provider. Runbook, home-GPU setup and cost table:
+[`docs/AI-OPERATIONS.md`](../docs/AI-OPERATIONS.md).
+
+| Variable                                                              | Default                          | Purpose                                                          |
+| --------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
+| `LLM_PROVIDER_CHAIN`                                                  | `deepseek,openrouter`            | Ordered failover chain (`deepseek`, `openrouter`, `local`)       |
+| `LLM_DEEPSEEK_API_KEY` / `LLM_DEEPSEEK_BASE_URL` / `LLM_DEEPSEEK_MODEL` | — / `https://api.deepseek.com` / `deepseek-flash` | Primary provider; key and model fall back to `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` |
+| `LLM_OPENROUTER_API_KEY` / `LLM_OPENROUTER_BASE_URL` / `LLM_OPENROUTER_MODEL` | — / `https://openrouter.ai/api/v1` / `deepseek/deepseek-v4.1-flash` | Fallback provider |
+| `LLM_OPENROUTER_PROVIDER_PREFS`                                       | unset                            | JSON passed as the request `provider` routing object             |
+| `LLM_LOCAL_BASE_URL` / `LLM_LOCAL_API_KEY` / `LLM_LOCAL_MODEL`        | unset                            | Self-hosted OpenAI-compatible endpoint (all three required)      |
+| `LLM_LOCAL_CF_ACCESS_CLIENT_ID` / `LLM_LOCAL_CF_ACCESS_CLIENT_SECRET` | unset                            | Cloudflare Access service token headers for the local endpoint   |
+| `LLM_<PROVIDER>_SUPPORTS_IMAGES`                                      | deepseek `true`, others `false`  | Whether image turns may be routed to that provider               |
+| `LLM_TTFT_TIMEOUT_MS` / `LLM_IDLE_TIMEOUT_MS` / `LLM_TOTAL_TIMEOUT_MS` | `15000` / `60000` / `180000`     | First-token (failover trigger), stream-stall and hard deadlines  |
+| `LLM_BREAKER_LONG_COOLDOWN_MS`                                        | `300000`                         | Breaker open time after 401/402                                  |
+| `LLM_LAST_PROVIDER_RETRIES`                                           | `1`                              | Retries on the last provider for transient failures              |
+| `PROMPT_VISION_PROVIDER`                                              | `deepseek`                       | `deepseek` = gateway vision; `openai` = dedicated vision model   |
 
 Env vars are read with bracket notation (`process.env['NAME']`) because of
 `noUncheckedIndexedAccess`. Do not introduce dot-notation reads.
