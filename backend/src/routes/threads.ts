@@ -185,8 +185,6 @@ function abortOnClientDisconnect(res: Response): AbortController {
   return controller;
 }
 
-type AbortableThreadRequest = EnhancePromptInThreadRequest & { signal: AbortSignal };
-
 const MODALITY_REQUIRES_SUBSCRIPTION_EVENT = {
   type: 'error',
   code: 'MODALITY_REQUIRES_SUBSCRIPTION',
@@ -303,7 +301,7 @@ threadRouter.post(
           logger.error({ err: cleanupError, threadId: thread.id }, 'Failed to clean up thread');
         });
       };
-      const streamRequest: AbortableThreadRequest = {
+      const streamRequest: EnhancePromptInThreadRequest = {
         prompt: data.prompt,
         tier: promptTier,
         maxTokens,
@@ -314,10 +312,10 @@ threadRouter.post(
         customInstructions: data.customInstructions,
         previousTurns: data.previousTurns,
         imageAttachment: data.imageAttachment,
-        signal: abortController.signal,
       };
 
       await enhancePromptInThreadStream(streamRequest, {
+        signal: abortController.signal,
         onToken: (token) => {
           if (abortController.signal.aborted) return;
           res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
@@ -540,7 +538,7 @@ threadRouter.post(
 
       const nextTurnIndex = thread.turns.length;
 
-      const streamRequest: AbortableThreadRequest = {
+      const streamRequest: EnhancePromptInThreadRequest = {
         prompt: data.prompt,
         tier: promptTier,
         maxTokens,
@@ -551,10 +549,10 @@ threadRouter.post(
         customInstructions: data.customInstructions,
         previousTurns,
         imageAttachment: data.imageAttachment,
-        signal: abortController.signal,
       };
 
       await enhancePromptInThreadStream(streamRequest, {
+        signal: abortController.signal,
         onToken: (token) => {
           if (abortController.signal.aborted) return;
           res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);

@@ -431,6 +431,12 @@ promptRouter.post(
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
       res.flushHeaders();
+      // `res` close with an unfinished response is the disconnect signal
+      // (`req` close fires as soon as the body has been read).
+      const abortController = new AbortController();
+      res.on('close', () => {
+        if (!res.writableEnded) abortController.abort();
+      });
 
       const promptTier = getPromptTierFromSubscription(subscriptionInfo.features);
 
@@ -463,10 +469,15 @@ promptRouter.post(
           imageAttachment: data.imageAttachment,
         },
         {
+          signal: abortController.signal,
           onToken: (token) => {
+            if (abortController.signal.aborted) return;
             res.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
           },
           onComplete: async (result) => {
+            // Client disconnected: nothing was delivered, so nothing is
+            // charged or persisted.
+            if (abortController.signal.aborted) return;
             // The model already produced a billable answer. Persistence is
             // best-effort from here: a DB failure (schema drift, transient
             // outage) must never turn a successful enhancement into a client
@@ -601,6 +612,7 @@ promptRouter.post(
             res.end();
           },
           onError: (error) => {
+            if (abortController.signal.aborted) return;
             promptLogger.error({ err: error }, 'Stream error');
             res.write(`data: ${JSON.stringify(toClientStreamError(error))}\n\n`);
             res.end();
