@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { promptRouter } from '../../src/routes/prompts.js';
 import { userRouter } from '../../src/routes/users.js';
+import { authRouter } from '../../src/routes/auth.js';
 import { buildChatRouter, loadChatConfig } from '../../src/features/chat/index.js';
 import { SUBSCRIPTION_REQUIRED_BODY } from '../../src/middleware/requireEntitlement.js';
 import { aiConsentRequiredBody } from '../../src/middleware/requireAiConsent.js';
@@ -21,6 +22,7 @@ function buildApp(): Express {
   app.use(express.json({ limit: '10mb' }));
   app.use('/api/v1/prompts', promptRouter);
   app.use('/api/v1/users', userRouter);
+  app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/chat', buildChatRouter({ config: loadChatConfig({}) }));
   return app;
 }
@@ -264,6 +266,20 @@ describe('user payloads', () => {
       .set('Authorization', `Bearer ${user.accessToken}`);
 
     expect(response.body.user.aiDataConsent).toBeNull();
+  });
+
+  it('includes the consent in GET /auth/me, the payload iOS restores its session from', async () => {
+    const user = await freeUser();
+    await grant(user, 1);
+
+    const response = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${user.accessToken}`);
+
+    expect(response.body.user.aiDataConsent).toEqual({
+      version: 1,
+      grantedAt: expect.any(String),
+    });
   });
 
   it('includes the consent in the auth payload returned by a token refresh', async () => {
