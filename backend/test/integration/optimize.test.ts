@@ -71,10 +71,16 @@ describe('reflection optimize routes', () => {
 
   beforeAll(async () => {
     freeUser = await createTestUser();
-    proUser = await createTestUser({ subscriptionTier: 'PRO' });
-    quotaUser = await createTestUser();
-    await prisma.subscription.create({
-      data: { userId: proUser.id, tier: 'PRO', status: 'ACTIVE' },
+    proUser = await createTestUser({ subscriptionTier: 'PREMIUM' });
+    quotaUser = await createTestUser({ subscriptionTier: 'PREMIUM' });
+    const expiresAt = new Date(Date.now() + 30 * 86_400_000);
+    await prisma.subscription.createMany({
+      data: [proUser.id, quotaUser.id].map((userId) => ({
+        userId,
+        tier: 'PREMIUM' as const,
+        status: 'ACTIVE' as const,
+        expiresAt,
+      })),
     });
   });
 
@@ -139,54 +145,20 @@ describe('reflection optimize routes', () => {
       expect(enqueueMock).not.toHaveBeenCalled();
     });
 
-    it('enqueues the single-pass fast path for FREE tier', async () => {
+    it('returns 403 SUBSCRIPTION_REQUIRED for a FREE user', async () => {
       const res = await request(app)
         .post('/api/v1/optimize')
         .set('Authorization', `Bearer ${freeUser.accessToken}`)
         .send({ raw_prompt: 'write a poem about the sea', goal: 'evocative imagery' });
 
-      expect(res.status).toBe(202);
-      expect(res.body).toEqual({
-        jobId: 'opt_11111111-2222-3333-4444-555555555555',
-        mode: 'fast_path',
-      });
-      expect(enqueueMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: freeUser.id,
-          mode: 'fast_path',
-          singlePassTier: 'basic',
-          rawPrompt: 'write a poem about the sea',
-          goal: 'evocative imagery',
-        }),
-      );
-    });
-
-    it('returns 403 when FREE tier requests a specific target-model family', async () => {
-      const res = await request(app)
-        .post('/api/v1/optimize')
-        .set('Authorization', `Bearer ${freeUser.accessToken}`)
-        .send({ raw_prompt: 'write a poem about the sea', target_model_family: 'claude' });
-
       expect(res.status).toBe(403);
       expect(res.body).toEqual({
         error: 'Subscription required',
-        code: 'TARGET_MODEL_REQUIRES_SUBSCRIPTION',
-        message: 'Upgrade to Pro or Premium to optimize for a specific model family.',
+        code: 'QUOTA_EXCEEDED',
+        reason: 'SUBSCRIPTION_REQUIRED',
+        remainingQuota: 0,
       });
       expect(enqueueMock).not.toHaveBeenCalled();
-    });
-
-    it("accepts the generic profile ('unknown') from FREE tier", async () => {
-      const res = await request(app)
-        .post('/api/v1/optimize')
-        .set('Authorization', `Bearer ${freeUser.accessToken}`)
-        .send({ raw_prompt: 'write a poem about the sea', target_model_family: 'unknown' });
-
-      expect(res.status).toBe(202);
-      expect(res.body.mode).toBe('fast_path');
-      expect(enqueueMock).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: freeUser.id, targetModelFamily: 'unknown' }),
-      );
     });
 
     it('returns 400 for a target_model_family outside the enum', async () => {
@@ -200,7 +172,7 @@ describe('reflection optimize routes', () => {
       expect(enqueueMock).not.toHaveBeenCalled();
     });
 
-    it('enqueues the full loop for PRO tier', async () => {
+    it('enqueues the full loop for a PREMIUM subscriber', async () => {
       const res = await request(app)
         .post('/api/v1/optimize')
         .set('Authorization', `Bearer ${proUser.accessToken}`)
@@ -212,17 +184,17 @@ describe('reflection optimize routes', () => {
         expect.objectContaining({
           userId: proUser.id,
           mode: 'full_loop',
-          singlePassTier: 'standard',
+          singlePassTier: 'advanced',
           targetModelFamily: 'claude',
         }),
       );
     });
 
-    it('returns 403 when the daily quota is exhausted', async () => {
+    it('returns 429 FAIR_USE_LIMIT when a subscriber reaches the daily ceiling', async () => {
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
       await prisma.dailyUsage.create({
-        data: { userId: quotaUser.id, date: today, promptCount: 10 },
+        data: { userId: quotaUser.id, date: today, promptCount: 300 },
       });
 
       const res = await request(app)
@@ -230,8 +202,8 @@ describe('reflection optimize routes', () => {
         .set('Authorization', `Bearer ${quotaUser.accessToken}`)
         .send({ raw_prompt: 'improve this' });
 
-      expect(res.status).toBe(403);
-      expect(res.body.code).toBe('QUOTA_EXCEEDED');
+      expect(res.status).toBe(429);
+      expect(res.body.code).toBe('FAIR_USE_LIMIT');
       expect(enqueueMock).not.toHaveBeenCalled();
     });
   });

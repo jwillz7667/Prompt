@@ -1,13 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 
-import {
-  buildTestApp,
-  createTestUser,
-  cleanupUser,
-  prisma,
-  type TestUser,
-} from './helpers.js';
+import { buildTestApp, createTestUser, cleanupUser, prisma, type TestUser } from './helpers.js';
 
 const app = buildTestApp();
 
@@ -20,9 +14,14 @@ describe('multi-provider compare gating', () => {
 
   beforeAll(async () => {
     freeUser = await createTestUser();
-    proUser = await createTestUser({ subscriptionTier: 'PRO' });
+    proUser = await createTestUser({ subscriptionTier: 'PREMIUM' });
     await prisma.subscription.create({
-      data: { userId: proUser.id, tier: 'PRO', status: 'ACTIVE' },
+      data: {
+        userId: proUser.id,
+        tier: 'PREMIUM',
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      },
     });
   });
 
@@ -38,14 +37,14 @@ describe('multi-provider compare gating', () => {
     expect(res.status).toBe(401);
   });
 
-  it('rejects FREE tier with an upgrade code', async () => {
+  it('returns 403 SUBSCRIPTION_REQUIRED for a FREE user', async () => {
     const res = await request(app)
       .post('/api/v1/prompts/compare')
       .set('Authorization', `Bearer ${freeUser.accessToken}`)
       .send({ prompt: 'improve this', providers: ['deepseek', 'anthropic'] });
 
     expect(res.status).toBe(403);
-    expect(res.body.code).toBe('COMPARE_REQUIRES_SUBSCRIPTION');
+    expect(res.body).toMatchObject({ code: 'QUOTA_EXCEEDED', reason: 'SUBSCRIPTION_REQUIRED' });
   });
 
   it('rejects fewer than two providers', async () => {

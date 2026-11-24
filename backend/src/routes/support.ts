@@ -1,7 +1,13 @@
-import { Router, Response } from 'express';
+import { Router, type NextFunction, type Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
+import {
+  entitlementConfig,
+  getDailyCounter,
+  incrementDailyCounter,
+} from '../services/subscriptionService.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 import {
   chatWithSupport,
   getTicket,
@@ -12,8 +18,49 @@ import {
 
 export const supportRouter = Router();
 
-// All support routes require authentication
+// All support routes require authentication. They deliberately do NOT require
+// a subscription: lapsed users and App Review must always be able to reach
+// support. AI replies are capped per user per UTC day instead.
 supportRouter.use(authenticate);
+
+function nextUtcMidnight(): Date {
+  const reset = new Date();
+  reset.setUTCHours(24, 0, 0, 0);
+  return reset;
+}
+
+// Without Redis the counter is unavailable and the cap fails open: support
+// staying reachable matters more than a perfectly enforced soft limit.
+async function requireSupportReplyAllowance(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Not authenticated' });
+    return;
+  }
+  const used = await getDailyCounter('support', req.user.id);
+  if (used !== null && used >= entitlementConfig.supportAiDailyLimit) {
+    res.status(429).json({
+      error: 'Daily support assistant limit reached. Your messages can still reach us by email.',
+      code: 'SUPPORT_LIMIT_REACHED',
+      resetAt: nextUtcMidnight().toISOString(),
+    });
+    return;
+  }
+  next();
+}
+
+function sendSupportFailure(res: Response, error: unknown, context: string): void {
+  logger.error({ err: error }, context);
+  const clientError = toClientStreamError(error);
+  res.status(clientErrorHttpStatus(clientError.code)).json({
+    error: clientError.message,
+    code: clientError.code,
+    retryable: clientError.retryable,
+  });
+}
 
 // Validation schemas
 const chatSchema = z.object({
@@ -36,36 +83,40 @@ const ticketChatSchema = z.object({
 // CHAT WITH SUPPORT AI (no ticket yet)
 // ============================================================================
 
-supportRouter.post('/chat', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
+supportRouter.post(
+  '/chat',
+  requireSupportReplyAllowance,
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const data = chatSchema.parse(req.body);
+
+      const response = await chatWithSupport({
+        userId: req.user.id,
+        message: data.message,
+        conversationHistory: data.conversationHistory as SupportMessage[] | undefined,
+      });
+      await incrementDailyCounter('support', req.user.id);
+
+      res.json({
+        reply: response.reply,
+        ticketCreated: response.ticketCreated,
+        ticketId: response.ticketId,
+        category: response.category,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid request', details: error.issues });
+        return;
+      }
+      sendSupportFailure(res, error, 'Support chat error');
     }
-
-    const data = chatSchema.parse(req.body);
-
-    const response = await chatWithSupport({
-      userId: req.user.id,
-      message: data.message,
-      conversationHistory: data.conversationHistory as SupportMessage[] | undefined,
-    });
-
-    res.json({
-      reply: response.reply,
-      ticketCreated: response.ticketCreated,
-      ticketId: response.ticketId,
-      category: response.category,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Invalid request', details: error.issues });
-      return;
-    }
-    logger.error({ err: error }, 'Support chat error');
-    res.status(500).json({ error: 'Failed to process support request' });
-  }
-});
+  },
+);
 
 // ============================================================================
 // GET USER'S TICKETS
@@ -127,6 +178,7 @@ supportRouter.get(
 
 supportRouter.post(
   '/tickets/:ticketId/chat',
+  requireSupportReplyAllowance,
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       if (!req.user) {
@@ -143,6 +195,7 @@ supportRouter.post(
       const data = ticketChatSchema.parse(req.body);
 
       const response = await continueTicketChat(ticketId, req.user.id, data.message);
+      await incrementDailyCounter('support', req.user.id);
 
       res.json({
         reply: response.reply,
@@ -161,8 +214,7 @@ supportRouter.post(
         res.status(400).json({ error: 'This ticket has been closed' });
         return;
       }
-      logger.error({ err: error }, 'Ticket chat error');
-      res.status(500).json({ error: 'Failed to process message' });
+      sendSupportFailure(res, error, 'Ticket chat error');
     }
   },
 );

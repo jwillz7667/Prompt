@@ -7,8 +7,9 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js';
-import { enforceQuota } from '../middleware/quotaEnforcement.js';
+import { requireEntitlement } from '../middleware/requireEntitlement.js';
 import { logger } from '../utils/logger.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 import {
   queueVariationGeneration,
   getVariationComparison,
@@ -76,46 +77,45 @@ const selectWinnerSchema = z.object({
  * POST /api/v1/variations/generate
  * Generate variations for a prompt
  */
-router.post(
-  '/generate',
-  enforceQuota('enhance_prompt'),
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { prompt, promptId, strategy, config } = generateVariationsSchema.parse(req.body);
-      const normalizedStrategy =
-        strategy === 'platform_test'
-          ? 'modality_focus'
-          : strategy === 'creative_exploration'
-            ? 'max_compare'
-            : strategy || 'quick';
+router.post('/generate', requireEntitlement, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { prompt, promptId, strategy, config } = generateVariationsSchema.parse(req.body);
+    const normalizedStrategy =
+      strategy === 'platform_test'
+        ? 'modality_focus'
+        : strategy === 'creative_exploration'
+          ? 'max_compare'
+          : strategy || 'quick';
 
-      const comparison = await queueVariationGeneration(
-        req.user!.id,
-        prompt,
-        promptId,
-        config ? (config as VariationConfig) : normalizedStrategy,
-      );
+    const comparison = await queueVariationGeneration(
+      req.user!.id,
+      prompt,
+      promptId,
+      config ? (config as VariationConfig) : normalizedStrategy,
+    );
 
-      return res.status(202).json({
-        success: true,
-        data: comparison,
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid request data',
-          details: error.issues,
-        });
-      }
-      logger.error({ error }, 'Failed to generate variations');
-      return res.status(500).json({
+    return res.status(202).json({
+      success: true,
+      data: comparison,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
         success: false,
-        error: 'Failed to generate variations',
+        error: 'Invalid request data',
+        details: error.issues,
       });
     }
-  },
-);
+    logger.error({ err: error }, 'Failed to generate variations');
+    const clientError = toClientStreamError(error);
+    return res.status(clientErrorHttpStatus(clientError.code)).json({
+      success: false,
+      error: clientError.message,
+      code: clientError.code,
+      retryable: clientError.retryable,
+    });
+  }
+});
 
 /**
  * GET /api/v1/variations/:id

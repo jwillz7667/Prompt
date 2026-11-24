@@ -1,8 +1,10 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
+import { requireEntitlement } from '../middleware/requireEntitlement.js';
 import { contextService } from '../services/contextService.js';
 import { logger } from '../utils/logger.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 
 const router = Router();
 
@@ -43,7 +45,7 @@ const mergeContextsSchema = z.object({
 /**
  * Create a new context
  */
-router.post('/', authenticate, async (req, res, next) => {
+router.post('/', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const validatedData = createContextSchema.parse(req.body);
 
@@ -75,7 +77,7 @@ router.post('/', authenticate, async (req, res, next) => {
 /**
  * Update a context
  */
-router.put('/:id', authenticate, async (req, res, next) => {
+router.put('/:id', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const validatedData = updateContextSchema.parse(req.body);
 
@@ -171,7 +173,7 @@ router.get('/', authenticate, async (req, res, next) => {
 /**
  * Search for similar contexts using semantic search
  */
-router.post('/search', authenticate, async (req, res, next) => {
+router.post('/search', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const validatedData = searchContextSchema.parse(req.body);
 
@@ -251,7 +253,7 @@ router.get('/prompt/:promptId', authenticate, async (req, res, next) => {
 /**
  * Merge multiple contexts into a new one
  */
-router.post('/merge', authenticate, async (req, res, next) => {
+router.post('/merge', authenticate, requireEntitlement, async (req, res, next) => {
   try {
     const validatedData = mergeContextsSchema.parse(req.body);
 
@@ -275,6 +277,32 @@ router.post('/merge', authenticate, async (req, res, next) => {
     }
     return next(error);
   }
+});
+
+// Service errors are plain Errors; only these messages are safe to show.
+// Everything else (provider, configuration, database) is logged once here
+// and mapped to the generic client copy so nothing upstream leaks.
+const CLIENT_SAFE_ERRORS = new Map<string, { status: number; message: string }>([
+  [
+    'One or more contexts not found or not accessible',
+    { status: 404, message: 'One or more contexts not found or not accessible' },
+  ],
+]);
+
+router.use((error: unknown, _req: Request, res: Response, _next: NextFunction): void => {
+  const safe = error instanceof Error ? CLIENT_SAFE_ERRORS.get(error.message) : undefined;
+  if (safe) {
+    res.status(safe.status).json({ success: false, error: safe.message });
+    return;
+  }
+  logger.error({ err: error }, 'Context route error');
+  const clientError = toClientStreamError(error);
+  res.status(clientErrorHttpStatus(clientError.code)).json({
+    success: false,
+    error: clientError.message,
+    code: clientError.code,
+    retryable: clientError.retryable,
+  });
 });
 
 export default router;
