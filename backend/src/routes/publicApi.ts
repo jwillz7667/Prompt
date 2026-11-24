@@ -24,6 +24,7 @@ import {
 import { getApiSubscriptionInfo, getTierConfig } from '../services/apiSubscriptionService.js';
 import { getRecentUsage } from '../services/apiUsageService.js';
 import { logger } from '../utils/logger.js';
+import { clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
 
 export const publicApiRouter = Router();
 
@@ -130,8 +131,16 @@ publicApiRouter.post(
               res.end();
             },
             onError: (error) => {
-              logger.error({ error, keyId: req.apiKey?.id }, 'Stream error');
-              res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+              logger.error({ err: error, keyId: req.apiKey?.id }, 'Stream error');
+              const clientError = toClientStreamError(error);
+              res.write(
+                `data: ${JSON.stringify({
+                  type: 'error',
+                  code: clientError.code,
+                  message: clientError.message,
+                  retryable: clientError.retryable,
+                })}\n\n`,
+              );
               res.end();
             },
           },
@@ -186,12 +195,21 @@ publicApiRouter.post(
         return;
       }
 
-      logger.error({ error, keyId: req.apiKey?.id, latencyMs }, 'Enhance error');
+      logger.error({ err: error, keyId: req.apiKey?.id, latencyMs }, 'Enhance error');
 
-      res.status(500).json({
+      // Gateway messages name upstream vendors and infrastructure; API
+      // customers only ever see the sanitized copy and a stable reason code.
+      const clientError = toClientStreamError(error);
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      res.status(clientErrorHttpStatus(clientError.code)).json({
         error: 'Enhancement failed',
         code: 'ENHANCEMENT_ERROR',
-        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+        reason: clientError.code,
+        message: clientError.message,
+        retryable: clientError.retryable,
       });
     }
   },
