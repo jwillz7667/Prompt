@@ -127,19 +127,42 @@ at boot by `validateLlmConfig()`; malformed values stop the boot, missing
 credentials only skip that provider. Runbook, home-GPU setup and cost table:
 [`docs/AI-OPERATIONS.md`](../docs/AI-OPERATIONS.md).
 
-| Variable                                                              | Default                          | Purpose                                                          |
-| --------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
-| `LLM_PROVIDER_CHAIN`                                                  | `deepseek,openrouter`            | Ordered failover chain (`deepseek`, `openrouter`, `local`)       |
-| `LLM_DEEPSEEK_API_KEY` / `LLM_DEEPSEEK_BASE_URL` / `LLM_DEEPSEEK_MODEL` | — / `https://api.deepseek.com` / `deepseek-flash` | Primary provider; key and model fall back to `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` |
-| `LLM_OPENROUTER_API_KEY` / `LLM_OPENROUTER_BASE_URL` / `LLM_OPENROUTER_MODEL` | — / `https://openrouter.ai/api/v1` / `deepseek/deepseek-v4.1-flash` | Fallback provider |
-| `LLM_OPENROUTER_PROVIDER_PREFS`                                       | unset                            | JSON passed as the request `provider` routing object             |
-| `LLM_LOCAL_BASE_URL` / `LLM_LOCAL_API_KEY` / `LLM_LOCAL_MODEL`        | unset                            | Self-hosted OpenAI-compatible endpoint (all three required)      |
-| `LLM_LOCAL_CF_ACCESS_CLIENT_ID` / `LLM_LOCAL_CF_ACCESS_CLIENT_SECRET` | unset                            | Cloudflare Access service token headers for the local endpoint   |
-| `LLM_<PROVIDER>_SUPPORTS_IMAGES`                                      | deepseek `true`, others `false`  | Whether image turns may be routed to that provider               |
-| `LLM_TTFT_TIMEOUT_MS` / `LLM_IDLE_TIMEOUT_MS` / `LLM_TOTAL_TIMEOUT_MS` | `15000` / `60000` / `180000`     | First-token (failover trigger), stream-stall and hard deadlines  |
-| `LLM_BREAKER_LONG_COOLDOWN_MS`                                        | `300000`                         | Breaker open time after 401/402                                  |
-| `LLM_LAST_PROVIDER_RETRIES`                                           | `1`                              | Retries on the last provider for transient failures              |
-| `PROMPT_VISION_PROVIDER`                                              | `deepseek`                       | `deepseek` = gateway vision; `openai` = dedicated vision model   |
+| Variable                                                                      | Default                                                             | Purpose                                                                            |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `LLM_PROVIDER_CHAIN`                                                          | `deepseek,openrouter`                                               | Ordered failover chain (`deepseek`, `openrouter`, `local`)                         |
+| `LLM_DEEPSEEK_API_KEY` / `LLM_DEEPSEEK_BASE_URL` / `LLM_DEEPSEEK_MODEL`       | — / `https://api.deepseek.com` / `deepseek-flash`                   | Primary provider; key and model fall back to `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` |
+| `LLM_OPENROUTER_API_KEY` / `LLM_OPENROUTER_BASE_URL` / `LLM_OPENROUTER_MODEL` | — / `https://openrouter.ai/api/v1` / `deepseek/deepseek-v4.1-flash` | Fallback provider                                                                  |
+| `LLM_OPENROUTER_PROVIDER_PREFS`                                               | unset                                                               | JSON passed as the request `provider` routing object                               |
+| `LLM_LOCAL_BASE_URL` / `LLM_LOCAL_API_KEY` / `LLM_LOCAL_MODEL`                | unset                                                               | Self-hosted OpenAI-compatible endpoint (all three required)                        |
+| `LLM_LOCAL_CF_ACCESS_CLIENT_ID` / `LLM_LOCAL_CF_ACCESS_CLIENT_SECRET`         | unset                                                               | Cloudflare Access service token headers for the local endpoint                     |
+| `LLM_<PROVIDER>_SUPPORTS_IMAGES`                                              | deepseek `true`, others `false`                                     | Whether image turns may be routed to that provider                                 |
+| `LLM_TTFT_TIMEOUT_MS` / `LLM_IDLE_TIMEOUT_MS` / `LLM_TOTAL_TIMEOUT_MS`        | `15000` / `60000` / `180000`                                        | First-token (failover trigger), stream-stall and hard deadlines                    |
+| `LLM_BREAKER_LONG_COOLDOWN_MS`                                                | `300000`                                                            | Breaker open time after 401/402                                                    |
+| `LLM_LAST_PROVIDER_RETRIES`                                                   | `1`                                                                 | Retries on the last provider for transient failures                                |
+| `PROMPT_VISION_PROVIDER`                                                      | `deepseek`                                                          | `deepseek` = gateway vision; `openai` = dedicated vision model                     |
+
+### Chat
+
+`src/features/chat` serves the general-purpose chatbot at `/api/v1/chat`
+(conversations CRUD, SSE replies, regenerate, report). Message-creating routes
+require an active subscription (`requireEntitlement`); reading, renaming,
+deleting and reporting need only sign-in. Replies stream through the LLM
+gateway with the client-disconnect signal, so a stopped reply aborts upstream
+and is saved as `stopped`. A reply that fails before any output deletes the
+turn and refunds the daily slot, so the client can resend with the same
+`clientMessageId`. Before the model is called, user messages go through
+moderation. Sexual content involving minors gets a fixed refusal. Self-harm
+intent gets a fixed supportive reply with crisis resources (988,
+findahelpline.com). `CHAT_*` values are Zod-parsed when the router is built at
+boot.
+
+| Variable                    | Default | Purpose                                                              |
+| --------------------------- | ------- | -------------------------------------------------------------------- |
+| `CHAT_MAX_OUTPUT_TOKENS`    | `2048`  | Output cap per reply (`length` finish → status `truncated`)          |
+| `CHAT_CONTEXT_TOKEN_BUDGET` | `12000` | History budget per turn, estimated as `ceil(chars / 3.5)`            |
+| `CHAT_DAILY_MESSAGE_LIMIT`  | `150`   | Replies per user per UTC day (`429 FAIR_USE_LIMIT`)                  |
+| `CHAT_MODERATION_ENABLED`   | `true`  | Pre-model moderation; active only when `OPENAI_API_KEY` is set       |
+| `OPENAI_API_KEY`            | unset   | Also used for the free moderation endpoint (2 s timeout, fails open) |
 
 Env vars are read with bracket notation (`process.env['NAME']`) because of
 `noUncheckedIndexedAccess`. Do not introduce dot-notation reads.
@@ -196,6 +219,7 @@ All routes are mounted under `/api/v1/` from `src/index.ts`.
 | `/api/v1/users`         | `routes/users.ts`         | Profile management                      |
 | `/api/v1/prompts`       | `routes/prompts.ts`       | CRUD + `/enhance` (SSE-streamed)        |
 | `/api/v1/threads`       | `routes/threads.ts`       | Multi-turn conversation threads         |
+| `/api/v1/chat`          | `features/chat/`          | General-purpose chatbot (SSE replies)   |
 | `/api/v1/collections`   | `routes/collections.ts`   | Folders for organising prompts          |
 | `/api/v1/contexts`      | `routes/contexts.ts`      | Reusable project context                |
 | `/api/v1/platforms`     | `routes/platforms.ts`     | Platform presets                        |
