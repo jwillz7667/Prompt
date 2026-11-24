@@ -19,6 +19,10 @@ struct ContentView: View {
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var deeplinkManager = DeeplinkManager.shared
     @State private var homeThreadViewModel = ThreadViewModel()
+    @State private var chatViewModel = ChatViewModel()
+    @State private var chatListViewModel = ConversationListViewModel()
+    @AppStorage("primarySurface") private var surface: AppSurface = .optimize
+    @AppStorage("chatConversationId") private var chatConversationId = ""
 
     @State private var showProfile = false
     @State private var showSubscription = false
@@ -39,6 +43,12 @@ struct ContentView: View {
         navigationContent
         .task {
             await loadHomeThreadIfNeeded()
+        }
+        .task {
+            await restoreChatConversation()
+        }
+        .onChange(of: chatViewModel.conversation?.id) { _, newId in
+            chatConversationId = newId ?? ""
         }
         .onAppear {
             checkWhatsNew()
@@ -95,6 +105,7 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     ChatSidebarView(
                         threadViewModel: sidebarThreadViewModel,
+                        surface: surface,
                         onSelectThread: { threadId in
                             closeSidebar()
                             Task {
@@ -111,7 +122,8 @@ struct ContentView: View {
                                 showProfile = true
                             }
                         },
-                        onDismiss: { closeSidebar() }
+                        onDismiss: { closeSidebar() },
+                        chatList: { chatConversationList }
                     )
                     .frame(width: sidebarWidth)
 
@@ -132,19 +144,53 @@ struct ContentView: View {
         }
     }
 
-    /// The main surface. Additional top-level surfaces (e.g. a general
-    /// chat assistant) plug in here behind a mode switch; the drawer, sheets
-    /// and deeplink handling around it are shared.
-    @ViewBuilder
+    /// The main surface: the prompt optimizer or the assistant chat, chosen
+    /// by the mode switch that sits centered in both surfaces' header row.
+    /// The drawer, sheets and deeplink handling around it are shared.
     private var primaryContent: some View {
-        ThreadView(
-            viewModel: homeThreadViewModel,
-            presentationStyle: .home,
-            onOpenThreads: { openSidebar() },
-            onOpenProfile: { showProfile = true },
-            onOpenHistory: { openSidebar() },
-            onOpenPaywall: { showSubscription = true },
-            onStartNewConversation: newConversation
+        ZStack(alignment: .top) {
+            switch surface {
+            case .optimize:
+                ThreadView(
+                    viewModel: homeThreadViewModel,
+                    presentationStyle: .home,
+                    onOpenThreads: { openSidebar() },
+                    onOpenProfile: { showProfile = true },
+                    onOpenHistory: { openSidebar() },
+                    onOpenPaywall: { showSubscription = true },
+                    onStartNewConversation: newConversation
+                )
+                .transition(.opacity)
+            case .chat:
+                ChatView(
+                    viewModel: chatViewModel,
+                    onOpenSidebar: { openSidebar() },
+                    onOpenProfile: { showProfile = true }
+                )
+                .transition(.opacity)
+            }
+
+            // Same top padding and control height as the surfaces' header rows.
+            AppSurfacePicker(selection: $surface)
+                .padding(.top, 11)
+        }
+        .animation(.easeInOut(duration: 0.2), value: surface)
+    }
+
+    private var chatConversationList: some View {
+        ConversationListView(
+            viewModel: chatListViewModel,
+            selectedConversationId: chatViewModel.conversation?.id,
+            onSelect: { conversationId in
+                closeSidebar()
+                Task { await chatViewModel.openConversation(id: conversationId) }
+            },
+            onNewChat: {
+                closeSidebar()
+                chatViewModel.startNewConversation()
+            },
+            onRenamed: { chatViewModel.conversationWasRenamed($0) },
+            onDeleted: { chatViewModel.conversationWasDeleted(id: $0) }
         )
     }
 
@@ -153,7 +199,24 @@ struct ContentView: View {
             showSidebar = true
         }
         Task {
-            await sidebarThreadViewModel.fetchThreads(refresh: true)
+            switch surface {
+            case .optimize:
+                await sidebarThreadViewModel.fetchThreads(refresh: true)
+            case .chat:
+                await chatListViewModel.refresh()
+            }
+        }
+    }
+
+    // MARK: - Chat
+
+    private func restoreChatConversation() async {
+        chatViewModel.listSync = chatListViewModel
+        guard !chatConversationId.isEmpty, chatViewModel.conversation == nil else { return }
+        await chatViewModel.openConversation(id: chatConversationId)
+        // Deleted elsewhere: forget it. A network failure keeps it for next launch.
+        if chatViewModel.conversation == nil, case .idle = chatViewModel.loadState {
+            chatConversationId = ""
         }
     }
 
@@ -321,7 +384,7 @@ struct ContentView: View {
     /// still streaming.
     private var isBusyOrPresenting: Bool {
         showProfile || showSubscription || showWhatsNew || showSidebar
-            || homeThreadViewModel.isStreaming
+            || homeThreadViewModel.isStreaming || chatViewModel.isStreaming
     }
 
     /// Single gate for every popup the app shows on its own (What's New,
