@@ -347,6 +347,77 @@ nonisolated enum MarkdownParser {
     }
 }
 
+// MARK: - Incremental Parsing
+
+extension MarkdownParser {
+    /// Index of the last blank line after which the rest of `lines` can be
+    /// parsed on its own with the same result as parsing everything: it is
+    /// outside any code fence, and the next line is complete (not the last,
+    /// still-growing line), non-blank, not indented and not a list item, so no
+    /// list, quote, table or paragraph continues across it.
+    static func lastStableBoundary(in lines: [String]) -> Int? {
+        guard lines.count >= 3 else { return nil }
+        var openFence: LineParser.Fence?
+        var boundary: Int?
+        for lineIndex in 0..<(lines.count - 1) {
+            let trimmed = lines[lineIndex].trimmingCharacters(in: .whitespaces)
+            if let fence = openFence {
+                let closingLength = trimmed.prefix { $0 == fence.marker }.count
+                if closingLength >= fence.length && trimmed.count == closingLength { openFence = nil }
+                continue
+            }
+            if trimmed.isEmpty {
+                let next = lineIndex + 1
+                guard lineIndex > 0, next < lines.count - 1 else { continue }
+                let nextLine = lines[next]
+                let isIndented = nextLine.first == " " || nextLine.first == "\t"
+                if !nextLine.trimmingCharacters(in: .whitespaces).isEmpty,
+                   !isIndented,
+                   LineParser.listItem(nextLine) == nil {
+                    boundary = lineIndex
+                }
+                continue
+            }
+            if let fence = LineParser.fenceOpening(trimmed) {
+                openFence = fence
+            }
+        }
+        return boundary
+    }
+
+    static func parse(lines: [String]) -> [MarkdownBlock] {
+        var parser = LineParser(lines: lines)
+        return parser.parseBlocks()
+    }
+}
+
+/// Caches the parsed blocks of a growing source up to its last stable block
+/// boundary. Streaming text only ever grows; any other change resets it.
+@MainActor
+final class MarkdownStreamParser {
+    private var stableSource = ""
+    private var stableBlocks: [MarkdownBlock] = []
+
+    func blocks(for rawSource: String) -> [MarkdownBlock] {
+        let source = rawSource.replacingOccurrences(of: "\r\n", with: "\n")
+        if !source.hasPrefix(stableSource) {
+            stableSource = ""
+            stableBlocks = []
+        }
+        let tailStart = source.utf8.index(source.utf8.startIndex, offsetBy: stableSource.utf8.count)
+        var tailLines = source[tailStart...]
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+
+        if let boundary = MarkdownParser.lastStableBoundary(in: tailLines) {
+            stableBlocks += MarkdownParser.parse(lines: Array(tailLines[..<boundary]))
+            stableSource += tailLines[...boundary].joined(separator: "\n") + "\n"
+            tailLines.removeFirst(boundary + 1)
+        }
+        return stableBlocks + MarkdownParser.parse(lines: tailLines)
+    }
+}
+
 // MARK: - Inline Rendering
 
 nonisolated enum MarkdownInline {
@@ -376,18 +447,44 @@ struct MarkdownText: View {
     let source: String
 
     var body: some View {
-        let blocks = MarkdownParser.parse(source)
+        MarkdownBlocksView(blocks: MarkdownParser.parse(source))
+    }
+}
+
+/// A reply that is still being generated. Blocks that can no longer change
+/// are parsed once and cached, so each token flush only re-parses the tail.
+struct StreamingMarkdownText: View {
+    let source: String
+
+    @State private var parser = MarkdownStreamParser()
+
+    var body: some View {
+        MarkdownBlocksView(blocks: parser.blocks(for: source))
+    }
+}
+
+private struct MarkdownBlocksView: View {
+    let blocks: [MarkdownBlock]
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                // Unchanged blocks skip re-rendering, so their inline
+                // AttributedStrings are not rebuilt on every stream flush.
                 MarkdownBlockView(block: block)
+                    .equatable()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct MarkdownBlockView: View {
+private struct MarkdownBlockView: View, Equatable {
     let block: MarkdownBlock
+
+    nonisolated static func == (lhs: MarkdownBlockView, rhs: MarkdownBlockView) -> Bool {
+        lhs.block == rhs.block
+    }
 
     @Environment(\.colorScheme) private var colorScheme
 

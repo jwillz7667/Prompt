@@ -286,7 +286,7 @@ struct ChatStreamingReply: View {
             if viewModel.streamingText.isEmpty {
                 ChatTypingIndicator()
             } else {
-                MarkdownText(source: viewModel.streamingText)
+                StreamingMarkdownText(source: viewModel.streamingText)
                     .foregroundStyle(Color.adaptiveTextPrimary)
             }
         }
