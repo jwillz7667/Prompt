@@ -3,11 +3,15 @@
  * vision provider.
  *
  * Order on a route: authenticate -> requireEntitlement -> handler. It must run
- * before any SSE headers are written so a denial is a real HTTP status:
+ * before any SSE headers are written so a denial is a real HTTP status. Once the
+ * user is entitled it hands off to requireAiConsent, so every AI route also
+ * enforces the AI data-sharing consent and the paywall denial always comes first:
  *   - not entitled: 403 {error:'Subscription required', code:'QUOTA_EXCEEDED',
  *     reason:'SUBSCRIPTION_REQUIRED', remainingQuota:0}. Shipped iOS builds open
  *     the paywall on 403 QUOTA_EXCEEDED, so the code must not change.
  *   - entitled but over the daily fair-use ceiling: 429 {code:'FAIR_USE_LIMIT', resetAt}.
+ *   - entitled but without current AI data-sharing consent (AI_CONSENT_ENFORCED
+ *     only): 403 {code:'AI_CONSENT_REQUIRED', requiredVersion}.
  * getSubscriptionInfo runs exactly once; its result is attached as
  * req.subscription (SubscriptionInfo plus the legacy flat fields, declared in
  * types/express.d.ts) and handlers read it through getEntitlement(req).
@@ -39,6 +43,7 @@ import {
 import { sendDailyLimitReached } from '../services/emailService.js';
 import { prisma } from '../utils/prisma.js';
 import { subscriptionLogger } from '../utils/logger.js';
+import { requireAiConsent } from './requireAiConsent.js';
 
 /** SubscriptionInfo plus the flat fields older handlers read off req.subscription. */
 export type RequestSubscription = SubscriptionInfo & {
@@ -165,5 +170,5 @@ export async function requireEntitlement(
   }
 
   req.subscription = toRequestSubscription(info);
-  next();
+  await requireAiConsent(req, res, next);
 }

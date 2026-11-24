@@ -6,6 +6,13 @@ import { logger } from '../utils/logger.js';
 import { sendAccountDeleted } from '../services/emailService.js';
 import { registerDeviceToken, unregisterDeviceToken } from '../services/notificationService.js';
 import { appleAccountService } from '../features/apple-account/index.js';
+import {
+  AI_CONSENT_SELECT,
+  AiConsentError,
+  grantAiConsent,
+  toAiDataConsent,
+  withdrawAiConsent,
+} from '../services/aiConsentService.js';
 
 export const userRouter = Router();
 
@@ -35,6 +42,7 @@ userRouter.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<
         customInstructions: true,
         appAccountToken: true,
         createdAt: true,
+        ...AI_CONSENT_SELECT,
       },
     });
 
@@ -43,7 +51,10 @@ userRouter.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<
       return;
     }
 
-    res.json({ user });
+    const { aiDataConsentAt, aiDataConsentVersion, ...profile } = user;
+    res.json({
+      user: { ...profile, aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }) },
+    });
   } catch (error) {
     logger.error({ err: error, userId: req.user?.id }, 'Get current user error');
     res.status(500).json({ error: 'Failed to get user info' });
@@ -80,10 +91,14 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
         isPremium: true,
         customInstructions: true,
         appAccountToken: true,
+        ...AI_CONSENT_SELECT,
       },
     });
 
-    res.json({ user });
+    const { aiDataConsentAt, aiDataConsentVersion, ...profile } = user;
+    res.json({
+      user: { ...profile, aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }) },
+    });
   } catch (error) {
     logger.error({ err: error }, 'Update profile error');
     if (error instanceof z.ZodError) {
@@ -93,6 +108,58 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
+
+// ============================================================================
+// AI DATA-SHARING CONSENT (App Store guideline 5.1.2(i))
+// ============================================================================
+
+const grantAiConsentSchema = z.object({
+  version: z.number().int().min(1),
+});
+
+function sendAiConsentError(res: Response, error: unknown, userId: string, action: string): void {
+  if (error instanceof z.ZodError) {
+    res.status(400).json({ error: 'Invalid request data', details: error.issues });
+    return;
+  }
+  if (error instanceof AiConsentError) {
+    res.status(error.statusCode).json({ error: error.message, code: error.code });
+    return;
+  }
+  logger.error({ err: error, userId }, `AI consent ${action} error`);
+  res.status(500).json({ error: `Failed to ${action} AI data sharing consent` });
+}
+
+// Idempotent: re-posting a version already granted keeps the original grant.
+userRouter.post('/me/ai-consent', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Not authenticated' });
+    return;
+  }
+  const userId = req.user.id;
+  try {
+    const { version } = grantAiConsentSchema.parse(req.body);
+    res.json(await grantAiConsent(userId, version));
+  } catch (error) {
+    sendAiConsentError(res, error, userId, 'record');
+  }
+});
+
+userRouter.delete(
+  '/me/ai-consent',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const userId = req.user.id;
+    try {
+      res.json(await withdrawAiConsent(userId));
+    } catch (error) {
+      sendAiConsentError(res, error, userId, 'withdraw');
+    }
+  },
+);
 
 // ============================================================================
 // GET USAGE STATS

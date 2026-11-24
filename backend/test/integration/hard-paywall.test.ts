@@ -163,6 +163,8 @@ const MOUNTS: Mount[] = [
     routes: {
       'GET /me': 'open',
       'PATCH /profile': 'open',
+      'POST /me/ai-consent': 'open',
+      'DELETE /me/ai-consent': 'open',
       'GET /stats': 'open',
       'GET /sessions': 'open',
       'DELETE /sessions/:id': 'open',
