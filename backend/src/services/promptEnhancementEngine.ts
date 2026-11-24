@@ -648,11 +648,6 @@ export function cleanEnhancedOutput(content: string): string {
 // ============================================================================
 
 export async function enhancePromptV2(request: EnhancementRequest): Promise<EnhancementResult> {
-  const apiKey = process.env['DEEPSEEK_API_KEY'];
-  if (!apiKey) {
-    throw new Error('DEEPSEEK_API_KEY environment variable not configured');
-  }
-
   const modality = request.modality || 'text';
   const tier = request.tier || 'advanced';
 
@@ -678,7 +673,7 @@ export async function enhancePromptV2(request: EnhancementRequest): Promise<Enha
     thinking: DEEPSEEK_THINKING_DISABLED,
   };
 
-  const result = await requestCompletion(deepseekRequest, apiKey, 'chat');
+  const result = await requestCompletion(deepseekRequest, 'chat');
   return {
     ...result,
     enhancedPrompt: cleanEnhancedPrompt(result.enhancedPrompt),
@@ -700,12 +695,6 @@ export async function enhancePromptV2Stream(
   request: EnhancementRequest,
   callbacks: StreamCallbacks,
 ): Promise<void> {
-  const apiKey = process.env['DEEPSEEK_API_KEY'];
-  if (!apiKey) {
-    await callbacks.onError(new Error('DEEPSEEK_API_KEY environment variable not configured'));
-    return;
-  }
-
   const modality = request.modality || 'text';
   const tier = request.tier || 'advanced';
 
@@ -729,7 +718,7 @@ export async function enhancePromptV2Stream(
     thinking: DEEPSEEK_THINKING_DISABLED,
   };
 
-  await streamCompletion(deepseekRequest, apiKey, 'chat', {
+  await streamCompletion(deepseekRequest, 'chat', {
     ...callbacks,
     onComplete: (result) =>
       callbacks.onComplete({

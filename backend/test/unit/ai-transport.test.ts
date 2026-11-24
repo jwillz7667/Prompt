@@ -27,7 +27,8 @@ import { imageAnalysisService } from '../../src/services/imageAnalysisService.js
 import { getDeepseekModel, resolveDeepseekModel } from '../../src/services/deepseekModels.js';
 import { enhancePromptV2 } from '../../src/services/promptEnhancementEngine.js';
 import { completeWithProvider } from '../../src/services/providerAdapters.js';
-import { ProviderError, resetDefaultLlmGateway } from '../../src/features/llm/index.js';
+import { ProviderError, loadLlmConfig, resetDefaultLlmGateway } from '../../src/features/llm/index.js';
+import { createDeepseekReflectionLlmCall } from '../../src/services/reflectionLoop/transport.js';
 
 const request: DeepSeekRequest = {
   model: 'deepseek-flash', messages: [{ role: 'user', content: 'Improve this prompt' }],
@@ -74,13 +75,21 @@ describe('prompt transport through the LLM gateway', () => {
     expect(JSON.parse(fetch.mock.calls[0]![1].body).stream_options.include_usage).toBe(true);
   });
 
-  it('still accepts the deprecated api-key argument order', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(token('Answer') + finish())));
-    const cb = callbacks();
-    await streamCompletion({ ...request, stream: true }, 'ignored-key', 'optimize', cb);
-    expect(cb.onComplete).toHaveBeenCalledOnce();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(completion()));
-    expect((await requestCompletion(request, 'ignored-key', 'chat')).enhancedPrompt).toBe('A complete prompt');
+  it('serves reflection calls on an OpenRouter-only chain without DEEPSEEK_API_KEY', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', undefined);
+    resetDefaultLlmGateway(loadLlmConfig({
+      LLM_PROVIDER_CHAIN: 'openrouter', LLM_OPENROUTER_API_KEY: 'or-key', LLM_LAST_PROVIDER_RETRIES: '0',
+    }));
+    const fetch = vi.fn().mockResolvedValue(completion('{"verdict":"ok"}'));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await createDeepseekReflectionLlmCall()({
+      stage: 'critique', model: 'deepseek-flash', systemPrompt: 'Judge it', userMessage: 'Prompt',
+      temperature: 0, maxTokens: 64, thinking: { type: 'disabled' },
+    });
+
+    expect(result.content).toBe('{"verdict":"ok"}');
+    expect(fetch.mock.calls[0]![0]).toBe('https://openrouter.ai/api/v1/chat/completions');
   });
 
   it.each([

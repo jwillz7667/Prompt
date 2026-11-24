@@ -20,14 +20,6 @@ import { createReflectionEngine } from './engine.js';
  * surface. Tests construct the engine with mocks and never import this file.
  */
 
-function getDeepseekApiKey(): string {
-  const apiKey = process.env['DEEPSEEK_API_KEY'];
-  if (!apiKey) {
-    throw new Error('DEEPSEEK_API_KEY environment variable not configured');
-  }
-  return apiKey;
-}
-
 export function createDeepseekReflectionLlmCall(): ReflectionLlmCall {
   return async (request) => {
     const messages: DeepSeekMessage[] =
@@ -49,7 +41,6 @@ export function createDeepseekReflectionLlmCall(): ReflectionLlmCall {
         stream: false,
         thinking: request.thinking,
       },
-      getDeepseekApiKey(),
       'chat',
     );
 

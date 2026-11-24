@@ -705,27 +705,11 @@ function requireCompleteOutput(
   };
 }
 
-function modeFromLegacyArgument(value: string): ConversationMode {
-  return value === 'chat' ? 'chat' : 'optimize';
-}
-
 /** One-shot completion through the LLM gateway with optimizer completeness rules. */
-export function requestCompletion(
-  request: DeepSeekRequest,
-  conversationMode: ConversationMode,
-): Promise<EnhancePromptResult>;
-/** @deprecated Provider credentials belong to the LLM gateway; the key argument is ignored. */
-export function requestCompletion(
-  request: DeepSeekRequest,
-  apiKey: string,
-  conversationMode: ConversationMode,
-): Promise<EnhancePromptResult>;
 export async function requestCompletion(
   request: DeepSeekRequest,
-  modeOrLegacyKey: string,
-  legacyMode?: ConversationMode,
+  conversationMode: ConversationMode,
 ): Promise<EnhancePromptResult> {
-  const conversationMode = legacyMode ?? modeFromLegacyArgument(modeOrLegacyKey);
   const startedAt = Date.now();
   const raw = await completeChat(toGatewayRequest(request, conversationMode, undefined));
   return requireCompleteOutput(raw, conversationMode, false, startedAt);
@@ -755,28 +739,11 @@ async function runStream(
 }
 
 /** Streaming completion through the LLM gateway. Never reports partial output as success. */
-export function streamCompletion(
-  request: DeepSeekRequest,
-  conversationMode: ConversationMode,
-  callbacks: StreamCallbacks,
-): Promise<void>;
-/** @deprecated Provider credentials belong to the LLM gateway; the key argument is ignored. */
-export function streamCompletion(
-  request: DeepSeekRequest,
-  apiKey: string,
-  conversationMode: ConversationMode,
-  callbacks: StreamCallbacks,
-): Promise<void>;
 export async function streamCompletion(
   request: DeepSeekRequest,
-  modeOrLegacyKey: string,
-  modeOrCallbacks: ConversationMode | StreamCallbacks,
-  legacyCallbacks?: StreamCallbacks,
+  conversationMode: ConversationMode,
+  callbacks: StreamCallbacks,
 ): Promise<void> {
-  const conversationMode =
-    typeof modeOrCallbacks === 'string' ? modeOrCallbacks : modeFromLegacyArgument(modeOrLegacyKey);
-  const callbacks = typeof modeOrCallbacks === 'string' ? legacyCallbacks : modeOrCallbacks;
-  if (!callbacks) throw new TypeError('streamCompletion requires stream callbacks');
   await runStream(
     (onToken) =>
       streamChat(toGatewayRequest(request, conversationMode, callbacks.signal), { onToken }),
