@@ -78,7 +78,18 @@ async function readJsonOrThrow(response: Response): Promise<unknown> {
   }
 }
 
+// The service key must belong to a developer account on an active paid API
+// plan. When it lapses, ChatGPT users get a neutral message; the operator
+// sees API_PLAN_REQUIRED in the Promptomize developer portal and logs.
+const PLAN_REQUIRED_MESSAGE =
+  'Promptomize prompt enhancement is temporarily unavailable. Please try again later.'
+
 function buildErrorMessage(status: number, payload: unknown, fallback: string): string {
+  if (status === 402) {
+    console.error('Promptomize API key has no active paid API plan (API_PLAN_REQUIRED)')
+    return PLAN_REQUIRED_MESSAGE
+  }
+
   if (payload && typeof payload === 'object') {
     const maybeMessage = (payload as { message?: unknown; error?: unknown }).message
     if (typeof maybeMessage === 'string' && maybeMessage.length > 0) {
