@@ -53,7 +53,10 @@ userRouter.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<
 
     const { aiDataConsentAt, aiDataConsentVersion, ...profile } = user;
     res.json({
-      user: { ...profile, aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }) },
+      user: {
+        ...profile,
+        aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }),
+      },
     });
   } catch (error) {
     logger.error({ err: error, userId: req.user?.id }, 'Get current user error');
@@ -97,7 +100,10 @@ userRouter.patch('/profile', async (req: AuthenticatedRequest, res: Response): P
 
     const { aiDataConsentAt, aiDataConsentVersion, ...profile } = user;
     res.json({
-      user: { ...profile, aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }) },
+      user: {
+        ...profile,
+        aiDataConsent: toAiDataConsent({ aiDataConsentAt, aiDataConsentVersion }),
+      },
     });
   } catch (error) {
     logger.error({ err: error }, 'Update profile error');
@@ -131,19 +137,22 @@ function sendAiConsentError(res: Response, error: unknown, userId: string, actio
 }
 
 // Idempotent: re-posting a version already granted keeps the original grant.
-userRouter.post('/me/ai-consent', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  if (!req.user) {
-    res.status(401).json({ error: 'Not authenticated' });
-    return;
-  }
-  const userId = req.user.id;
-  try {
-    const { version } = grantAiConsentSchema.parse(req.body);
-    res.json(await grantAiConsent(userId, version));
-  } catch (error) {
-    sendAiConsentError(res, error, userId, 'record');
-  }
-});
+userRouter.post(
+  '/me/ai-consent',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    const userId = req.user.id;
+    try {
+      const { version } = grantAiConsentSchema.parse(req.body);
+      res.json(await grantAiConsent(userId, version));
+    } catch (error) {
+      sendAiConsentError(res, error, userId, 'record');
+    }
+  },
+);
 
 userRouter.delete(
   '/me/ai-consent',

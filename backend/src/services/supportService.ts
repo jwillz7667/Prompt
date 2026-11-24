@@ -215,9 +215,7 @@ function generateTicketSubject(userMessage: string, category: TicketCategory): s
 
 export async function chatWithSupport(request: ChatRequest): Promise<ChatResponse> {
   // Build conversation messages
-  const messages: LlmMessage[] = [
-    { role: 'system', content: SUPPORT_SYSTEM_PROMPT },
-  ];
+  const messages: LlmMessage[] = [{ role: 'system', content: SUPPORT_SYSTEM_PROMPT }];
 
   // Add conversation history if provided
   if (request.conversationHistory) {

@@ -76,7 +76,8 @@ const PROVIDER_WIDE_KINDS: ReadonlySet<string> = new Set<ProviderErrorKind>([
 function isProviderWideMarker(marker: string): boolean {
   try {
     const parsed: unknown = JSON.parse(marker);
-    const kind = typeof parsed === 'object' && parsed !== null ? Reflect.get(parsed, 'kind') : undefined;
+    const kind =
+      typeof parsed === 'object' && parsed !== null ? Reflect.get(parsed, 'kind') : undefined;
     return typeof kind === 'string' && PROVIDER_WIDE_KINDS.has(kind);
   } catch {
     return false;

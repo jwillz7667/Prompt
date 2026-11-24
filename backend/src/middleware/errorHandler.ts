@@ -1,7 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger.js';
 import { captureError } from '../utils/sentry.js';
-import { ProviderError, clientErrorHttpStatus, toClientStreamError } from '../features/llm/errors.js';
+import {
+  ProviderError,
+  clientErrorHttpStatus,
+  toClientStreamError,
+} from '../features/llm/errors.js';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -25,7 +29,11 @@ function clientFacing(err: AppError, statusCode: number): { status: number; body
     const clientError = toClientStreamError(err);
     return {
       status: clientErrorHttpStatus(clientError.code),
-      body: { error: clientError.message, code: clientError.code, retryable: clientError.retryable },
+      body: {
+        error: clientError.message,
+        code: clientError.code,
+        retryable: clientError.retryable,
+      },
     };
   }
   if (statusCode >= 500) {

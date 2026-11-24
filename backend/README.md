@@ -196,10 +196,10 @@ stored on `User.aiDataConsentAt` / `aiDataConsentVersion` and managed with
 the support assistant answer
 `403 {code:'AI_CONSENT_REQUIRED', requiredVersion}` before any provider call.
 
-| Variable                  | Default | Purpose                                                              |
-| ------------------------- | ------- | -------------------------------------------------------------------- |
-| `AI_CONSENT_ENFORCED`     | `false` | Enforce the consent gate (see rollout in `aiConsentService.ts`)      |
-| `AI_DATA_CONSENT_VERSION` | `1`     | Disclosure version; raising it re-requires consent from every user   |
+| Variable                  | Default | Purpose                                                            |
+| ------------------------- | ------- | ------------------------------------------------------------------ |
+| `AI_CONSENT_ENFORCED`     | `false` | Enforce the consent gate (see rollout in `aiConsentService.ts`)    |
+| `AI_DATA_CONSENT_VERSION` | `1`     | Disclosure version; raising it re-requires consent from every user |
 
 Turn `AI_CONSENT_ENFORCED` on only once the consent-syncing iOS build is the
 minimum supported version; the web dashboard handles the 403 with its own

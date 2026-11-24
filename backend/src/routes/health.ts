@@ -201,9 +201,13 @@ healthRouter.get('/status', async (_req: Request, res: Response): Promise<void> 
 // deploy — it just makes the misconfiguration visible.
 function llmConfigProblem(): string | undefined {
   try {
-    return getLlmConfig().chain.length === 0 ? 'no usable LLM provider in LLM_PROVIDER_CHAIN' : undefined;
+    return getLlmConfig().chain.length === 0
+      ? 'no usable LLM provider in LLM_PROVIDER_CHAIN'
+      : undefined;
   } catch (error) {
-    return error instanceof LlmConfigError ? 'invalid LLM provider configuration' : 'LLM configuration unreadable';
+    return error instanceof LlmConfigError
+      ? 'invalid LLM provider configuration'
+      : 'LLM configuration unreadable';
   }
 }
 

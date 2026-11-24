@@ -173,7 +173,10 @@ export function isSandboxTrustedAccount(
   userId: string,
   accountCreatedAt: Date,
   now: Date = new Date(),
-  config: Pick<EntitlementConfig, 'sandboxAccountMaxAgeDays' | 'sandboxAllowedUserIds'> = entitlementConfig,
+  config: Pick<
+    EntitlementConfig,
+    'sandboxAccountMaxAgeDays' | 'sandboxAllowedUserIds'
+  > = entitlementConfig,
 ): boolean {
   if (config.sandboxAllowedUserIds.has(userId)) return true;
   const maxAgeMs = config.sandboxAccountMaxAgeDays * 86_400_000;

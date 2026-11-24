@@ -8,11 +8,7 @@ import { z } from 'zod';
  * (for example non-threatening harassment) are left to the model's own
  * safety training, which the system prompt reinforces.
  */
-export type ModerationVerdict =
-  | 'allow'
-  | 'refuse_minors'
-  | 'refuse_harmful'
-  | 'self_harm_support';
+export type ModerationVerdict = 'allow' | 'refuse_minors' | 'refuse_harmful' | 'self_harm_support';
 
 export type ModerateMessage = (text: string, signal?: AbortSignal) => Promise<ModerationVerdict>;
 
@@ -118,7 +114,10 @@ export function createModerator(deps: ModeratorDeps): ModerateMessage {
       const response = await doFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: MODERATION_MODEL, input: text.slice(0, MAX_MODERATED_CHARS) }),
+        body: JSON.stringify({
+          model: MODERATION_MODEL,
+          input: text.slice(0, MAX_MODERATED_CHARS),
+        }),
         signal: combined,
       });
       if (!response.ok) {

@@ -34,10 +34,7 @@ const aiConsentEnvSchema = z.object({
       .default('false')
       .transform((value) => value === 'true'),
   ),
-  AI_DATA_CONSENT_VERSION: z.preprocess(
-    blankAsUnset,
-    z.coerce.number().int().min(1).default(1),
-  ),
+  AI_DATA_CONSENT_VERSION: z.preprocess(blankAsUnset, z.coerce.number().int().min(1).default(1)),
 });
 
 export interface AiConsentConfig {
