@@ -97,7 +97,8 @@ struct PromptApp: App {
 
 // MARK: - Root View
 
-/// Launch gate: splash, then required Sign in with Apple, then entitlement.
+/// Launch gate: splash, then required Sign in with Apple, then a one-time
+/// AI data-sharing consent, then entitlement.
 /// The app shell (ContentView) is only reachable with an active
 /// subscription or free trial; while entitlement is unknown the gate waits
 /// (or offers a retry) and never fails open.
@@ -106,10 +107,12 @@ struct RootView: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(StoreKitManager.self) private var storeKit
     @State private var splashMinimumDurationElapsed = false
+    @State private var consentStore = AIDataConsentStore.shared
 
     private enum Stage: Equatable {
         case splash
         case signIn
+        case aiConsent
         case checkingEntitlement
         case entitlementCheckFailed
         case paywall
@@ -126,7 +129,10 @@ struct RootView: View {
     private var stage: Stage {
         if isUITesting { return .app }
         if authManager.isCheckingSession || !splashMinimumDurationElapsed { return .splash }
-        guard authManager.isAuthenticated else { return .signIn }
+        guard authManager.isAuthenticated, let userId = authManager.currentUser?.id else { return .signIn }
+        // Content reaches third-party AI providers only after explicit
+        // permission (App Review 5.1.2(i)), so this comes before the paywall.
+        guard consentStore.hasConsented(userId: userId) else { return .aiConsent }
         switch storeKit.entitlementState {
         case .entitled:
             return .app
@@ -144,6 +150,8 @@ struct RootView: View {
                 SplashView()
             case .signIn:
                 AuthView()
+            case .aiConsent:
+                AIDataConsentView(consentStore: consentStore)
             case .checkingEntitlement:
                 EntitlementCheckView(hasFailed: false)
             case .entitlementCheckFailed:

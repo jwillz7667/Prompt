@@ -358,6 +358,9 @@ final class AuthManager: NSObject {
     func deleteAccount() async throws {
         authAttemptVersion &+= 1
         try await APIClient.shared.requestVoid("/users/account", method: .delete)
+        if let userId = currentUser?.id {
+            AIDataConsentStore.shared.forgetConsent(userId: userId)
+        }
         await APIClient.shared.clearTokens()
         clearSignedInState()
         StoreKitManager.shared.clearSubscriptionState()
