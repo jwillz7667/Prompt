@@ -23,6 +23,8 @@ import {
 } from './moderation.js';
 import {
   DuplicateClientMessageError,
+  decodeConversationCursor,
+  encodeConversationCursor,
   type ChatMessageStatus,
   type ChatRepo,
   type ConversationRecord,
@@ -168,6 +170,8 @@ interface TurnPlan {
   userMessageIdToDropOnSilentFailure?: string;
   /** Regenerate: the reply being replaced; removed once the new one has any output. */
   replacedMessageId?: string;
+  /** Set once the reply's rows are committed; nothing may be discarded after that. */
+  isReplyCommitted?: boolean;
 }
 
 export function createChatService(deps: ChatServiceDeps) {
@@ -182,7 +186,22 @@ export function createChatService(deps: ChatServiceDeps) {
     return result.reservation;
   };
 
-  /** Removes rows of a turn that produced nothing and hands the fair-use slot back. */
+  /**
+   * A turn whose stream already started (the client holds its message ids)
+   * but produced no output. A send keeps the user's message and marks the
+   * empty reply FAILED so the client can retry it with regenerate; a
+   * regenerate drops its placeholder and keeps the reply it was replacing.
+   */
+  const failTurnWithoutOutput = async (plan: TurnPlan): Promise<void> => {
+    await plan.reservation.release();
+    if (plan.replacedMessageId) {
+      await repo.deleteMessages(plan.conversation.id, [plan.assistantMessageId]);
+      return;
+    }
+    await repo.finalizeAssistant(plan.assistantMessageId, { content: '', status: 'FAILED' });
+  };
+
+  /** Removes rows of a turn the client never learned about and hands the fair-use slot back. */
   const discardSilentTurn = async (plan: TurnPlan): Promise<void> => {
     await plan.reservation.release();
     await repo.deleteMessages(
@@ -202,17 +221,6 @@ export function createChatService(deps: ChatServiceDeps) {
       shouldAutoTitle: boolean;
     },
   ): Promise<{ id: string; title: string; updatedAt: Date }> => {
-    await repo.finalizeAssistant(plan.assistantMessageId, {
-      content: reply.content,
-      status: reply.status,
-      inputTokens: reply.result?.usage.inputTokens,
-      outputTokens: reply.result?.usage.outputTokens,
-      provider: reply.result?.provider,
-      model: reply.result?.model,
-    });
-    if (plan.replacedMessageId) {
-      await repo.deleteMessages(plan.conversation.id, [plan.replacedMessageId]);
-    }
     let title: string | undefined;
     if (reply.shouldAutoTitle && plan.conversation.title === DEFAULT_CONVERSATION_TITLE) {
       const firstUserMessage = await repo.findFirstUserMessage(plan.conversation.id);
@@ -220,10 +228,22 @@ export function createChatService(deps: ChatServiceDeps) {
         ? (deriveConversationTitle(firstUserMessage) ?? undefined)
         : undefined;
     }
-    return repo.touchConversation(plan.conversation.id, {
-      lastMessagePreview: toMessagePreview(reply.content),
-      ...(title ? { title } : {}),
+    const conversation = await repo.commitReply({
+      conversationId: plan.conversation.id,
+      assistantMessageId: plan.assistantMessageId,
+      finalization: {
+        content: reply.content,
+        status: reply.status,
+        inputTokens: reply.result?.usage.inputTokens,
+        outputTokens: reply.result?.usage.outputTokens,
+        provider: reply.result?.provider,
+        model: reply.result?.model,
+      },
+      ...(plan.replacedMessageId ? { replacedMessageId: plan.replacedMessageId } : {}),
+      touch: { lastMessagePreview: toMessagePreview(reply.content), ...(title ? { title } : {}) },
     });
+    plan.isReplyCommitted = true;
+    return conversation;
   };
 
   const sendComplete = (
@@ -307,7 +327,7 @@ export function createChatService(deps: ChatServiceDeps) {
         'Chat reply failed',
       );
       if (content.length === 0) {
-        await discardSilentTurn(plan);
+        await failTurnWithoutOutput(plan);
       } else {
         await plan.reservation.release();
         await persistReply(plan, { content, status: 'FAILED', shouldAutoTitle: false });
@@ -326,7 +346,7 @@ export function createChatService(deps: ChatServiceDeps) {
         { err: error, userId: plan.userId, conversationId: plan.conversation.id },
         'Chat reply was empty',
       );
-      await discardSilentTurn(plan);
+      await failTurnWithoutOutput(plan);
       sink.send(toClientStreamError(error));
       return;
     }
@@ -380,12 +400,19 @@ export function createChatService(deps: ChatServiceDeps) {
       userId: string,
       options: { cursor?: string; limit: number },
     ): Promise<{ conversations: ConversationSummaryDto[]; nextCursor: string | null }> {
-      const page = await repo.listConversations(userId, options);
-      if (!page) throw new ChatError('INVALID_CURSOR');
+      const cursor = options.cursor ? decodeConversationCursor(options.cursor) : undefined;
+      if (cursor === null) throw new ChatError('INVALID_CURSOR');
+      const page = await repo.listConversations(userId, {
+        limit: options.limit,
+        ...(cursor ? { cursor } : {}),
+      });
       const last = page.items.at(-1);
       return {
         conversations: page.items.map(summaryToDto),
-        nextCursor: page.hasMore && last ? last.id : null,
+        nextCursor:
+          page.hasMore && last
+            ? encodeConversationCursor({ updatedAt: last.updatedAt, id: last.id })
+            : null,
       };
     },
 
@@ -434,6 +461,7 @@ export function createChatService(deps: ChatServiceDeps) {
       const reportId = await repo.createReport({
         userId,
         messageId: message.id,
+        messageContent: message.content,
         reason: REPORT_REASON[body.reason],
         details: body.details,
       });
@@ -497,8 +525,14 @@ export function createChatService(deps: ChatServiceDeps) {
       const conversation = await repo.findConversation(userId, conversationId);
       if (!conversation) throw new ChatError('NOT_FOUND');
       const target = await repo.findAssistantMessage(userId, conversation.id, messageId);
-      if (!target || target.content.length === 0) throw new ChatError('NOT_FOUND');
-      const latest = await repo.findLatestAssistantMessage(conversation.id);
+      // An empty FAILED reply is a retry target; any other empty row is an in-flight placeholder.
+      if (!target || (target.content.length === 0 && target.status !== 'FAILED')) {
+        throw new ChatError('NOT_FOUND');
+      }
+      // Newest message of any role: a later user message (for example one
+      // whose reply was stopped before any output) means this reply is stale,
+      // and answering it again would land after that message.
+      const latest = await repo.findLatestMessage(conversation.id);
       if (latest?.id !== target.id) throw new ChatError('NOT_LATEST_MESSAGE');
 
       const earlier = await repo.recentHistory(conversation.id, target);
@@ -551,12 +585,22 @@ export function createChatService(deps: ChatServiceDeps) {
       await runTurn(plan, trackedSink);
     } catch (error) {
       logger.error(
-        { err: error, userId: plan.userId, conversationId: plan.conversation.id },
+        {
+          err: error,
+          userId: plan.userId,
+          conversationId: plan.conversation.id,
+          isReplyCommitted: plan.isReplyCommitted === true,
+        },
         'Chat turn failed unexpectedly',
       );
-      await discardSilentTurn(plan).catch((cleanupError: unknown) => {
-        logger.warn({ err: cleanupError }, 'Failed to clean up chat turn');
-      });
+      // A committed reply was delivered and saved; never delete it (or the
+      // user's message) because a later step failed.
+      if (!plan.isReplyCommitted) {
+        const cleanup = hasOpened ? failTurnWithoutOutput(plan) : discardSilentTurn(plan);
+        await cleanup.catch((cleanupError: unknown) => {
+          logger.warn({ err: cleanupError }, 'Failed to clean up chat turn');
+        });
+      }
       if (!hasOpened) trackedSink.open();
       trackedSink.send(toClientStreamError(error));
     }

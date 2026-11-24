@@ -66,35 +66,77 @@ export interface AssistantFinalization {
   model?: string;
 }
 
-/** Rows that exist only while a reply streams: assistant messages with no content yet. */
+/**
+ * Rows that exist only while a reply streams: empty assistant messages that
+ * have not been marked FAILED. A FAILED empty reply is a real, visible row the
+ * client can retry (regenerate) after the stream failed before any output.
+ */
 const notPlaceholder: Prisma.ChatMessageWhereInput = {
-  NOT: { role: 'ASSISTANT', content: '' },
+  NOT: { role: 'ASSISTANT', content: '', status: { not: 'FAILED' } },
 };
+
+/** Assistant rows with actual output (reportable content). */
+const hasOutput: Prisma.ChatMessageWhereInput = { NOT: { role: 'ASSISTANT', content: '' } };
+
+export interface ConversationCursor {
+  updatedAt: Date;
+  id: string;
+}
+
+/**
+ * Opaque keyset cursor. It carries the anchor's (updatedAt, id) instead of
+ * re-reading the anchor row, whose updatedAt moves whenever it gets a reply
+ * and which may be deleted between pages.
+ */
+export function encodeConversationCursor(cursor: ConversationCursor): string {
+  return Buffer.from(
+    JSON.stringify({ u: cursor.updatedAt.toISOString(), i: cursor.id }),
+    'utf8',
+  ).toString('base64url');
+}
+
+export function decodeConversationCursor(raw: string): ConversationCursor | null {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const updatedAt = Reflect.get(parsed, 'u');
+    const id = Reflect.get(parsed, 'i');
+    if (typeof updatedAt !== 'string' || typeof id !== 'string' || id.length === 0) return null;
+    const date = new Date(updatedAt);
+    return Number.isNaN(date.getTime()) ? null : { updatedAt: date, id };
+  } catch {
+    return null;
+  }
+}
+
+export interface ReplyCommit {
+  conversationId: string;
+  assistantMessageId: string;
+  finalization: AssistantFinalization;
+  /** Regenerate: the reply being replaced, removed in the same transaction. */
+  replacedMessageId?: string;
+  touch: { lastMessagePreview: string; title?: string };
+}
 
 // Bounds the history read per turn; the token budget trims further.
 const MAX_HISTORY_MESSAGES = 200;
 
 export function createChatRepo(db: PrismaClient) {
   return {
-    /** Cursor-paged list; `null` when the cursor is not one of this user's conversations. */
+    /** Keyset page ordered by (updatedAt desc, id desc), continuing strictly after `cursor`. */
     async listConversations(
       userId: string,
-      options: { cursor?: string; limit: number },
-    ): Promise<Page<ConversationSummaryRecord> | null> {
-      let keyset: Prisma.ChatConversationWhereInput = {};
-      if (options.cursor) {
-        const anchor = await db.chatConversation.findFirst({
-          where: { id: options.cursor, userId },
-          select: { id: true, updatedAt: true },
-        });
-        if (!anchor) return null;
-        keyset = {
-          OR: [
-            { updatedAt: { lt: anchor.updatedAt } },
-            { updatedAt: anchor.updatedAt, id: { lt: anchor.id } },
-          ],
-        };
-      }
+      options: { cursor?: ConversationCursor; limit: number },
+    ): Promise<Page<ConversationSummaryRecord>> {
+      const anchor = options.cursor;
+      const keyset: Prisma.ChatConversationWhereInput = anchor
+        ? {
+            OR: [
+              { updatedAt: { lt: anchor.updatedAt } },
+              { updatedAt: anchor.updatedAt, id: { lt: anchor.id } },
+            ],
+          }
+        : {};
       const rows = await db.chatConversation.findMany({
         where: { userId, ...keyset },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -281,6 +323,38 @@ export function createChatRepo(db: PrismaClient) {
       });
     },
 
+    /**
+     * Finalizes a reply, removes the reply it replaces and bumps the
+     * conversation atomically, so a failure part-way can never leave a
+     * delivered reply half-saved (or the replaced one already gone).
+     */
+    commitReply(commit: ReplyCommit): Promise<{ id: string; title: string; updatedAt: Date }> {
+      const { finalization } = commit;
+      return db.$transaction(async (tx) => {
+        await tx.chatMessage.update({
+          where: { id: commit.assistantMessageId },
+          data: {
+            content: finalization.content,
+            status: finalization.status,
+            inputTokens: finalization.inputTokens ?? null,
+            outputTokens: finalization.outputTokens ?? null,
+            provider: finalization.provider ?? null,
+            model: finalization.model ?? null,
+          },
+        });
+        if (commit.replacedMessageId) {
+          await tx.chatMessage.deleteMany({
+            where: { conversationId: commit.conversationId, id: commit.replacedMessageId },
+          });
+        }
+        return tx.chatConversation.update({
+          where: { id: commit.conversationId },
+          data: commit.touch,
+          select: { id: true, title: true, updatedAt: true },
+        });
+      });
+    },
+
     async deleteMessages(conversationId: string, messageIds: string[]): Promise<void> {
       if (messageIds.length === 0) return;
       await db.chatMessage.deleteMany({ where: { conversationId, id: { in: messageIds } } });
@@ -297,9 +371,10 @@ export function createChatRepo(db: PrismaClient) {
       });
     },
 
-    findLatestAssistantMessage(conversationId: string): Promise<MessageRecord | null> {
+    /** Newest visible message of any role; regenerate is only valid on this one. */
+    findLatestMessage(conversationId: string): Promise<MessageRecord | null> {
       return db.chatMessage.findFirst({
-        where: { conversationId, role: 'ASSISTANT', AND: [notPlaceholder] },
+        where: { conversationId, AND: [notPlaceholder] },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         select: messageSelect,
       });
@@ -314,33 +389,30 @@ export function createChatRepo(db: PrismaClient) {
       return row?.content ?? null;
     },
 
-    /** Bumps updatedAt (via @updatedAt) and the list preview; returns the fields the client shows. */
-    touchConversation(
-      conversationId: string,
-      data: { lastMessagePreview: string; title?: string },
-    ): Promise<{ id: string; title: string; updatedAt: Date }> {
-      return db.chatConversation.update({
-        where: { id: conversationId },
-        data,
-        select: { id: true, title: true, updatedAt: true },
-      });
-    },
-
-    findReportableMessage(userId: string, messageId: string): Promise<{ id: string } | null> {
+    findReportableMessage(
+      userId: string,
+      messageId: string,
+    ): Promise<{ id: string; content: string } | null> {
       return db.chatMessage.findFirst({
         where: {
           id: messageId,
           role: 'ASSISTANT',
           conversation: { userId },
-          AND: [notPlaceholder],
+          AND: [hasOutput],
         },
-        select: { id: true },
+        select: { id: true, content: true },
       });
     },
 
+    /**
+     * The reported text is copied onto the report: regenerating or deleting
+     * the conversation removes the message, and the report must still reach
+     * human review with what the user saw.
+     */
     async createReport(data: {
       userId: string;
       messageId: string;
+      messageContent: string;
       reason: ChatReportReason;
       details?: string;
     }): Promise<string> {
@@ -348,6 +420,7 @@ export function createChatRepo(db: PrismaClient) {
         data: {
           userId: data.userId,
           messageId: data.messageId,
+          messageContent: data.messageContent,
           reason: data.reason,
           details: data.details?.trim() ? data.details.trim() : null,
         },

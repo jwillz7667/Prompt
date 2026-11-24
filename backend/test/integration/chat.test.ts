@@ -263,6 +263,31 @@ describe('chat conversations CRUD', () => {
     expect(second.body.nextCursor).toBeNull();
   });
 
+  it('continues after the cursor even when its anchor changes or is deleted', async () => {
+    const ids: string[] = [];
+    for (const title of ['one', 'two', 'three', 'four']) {
+      ids.push(await createConversation(alice, { title }));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    const auth = `Bearer ${alice.accessToken}`;
+    const first = await request(app).get('/api/v1/chat/conversations?limit=2').set('Authorization', auth).expect(200);
+    const anchorId = first.body.conversations[1].id as string;
+
+    await prisma.chatConversation.update({ where: { id: anchorId }, data: { lastMessagePreview: 'new reply' } });
+    const afterBump = await request(app)
+      .get(`/api/v1/chat/conversations?limit=2&cursor=${first.body.nextCursor}`)
+      .set('Authorization', auth)
+      .expect(200);
+    await prisma.chatConversation.delete({ where: { id: anchorId } });
+    const afterDelete = await request(app)
+      .get(`/api/v1/chat/conversations?limit=2&cursor=${first.body.nextCursor}`)
+      .set('Authorization', auth)
+      .expect(200);
+
+    expect(afterBump.body.conversations.map((c: { id: string }) => c.id)).toEqual([ids[1], ids[0]]);
+    expect(afterDelete.body.conversations.map((c: { id: string }) => c.id)).toEqual([ids[1], ids[0]]);
+  });
+
   it('pages messages newest-first while returning each page oldest-first', async () => {
     const id = await createConversation(alice);
     const base = Date.now() - 10_000;
@@ -452,7 +477,7 @@ describe('chat streaming', () => {
     expect(assistant).toMatchObject({ content: 'From the fallback', provider: 'openrouter' });
   });
 
-  it('sends a sanitized error event, persists nothing and does not charge when every provider fails', async () => {
+  it('sends a sanitized error event, keeps the turn as a retryable failed reply and does not charge when every provider fails', async () => {
     const id = await createConversation(alice);
     routeFetch({ primary: failure(500), fallback: failure(503) });
     const clientMessageId = randomUUID();
@@ -469,14 +494,42 @@ describe('chat streaming', () => {
       retryable: true,
     });
     expect(res.text).not.toMatch(/deepseek|openrouter|upstream detail/i);
-    expect(await prisma.chatMessage.count({ where: { conversationId: id } })).toBe(0);
     if (hasRedis) expect(await usageCount(alice.id)).toBe(0);
+    const auth = `Bearer ${alice.accessToken}`;
+    const transcript = await request(app).get(`/api/v1/chat/conversations/${id}`).set('Authorization', auth);
+    expect(transcript.body.messages.map((m: { role: string; content: string; status: string }) => [m.role, m.content, m.status]))
+      .toEqual([['user', 'hi', 'complete'], ['assistant', '', 'failed']]);
+    const failedReplyId = String(events[0]?.['assistantMessageId']);
+    expect(transcript.body.messages[1].id).toBe(failedReplyId);
 
-    // The idempotency key is free again, so the client can retry the same send.
+    // Retry regenerates the failed reply in place of the original send.
     routeFetch({ primary: completion(['Recovered']) });
     await resetBreakers();
-    const retry = await sendMessage(alice, id, 'hi', clientMessageId).expect(200);
+    const retry = await request(app)
+      .post(`/api/v1/chat/conversations/${id}/messages/${failedReplyId}/regenerate/stream`)
+      .set('Authorization', auth)
+      .send({})
+      .expect(200);
     expect(parseSse(retry.text).events.at(-1)).toMatchObject({ type: 'complete' });
+    const stored = await prisma.chatMessage.findMany({ where: { conversationId: id }, orderBy: { createdAt: 'asc' } });
+    expect(stored.map((m) => [m.role, m.content])).toEqual([['USER', 'hi'], ['ASSISTANT', 'Recovered']]);
+  });
+
+  it('keeps the previous reply when a regenerate fails before any output', async () => {
+    const id = await createConversation(alice);
+    routeFetch({ primary: completion(['Original answer']) });
+    const sent = parseSse((await sendMessage(alice, id, 'q1').expect(200)).text);
+    const replyId = String(sent.events[0]?.['assistantMessageId']);
+    routeFetch({ primary: failure(500), fallback: failure(503) });
+
+    await request(app)
+      .post(`/api/v1/chat/conversations/${id}/messages/${replyId}/regenerate/stream`)
+      .set('Authorization', `Bearer ${alice.accessToken}`)
+      .send({})
+      .expect(200);
+
+    const stored = await prisma.chatMessage.findMany({ where: { conversationId: id }, orderBy: { createdAt: 'asc' } });
+    expect(stored.map((m) => [m.id === replyId, m.content])).toEqual([[false, 'q1'], [true, 'Original answer']]);
   });
 
   it('stops upstream on client disconnect and keeps the partial reply as stopped', async () => {
@@ -630,11 +683,15 @@ describe('chat regenerate', () => {
     routeFetch({ primary: completion(['Better answer']) });
     const auth = `Bearer ${alice.accessToken}`;
 
-    await request(app)
+    const stale = await request(app)
       .post(`/api/v1/chat/conversations/${id}/messages/${firstReplyId}/regenerate/stream`)
       .set('Authorization', auth)
       .send({})
       .expect(409);
+    expect(stale.body).toEqual({
+      error: 'Only the latest reply can be regenerated',
+      code: 'NOT_LATEST_MESSAGE',
+    });
     const res = await request(app)
       .post(`/api/v1/chat/conversations/${id}/messages/${secondReplyId}/regenerate/stream`)
       .set('Authorization', auth)
@@ -660,7 +717,54 @@ describe('chat regenerate', () => {
   });
 });
 
+describe('chat regenerate ordering', () => {
+  it('rejects regenerating a reply once a newer user message exists', async () => {
+    const id = await createConversation(alice);
+    routeFetch({ primary: completion(['A1']) });
+    const sent = parseSse((await sendMessage(alice, id, 'U1').expect(200)).text);
+    const replyId = String(sent.events[0]?.['assistantMessageId']);
+    await prisma.chatMessage.create({ data: { conversationId: id, role: 'USER', content: 'U2' } });
+
+    const res = await request(app)
+      .post(`/api/v1/chat/conversations/${id}/messages/${replyId}/regenerate/stream`)
+      .set('Authorization', `Bearer ${alice.accessToken}`)
+      .send({})
+      .expect(409);
+
+    expect(res.body.code).toBe('NOT_LATEST_MESSAGE');
+    expect(providerCalls(PRIMARY)).toHaveLength(1);
+  });
+});
+
 describe('chat message reports', () => {
+  it('keeps the report and the reported text after the reply is regenerated away', async () => {
+    const id = await createConversation(alice);
+    routeFetch({ primary: completion(['Harmful answer']) });
+    const sent = parseSse((await sendMessage(alice, id, 'q').expect(200)).text);
+    const replyId = String(sent.events[0]?.['assistantMessageId']);
+    const auth = `Bearer ${alice.accessToken}`;
+    await request(app)
+      .post(`/api/v1/chat/messages/${replyId}/report`)
+      .set('Authorization', auth)
+      .send({ reason: 'harmful' })
+      .expect(201);
+    routeFetch({ primary: completion(['Better answer']) });
+
+    await request(app)
+      .post(`/api/v1/chat/conversations/${id}/messages/${replyId}/regenerate/stream`)
+      .set('Authorization', auth)
+      .send({})
+      .expect(200);
+    await request(app).delete(`/api/v1/chat/conversations/${id}`).set('Authorization', auth).expect(204);
+
+    const reports = await prisma.chatMessageReport.findMany({ where: { userId: alice.id } });
+    expect(reports.map((r) => [r.messageId, r.messageContent, r.reason])).toContainEqual([
+      null,
+      'Harmful answer',
+      'HARMFUL',
+    ]);
+  });
+
   it('records a report on an assistant reply', async () => {
     const id = await createConversation(alice);
     const message = await prisma.chatMessage.create({
@@ -677,7 +781,12 @@ describe('chat message reports', () => {
     const report = await prisma.chatMessageReport.findFirstOrThrow({
       where: { messageId: message.id },
     });
-    expect(report).toMatchObject({ userId: alice.id, reason: 'INACCURATE', details: 'wrong date' });
+    expect(report).toMatchObject({
+      userId: alice.id,
+      reason: 'INACCURATE',
+      details: 'wrong date',
+      messageContent: 'questionable answer',
+    });
   });
 
   it('rejects an unknown reason', async () => {

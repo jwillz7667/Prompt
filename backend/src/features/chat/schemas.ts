@@ -16,7 +16,8 @@ export const messageParamsSchema = z.object({ messageId: id });
 export const regenerateParamsSchema = z.object({ id, messageId: id });
 
 export const listConversationsQuerySchema = z.object({
-  cursor: id.optional(),
+  // Opaque (base64url) keyset cursor from a previous page's nextCursor.
+  cursor: z.string().trim().min(1).max(256).optional(),
   limit: pageLimit(50, 30),
 });
 

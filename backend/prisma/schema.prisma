@@ -1126,14 +1126,18 @@ model ChatMessage {
 }
 
 model ChatMessageReport {
-  id        String           @id @default(cuid())
-  messageId String
-  message   ChatMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reason    ChatReportReason
-  details   String?          @db.Text
-  createdAt DateTime         @default(now())
+  id             String           @id @default(cuid())
+  // Null once the message is regenerated away or its conversation deleted;
+  // the report itself must survive until a human has reviewed it.
+  messageId      String?
+  message        ChatMessage?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  // Snapshot of the reported reply as the user saw it.
+  messageContent String           @db.Text
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason         ChatReportReason
+  details        String?          @db.Text
+  createdAt      DateTime         @default(now())
 
   @@index([createdAt])
   @@index([messageId])
