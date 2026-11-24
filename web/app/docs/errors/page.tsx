@@ -26,6 +26,7 @@ export default function ErrorsPage() {
           {[
             { code: 400, name: 'Bad Request', desc: 'Invalid request format or validation error' },
             { code: 401, name: 'Unauthorized', desc: 'Missing or invalid API key' },
+            { code: 402, name: 'Payment Required', desc: 'An active paid API plan is required' },
             { code: 403, name: 'Forbidden', desc: 'API key lacks required permission' },
             { code: 429, name: 'Too Many Requests', desc: 'Rate limit or quota exceeded' },
             { code: 500, name: 'Internal Server Error', desc: 'Server-side error' },
@@ -83,6 +84,13 @@ export default function ErrorsPage() {
               </tr>
               <tr className="border-border border-b">
                 <td className="px-4 py-2">
+                  <code>API_PLAN_REQUIRED</code>
+                </td>
+                <td className="px-4 py-2">No active paid plan (402)</td>
+                <td className="px-4 py-2">Choose a plan at the upgradeUrl in the response</td>
+              </tr>
+              <tr className="border-border border-b">
+                <td className="px-4 py-2">
                   <code>QUOTA_EXCEEDED</code>
                 </td>
                 <td className="px-4 py-2">Monthly quota reached</td>
@@ -121,6 +129,11 @@ export default function ErrorsPage() {
         // Wait and retry
         await sleep(data.retryAfter * 1000);
         return enhance(prompt);
+
+      case 'API_PLAN_REQUIRED':
+        // No active paid plan: send the developer to data.upgradeUrl
+        showUpgradeDialog(data.upgradeUrl);
+        break;
 
       case 'QUOTA_EXCEEDED':
         // Show upgrade prompt
