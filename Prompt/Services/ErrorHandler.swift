@@ -437,6 +437,8 @@ final class ErrorHandler: ObservableObject {
                 return .service(failure)
             case .transactionOwnedByAnotherAccount:
                 return .ownedByAnotherAccount
+            case .conflict(let conflict):
+                return .unknown(conflict.userMessage)
             case .serverMessage(let message, let code):
                 return .serverError(code, message)
             case .serverError(let code):

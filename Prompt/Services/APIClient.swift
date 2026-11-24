@@ -703,6 +703,8 @@ enum APIError: LocalizedError, Sendable {
     case service(ServiceFailure)
     /// 409 TRANSACTION_OWNED_BY_ANOTHER_USER from purchase activation.
     case transactionOwnedByAnotherAccount
+    /// A 409 whose `code` needs a specific recovery (e.g. reloading a chat).
+    case conflict(ConflictCode)
     case serverMessage(String, Int)
     case serverError(Int)
     case httpError(Int)
@@ -725,6 +727,7 @@ enum APIError: LocalizedError, Sendable {
         case .fairUseLimit(let resetAt): return ServiceMessages.fairUseLimit(resetAt: resetAt)
         case .service(let failure): return failure.code.userMessage
         case .transactionOwnedByAnotherAccount: return ServiceMessages.transactionOwnedByAnotherAccount
+        case .conflict(let conflict): return conflict.userMessage
         case .serverMessage(let message, _): return message
         case .serverError: return ServiceErrorCode.internalError.userMessage
         case .httpError(let code): return "Request failed (\(code))"
@@ -770,6 +773,8 @@ enum APIError: LocalizedError, Sendable {
             return .unauthorized
         case "TRANSACTION_OWNED_BY_ANOTHER_USER":
             return .transactionOwnedByAnotherAccount
+        case ConflictCode.duplicateMessage.rawValue, ConflictCode.notLatestMessage.rawValue:
+            return ConflictCode(rawValue: code).map { .conflict($0) }
         default:
             guard let serviceCode = ServiceErrorCode(rawValue: code) else { return nil }
             return .service(ServiceFailure(
@@ -777,6 +782,25 @@ enum APIError: LocalizedError, Sendable {
                 isRetryable: retryable ?? serviceCode.isRetryableByDefault,
                 retryAfter: retryAfterMs.map { TimeInterval($0) / 1000 }
             ))
+        }
+    }
+}
+
+// MARK: - Conflicts
+
+/// 409 `code`s from the chat API (`backend/src/features/chat/errors.ts`).
+nonisolated enum ConflictCode: String, Sendable, Equatable {
+    /// A message with this idempotency key was already stored.
+    case duplicateMessage = "DUPLICATE_MESSAGE"
+    /// Regenerate targeted a reply that is no longer the newest one.
+    case notLatestMessage = "NOT_LATEST_MESSAGE"
+
+    var userMessage: String {
+        switch self {
+        case .duplicateMessage:
+            return String(localized: "That message was already sent.")
+        case .notLatestMessage:
+            return String(localized: "This chat changed on another device. It now shows the latest version.")
         }
     }
 }

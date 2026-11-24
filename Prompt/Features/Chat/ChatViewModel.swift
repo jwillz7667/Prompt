@@ -191,17 +191,19 @@ final class ChatViewModel {
         }
     }
 
-    /// Re-reads the newest page from the server, discarding local-only rows.
-    func reloadConversation() async {
+    /// Re-reads the newest page from the server. Messages the server never
+    /// accepted stay at the end so their text is not lost. `notice` is shown
+    /// once the reload succeeds (e.g. why the transcript changed).
+    func reloadConversation(notice: Error? = nil) async {
         guard let id = conversation?.id, !isStreaming else { return }
         loadGeneration += 1
         let generation = loadGeneration
         banner = nil
         do {
             let detail = try await service.fetchConversation(id: id)
-            guard generation == loadGeneration else { return }
-            unsentClientIds = [:]
-            apply(detail)
+            guard generation == loadGeneration, !isStreaming else { return }
+            applyKeepingUnsentRows(detail)
+            if let notice { presentBanner(for: notice, retry: nil) }
         } catch {
             guard generation == loadGeneration else { return }
             errorHandler.handleSilently(error, context: "chat.reloadConversation")
@@ -406,22 +408,19 @@ final class ChatViewModel {
         finishStream()
 
         switch stream.request {
-        case .send(let content, _, let userRowId):
+        case .send(_, _, let userRowId):
             if stream.didStart {
                 settleReply(stream, text: text, status: .stopped)
             } else {
-                // The server never acknowledged the message: hand it back.
+                // `start` may still be in flight: the server can already hold
+                // this message. Keeping the row unsent with its idempotency
+                // key means Retry either sends it or gets DUPLICATE_MESSAGE and
+                // reloads, instead of a second copy under a new key.
                 removeRow(id: stream.replyRowId)
-                removeRow(id: userRowId)
-                unsentClientIds[userRowId] = nil
-                if draft.isEmpty { draft = content }
+                setStatus(.notSent, forRow: userRowId)
             }
-        case .regenerate(_, let original):
-            if stream.didStart {
-                settleReply(stream, text: text, status: .stopped)
-            } else {
-                replaceRow(id: stream.replyRowId, with: original)
-            }
+        case .regenerate:
+            settleStartedOrRestore(stream, text: text, status: .stopped)
         }
     }
 
@@ -601,12 +600,62 @@ final class ChatViewModel {
 
         if !stream.didStart {
             handlePreStartFailure(stream, error: error)
-        } else {
+            return
+        }
+
+        let retryTarget: String?
+        switch stream.request {
+        case .send:
             settleReply(stream, text: text, status: .failed)
-            let retry: ChatRetryAction? = Self.isRetryable(error)
-                ? stream.assistantServerId.map { .regenerate(assistantMessageId: $0) } ?? .reload
-                : nil
+            retryTarget = stream.assistantServerId
+        case .regenerate(let previousReplyId, _):
+            settleStartedOrRestore(stream, text: text, status: .failed)
+            retryTarget = text.isEmpty ? previousReplyId : stream.assistantServerId
+        }
+        let retry: ChatRetryAction? = Self.isRetryable(error)
+            ? retryTarget.map { .regenerate(assistantMessageId: $0) } ?? .reload
+            : nil
+        presentBanner(for: error, retry: retry)
+
+        if text.isEmpty {
+            // The server decides what a reply that failed before its first
+            // token leaves behind (a failed reply to regenerate, or the
+            // previous reply when regenerating). Re-read it so Retry targets
+            // a message that exists and the user's text is never dropped.
+            Task { await reconcileAfterSilentFailure(stream, error: error) }
+        }
+    }
+
+    private func reconcileAfterSilentFailure(_ stream: ActiveStream, error: Error) async {
+        guard let id = conversation?.id, !isStreaming else { return }
+        let sentMessage: (serverId: String, content: String)? = {
+            guard case .send(let content, _, let userRowId) = stream.request,
+                  let serverId = messages.first(where: { $0.id == userRowId })?.serverId else { return nil }
+            return (serverId, content)
+        }()
+        loadGeneration += 1
+        let generation = loadGeneration
+        do {
+            let detail = try await service.fetchConversation(id: id)
+            guard generation == loadGeneration, !isStreaming else { return }
+            applyKeepingUnsentRows(detail)
+            if let sentMessage, !messages.contains(where: { $0.serverId == sentMessage.serverId }), draft.isEmpty {
+                // The server discarded the message along with the failed
+                // reply: give the text back instead of losing it.
+                draft = sentMessage.content
+            }
+            let retry: ChatRetryAction? = {
+                guard Self.isRetryable(error),
+                      let latest = messages.last(where: { $0.status != .notSent }),
+                      latest.role == .assistant,
+                      let serverId = latest.serverId else { return nil }
+                return .regenerate(assistantMessageId: serverId)
+            }()
             presentBanner(for: error, retry: retry)
+        } catch {
+            // Keep the local state and the banner already shown.
+            guard generation == loadGeneration else { return }
+            errorHandler.handleSilently(error, context: "chat.reconcileAfterSilentFailure")
         }
     }
 
@@ -614,7 +663,7 @@ final class ChatViewModel {
         switch stream.request {
         case .send(let content, _, let userRowId):
             removeRow(id: stream.replyRowId)
-            if Self.isDuplicateMessage(error) {
+            if case APIError.conflict(.duplicateMessage) = error {
                 // An earlier attempt with this key reached the server.
                 unsentClientIds[userRowId] = nil
                 Task { await reloadConversation() }
@@ -637,6 +686,12 @@ final class ChatViewModel {
                 Task { await reloadConversation() }
                 return
             }
+            if case APIError.conflict(.notLatestMessage) = error {
+                // Another device added a newer reply: show it rather than
+                // retrying a regenerate that can never succeed.
+                Task { await reloadConversation(notice: error) }
+                return
+            }
             presentBanner(
                 for: error,
                 retry: Self.isRetryable(error) ? .regenerate(assistantMessageId: assistantMessageId) : nil
@@ -655,12 +710,19 @@ final class ChatViewModel {
                 unsentClientIds[userRowId] = nil
                 if draft.isEmpty { draft = content }
             }
-        case .regenerate(_, let original):
-            if stream.didStart {
-                settleReply(stream, text: text, status: .failed)
-            } else {
-                replaceRow(id: stream.replyRowId, with: original)
-            }
+        case .regenerate:
+            settleStartedOrRestore(stream, text: text, status: .failed)
+        }
+    }
+
+    /// A regenerate replaces the previous reply only once the new one has
+    /// output (the server's rule). Before that, the previous reply stays.
+    private func settleStartedOrRestore(_ stream: ActiveStream, text: String, status: ChatTranscriptStatus) {
+        guard case .regenerate(_, let original) = stream.request else { return }
+        if stream.didStart && !text.isEmpty {
+            settleReply(stream, text: text, status: status)
+        } else {
+            replaceRow(id: stream.replyRowId, with: original)
         }
     }
 
@@ -731,6 +793,14 @@ final class ChatViewModel {
         transcriptRevision += 1
     }
 
+    private func applyKeepingUnsentRows(_ detail: ChatConversationDetailResponse) {
+        let unsentRows = messages.filter { $0.status == .notSent && unsentClientIds[$0.id] != nil }
+        let unsentIds = Set(unsentRows.map(\.id))
+        unsentClientIds = unsentClientIds.filter { unsentIds.contains($0.key) }
+        apply(detail)
+        messages.append(contentsOf: unsentRows)
+    }
+
     private func applyConversationChange(_ updated: ChatConversation) {
         conversation = updated
         let preview = messages.last(where: { !$0.content.isEmpty })?.content
@@ -777,11 +847,6 @@ final class ChatViewModel {
         return ChatLimits.truncated(trimmed, toLength: limit)
     }
 
-    private static func isDuplicateMessage(_ error: Error) -> Bool {
-        if case APIError.serverMessage(_, 409) = error { return true }
-        return false
-    }
-
     static func isRetryable(_ error: Error) -> Bool {
         if let apiError = error as? APIError {
             switch apiError {
@@ -792,7 +857,7 @@ final class ChatViewModel {
                 return failure.isRetryable
             case .requestTimedOut, .rateLimited, .serverError, .invalidResponse, .decodingError:
                 return true
-            case .notFound, .serverMessage, .httpError, .invalidURL, .secureStorageUnavailable:
+            case .notFound, .serverMessage, .httpError, .invalidURL, .secureStorageUnavailable, .conflict:
                 return false
             }
         }
