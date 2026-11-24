@@ -35,6 +35,25 @@ function subscriptionPayload(info: SubscriptionInfo) {
   };
 }
 
+function isWebTrialEligible(
+  billing: {
+    hasUsedTrial: boolean;
+    originalTransactionId: string | null;
+    stripeSubscriptionId: string | null;
+    stripePriceId: string | null;
+  } | null,
+  hasAppStorePurchase: boolean,
+): boolean {
+  if (hasAppStorePurchase) return false;
+  if (!billing) return true;
+  return (
+    !billing.hasUsedTrial &&
+    !billing.originalTransactionId &&
+    !billing.stripeSubscriptionId &&
+    !billing.stripePriceId
+  );
+}
+
 // All subscription routes require authentication
 subscriptionRouter.use(authenticate);
 
@@ -54,7 +73,7 @@ subscriptionRouter.get(
       // Ensure subscription record exists
       await ensureSubscriptionExists(req.user.id);
 
-      const [subscriptionInfo, user, billing] = await Promise.all([
+      const [subscriptionInfo, user, billing, appStorePurchase] = await Promise.all([
         getSubscriptionInfo(req.user.id),
         prisma.user.findUnique({
           where: { id: req.user.id },
@@ -65,8 +84,15 @@ subscriptionRouter.get(
           select: {
             originalTransactionId: true,
             stripeSubscriptionId: true,
+            stripePriceId: true,
             autoRenewEnabled: true,
+            hasUsedTrial: true,
           },
+        }),
+        // Uses AppStoreTransaction @@index([userId]).
+        prisma.appStoreTransaction.findFirst({
+          where: { userId: req.user.id },
+          select: { id: true },
         }),
       ]);
       const maxModeQuota = await getMaxModeQuota(req.user.id, subscriptionInfo.tier);
@@ -89,6 +115,10 @@ subscriptionRouter.get(
             ? 'appstore'
             : null,
         autoRenewEnabled: billing?.autoRenewEnabled ?? false,
+        // The web checkout offers its free trial only to accounts that never
+        // trialed or subscribed through either store. The web route also
+        // checks Stripe itself, since a deleted Stripe agreement is cleared here.
+        trialEligible: isWebTrialEligible(billing, appStorePurchase !== null),
         // Stripe customer ID for web portal
         stripeCustomerId: user?.stripeCustomerId || null,
       });
