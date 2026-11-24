@@ -138,8 +138,8 @@ export default function HistoryPage() {
             Export
           </Button>
           {!canExport && (
-            <Badge variant="pro" className="text-[10px]">
-              PRO
+            <Badge variant="premium" className="text-[10px]">
+              PREMIUM
             </Badge>
           )}
         </div>

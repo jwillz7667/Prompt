@@ -1,23 +1,18 @@
 'use client'
 
 import { useEffect } from 'react'
-import {
-  useSubscriptionStore,
-  useIsPremium,
-  useIsPro,
-  useCanCreatePrompt,
-  useDailyUsage,
-  useCanExport,
-} from '@/lib/stores/subscriptionStore'
+import { useSubscriptionStore, useIsEntitled, useCanExport } from '@/lib/stores/subscriptionStore'
 import { useAuthStore } from '@/lib/stores/authStore'
 
 export function useSubscription() {
   const { isAuthenticated } = useAuthStore()
   const {
     subscription,
-    usage,
     features,
     billingProvider,
+    isEntitled,
+    trialEligible,
+    hasLoaded,
     isLoading,
     error,
     fetchSubscription,
@@ -32,9 +27,11 @@ export function useSubscription() {
 
   return {
     subscription,
-    usage,
     features,
     billingProvider,
+    isEntitled,
+    trialEligible,
+    hasLoaded,
     isLoading,
     error,
     refreshAfterPurchase,
@@ -42,4 +39,4 @@ export function useSubscription() {
   }
 }
 
-export { useIsPremium, useIsPro, useCanCreatePrompt, useDailyUsage, useCanExport }
+export { useIsEntitled, useCanExport }

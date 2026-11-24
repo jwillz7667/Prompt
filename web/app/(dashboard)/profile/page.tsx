@@ -39,7 +39,7 @@ const deviceIcons: Record<string, React.ReactNode> = {
 export default function ProfilePage() {
   const router = useRouter()
   const { user, logout, logoutAllDevices } = useAuthStore()
-  const { subscription } = useSubscription()
+  const { subscription, isEntitled } = useSubscription()
   const { data: stats, isLoading: statsLoading } = useUserStats()
   const { data: sessionsData, isLoading: sessionsLoading, refetch: refetchSessions } = useSessions()
 
@@ -155,17 +155,9 @@ export default function ProfilePage() {
               </div>
 
               <div className="mt-3 flex items-center gap-3">
-                <Badge
-                  variant={
-                    subscription.tier === 'PREMIUM'
-                      ? 'premium'
-                      : subscription.tier === 'PRO'
-                        ? 'pro'
-                        : 'outline'
-                  }
-                >
-                  {subscription.tier === 'PREMIUM' && <Crown className="mr-1 h-3 w-3" />}
-                  {subscription.tier}
+                <Badge variant={isEntitled ? 'premium' : 'outline'}>
+                  {isEntitled && <Crown className="mr-1 h-3 w-3" />}
+                  {isEntitled ? 'Premium' : 'No plan'}
                 </Badge>
                 {subscription.isTrialing && <Badge variant="cyan">Trial</Badge>}
               </div>

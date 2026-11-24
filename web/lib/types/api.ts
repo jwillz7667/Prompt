@@ -13,7 +13,6 @@ import type {
   PromptModality,
   DeepseekModel,
   SubscriptionTier,
-  StripeProduct,
 } from './models'
 
 // Auth
@@ -122,22 +121,27 @@ export interface AddToCollectionRequest {
 // Subscription
 export interface SubscriptionStatusResponse extends SubscriptionInfo {
   autoRenewEnabled?: boolean
+  isEntitled?: boolean
+  trialEligible?: boolean
 }
 
 // Stripe
 export interface StripeCheckoutRequest {
-  priceId: string
-  successUrl: string
-  cancelUrl: string
+  plan: 'premium_monthly'
 }
 
 export interface StripeCheckoutResponse {
   sessionId: string
   url: string
+  includesTrial: boolean
 }
 
-export interface StripePortalResponse {
-  url: string
+export type StripePortalResponse =
+  | { provider: 'stripe'; url: string }
+  | { provider: 'appstore'; url: string; instructions: string }
+
+export interface BillingConfigResponse {
+  isCheckoutAvailable: boolean
 }
 
 // Analytics
@@ -168,6 +172,9 @@ export interface APIError {
   error: string
   message: string
   statusCode: number
+  code?: string
+  reason?: string
+  billingProvider?: 'stripe' | 'appstore' | null
 }
 
 export interface SuccessResponse {

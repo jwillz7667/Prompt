@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils/cn'
 import { useUIStore } from '@/lib/stores/uiStore'
 import { useAuthStore } from '@/lib/stores/authStore'
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
+import { PREMIUM_TRIAL_SUMMARY } from '@/lib/billing/premium-plan'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Logo } from '@/components/shared/logo'
@@ -44,9 +45,8 @@ export function MobileNav() {
   const pathname = usePathname()
   const { mobileMenuOpen, closeMobileMenu } = useUIStore()
   const { user, logout } = useAuthStore()
-  const { subscription } = useSubscriptionStore()
-
-  const tier = subscription.tier
+  const { isEntitled, hasLoaded } = useSubscriptionStore()
+  const needsSubscription = hasLoaded && !isEntitled
 
   // Close on route change
   useEffect(() => {
@@ -125,10 +125,10 @@ export function MobileNav() {
             <p className="truncate text-sm text-[var(--text-secondary)]">{user?.email}</p>
           </div>
           <Badge
-            variant={tier === 'PREMIUM' ? 'premium' : tier === 'PRO' ? 'pro' : 'outline'}
-            aria-label={`Current tier: ${tier}`}
+            variant={isEntitled ? 'premium' : 'outline'}
+            aria-label={`Current plan: ${isEntitled ? 'Premium' : 'none'}`}
           >
-            {tier}
+            {isEntitled ? 'Premium' : 'No plan'}
           </Badge>
         </div>
 
@@ -137,7 +137,7 @@ export function MobileNav() {
           <ul className="space-y-1">
             {navigation.map((item) => {
               const isActive = pathname === item.href
-              const isPremiumLocked = item.premium && tier !== 'PREMIUM'
+              const isPremiumLocked = item.premium && !isEntitled
 
               return (
                 <li key={item.name}>
@@ -163,7 +163,11 @@ export function MobileNav() {
                         variant={isPremiumLocked ? 'outline' : 'premium'}
                         className="text-[10px]"
                       >
-                        {isPremiumLocked ? 'PRO' : <Crown className="h-3 w-3" aria-hidden="true" />}
+                        {isPremiumLocked ? (
+                          'PREMIUM'
+                        ) : (
+                          <Crown className="h-3 w-3" aria-hidden="true" />
+                        )}
                       </Badge>
                     )}
                   </Link>
@@ -173,23 +177,23 @@ export function MobileNav() {
           </ul>
 
           {/* Upgrade Banner */}
-          {tier === 'FREE' && (
+          {needsSubscription && (
             <Link
               href="/upgrade"
               onClick={closeMobileMenu}
               className="mt-4 block rounded-xl border border-brand-indigo/20 bg-brand-indigo/10 p-4 transition-colors hover:border-brand-indigo/40 dark:border-brand-cyan/20 dark:bg-brand-cyan/10 dark:hover:border-brand-cyan/40"
-              aria-label="Upgrade to Pro for more features"
+              aria-label="Start your Premium free trial"
             >
               <div className="mb-2 flex items-center gap-2">
                 <Crown
                   className="h-5 w-5 text-brand-indigo dark:text-brand-cyan"
                   aria-hidden="true"
                 />
-                <span className="font-semibold text-[var(--text-primary)]">Upgrade to Pro</span>
+                <span className="font-semibold text-[var(--text-primary)]">
+                  Start your free trial
+                </span>
               </div>
-              <p className="text-xs text-[var(--text-secondary)]">
-                Get 100 daily prompts, advanced features, and more
-              </p>
+              <p className="text-xs text-[var(--text-secondary)]">{PREMIUM_TRIAL_SUMMARY}</p>
             </Link>
           )}
         </nav>

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils/cn'
 import { useUIStore } from '@/lib/stores/uiStore'
 import { useSubscriptionStore } from '@/lib/stores/subscriptionStore'
+import { PREMIUM_TRIAL_SUMMARY } from '@/lib/billing/premium-plan'
 import { Badge } from '@/components/ui/badge'
 import { Logo } from '@/components/shared/logo'
 import {
@@ -44,9 +45,8 @@ const bottomNavigation: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname()
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore()
-  const { subscription } = useSubscriptionStore()
-
-  const tier = subscription.tier
+  const { isEntitled, hasLoaded } = useSubscriptionStore()
+  const needsSubscription = hasLoaded && !isEntitled
 
   return (
     <aside
@@ -87,7 +87,7 @@ export function Sidebar() {
         <ul className="flex-1 space-y-1">
           {navigation.map((item) => {
             const isActive = pathname === item.href
-            const isPremiumLocked = item.premium && tier !== 'PREMIUM'
+            const isPremiumLocked = item.premium && !isEntitled
 
             return (
               <li key={item.name}>
@@ -115,7 +115,7 @@ export function Sidebar() {
                           className="text-[10px]"
                         >
                           {isPremiumLocked ? (
-                            'PRO'
+                            'PREMIUM'
                           ) : (
                             <Crown className="h-3 w-3" aria-hidden="true" />
                           )}
@@ -130,22 +130,22 @@ export function Sidebar() {
         </ul>
 
         {/* Upgrade Banner */}
-        {!sidebarCollapsed && tier === 'FREE' && (
+        {!sidebarCollapsed && needsSubscription && (
           <Link
             href="/upgrade"
             className="mb-4 rounded-xl border border-brand-indigo/20 bg-brand-indigo/10 p-4 transition-colors hover:border-brand-indigo/40 dark:border-brand-cyan/20 dark:bg-brand-cyan/10 dark:hover:border-brand-cyan/40"
-            aria-label="Upgrade to Pro for more features"
+            aria-label="Start your Premium free trial"
           >
             <div className="mb-2 flex items-center gap-2">
               <Crown
                 className="h-5 w-5 text-brand-indigo dark:text-brand-cyan"
                 aria-hidden="true"
               />
-              <span className="font-semibold text-[var(--text-primary)]">Upgrade to Pro</span>
+              <span className="font-semibold text-[var(--text-primary)]">
+                Start your free trial
+              </span>
             </div>
-            <p className="text-xs text-[var(--text-secondary)]">
-              Get 100 daily prompts, advanced features, and more
-            </p>
+            <p className="text-xs text-[var(--text-secondary)]">{PREMIUM_TRIAL_SUMMARY}</p>
           </Link>
         )}
 

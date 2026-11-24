@@ -13,13 +13,13 @@ import { useSubscription } from '@/lib/hooks/useSubscription'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
 import { toast } from '@/lib/stores/uiStore'
 import { cn } from '@/lib/utils/cn'
+import { PREMIUM_TRIAL_SUMMARY } from '@/lib/billing/premium-plan'
 import type { ToneType, OutputLength, PromptModality } from '@/lib/types/models'
 import {
   Sparkles,
   Copy,
   Check,
   RefreshCw,
-  Zap,
   Crown,
   AlertCircle,
   Flame,
@@ -171,7 +171,7 @@ export default function DashboardPage() {
   const [maxModeEnabled, setMaxModeEnabled] = useState(false)
   const { selectedTone, setTone, outputLength, setOutputLength, deepThinkEnabled, setDeepThink } =
     useSettingsStore()
-  const { subscription, usage } = useSubscription()
+  const { subscription, isEntitled, hasLoaded } = useSubscription()
   const { isEnhancing, streamedContent, result, error, warning, progress, enhance, reset, cancel } =
     useEnhance()
 
@@ -192,17 +192,11 @@ export default function DashboardPage() {
     }
   }, [searchParams, reset, router])
 
-  const tier = subscription.tier
-  const isTrialing = subscription.isTrialing
-  const canDeepThink = tier === 'PRO' || tier === 'PREMIUM'
-  const canEnhance = usage.canCreatePrompt
-
-  // MAX MODE access: Premium = unlimited, Pro = 5/day, Free = none
-  const hasUnlimitedMaxMode = tier === 'PREMIUM' || isTrialing
-  const maxModeUsedToday = usage.maxModeUsedToday ?? 0
-  const maxModeLimit = usage.maxModeDailyLimit ?? (tier === 'PRO' ? 5 : 0)
-  const maxModeRemaining = hasUnlimitedMaxMode ? Infinity : maxModeLimit - maxModeUsedToday
-  const canUseMaxMode = hasUnlimitedMaxMode || (tier === 'PRO' && maxModeRemaining > 0)
+  // No free tier: every generation needs Premium. The server enforces it;
+  // this only avoids a round trip and keeps the controls honest.
+  const needsSubscription = hasLoaded && !isEntitled
+  const canDeepThink = isEntitled
+  const canUseMaxMode = isEntitled
   const activeModality = modalityDetails[modality]
   const outputModality = result?.modality ?? modality
   const outputModalityDetails = modalityDetails[outputModality]
@@ -213,21 +207,8 @@ export default function DashboardPage() {
       return
     }
 
-    if (!canEnhance) {
-      toast.error('Daily limit reached', 'Upgrade to get more prompts')
-      return
-    }
-
-    // Check MAX MODE quota
-    if ((maxModeEnabled || (canDeepThink && deepThinkEnabled)) && !canUseMaxMode) {
-      if (tier === 'FREE') {
-        toast.error(
-          'MAX MODE requires Pro',
-          'Upgrade to Pro for 5 MAX prompts/day or Premium for unlimited',
-        )
-      } else {
-        toast.error('MAX MODE limit reached', 'Upgrade to Premium for unlimited MAX prompts')
-      }
+    if (needsSubscription) {
+      router.push('/upgrade')
       return
     }
 
@@ -254,11 +235,10 @@ export default function DashboardPage() {
     outputLength,
     deepThinkEnabled,
     canDeepThink,
-    canEnhance,
+    needsSubscription,
     enhance,
     maxModeEnabled,
-    canUseMaxMode,
-    tier,
+    router,
   ])
 
   const handleCopy = useCallback(async () => {
@@ -289,19 +269,17 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Quota warning */}
-      {!canEnhance && (
-        <div className="flex items-center gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4">
-          <AlertCircle className="h-5 w-5 flex-shrink-0 text-yellow-500" />
+      {/* Paywall notice */}
+      {needsSubscription && (
+        <div className="flex items-center gap-3 rounded-xl border border-brand-indigo/20 bg-brand-indigo/5 p-4">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 text-brand-indigo" />
           <div className="flex-1">
-            <p className="font-medium text-[var(--text-primary)]">Daily limit reached</p>
-            <p className="text-sm text-[var(--text-secondary)]">
-              You&apos;ve used all {usage.dailyPromptsLimit} prompts today.
-            </p>
+            <p className="font-medium text-[var(--text-primary)]">Premium is required</p>
+            <p className="text-sm text-[var(--text-secondary)]">{PREMIUM_TRIAL_SUMMARY}.</p>
           </div>
           <Link href="/upgrade">
             <Button variant="cyan" size="sm">
-              Upgrade
+              Start free trial
             </Button>
           </Link>
         </div>
@@ -393,8 +371,8 @@ export default function DashboardPage() {
                   Deep Think · MAX quota
                 </span>
                 {!canDeepThink && (
-                  <Badge variant="pro" className="text-[10px]">
-                    PRO
+                  <Badge variant="premium" className="text-[10px]">
+                    PREMIUM
                   </Badge>
                 )}
               </div>
@@ -405,22 +383,12 @@ export default function DashboardPage() {
                   checked={maxModeEnabled}
                   onChange={(checked) => {
                     if (checked && !canUseMaxMode) {
-                      if (tier === 'FREE') {
-                        toast.info(
-                          'MAX MODE requires Pro',
-                          'Upgrade to Pro or Premium for MAX MODE access',
-                        )
-                      } else {
-                        toast.info(
-                          'MAX MODE limit reached',
-                          'Upgrade to Premium for unlimited MAX prompts',
-                        )
-                      }
+                      toast.info('MAX mode is part of Premium', PREMIUM_TRIAL_SUMMARY)
                       return
                     }
                     setMaxModeEnabled(checked)
                   }}
-                  disabled={isEnhancing || tier === 'FREE'}
+                  disabled={isEnhancing || !canUseMaxMode}
                 />
                 <div className="flex items-center gap-1.5">
                   <Flame
@@ -431,14 +399,9 @@ export default function DashboardPage() {
                   />
                   <span className="text-sm text-[var(--text-secondary)]">MAX</span>
                 </div>
-                {tier === 'FREE' && (
-                  <Badge variant="pro" className="text-[10px]">
-                    PRO
-                  </Badge>
-                )}
-                {tier === 'PRO' && (
-                  <Badge variant="outline" className="text-[10px]">
-                    {maxModeRemaining}/{maxModeLimit}
+                {!canUseMaxMode && (
+                  <Badge variant="premium" className="text-[10px]">
+                    PREMIUM
                   </Badge>
                 )}
               </div>
@@ -455,7 +418,7 @@ export default function DashboardPage() {
                 variant="cyan"
                 size="lg"
                 onClick={handleEnhance}
-                disabled={!prompt.trim() || isEnhancing || !canEnhance}
+                disabled={!prompt.trim() || isEnhancing}
                 isLoading={isEnhancing}
                 leftIcon={!isEnhancing && <Sparkles className="h-5 w-5" />}
                 className="min-w-[180px]"
@@ -582,52 +545,29 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-indigo/10">
-              <Zap className="h-5 w-5 text-brand-indigo" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-secondary)]">Daily Prompts</p>
-              <p className="text-lg font-semibold text-[var(--text-primary)]">
-                {usage.dailyPromptsUsed}/{usage.dailyPromptsLimit}
-              </p>
-            </div>
+      {/* Plan */}
+      <Card className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-cyan/10">
+            <Crown className="h-5 w-5 text-brand-cyan" />
           </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-cyan/10">
-              <Crown className="h-5 w-5 text-brand-cyan" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-secondary)]">Current Plan</p>
-              <p className="text-lg font-semibold text-[var(--text-primary)]">{tier}</p>
-            </div>
+          <div className="flex-1">
+            <p className="text-sm text-[var(--text-secondary)]">Current plan</p>
+            <p className="text-lg font-semibold text-[var(--text-primary)]">
+              {isEntitled
+                ? subscription.isTrialing
+                  ? 'Premium (free trial)'
+                  : 'Premium'
+                : 'No active subscription'}
+            </p>
           </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/10">
-              <Sparkles className="h-5 w-5 text-green-500" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-secondary)]">Quality</p>
-              <p className="text-lg font-semibold capitalize text-[var(--text-primary)]">
-                {subscription.tier === 'FREE'
-                  ? 'Basic'
-                  : subscription.tier === 'PRO'
-                    ? 'Standard'
-                    : 'Advanced'}
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
+          <Link href="/upgrade">
+            <Button variant="secondary" size="sm">
+              {isEntitled ? 'Manage' : 'Start free trial'}
+            </Button>
+          </Link>
+        </div>
+      </Card>
     </div>
   )
 }
