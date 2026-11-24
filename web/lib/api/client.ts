@@ -138,22 +138,45 @@ export function isSubscriptionRequired(error: unknown): error is SubscriptionReq
   return error instanceof SubscriptionRequiredError
 }
 
+/**
+ * The backend's AI data-sharing consent denial (403 AI_CONSENT_REQUIRED),
+ * answered before any AI provider call, so the request is safe to retry once
+ * the user agrees to `requiredVersion` of the disclosure.
+ */
+export class AiConsentRequiredError extends Error {
+  readonly statusCode = 403
+  readonly code = 'AI_CONSENT_REQUIRED'
+
+  constructor(readonly requiredVersion: number) {
+    super('Please review how your prompts are processed before continuing.')
+    this.name = 'AiConsentRequiredError'
+  }
+}
+
+export function isAiConsentRequired(error: unknown): error is AiConsentRequiredError {
+  return error instanceof AiConsentRequiredError
+}
+
 const errorBodySchema = z.object({
   error: z.string().optional(),
   message: z.string().optional(),
   code: z.string().optional(),
   reason: z.string().optional(),
   billingProvider: z.enum(['stripe', 'appstore']).nullable().optional(),
+  requiredVersion: z.number().int().positive().optional(),
 })
 
 async function responseError(
   response: Response,
   fallback: { error: string; message: string },
-): Promise<SubscriptionRequiredError | APIError> {
+): Promise<SubscriptionRequiredError | AiConsentRequiredError | APIError> {
   const parsed = errorBodySchema.safeParse(await response.json().catch(() => null))
   const body = parsed.success ? parsed.data : {}
   if (response.status === 403 && body.reason === 'SUBSCRIPTION_REQUIRED') {
     return new SubscriptionRequiredError()
+  }
+  if (response.status === 403 && body.code === 'AI_CONSENT_REQUIRED') {
+    return new AiConsentRequiredError(body.requiredVersion ?? 1)
   }
   return {
     ...body,

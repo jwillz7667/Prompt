@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  AiConsentRequiredError,
   api,
   clearTokens,
+  isAiConsentRequired,
   getAccessToken,
   isSubscriptionRequired,
   refreshAccessToken,
@@ -9,6 +11,7 @@ import {
   SubscriptionRequiredError,
 } from '@/lib/api/client'
 import { getCurrentUser, logout } from '@/lib/api/auth'
+import { grantAiConsent } from '@/lib/api/users'
 
 const fetchMock = vi.fn()
 beforeEach(() => {
@@ -135,6 +138,45 @@ describe('hard paywall responses', () => {
     await expect(api.stream('/prompts/enhance/stream', {}).next()).rejects.toBeInstanceOf(
       SubscriptionRequiredError,
     )
+  })
+
+  const consentBody = {
+    error: 'AI data sharing consent required',
+    code: 'AI_CONSENT_REQUIRED',
+    requiredVersion: 2,
+  }
+
+  it('throws AiConsentRequiredError with the required version for a 403 AI_CONSENT_REQUIRED', async () => {
+    setTokens('access', undefined, 900)
+    fetchMock.mockResolvedValue(Response.json(consentBody, { status: 403 }))
+
+    const failure = await api.post('/prompts/enhance', {}).catch((error: unknown) => error)
+
+    expect(isAiConsentRequired(failure) && failure.requiredVersion).toBe(2)
+  })
+
+  it('throws AiConsentRequiredError before an enhancement stream starts', async () => {
+    setTokens('access', undefined, 900)
+    fetchMock.mockResolvedValue(Response.json(consentBody, { status: 403 }))
+
+    await expect(api.stream('/prompts/enhance/stream', {}).next()).rejects.toBeInstanceOf(
+      AiConsentRequiredError,
+    )
+  })
+
+  it('records consent with the requested disclosure version', async () => {
+    setTokens('access', undefined, 900)
+    fetchMock.mockResolvedValue(
+      Response.json({
+        aiDataConsent: { version: 2, grantedAt: '2026-11-24T00:00:00.000Z' },
+        requiredVersion: 2,
+      }),
+    )
+
+    await grantAiConsent(2)
+
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/users\/me\/ai-consent$/)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ version: 2 })
   })
 
   it('keeps other 403 responses as ordinary API errors', async () => {

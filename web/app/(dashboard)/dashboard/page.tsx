@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, type SelectOption } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { AiConsentDialog } from '@/components/shared/ai-consent-dialog'
 import { useEnhance } from '@/lib/hooks/useEnhance'
 import { useSubscription } from '@/lib/hooks/useSubscription'
 import { useSettingsStore } from '@/lib/stores/settingsStore'
@@ -172,8 +173,19 @@ export default function DashboardPage() {
   const { selectedTone, setTone, outputLength, setOutputLength, deepThinkEnabled, setDeepThink } =
     useSettingsStore()
   const { subscription, isEntitled, hasLoaded } = useSubscription()
-  const { isEnhancing, streamedContent, result, error, warning, progress, enhance, reset, cancel } =
-    useEnhance()
+  const {
+    isEnhancing,
+    streamedContent,
+    result,
+    error,
+    warning,
+    progress,
+    consentRequiredVersion,
+    enhance,
+    reset,
+    cancel,
+    dismissConsentRequest,
+  } = useEnhance()
 
   // Pre-fill prompt from URL params (for re-enhance from history)
   useEffect(() => {
@@ -250,6 +262,11 @@ export default function DashboardPage() {
     toast.success('Copied to clipboard')
     setTimeout(() => setCopied(false), 2000)
   }, [result, streamedContent])
+
+  const handleConsented = useCallback(() => {
+    dismissConsentRequest()
+    void handleEnhance()
+  }, [dismissConsentRequest, handleEnhance])
 
   const handleReset = useCallback(() => {
     setPrompt('')
@@ -568,6 +585,12 @@ export default function DashboardPage() {
           </Link>
         </div>
       </Card>
+
+      <AiConsentDialog
+        requiredVersion={consentRequiredVersion}
+        onConsented={handleConsented}
+        onDismiss={dismissConsentRequest}
+      />
     </div>
   )
 }
