@@ -1,3 +1,5 @@
+import type { RequestSubscription } from '../middleware/requireEntitlement.js';
+
 declare global {
   namespace Express {
     interface Request {
@@ -6,14 +8,8 @@ declare global {
         email: string;
         sessionId: string;
       };
-      subscription?: {
-        tier: string;
-        promptQuality: 'basic' | 'standard' | 'advanced';
-        dailyPromptsUsed: number;
-        dailyPromptsLimit: number;
-        canExport: boolean;
-        maxTokensPerPrompt: number;
-      };
+      /** Set by requireEntitlement: the resolved SubscriptionInfo plus legacy flat fields. */
+      subscription?: RequestSubscription;
     }
   }
 }

@@ -9,8 +9,8 @@
  *     the paywall on 403 QUOTA_EXCEEDED, so the code must not change.
  *   - entitled but over the daily fair-use ceiling: 429 {code:'FAIR_USE_LIMIT', resetAt}.
  * getSubscriptionInfo runs exactly once; its result is attached as
- * req.subscription (legacy flat shape declared in types/express.d.ts) and the
- * full SubscriptionInfo is available to handlers through getEntitlement(req).
+ * req.subscription (SubscriptionInfo plus the legacy flat fields, declared in
+ * types/express.d.ts) and handlers read it through getEntitlement(req).
  *
  * This gate only reads today's count (an early, cheap rejection). Generating
  * handlers then reserve each provider call atomically with reserveGenerations
@@ -49,13 +49,9 @@ export type RequestSubscription = SubscriptionInfo & {
 
 export type EntitledRequest = AuthenticatedRequest;
 
-// Request-scoped: entries die with their request object. Used because the
-// global Express.Request.subscription type predates SubscriptionInfo.
-const entitlementsByRequest = new WeakMap<Request, SubscriptionInfo>();
-
 /** The SubscriptionInfo requireEntitlement resolved for this request. */
 export function getEntitlement(req: Request): SubscriptionInfo | undefined {
-  return entitlementsByRequest.get(req);
+  return req.subscription;
 }
 
 export const SUBSCRIPTION_REQUIRED_BODY = {
@@ -168,7 +164,6 @@ export async function requireEntitlement(
     return;
   }
 
-  entitlementsByRequest.set(req, info);
   req.subscription = toRequestSubscription(info);
   next();
 }
