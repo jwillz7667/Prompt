@@ -24,12 +24,30 @@ const booleanFlag = (defaultValue: boolean) =>
 const nonNegativeInt = (defaultValue: number) =>
   z.preprocess(blankAsUnset, z.coerce.number().int().min(0).default(defaultValue));
 
+const idList = z.preprocess(
+  blankAsUnset,
+  z
+    .string()
+    .default('')
+    .transform(
+      (value) =>
+        new Set(
+          value
+            .split(',')
+            .map((id) => id.trim())
+            .filter((id) => id.length > 0),
+        ),
+    ),
+);
+
 const entitlementEnvSchema = z.object({
   HARD_PAYWALL_ENABLED: booleanFlag(true),
   FREE_DAILY_PROMPT_LIMIT: nonNegativeInt(10),
   PREMIUM_DAILY_GENERATION_SOFT_CAP: nonNegativeInt(300),
   SUPPORT_AI_DAILY_LIMIT: nonNegativeInt(20),
   APPLE_ACCEPT_SANDBOX_TRANSACTIONS: booleanFlag(true),
+  APPLE_SANDBOX_ACCOUNT_MAX_AGE_DAYS: nonNegativeInt(14),
+  APPLE_SANDBOX_ALLOWED_USER_IDS: idList,
 });
 
 export interface EntitlementConfig {
@@ -38,6 +56,10 @@ export interface EntitlementConfig {
   premiumDailyGenerationSoftCap: number;
   supportAiDailyLimit: number;
   shouldAcceptSandboxTransactions: boolean;
+  /** Sandbox purchases unlock only accounts younger than this (0: allow-list only). */
+  sandboxAccountMaxAgeDays: number;
+  /** Internal testers whose sandbox purchases always unlock. */
+  sandboxAllowedUserIds: ReadonlySet<string>;
 }
 
 export function parseEntitlementConfig(env: NodeJS.ProcessEnv): EntitlementConfig {
@@ -48,6 +70,8 @@ export function parseEntitlementConfig(env: NodeJS.ProcessEnv): EntitlementConfi
     premiumDailyGenerationSoftCap: parsed.PREMIUM_DAILY_GENERATION_SOFT_CAP,
     supportAiDailyLimit: parsed.SUPPORT_AI_DAILY_LIMIT,
     shouldAcceptSandboxTransactions: parsed.APPLE_ACCEPT_SANDBOX_TRANSACTIONS,
+    sandboxAccountMaxAgeDays: parsed.APPLE_SANDBOX_ACCOUNT_MAX_AGE_DAYS,
+    sandboxAllowedUserIds: parsed.APPLE_SANDBOX_ALLOWED_USER_IDS,
   };
 }
 
@@ -85,6 +109,8 @@ export interface EntitlementState {
   status: SubscriptionStatus;
   expiresAt: Date | null;
   environment: string | null;
+  /** Whether a Sandbox-environment subscription may unlock this account (see isSandboxTrustedAccount). */
+  isSandboxTrusted: boolean;
 }
 
 // ============================================================================
@@ -127,10 +153,31 @@ export function isEntitled(state: EntitlementState, now: Date = new Date()): boo
     return false;
   }
   if (!state.expiresAt || state.expiresAt.getTime() <= now.getTime()) return false;
-  if (state.environment === 'Sandbox' && !entitlementConfig.shouldAcceptSandboxTransactions) {
+  if (
+    state.environment === 'Sandbox' &&
+    !(entitlementConfig.shouldAcceptSandboxTransactions && state.isSandboxTrusted)
+  ) {
     return false;
   }
   return true;
+}
+
+/**
+ * Sandbox (TestFlight / App Review) purchases are free, yet the production
+ * backend must accept them so App Review can complete a purchase. They only
+ * unlock accounts created recently (reviewers sign in with a fresh Apple ID)
+ * or listed internal testers, so a long-standing TestFlight tester cannot
+ * keep real Premium for free by re-buying in the sandbox.
+ */
+export function isSandboxTrustedAccount(
+  userId: string,
+  accountCreatedAt: Date,
+  now: Date = new Date(),
+  config: Pick<EntitlementConfig, 'sandboxAccountMaxAgeDays' | 'sandboxAllowedUserIds'> = entitlementConfig,
+): boolean {
+  if (config.sandboxAllowedUserIds.has(userId)) return true;
+  const maxAgeMs = config.sandboxAccountMaxAgeDays * 86_400_000;
+  return now.getTime() - accountCreatedAt.getTime() < maxAgeMs;
 }
 
 function effectiveExpiry(
@@ -161,7 +208,7 @@ function utcMidnight(date: Date = new Date()): Date {
 // the schema and are treated as a miss instead of being misread.
 const SUBSCRIPTION_CACHE_TTL_SECONDS = 300;
 const cachedSubscriptionSchema = z.object({
-  v: z.literal(2),
+  v: z.literal(3),
   tier: z.nativeEnum(SubscriptionTier),
   status: z.nativeEnum(SubscriptionStatus),
   expiresAt: z.string().nullable(),
@@ -169,6 +216,7 @@ const cachedSubscriptionSchema = z.object({
   trialEndsAt: z.string().nullable(),
   productId: z.string().nullable(),
   environment: z.string().nullable(),
+  isSandboxTrusted: z.boolean(),
 });
 type CachedSubscription = z.infer<typeof cachedSubscriptionSchema>;
 
@@ -180,6 +228,7 @@ interface SubscriptionSnapshot {
   trialEndsAt: Date | null;
   productId: string | null;
   environment: string | null;
+  isSandboxTrusted: boolean;
 }
 
 const FREE_SNAPSHOT: SubscriptionSnapshot = {
@@ -190,6 +239,7 @@ const FREE_SNAPSHOT: SubscriptionSnapshot = {
   trialEndsAt: null,
   productId: null,
   environment: null,
+  isSandboxTrusted: false,
 };
 
 async function readCachedSnapshot(userId: string): Promise<SubscriptionSnapshot | null> {
@@ -203,12 +253,13 @@ async function readCachedSnapshot(userId: string): Promise<SubscriptionSnapshot 
     trialEndsAt: parsed.data.trialEndsAt ? new Date(parsed.data.trialEndsAt) : null,
     productId: parsed.data.productId,
     environment: parsed.data.environment,
+    isSandboxTrusted: parsed.data.isSandboxTrusted,
   };
 }
 
 async function writeCachedSnapshot(userId: string, snapshot: SubscriptionSnapshot): Promise<void> {
   const entry: CachedSubscription = {
-    v: 2,
+    v: 3,
     tier: snapshot.tier,
     status: snapshot.status,
     expiresAt: snapshot.expiresAt?.toISOString() ?? null,
@@ -216,18 +267,27 @@ async function writeCachedSnapshot(userId: string, snapshot: SubscriptionSnapsho
     trialEndsAt: snapshot.trialEndsAt?.toISOString() ?? null,
     productId: snapshot.productId,
     environment: snapshot.environment,
+    isSandboxTrusted: snapshot.isSandboxTrusted,
   };
   await cache.set(`sub:${userId}`, entry, SUBSCRIPTION_CACHE_TTL_SECONDS);
 }
 
-function snapshotFromRow(subscription: Subscription, now: Date): SubscriptionSnapshot {
+type SubscriptionWithAccount = Subscription & { user: { createdAt: Date } };
+
+function snapshotFromRow(subscription: SubscriptionWithAccount, now: Date): SubscriptionSnapshot {
   const expiresAt = effectiveExpiry(subscription);
+  const isSandboxTrusted = isSandboxTrustedAccount(
+    subscription.userId,
+    subscription.user.createdAt,
+    now,
+  );
   const entitled = isEntitled(
     {
       tier: subscription.tier,
       status: subscription.status,
       expiresAt,
       environment: subscription.environment,
+      isSandboxTrusted,
     },
     now,
   );
@@ -242,8 +302,11 @@ function snapshotFromRow(subscription: Subscription, now: Date): SubscriptionSna
     trialEndsAt: subscription.trialEndDate,
     productId: subscription.productId,
     environment: subscription.environment,
+    isSandboxTrusted,
   };
 }
+
+const withAccount = { user: { select: { createdAt: true } } } as const;
 
 function needsExpiryProcessing(
   subscription: Pick<Subscription, 'tier' | 'status' | 'gracePeriodEndDate' | 'expiresAt'>,
@@ -265,7 +328,10 @@ const MAX_SNAPSHOT_ATTEMPTS = 3;
 async function loadSnapshotFromDatabase(userId: string): Promise<SubscriptionSnapshot> {
   for (let attempt = 0; attempt < MAX_SNAPSHOT_ATTEMPTS; attempt++) {
     const now = new Date();
-    const subscription = await prisma.subscription.findUnique({ where: { userId } });
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      include: withAccount,
+    });
     if (!subscription) return FREE_SNAPSHOT;
     if (!needsExpiryProcessing(subscription, now)) return snapshotFromRow(subscription, now);
 
@@ -282,7 +348,10 @@ async function loadSnapshotFromDatabase(userId: string): Promise<SubscriptionSna
     // Re-read: reconciliation renewed it, we expired it, or a concurrent
     // renewal won the advisory lock.
   }
-  const subscription = await prisma.subscription.findUnique({ where: { userId } });
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId },
+    include: withAccount,
+  });
   return subscription ? snapshotFromRow(subscription, new Date()) : FREE_SNAPSHOT;
 }
 
@@ -332,6 +401,7 @@ function buildSubscriptionInfo(
   snapshot: SubscriptionSnapshot,
   dailyPromptsUsed: number,
 ): SubscriptionInfo {
+  const { isSandboxTrusted: _isSandboxTrusted, ...publicSnapshot } = snapshot;
   const entitled = isEntitled(snapshot);
   const dailyPromptsLimit = entitled
     ? -1
@@ -339,7 +409,7 @@ function buildSubscriptionInfo(
       ? 0
       : entitlementConfig.freeDailyPromptLimit;
   return {
-    ...snapshot,
+    ...publicSnapshot,
     tier: entitled ? SubscriptionTier.PREMIUM : SubscriptionTier.FREE,
     isTrialing: entitled && snapshot.isTrialing,
     isEntitled: entitled,

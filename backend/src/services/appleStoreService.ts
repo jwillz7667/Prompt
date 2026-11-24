@@ -526,6 +526,9 @@ export async function reconcileAppStoreSubscription(
                 ? refreshed.gracePeriodEndDate
                 : refreshed.expiresAt,
             environment: refreshed.environment,
+            // Only "is this subscription live at Apple?" is asked here; account
+            // trust for sandbox purchases is applied when access is granted.
+            isSandboxTrusted: true,
           })
         ) {
           storeLogger.info({ userId }, 'Reconciled lapsed subscription with App Store');
@@ -589,6 +592,8 @@ async function isSupersededNotification(
     status: current.status,
     expiresAt: currentExpiry,
     environment: current.environment,
+    // Ordering between transactions, not access: account trust does not apply.
+    isSandboxTrusted: true,
   });
   if (current.stripeSubscriptionId && !current.originalTransactionId) return isCurrentEntitled;
   if (

@@ -4,6 +4,7 @@ import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
 import {
   getTierFromProductId,
   isEntitled,
+  isSandboxTrustedAccount,
   parseEntitlementConfig,
   type EntitlementState,
 } from '../../src/services/subscriptionService.js';
@@ -18,6 +19,7 @@ function state(overrides: Partial<EntitlementState> = {}): EntitlementState {
     status: SubscriptionStatus.ACTIVE,
     expiresAt: FUTURE,
     environment: 'Production',
+    isSandboxTrusted: true,
     ...overrides,
   };
 }
@@ -41,8 +43,33 @@ describe('isEntitled', () => {
     expect(isEntitled(state(overrides), NOW)).toBe(false);
   });
 
-  it('accepts sandbox subscriptions by default', () => {
+  it('accepts sandbox subscriptions on a trusted account by default', () => {
     expect(isEntitled(state({ environment: 'Sandbox' }), NOW)).toBe(true);
+  });
+
+  it('denies a sandbox subscription on an account that is not trusted for sandbox purchases', () => {
+    expect(isEntitled(state({ environment: 'Sandbox', isSandboxTrusted: false }), NOW)).toBe(false);
+  });
+
+  it('ignores sandbox trust for production subscriptions', () => {
+    expect(isEntitled(state({ isSandboxTrusted: false }), NOW)).toBe(true);
+  });
+});
+
+describe('isSandboxTrustedAccount', () => {
+  const config = { sandboxAccountMaxAgeDays: 14, sandboxAllowedUserIds: new Set(['tester_1']) };
+  const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000);
+
+  it('trusts a recently created account such as an App Review sign-in', () => {
+    expect(isSandboxTrustedAccount('user_new', daysAgo(2), NOW, config)).toBe(true);
+  });
+
+  it('does not trust a long-standing account', () => {
+    expect(isSandboxTrustedAccount('user_old', daysAgo(30), NOW, config)).toBe(false);
+  });
+
+  it('always trusts an allow-listed internal tester', () => {
+    expect(isSandboxTrustedAccount('tester_1', daysAgo(400), NOW, config)).toBe(true);
   });
 });
 
@@ -69,7 +96,15 @@ describe('parseEntitlementConfig', () => {
       premiumDailyGenerationSoftCap: 300,
       supportAiDailyLimit: 20,
       shouldAcceptSandboxTransactions: true,
+      sandboxAccountMaxAgeDays: 14,
+      sandboxAllowedUserIds: new Set(),
     });
+  });
+
+  it('parses the sandbox tester allow-list', () => {
+    expect(
+      parseEntitlementConfig({ APPLE_SANDBOX_ALLOWED_USER_IDS: ' user_a, ,user_b ' }).sandboxAllowedUserIds,
+    ).toEqual(new Set(['user_a', 'user_b']));
   });
 
   it('treats blank values as unset', () => {

@@ -609,6 +609,28 @@ describe('subscription status and identity', () => {
     ).toBe('Sandbox');
   });
 
+  it('unlocks a sandbox purchase on a new account such as an App Review sign-in', async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    await processVerifiedTransaction(user.id, transaction({ environment: 'Sandbox' }));
+
+    expect((await getSubscriptionInfo(user.id)).isEntitled).toBe(true);
+  });
+
+  it('does not unlock a sandbox purchase on a long-standing account', async () => {
+    const user = await createTestUser();
+    users.push(user);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { createdAt: new Date(Date.now() - 60 * DAY_MS) },
+    });
+
+    await processVerifiedTransaction(user.id, transaction({ environment: 'Sandbox' }));
+
+    expect(await getSubscriptionInfo(user.id)).toMatchObject({ isEntitled: false, tier: 'FREE' });
+  });
+
   it('removes App Store transactions when the owning account is deleted', async () => {
     const user = await createTestUser();
     const purchase = transaction();
