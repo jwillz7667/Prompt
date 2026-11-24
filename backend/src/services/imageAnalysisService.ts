@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import { completeChat } from '../features/llm/index.js';
 import { promptLogger } from '../utils/logger.js';
 
 export interface PromptImageAttachment {
@@ -9,7 +9,7 @@ export interface PromptImageAttachment {
   analysis?: string | null;
 }
 
-const IMAGE_ANALYSIS_MODEL = 'gpt-4.1-mini';
+const IMAGE_ANALYSIS_MAX_TOKENS = 320;
 const MAX_ANALYSIS_CHARS = 1_500;
 const FALLBACK_IMAGE_ANALYSIS = [
   'Use the uploaded source image as the primary visual reference.',
@@ -17,16 +17,13 @@ const FALLBACK_IMAGE_ANALYSIS = [
   'Add motion, camera movement, and environmental dynamics that feel natural for the scene without changing its core layout.',
 ].join(' ');
 
+/**
+ * Produces a text description of an uploaded image through the LLM gateway
+ * (image-capable providers only). Used where a downstream step needs words
+ * rather than pixels; failures degrade to generic guidance instead of failing
+ * the user's request.
+ */
 class ImageAnalysisService {
-  private client: OpenAI | null = null;
-
-  constructor() {
-    const apiKey = process.env['OPENAI_API_KEY'];
-    if (apiKey) {
-      this.client = new OpenAI({ apiKey });
-    }
-  }
-
   async enrichAttachmentForPrompt(
     attachment: PromptImageAttachment,
     userPrompt: string,
@@ -55,26 +52,22 @@ class ImageAnalysisService {
     userPrompt: string,
     modality: 'text' | 'image' | 'video' | 'audio' | 'code' | '3d',
   ): Promise<string> {
-    if (!this.client) {
-      promptLogger.warn('OPENAI_API_KEY missing; using fallback image analysis');
-      return FALLBACK_IMAGE_ANALYSIS;
-    }
-
     try {
       const modalityDirective =
         modality === 'video'
           ? 'Focus on converting this still image into a strong image-to-video prompt.'
           : 'Focus on extracting the most useful visual information for prompt rewriting.';
 
-      const response = await this.client.responses.create({
-        model: IMAGE_ANALYSIS_MODEL,
-        max_output_tokens: 320,
-        input: [
+      const response = await completeChat({
+        maxTokens: IMAGE_ANALYSIS_MAX_TOKENS,
+        reasoning: 'off',
+        purpose: 'image-analysis',
+        messages: [
           {
             role: 'user',
             content: [
               {
-                type: 'input_text',
+                type: 'text',
                 text: [
                   'Analyze this uploaded image for prompt generation.',
                   'Return plain text only, no markdown fencing.',
@@ -90,17 +83,16 @@ class ImageAnalysisService {
                 ].join('\n'),
               },
               {
-                type: 'input_image',
-                image_url: attachment.dataUrl,
-                detail: 'auto',
+                type: 'image_url',
+                image_url: { url: attachment.dataUrl, detail: 'auto' },
               },
             ],
           },
         ],
       });
 
-      const output = response.output_text.trim();
-      if (!output) {
+      const output = response.content.trim();
+      if (!output || response.finishReason === 'content_filter') {
         return FALLBACK_IMAGE_ANALYSIS;
       }
 
